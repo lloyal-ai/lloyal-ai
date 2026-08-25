@@ -13,6 +13,7 @@
  * says so in the returned flag. Per-field provenance (`ConfigOrigin`) is
  * computed AS the layering runs — nothing here reports a source it didn't use.
  */
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parse } from "yaml";
@@ -153,6 +154,19 @@ export function loadConfig(
   const envGpu = isConfigGpu(envGpuStr) ? envGpuStr : undefined;
   // A hand-edited harness.json could carry a bad gpu value; ignore, don't error.
   const localGpu = isConfigGpu(local?.model?.gpu) ? local?.model?.gpu : undefined;
+  // Same treatment for hand-edited defaults: the committed yml fails LOUD at
+  // load (a deliberate deploy deserves a loud typo), but the local overlay is
+  // machine-written — an invalid hand edit falls through to the next rung
+  // instead of reaching the preset lookup mid-query.
+  const ld = local?.defaults;
+  const localReasoningMode =
+    ld?.reasoningMode === "flat" || ld?.reasoningMode === "deep" ? ld.reasoningMode : undefined;
+  const localEffort =
+    ld?.effort !== undefined && ["low", "medium", "high", "ultra"].includes(ld.effort)
+      ? ld.effort
+      : undefined;
+  const localMaxTurns =
+    Number.isInteger(ld?.maxTurns) && (ld!.maxTurns as number) >= 1 ? ld!.maxTurns : undefined;
 
   // Path-shaped fields resolve through resolvePath at this boundary (~ expansion
   // + relative→absolute; idempotent on absolute paths), so stale `~`-bearing
@@ -161,21 +175,20 @@ export function loadConfig(
   const outputDir = rawOutputDir ? resolvePath(rawOutputDir) : undefined;
   const rawModelPath = cli.modelPath ?? local?.model?.path ?? llm.path;
   const modelPath = rawModelPath ? resolvePath(rawModelPath) : undefined;
-  const reranker = cli.reranker ?? local?.model?.reranker ?? yml.model?.reranker?.path;
+  const rawReranker = cli.reranker ?? local?.model?.reranker ?? yml.model?.reranker?.path;
+  const reranker = rawReranker ? resolvePath(rawReranker) : undefined;
   const nCtx = cli.nCtx ?? envNCtx ?? local?.model?.nCtx ?? llm.context;
   const gpu = cli.gpu ?? envGpu ?? localGpu ?? llm.gpu;
   const reasoningMode =
     cli.reasoningMode ??
-    local?.defaults?.reasoningMode ??
+    localReasoningMode ??
     yml.defaults?.reasoningMode ??
     SHIPPED_DEFAULTS.reasoningMode;
 
   const defaults: ConfigDefaults = {
     reasoningMode,
-    effort:
-      local?.defaults?.effort ?? yml.defaults?.effort ?? SHIPPED_DEFAULTS.effort,
-    maxTurns:
-      local?.defaults?.maxTurns ?? yml.defaults?.maxTurns ?? SHIPPED_DEFAULTS.maxTurns,
+    effort: localEffort ?? yml.defaults?.effort ?? SHIPPED_DEFAULTS.effort,
+    maxTurns: localMaxTurns ?? yml.defaults?.maxTurns ?? SHIPPED_DEFAULTS.maxTurns,
   };
 
   // Ability config is json-only (there is no yml rung for it); path-shaped
@@ -214,7 +227,7 @@ export function loadConfig(
     c !== undefined ? "cli" : e !== undefined ? "env" : l !== undefined ? "file" : y !== undefined ? "yml" : "default";
 
   const origin: ConfigOrigin = {
-    reasoningMode: rung(cli.reasoningMode, undefined, local?.defaults?.reasoningMode, yml.defaults?.reasoningMode),
+    reasoningMode: rung(cli.reasoningMode, undefined, localReasoningMode, yml.defaults?.reasoningMode),
     modelPath: rung(cli.modelPath, undefined, local?.model?.path, llm.path ?? llm.id),
     reranker: rung(cli.reranker, undefined, local?.model?.reranker, yml.model?.reranker?.path ?? yml.model?.reranker?.id),
     nCtx: rung(cli.nCtx, envNCtx, local?.model?.nCtx, llm.context),
@@ -297,8 +310,11 @@ export function saveLocalConfig(
 }
 
 /** If CWD (or an ancestor) is a git repo, append `harness.json` to the nearest
- *  `.gitignore` iff it isn't already listed. Returns true only when a write
- *  happened — at most once per repo (scaffolds ship it pre-listed). */
+ *  `.gitignore` iff Git doesn't already ignore it. `git check-ignore` is the
+ *  authority (it honors wildcards, anchored patterns, and global excludes);
+ *  when git isn't runnable, a literal line-match is the conservative fallback.
+ *  Returns true only when a write happened — at most once per repo (scaffolds
+ *  ship it pre-listed). */
 function maybeAppendGitignore(configFilePath: string): boolean {
   try {
     const repoRoot = findGitRoot(path.dirname(configFilePath));
@@ -308,11 +324,26 @@ function maybeAppendGitignore(configFilePath: string): boolean {
     const existing = fs.existsSync(gitignorePath)
       ? fs.readFileSync(gitignorePath, "utf8")
       : "";
-    const name = path.basename(configFilePath);
-    const needle = new RegExp(
-      `(^|\\n)\\s*(${escapeRe(relative)}|${escapeRe(name)})\\s*(\\n|$)`,
-    );
-    if (needle.test(existing)) return false;
+    let ignored: boolean | null = null;
+    try {
+      execFileSync("git", ["check-ignore", "-q", "--", relative], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+      ignored = true;
+    } catch (e) {
+      // exit 1 = definitively not ignored; anything else (git missing,
+      // not-a-repo edge) = unknown → fall back to the literal check.
+      ignored = (e as { status?: number }).status === 1 ? false : null;
+    }
+    if (ignored === true) return false;
+    if (ignored === null) {
+      const name = path.basename(configFilePath);
+      const needle = new RegExp(
+        `(^|\\n)\\s*(${escapeRe(relative)}|${escapeRe(name)})\\s*(\\n|$)`,
+      );
+      if (needle.test(existing)) return false;
+    }
     const prefix = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
     fs.appendFileSync(gitignorePath, prefix + relative + "\n");
     return true;

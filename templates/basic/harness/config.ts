@@ -12,6 +12,7 @@
  * says so in the returned flag. Per-field provenance (`ConfigOrigin`) is
  * computed AS the layering runs — nothing here reports a source it didn't use.
  */
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parse } from "yaml";
@@ -132,7 +133,8 @@ export function loadConfig(
   const outputDir = rawOutputDir ? resolvePath(rawOutputDir) : undefined;
   const rawModelPath = cli.modelPath ?? local?.model?.path ?? llm.path;
   const modelPath = rawModelPath ? resolvePath(rawModelPath) : undefined;
-  const reranker = cli.reranker ?? local?.model?.reranker ?? yml.model?.reranker?.path;
+  const rawReranker = cli.reranker ?? local?.model?.reranker ?? yml.model?.reranker?.path;
+  const reranker = rawReranker ? resolvePath(rawReranker) : undefined;
   const nCtx = cli.nCtx ?? envNCtx ?? local?.model?.nCtx ?? llm.context;
   const gpu = cli.gpu ?? envGpu ?? localGpu ?? llm.gpu;
 
@@ -248,8 +250,11 @@ export function saveLocalConfig(
 }
 
 /** If CWD (or an ancestor) is a git repo, append `harness.json` to the nearest
- *  `.gitignore` iff it isn't already listed. Returns true only when a write
- *  happened — at most once per repo (scaffolds ship it pre-listed). */
+ *  `.gitignore` iff Git doesn't already ignore it. `git check-ignore` is the
+ *  authority (it honors wildcards, anchored patterns, and global excludes);
+ *  when git isn't runnable, a literal line-match is the conservative fallback.
+ *  Returns true only when a write happened — at most once per repo (scaffolds
+ *  ship it pre-listed). */
 function maybeAppendGitignore(configFilePath: string): boolean {
   try {
     const repoRoot = findGitRoot(path.dirname(configFilePath));
@@ -259,11 +264,26 @@ function maybeAppendGitignore(configFilePath: string): boolean {
     const existing = fs.existsSync(gitignorePath)
       ? fs.readFileSync(gitignorePath, "utf8")
       : "";
-    const name = path.basename(configFilePath);
-    const needle = new RegExp(
-      `(^|\\n)\\s*(${escapeRe(relative)}|${escapeRe(name)})\\s*(\\n|$)`,
-    );
-    if (needle.test(existing)) return false;
+    let ignored: boolean | null = null;
+    try {
+      execFileSync("git", ["check-ignore", "-q", "--", relative], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+      ignored = true;
+    } catch (e) {
+      // exit 1 = definitively not ignored; anything else (git missing,
+      // not-a-repo edge) = unknown → fall back to the literal check.
+      ignored = (e as { status?: number }).status === 1 ? false : null;
+    }
+    if (ignored === true) return false;
+    if (ignored === null) {
+      const name = path.basename(configFilePath);
+      const needle = new RegExp(
+        `(^|\\n)\\s*(${escapeRe(relative)}|${escapeRe(name)})\\s*(\\n|$)`,
+      );
+      if (needle.test(existing)) return false;
+    }
     const prefix = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
     fs.appendFileSync(gitignorePath, prefix + relative + "\n");
     return true;
