@@ -34,12 +34,19 @@ import { resolveModel } from "@lloyal-labs/rig/node";
 import { createServedHostDriver } from "./driver.js";
 import { runServedSession } from "../../harness/served-session.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import type { Config } from "../../harness/config-types.js";
+import type { Config, ConfigKvCache } from "../../harness/config-types.js";
 
 interface ModelEntry {
   id?: string;
   path?: string;
   context?: number;
+  /** Concurrent sequences (`nSeqMax`). Each one holds its own KV lease, and on
+   *  a hybrid/linear-attention model its own recurrent state — which is f32 and
+   *  not affected by `kvCache`. Lower this if the machine is memory-bound. */
+  branches?: number;
+  /** KV cache type for the attention layers. Bounds the smallest meaningful
+   *  score difference; raise it for precision, lower it for memory. */
+  kvCache?: ConfigKvCache;
 }
 
 function loadYaml(): { model?: { llm?: ModelEntry; reranker?: ModelEntry } } {
@@ -115,7 +122,13 @@ function* resolveConfig(): Operation<Config> {
     sources: {},
     abilities: {},
     defaults: { reasoningMode: "flat", effort: "high", maxTurns: 10 },
-    model: { path: modelPath, reranker: rerankerPath, nCtx: llm.context ?? 32768 },
+    model: {
+      path: modelPath,
+      reranker: rerankerPath,
+      nCtx: llm.context ?? 32768,
+      branches: llm.branches,
+      kvCache: llm.kvCache,
+    },
   };
 }
 
