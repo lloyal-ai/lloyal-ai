@@ -13,7 +13,7 @@
  * resolved `{path}` when a reranker-using ability is enabled; absent, `provisionAbilityModels`
  * falls back to the platform catalog default (and is a no-op if no ability needs one).
  */
-import { closeSync, openSync } from "node:fs";
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ensure } from "effection";
@@ -59,7 +59,8 @@ export function* runServedSession(
 
 /** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
  *  in `sources.outputDir` (default: the project root) — the record the dev
- *  tools tail. Otherwise Null: production writes nothing. The random id keeps
+ *  tools tail (the directory is created if missing). Otherwise Null:
+ *  production writes nothing. The random id keeps
  *  concurrent writers apart and `"wx"` refuses to truncate an existing file; a
  *  failed open degrades to Null (tracing is observability, never a
  *  dependency). The caller owns the fd — `ensure(close)` it on its scope. */
@@ -67,6 +68,7 @@ function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; clos
   if (!dev) return { writer: new NullTraceWriter(), close: () => {} };
   try {
     const dir = cfg.sources.outputDir ?? process.cwd();
+    mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const fd = openSync(join(dir, `trace-${ts}-${randomUUID().slice(0, 8)}.jsonl`), "wx");
     return {

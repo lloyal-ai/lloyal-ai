@@ -103,7 +103,13 @@ export function HarnessApp() {
     if (state.uiPhase === "clarifying") {
       window.harness.send({ type: "submit_clarification", answer: q });
     } else {
-      window.harness.send({ type: "submit_query", query: q, mode: "flat" });
+      // The run mode comes from the loaded config default (`config:loaded`
+      // seeds `state.config`); this view has no mode toggle.
+      window.harness.send({
+        type: "submit_query",
+        query: q,
+        mode: state.config?.defaults.reasoningMode ?? "flat",
+      });
     }
     setQuery("");
   };

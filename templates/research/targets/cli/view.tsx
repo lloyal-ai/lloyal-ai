@@ -93,7 +93,13 @@ function View({
     if (state.uiPhase === "clarifying") {
       dispatch({ type: "submit_clarification", answer: text });
     } else {
-      dispatch({ type: "submit_query", query: text, mode: "flat" });
+      // The run mode comes from the loaded config default (`config:loaded`
+      // seeds `state.config`); this austere view has no mode toggle.
+      dispatch({
+        type: "submit_query",
+        query: text,
+        mode: state.config?.defaults.reasoningMode ?? "flat",
+      });
     }
   };
 
