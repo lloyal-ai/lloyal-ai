@@ -10,8 +10,10 @@ targets: [cli, desktop, web]
 
 model:
   llm:
-    id: "qwen3.5-4b"          # kvCache: q4_0 · gpu: auto · branches: from capacity
+    id: "qwen3.5-4b"          # add `branches:` or `kvCache:` below to override
     context: 32768
+    # branches: 32           # concurrent sequences (nSeqMax)
+    # kvCache: q4_0          # attention KV type
   # The corpus + web abilities score retrievals with a reranker. It's resolved +
   # digest-verified into models/reranker/ on first run, then created per-boot.
   reranker:

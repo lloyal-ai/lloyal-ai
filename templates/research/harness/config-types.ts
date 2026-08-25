@@ -41,6 +41,11 @@ export interface ConfigDefaults {
  *  `applyServedGpuEnv`) rather than silently dropping to CPU. */
 export type ConfigGpu = 'default' | 'cuda' | 'vulkan';
 
+/** KV cache type for the attention layers. Mirrors the SDK's `KvCacheType`;
+ *  restated here so this file stays dependency-free like `ConfigGpu`. */
+export type ConfigKvCache =
+  | 'f32' | 'f16' | 'bf16' | 'q8_0' | 'q4_0' | 'q4_1' | 'iq4_nl' | 'q5_0' | 'q5_1';
+
 export const CONFIG_GPU_VALUES: readonly ConfigGpu[] = [
   'default',
   'cuda',
@@ -65,6 +70,13 @@ export interface ConfigModel {
    *  ("won't ask again"); undefined = never asked / may offer. Never `true`:
    *  acceptance is evidenced by the cache itself, not a config bit. */
   backendPack?: boolean;
+  /** Concurrent sequences (`nSeqMax`). Each holds its own KV lease, and on a
+   *  hybrid/linear-attention model its own recurrent state — which is f32 and
+   *  unaffected by `kvCache`, so this is the lever on a memory-bound machine. */
+  branches?: number;
+  /** KV cache type for the attention layers. Bounds the smallest meaningful
+   *  score difference; raise for precision, lower for memory. */
+  kvCache?: ConfigKvCache;
 }
 
 export interface Config {

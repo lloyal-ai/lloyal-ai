@@ -62,9 +62,9 @@ export function createServedContext(cfg: Config): Promise<SessionContext> {
     {
       modelPath,
       nCtx: cfg.model.nCtx ?? 32768,
-      nSeqMax: 24,
-      typeK: "q4_0",
-      typeV: "q4_0",
+      nSeqMax: cfg.model.branches ?? 24,
+      typeK: cfg.model.kvCache ?? "q4_0",
+      typeV: cfg.model.kvCache ?? "q4_0",
     },
     cfg.model.gpu ? { gpuVariant: cfg.model.gpu } : undefined,
   );

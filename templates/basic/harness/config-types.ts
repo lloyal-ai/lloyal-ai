@@ -36,6 +36,11 @@ export type ConfigApps = Record<string, Record<string, unknown>>;
  *  `applyServedGpuEnv`) rather than silently dropping to CPU. */
 export type ConfigGpu = 'default' | 'cuda' | 'vulkan';
 
+/** KV cache type for the attention layers. Mirrors the SDK's `KvCacheType`;
+ *  restated here so this file stays dependency-free like `ConfigGpu`. */
+export type ConfigKvCache =
+  | 'f32' | 'f16' | 'bf16' | 'q8_0' | 'q4_0' | 'q4_1' | 'iq4_nl' | 'q5_0' | 'q5_1';
+
 export interface ConfigModel {
   /** Filesystem path OR catalog id (e.g. `qwen3.5-4b`). Resolution is the
    *  caller's concern (`rig.resolveModel`) — config just stores whatever the
@@ -53,6 +58,13 @@ export interface ConfigModel {
    *  boot header (see `BootFacts`), never a hardcoded string. */
   id?: string;
   sizeBytes?: number;
+  /** Concurrent sequences (`nSeqMax`). Each holds its own KV lease, and on a
+   *  hybrid/linear-attention model its own recurrent state — which is f32 and
+   *  unaffected by `kvCache`, so this is the lever on a memory-bound machine. */
+  branches?: number;
+  /** KV cache type for the attention layers. Bounds the smallest meaningful
+   *  score difference; raise for precision, lower for memory. */
+  kvCache?: ConfigKvCache;
 }
 
 export interface Config {

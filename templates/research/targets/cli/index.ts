@@ -29,13 +29,20 @@ import { harness, abilities } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
 import { makeEdgeRunner } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
-import type { Config } from "../../harness/config-types.js";
+import type { Config, ConfigKvCache } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
 
 interface ModelEntry {
   id?: string;
   path?: string;
   context?: number;
+  /** Concurrent sequences (`nSeqMax`). Each one holds its own KV lease, and on
+   *  a hybrid/linear-attention model its own recurrent state — which is f32 and
+   *  not affected by `kvCache`. Lower this if the machine is memory-bound. */
+  branches?: number;
+  /** KV cache type for the attention layers. Bounds the smallest meaningful
+   *  score difference; raise it for precision, lower it for memory. */
+  kvCache?: ConfigKvCache;
 }
 interface HarnessConfig {
   model?: { llm?: ModelEntry; reranker?: ModelEntry };
@@ -93,9 +100,9 @@ main(function* () {
     createContext({
       modelPath,
       nCtx: context,
-      nSeqMax: 32,
-      typeK: "q4_0",
-      typeV: "q4_0",
+      nSeqMax: llm.branches ?? 32,
+      typeK: llm.kvCache ?? "q4_0",
+      typeV: llm.kvCache ?? "q4_0",
     }),
   );
 
