@@ -55,6 +55,9 @@ export interface ModelEntry {
 export interface HarnessYml {
   model?: { llm?: ModelEntry; reranker?: ModelEntry };
   sources?: { outputDir?: string };
+  /** Committed per-ability config — the operator's deploy declaration (e.g. a
+   *  corpus path). Secrets belong in env at the ability factory, never here. */
+  abilities?: ConfigApps;
 }
 
 /** Read + validate `harness.yml`. Throws with a one-line message on a missing
@@ -154,9 +157,15 @@ export function loadConfig(
   const nCtx = cli.nCtx ?? envNCtx ?? localNCtx ?? llm.context;
   const gpu = cli.gpu ?? envGpu ?? localGpu ?? llm.gpu;
 
-  // Ability config is json-only (there is no yml rung for it); path-shaped
-  // values resolve generically, matching the harness-level fields.
+  // Ability config layers like everything else: the local overlay WHOLE-
+  // REPLACES a named ability's committed yml entry (matching the store's
+  // whole-replace convention — no per-key merge across rungs). Path-shaped
+  // values resolve generically, matching the harness-level fields. Secrets
+  // belong in env at the ability factory, never in the committed yml.
   const abilities: ConfigApps = {};
+  for (const [name, cfg] of Object.entries(yml.abilities ?? {})) {
+    abilities[name] = resolveAppConfigPaths(cfg);
+  }
   for (const [name, cfg] of Object.entries(local?.abilities ?? {})) {
     abilities[name] = resolveAppConfigPaths(cfg);
   }
