@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from 'ink-testing-library';
 import { createElement } from 'react';
 import { Wizard, orderTargets } from '../src/commands/new-wizard.js';
-import { MODEL_FOOTPRINT_HINT } from '../src/scaffold/model-catalog.js';
+import { MODEL_FOOTPRINT_HINT, modelsForRole } from '../src/scaffold/model-catalog.js';
 import { join, dirname } from 'node:path';
 
 // COVERAGE BOUNDARY: the full keystroke-driven flow (name → targets → model →
@@ -35,25 +35,47 @@ describe('MODEL_FOOTPRINT_HINT — the hardware floor shown at the model step', 
   // `packages/rig/src/models.ts`, which was the sharpest form of the check but
   // is impossible now the CLI lives in its own repo.
   //
-  // SOURCE OF TRUTH: `MODEL_CATALOG` in @lloyal-labs/rig (`src/models.ts`),
-  // entry `qwen3.5-4b`, `sizeBytes: 2_600_000_000`. If rig swaps the
-  // recommended model or restates its size, this number and the hint in
-  // `src/scaffold/model-catalog.ts` must both move. Nothing enforces that
+  // SOURCE OF TRUTH: `MODEL_CATALOG` in @lloyal-labs/rig (`src/models.ts`). If
+  // rig restates any of these sizes, the matching label in
+  // `src/scaffold/model-catalog.ts` must move with it. Nothing enforces that
   // across the repo boundary any more — see lloyal-ai/lloyal-ai#1.
-  const RIG_RECOMMENDED_MODEL_BYTES = 2_600_000_000;
+  //
+  // The figures moved from the hint onto the rows when the catalog gained a
+  // 16.5 GB option, because one sentence cannot describe both. The guard
+  // followed them rather than being dropped.
+  const RIG_SIZE_BYTES: Record<string, number> = {
+    'qwen3.5-4b': 2_600_000_000,
+    'qwen3.8-27b-q4': 16_464_440_224,
+    'qwen3.8-27b-iq1': 6_192_222_208,
+  };
 
-  it('quotes a download size that matches rig’s sizeBytes for the recommended model', () => {
-    const quoted = Number(/([\d.]+)\s*GB download/.exec(MODEL_FOOTPRINT_HINT)?.[1] ?? NaN);
-    expect(Number.isFinite(quoted)).toBe(true);
-    // Same figure to one decimal, in GB as a human reads it (2_600_000_000 → 2.6).
-    expect(quoted).toBeCloseTo(RIG_RECOMMENDED_MODEL_BYTES / 1e9, 1);
+  it('every llm row quotes a download size matching rig’s sizeBytes', () => {
+    const llms = modelsForRole('llm');
+    expect(llms.length).toBeGreaterThan(0);
+    for (const m of llms) {
+      const expected = RIG_SIZE_BYTES[m.id];
+      expect(expected, `no pinned size for catalog id "${m.id}"`).toBeDefined();
+      const quoted = Number(/([\d.]+)\s*GB/.exec(m.label)?.[1] ?? NaN);
+      expect(Number.isFinite(quoted), `label "${m.label}" quotes no size`).toBe(true);
+      // Same figure to one decimal, in GB as a human reads it.
+      expect(quoted).toBeCloseTo(expected / 1e9, 1);
+    }
   });
 
-  it('states that concurrent agents do not multiply the requirement', () => {
-    // The counter-intuitive half, and the reason the hint exists at all —
-    // readers assume four agents means four times the model.
-    expect(MODEL_FOOTPRINT_HINT).toMatch(/share one context/i);
+  it('stays one short line carrying the measured figure', () => {
+    // This sits under the picker at the moment of choosing, so length is the
+    // property worth guarding. It previously ran to three sentences and opened
+    // by repeating the Field hint directly above it.
     expect(MODEL_FOOTPRINT_HINT).toMatch(/16 GB/);
+    expect(MODEL_FOOTPRINT_HINT.length).toBeLessThan(70);
+
+    // It must not restate what the Field hint already says one line above.
+    expect(MODEL_FOOTPRINT_HINT).not.toMatch(/verified|fetch/i);
+
+    // "agents share one context" was dropped deliberately: at the model step it
+    // is not a selection criterion, and it was imprecise — concurrency is free
+    // on compute but paid in SPACE (N reports of length L hold N·L cells).
+    expect(MODEL_FOOTPRINT_HINT).not.toMatch(/multiply/i);
   });
 });
 

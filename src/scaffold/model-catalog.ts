@@ -29,7 +29,19 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
   {
     id: 'qwen3.5-4b',
     role: 'llm',
-    label: 'Qwen3.5 4B · Q4_K_M',
+    label: 'Qwen3.5 4B · Q4_K_M · 2.6 GB',
+    recommendedContext: 32768,
+  },
+  {
+    id: 'qwen3.8-27b-q4',
+    role: 'llm',
+    label: 'Qwen3.8 27B · Q4_K_M · 16.5 GB',
+    recommendedContext: 32768,
+  },
+  {
+    id: 'qwen3.8-27b-iq1',
+    role: 'llm',
+    label: 'Qwen3.8 27B · UD-IQ1_S · 6.2 GB',
     recommendedContext: 32768,
   },
   {
@@ -40,21 +52,18 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
 ];
 
 /**
- * One-line hardware floor, shown at the moment the model is chosen.
+ * One short line under the model picker. Size is on each row; the Field above
+ * already covers fetch + verification, so this says the one thing neither does.
  *
- * Grounded, not guessed: `qwen3.5-4b` Q4_K_M is 2.6 GB of weights and the
- * `research` template adds the 0.6B reranker at 630 MB (`sizeBytes` in rig's
- * `MODEL_CATALOG`, packages/rig/src/models.ts). The rest of the 16 GB covers KV
- * at the recommended 32k context plus the OS and whichever surface is running —
- * 8 GB does not survive Electron or a browser on top. 16 GB is the machine the
- * `research` template was verified end-to-end on (Apple M2, 16 GB).
+ * Keep it to a single clause a reader can take in without stopping. Anything
+ * needing a "because" belongs in the docs, not at the moment of choosing.
  *
- * The second sentence is the counter-intuitive part and the reason this exists:
- * readers assume four agents means four times the model. They share one
- * context, so the cost tracks KV FULLNESS, not agent count.
+ * The 16 GB figure is measured, not guessed: the machine the `research`
+ * template was verified end-to-end on (Apple M2, 16 GB) running `qwen3.5-4b`
+ * plus the 0.6B reranker. No figure is offered for the 27B rows because none
+ * has been measured — better silent than invented.
  */
-export const MODEL_FOOTPRINT_HINT =
-  '~2.6 GB download · 16 GB RAM recommended. Concurrent agents share one context — they do not multiply it.';
+export const MODEL_FOOTPRINT_HINT = '16 GB RAM runs the 4B. Larger models need more.';
 
 /** The catalog entries for one role, in listing order. */
 export function modelsForRole(role: ModelRole): readonly CatalogModel[] {
