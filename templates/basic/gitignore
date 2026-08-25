@@ -1,6 +1,7 @@
 node_modules/
 dist/
 traces/
+trace-*.jsonl
 
 # Build outputs: cli (dist/ above), desktop (electron-vite → out/),
 # web (vite → dist-web/).

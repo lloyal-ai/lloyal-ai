@@ -253,6 +253,7 @@ function* runQuery(
   _events: EventBus<WorkflowEvent>,
 ): Operation<string> {
   const registry = yield* AbilityRegistryCtx.expect();
+  const runner = yield* RunnerCtx.expect();
   const abilities = registry.enabled();
   if (abilities.length === 0) {
     throw new Error(
@@ -277,6 +278,11 @@ function* runQuery(
         maxTurns: MAX_TURNS,
         pruneOnReturn: true,
         policy: new DefaultAgentPolicy({ terminalToolName: "report" }),
+        // Per-token entropy/surprisal on agent:produce + AgentResult.trace —
+        // the dev pane's epistemics. Off outside dev: it costs two metric
+        // computations per produced token. Read from the Runner, never
+        // process.env — this file stays portable across bindings.
+        trace: runner.dev,
         enableThinking: true,
         // Breadth: independent angles, in parallel, over one shared spine.
         // For sequential DEPTH — each task building on the last via the spine —
