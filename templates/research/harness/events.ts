@@ -48,7 +48,9 @@ export type StepEvent =
     }
   | { type: 'complete'; data: Record<string, unknown> }
   // ── UI / config events driven by main.ts ────────────────────────
-  | { type: 'config:loaded'; config: Config; origin: ConfigOrigin; path: string }
+  // `path` is the file the config was loaded from — absent for the in-memory
+  // runner (nothing is read from disk today).
+  | { type: 'config:loaded'; config: Config; origin: ConfigOrigin; path?: string }
   | {
       type: 'config:updated';
       config: Config;
