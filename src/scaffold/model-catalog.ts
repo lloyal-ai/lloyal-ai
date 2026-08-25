@@ -29,19 +29,19 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
   {
     id: 'qwen3.5-4b',
     role: 'llm',
-    label: 'Qwen3.5 4B · Q4_K_M — 2.6 GB download',
+    label: 'Qwen3.5 4B · Q4_K_M · 2.6 GB',
     recommendedContext: 32768,
   },
   {
     id: 'qwen3.8-27b-q4',
     role: 'llm',
-    label: 'Qwen3.8 27B · Q4_K_M — 16.5 GB download',
+    label: 'Qwen3.8 27B · Q4_K_M · 16.5 GB',
     recommendedContext: 32768,
   },
   {
     id: 'qwen3.8-27b-iq1',
     role: 'llm',
-    label: 'Qwen3.8 27B · UD-IQ1_S — 6.2 GB download',
+    label: 'Qwen3.8 27B · UD-IQ1_S · 6.2 GB',
     recommendedContext: 32768,
   },
   {
@@ -52,22 +52,18 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
 ];
 
 /**
- * One-line hardware note, shown at the moment the model is chosen.
+ * One short line under the model picker. Size is on each row; the Field above
+ * already covers fetch + verification, so this says the one thing neither does.
  *
- * Download size lives on each row instead of here, because one sentence cannot
- * describe both a 2.6 GB and a 16.5 GB choice. What stays is the claim that
- * holds for every row, and the counter-intuitive one this exists for: readers
- * assume four agents means four times the model. They share one context, so
- * the cost tracks KV FULLNESS, not agent count.
+ * Keep it to a single clause a reader can take in without stopping. Anything
+ * needing a "because" belongs in the docs, not at the moment of choosing.
  *
- * The 16 GB floor is grounded, not guessed — it is the machine the `research`
- * template was verified end-to-end on (Apple M2, 16 GB), running `qwen3.5-4b`
- * plus the 0.6B reranker. Budget above the download size for KV at the
- * recommended context, the OS, and whichever surface is running; 8 GB does not
- * survive Electron or a browser on top.
+ * The 16 GB figure is measured, not guessed: the machine the `research`
+ * template was verified end-to-end on (Apple M2, 16 GB) running `qwen3.5-4b`
+ * plus the 0.6B reranker. No figure is offered for the 27B rows because none
+ * has been measured — better silent than invented.
  */
-export const MODEL_FOOTPRINT_HINT =
-  'Fetched + digest-verified on first run. Budget RAM above the download size for KV and the OS — 16 GB was the floor for the 4B. Concurrent agents share one context; they do not multiply it.';
+export const MODEL_FOOTPRINT_HINT = '16 GB RAM runs the 4B. Larger models need more.';
 
 /** The catalog entries for one role, in listing order. */
 export function modelsForRole(role: ModelRole): readonly CatalogModel[] {

@@ -379,8 +379,7 @@ export function Wizard({
             <Field label="Trunk model" hint="fetched + digest-verified on first run — no key" />
             {/* The hardware floor belongs HERE, at the moment the choice is
                 committed — not only in the docs, which a wizard user may never
-                have opened. Concurrent agents share one context, so they do not
-                multiply this; memory tracks KV fullness, not agent count. */}
+                have opened. One line; the rows carry the sizes. */}
             <Text dimColor>{`  ${MODEL_FOOTPRINT_HINT}`}</Text>
             <Select
               options={[
@@ -392,7 +391,7 @@ export function Wizard({
                   value: m.id,
                 })),
                 { label: 'Bring your own — a local .gguf you already have', value: 'byo' },
-                { label: 'Decide later — keep the default, edit harness.yml', value: 'later' },
+                { label: 'Decide later — keep the default', value: 'later' },
               ]}
               onChange={submitModel}
             />

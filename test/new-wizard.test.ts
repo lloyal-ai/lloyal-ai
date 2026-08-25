@@ -55,18 +55,27 @@ describe('MODEL_FOOTPRINT_HINT — the hardware floor shown at the model step', 
     for (const m of llms) {
       const expected = RIG_SIZE_BYTES[m.id];
       expect(expected, `no pinned size for catalog id "${m.id}"`).toBeDefined();
-      const quoted = Number(/([\d.]+)\s*GB download/.exec(m.label)?.[1] ?? NaN);
+      const quoted = Number(/([\d.]+)\s*GB/.exec(m.label)?.[1] ?? NaN);
       expect(Number.isFinite(quoted), `label "${m.label}" quotes no size`).toBe(true);
       // Same figure to one decimal, in GB as a human reads it.
       expect(quoted).toBeCloseTo(expected / 1e9, 1);
     }
   });
 
-  it('states that concurrent agents do not multiply the requirement', () => {
-    // The counter-intuitive half, and the reason the hint exists at all —
-    // readers assume four agents means four times the model.
-    expect(MODEL_FOOTPRINT_HINT).toMatch(/share one context/i);
+  it('stays one short line carrying the measured figure', () => {
+    // This sits under the picker at the moment of choosing, so length is the
+    // property worth guarding. It previously ran to three sentences and opened
+    // by repeating the Field hint directly above it.
     expect(MODEL_FOOTPRINT_HINT).toMatch(/16 GB/);
+    expect(MODEL_FOOTPRINT_HINT.length).toBeLessThan(70);
+
+    // It must not restate what the Field hint already says one line above.
+    expect(MODEL_FOOTPRINT_HINT).not.toMatch(/verified|fetch/i);
+
+    // "agents share one context" was dropped deliberately: at the model step it
+    // is not a selection criterion, and it was imprecise — concurrency is free
+    // on compute but paid in SPACE (N reports of length L hold N·L cells).
+    expect(MODEL_FOOTPRINT_HINT).not.toMatch(/multiply/i);
   });
 });
 
