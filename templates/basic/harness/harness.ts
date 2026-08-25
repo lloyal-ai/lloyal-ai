@@ -277,6 +277,10 @@ function* runQuery(
         maxTurns: MAX_TURNS,
         pruneOnReturn: true,
         policy: new DefaultAgentPolicy({ terminalToolName: "report" }),
+        // Per-token entropy/surprisal on agent:produce + AgentResult.trace —
+        // the dev pane's epistemics. Off outside LLOYAL_DEV: it costs two
+        // metric computations per produced token.
+        trace: process.env.LLOYAL_DEV === "1",
         enableThinking: true,
         // Breadth: independent angles, in parallel, over one shared spine.
         // For sequential DEPTH — each task building on the last via the spine —

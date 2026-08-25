@@ -575,6 +575,7 @@ export function* runPreflight(
       const preflight = yield* resolvePrompt("preflight");
       const reconRecover = yield* resolvePrompt("preflight-recover");
       const probe = yield* agentPool({
+        trace: process.env.LLOYAL_DEV === "1", // dev-pane epistemics (per-token entropy/surprisal)
         tools: reconTools,
         parent: reconSpine,
         terminal: reportTool,
@@ -952,6 +953,7 @@ export function* runResearchPlan(
 
       const recoveryPrompt = yield* resolvePrompt("recovery");
       const research = yield* agentPool({
+        trace: process.env.LLOYAL_DEV === "1", // dev-pane epistemics (per-token entropy/surprisal)
         tools: researchTools,
         parent: querySpine,
         terminal: citedReportTool,

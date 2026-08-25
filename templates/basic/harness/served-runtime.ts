@@ -18,7 +18,10 @@ import { createSignal } from "effection";
 import type { Signal } from "effection";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import type { SessionContext } from "@lloyal-labs/sdk";
-import { NullTraceWriter } from "@lloyal-labs/lloyal-agents";
+import { openSync } from "node:fs";
+import { join } from "node:path";
+import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
+import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createBus, type EventBus } from "@lloyal-labs/binding";
 import type { Runner } from "./runner-ctx.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
@@ -94,6 +97,25 @@ function mergeConfig(base: Config, patch: Partial<Config>): Config {
 }
 
 /**
+ * The dev-gated trace sink. `LLOYAL_DEV=1` writes `trace-<ts>.jsonl` into
+ * `sources.outputDir` (default: the project root) — the record the dev tools
+ * tail; anything else stays Null, so production writes nothing to disk. A
+ * failed open degrades to Null rather than blocking boot: tracing is
+ * observability, never a dependency. The fd lives for the process (dev-only;
+ * nothing closes it — the TraceWriter contract has no dispose).
+ */
+function makeTraceWriter(cfg: Config): TraceWriter {
+  if (process.env.LLOYAL_DEV !== "1") return new NullTraceWriter();
+  try {
+    const dir = cfg.sources.outputDir ?? process.cwd();
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    return new JsonlTraceWriter(openSync(join(dir, `trace-${ts}.jsonl`), "w"));
+  } catch {
+    return new NullTraceWriter();
+  }
+}
+
+/**
  * Build the served `Runner` for ONE Session. Everything here is per-session: its
  * OWN config clone (in-memory `saveConfig`), fresh wind-down / cancel signals, and
  * a null trace sink — so no runner state and no user data crosses between tenants.
@@ -106,7 +128,7 @@ export function makeServedRunner(cfg: Config): Runner {
   let sessionConfig = structuredClone(cfg);
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
-  const traceWriter = new NullTraceWriter();
+  const traceWriter = makeTraceWriter(cfg);
   return {
     config: () => sessionConfig,
     origin: () => EPHEMERAL_ORIGIN,
@@ -147,7 +169,7 @@ export function makeEdgeRunner(cfg: Config): Runner {
   let sessionConfig = structuredClone(cfg);
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
-  const traceWriter = new NullTraceWriter();
+  const traceWriter = makeTraceWriter(cfg);
   return {
     config: () => sessionConfig,
     origin: () => EPHEMERAL_ORIGIN,
