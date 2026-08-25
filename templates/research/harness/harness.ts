@@ -56,6 +56,7 @@ import {
   PromptsCtx,
   type Effort,
 } from "./pipeline.js";
+import type { Config } from "./config-types.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
 import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
@@ -142,6 +143,23 @@ function buildPlannerContext(abilities: readonly Ability[]): string {
 // The catalog-metadata join (title/iconUrl/entitlements) reasoning.run does is
 // intentionally absent here.
 
+/** Ability config can carry credentials (a `tavilyKey`). VALUES never ride
+ *  the event bus — on a served placement the bus terminates in every connected
+ *  tenant's renderer. Entries redact to key-presence (`key: true`) so a
+ *  surface can show WHAT is configured without seeing secrets; the real values
+ *  stay server-side in the config store and the runner. */
+function redactAbilities(config: Config): Config {
+  return {
+    ...config,
+    abilities: Object.fromEntries(
+      Object.entries(config.abilities).map(([name, cfg]) => [
+        name,
+        Object.fromEntries(Object.keys(cfg).map((k) => [k, true])),
+      ]),
+    ),
+  };
+}
+
 /** Build view-ready descriptors for every registry-enabled ability, from each ability's
  *  own manifest. Display-only — never throws on a missing field. */
 function* buildAppDescriptors(
@@ -160,7 +178,8 @@ function* buildAppDescriptors(
       tools: [...manifest.protocol.tools],
       entitlements: [],
       configSchema: manifest.configSchema,
-      config,
+      // Key-presence only — see redactAbilities.
+      config: Object.fromEntries(Object.keys(config).map((k) => [k, true])),
       enabled: true,
     });
   }
@@ -223,7 +242,7 @@ export function* harness(
   // runner adds it.
   events.send({
     type: "config:loaded",
-    config: runner.config(),
+    config: redactAbilities(runner.config()),
     origin: runner.origin(),
   });
 
@@ -608,7 +627,7 @@ export function* harness(
 
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
@@ -622,7 +641,7 @@ export function* harness(
         });
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
@@ -635,7 +654,7 @@ export function* harness(
         const saved = runner.saveConfig({ defaults: { effort: cmd.effort } });
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
