@@ -23,6 +23,13 @@ model:
 # sources:
 #   outputDir: runs          # where run artifacts and dev traces land
 
+# abilities:                 # per-ability config committed with the deploy
+#   corpus:
+#     corpusPath: docs       # secrets go in env (e.g. TAVILY_API_KEY), not here
+
+# Local overrides the harness saves (set_effort, set_output_dir) live in
+# harness.json — gitignored, layered over this file.
+
 # defaults:
 #   effort: high             # low · medium · high · ultra
 #   reasoningMode: flat      # flat · deep

@@ -23,7 +23,7 @@ import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createBus, type EventBus } from "@lloyal-labs/binding";
 import type { Runner } from "./runner-ctx.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
-import type { Config, ConfigOrigin } from "./config-types.js";
+import type { Config, ConfigOrigin, ConfigPatch, SaveResult } from "./config-types.js";
 
 /**
  * Steer the native backend for the resident model context via
@@ -68,19 +68,9 @@ export function createServedContext(cfg: Config): Promise<SessionContext> {
   );
 }
 
-// A runner config isn't sourced from CLI/env/file — it's in-memory/deploy state.
-// Every field reads as `default` for the composer's provenance hints.
-const EPHEMERAL_ORIGIN: ConfigOrigin = {
-  modelPath: "default",
-  reranker: "default",
-  nCtx: "default",
-  gpu: "default",
-  outputDir: "default",
-};
-
 /** Deep-merge a `saveConfig` patch into a config — a nested-object merge, purely
  *  in-memory. */
-function mergeConfig(base: Config, patch: Partial<Config>): Config {
+function mergeConfig(base: Config, patch: ConfigPatch): Config {
   const sources = { ...base.sources, ...(patch.sources ?? {}) };
   const model = { ...base.model, ...(patch.model ?? {}) };
   if (sources.outputDir === "") delete sources.outputDir;
@@ -110,6 +100,30 @@ export interface RunnerDevOpts {
 }
 
 /**
+ * Boot-owned config plumbing, injected like the dev sink so the factories
+ * stay platform-free. The boot that layered the config passes the computed
+ * per-field `origin`, and — edge only — a `persist` that writes the patch to
+ * `harness.json` and returns the re-layered provenance. Absent `persist`,
+ * patches stay in-memory and their fields read `session`.
+ */
+export interface RunnerConfigOpts {
+  origin: ConfigOrigin;
+  persist?: (patch: ConfigPatch) => SaveResult & { config: Config; origin: ConfigOrigin };
+}
+
+/** Mark every origin-tracked field a patch touches as `session` — the honest
+ *  provenance for an in-memory change that no file will remember. */
+function markSession(origin: ConfigOrigin, patch: ConfigPatch): ConfigOrigin {
+  const next = { ...origin };
+  if (patch.sources && "outputDir" in patch.sources) next.outputDir = "session";
+  if (patch.model?.path !== undefined) next.modelPath = "session";
+  if (patch.model?.reranker !== undefined) next.reranker = "session";
+  if (patch.model?.nCtx !== undefined) next.nCtx = "session";
+  if (patch.model?.gpu !== undefined) next.gpu = "session";
+  return next;
+}
+
+/**
  * Build the served `Runner` for ONE Session. Everything here is per-session: its
  * OWN config clone (in-memory `saveConfig`), fresh wind-down / cancel signals, and
  * its own injected trace sink — so no runner state and no user data crosses between tenants.
@@ -118,21 +132,26 @@ export interface RunnerDevOpts {
  * the model is a fixed host residency, so a config change that would rebuild it
  * just ends that Session.
  */
-export function makeServedRunner(cfg: Config, opts: RunnerDevOpts = {}): Runner {
+export function makeServedRunner(cfg: Config, opts: RunnerDevOpts & RunnerConfigOpts): Runner {
   let sessionConfig = structuredClone(cfg);
+  let sessionOrigin = { ...opts.origin };
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
   return {
     config: () => sessionConfig,
-    origin: () => EPHEMERAL_ORIGIN,
+    origin: () => sessionOrigin,
     saveConfig(patch) {
+      // In-memory only — a shared server-side file would leak one tenant's
+      // settings into another's. `path: null` says so; touched fields read
+      // `session` in the origin.
       sessionConfig = mergeConfig(sessionConfig, patch);
+      sessionOrigin = markSession(sessionOrigin, patch);
       return {
-        path: "<served>",
+        path: null,
         gitignored: false,
         skipped: [],
         config: sessionConfig,
-        origin: EPHEMERAL_ORIGIN,
+        origin: sessionOrigin,
       };
     },
     reloadRuntime(_patch: Partial<Config>) {
@@ -151,34 +170,56 @@ export function makeServedRunner(cfg: Config, opts: RunnerDevOpts = {}): Runner 
 }
 
 /**
- * Build the CLI edge `Runner` — this template's edge substrate. An in-memory,
- * ephemeral mirror of {@link makeServedRunner}: `saveConfig` mutates a private
- * clone (so config edits survive within a session but not across restarts — a
- * cold path, fine for an austere CLI), `reloadRuntime` is a no-op (the boot owns
- * the `SessionContext` lifetime), the boot's injected trace sink, no replay, `interactive`
- * mode. The reranker is NOT here: the boot's `provisionAbilityModels` publishes it on
+ * Build the CLI edge `Runner` — this template's edge substrate. `saveConfig`
+ * evolves a private clone AND persists the patch through the boot-injected
+ * `persist` (harness.json), so config edits survive restarts; `reloadRuntime`
+ * persists too — the process ends after it, and the next launch applies the
+ * change. The boot's injected trace sink, no replay, `interactive` mode. The
+ * reranker is NOT here: the boot's `provisionAbilityModels` publishes it on
  * `RerankerCtx` before `harness` runs.
  */
-export function makeEdgeRunner(cfg: Config, opts: RunnerDevOpts = {}): Runner {
+export function makeEdgeRunner(cfg: Config, opts: RunnerDevOpts & RunnerConfigOpts): Runner {
   let sessionConfig = structuredClone(cfg);
+  let sessionOrigin = { ...opts.origin };
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
   return {
     config: () => sessionConfig,
-    origin: () => EPHEMERAL_ORIGIN,
+    origin: () => sessionOrigin,
     saveConfig(patch) {
+      if (opts.persist) {
+        // Live-read fields (sources, defaults, abilities) reconcile from the
+        // re-layered files — value AND origin together, so clearing a key
+        // restores the rung beneath it and an env-outranked save shows the
+        // env value it actually runs with. The model block stays BOOT-FROZEN
+        // (value and origin): it describes the RUNNING residency, which a
+        // save cannot change — that is reloadRuntime + a relaunch.
+        const saved = opts.persist(patch);
+        sessionConfig = { ...saved.config, surface: sessionConfig.surface, model: sessionConfig.model };
+        sessionOrigin = {
+          ...saved.origin,
+          modelPath: sessionOrigin.modelPath,
+          reranker: sessionOrigin.reranker,
+          nCtx: sessionOrigin.nCtx,
+          gpu: sessionOrigin.gpu,
+        };
+        return { ...saved, config: sessionConfig, origin: sessionOrigin };
+      }
       sessionConfig = mergeConfig(sessionConfig, patch);
+      sessionOrigin = markSession(sessionOrigin, patch);
       return {
-        path: "<in-memory>",
+        path: null,
         gitignored: false,
         skipped: [],
         config: sessionConfig,
-        origin: EPHEMERAL_ORIGIN,
+        origin: sessionOrigin,
       };
     },
-    reloadRuntime(_patch: Partial<Config>) {
-      // No-op — the CLI boot owns the SessionContext lifetime; a config change
-      // that would rebuild it just ends the current run cleanly.
+    reloadRuntime(patch: ConfigPatch) {
+      // Persist the change; there is no in-process rebuild — the harness
+      // returns after calling this and the process ends. The next launch
+      // reads harness.json and applies it.
+      opts.persist?.(patch);
     },
     windDown,
     cancelAgent,

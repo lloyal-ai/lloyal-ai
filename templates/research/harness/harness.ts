@@ -56,6 +56,7 @@ import {
   PromptsCtx,
   type Effort,
 } from "./pipeline.js";
+import type { Config } from "./config-types.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
 import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
@@ -142,6 +143,23 @@ function buildPlannerContext(abilities: readonly Ability[]): string {
 // The catalog-metadata join (title/iconUrl/entitlements) reasoning.run does is
 // intentionally absent here.
 
+/** Ability config can carry credentials (a `tavilyKey`). VALUES never ride
+ *  the event bus — on a served placement the bus terminates in every connected
+ *  tenant's renderer. Entries redact to key-presence (`key: true`) so a
+ *  surface can show WHAT is configured without seeing secrets; the real values
+ *  stay server-side in the config store and the runner. */
+function redactAbilities(config: Config): Config {
+  return {
+    ...config,
+    abilities: Object.fromEntries(
+      Object.entries(config.abilities).map(([name, cfg]) => [
+        name,
+        Object.fromEntries(Object.keys(cfg).map((k) => [k, true])),
+      ]),
+    ),
+  };
+}
+
 /** Build view-ready descriptors for every registry-enabled ability, from each ability's
  *  own manifest. Display-only — never throws on a missing field. */
 function* buildAppDescriptors(
@@ -160,7 +178,8 @@ function* buildAppDescriptors(
       tools: [...manifest.protocol.tools],
       entitlements: [],
       configSchema: manifest.configSchema,
-      config,
+      // Key-presence only — see redactAbilities.
+      config: Object.fromEntries(Object.keys(config).map((k) => [k, true])),
       enabled: true,
     });
   }
@@ -223,7 +242,7 @@ export function* harness(
   // runner adds it.
   events.send({
     type: "config:loaded",
-    config: runner.config(),
+    config: redactAbilities(runner.config()),
     origin: runner.origin(),
   });
 
@@ -519,6 +538,35 @@ export function* harness(
         const resolvedValues = resolveConfigPaths(cmd.values);
         const isClear = Object.keys(resolvedValues).length === 0;
 
+        // Path-shaped values must EXIST before anything persists or enables:
+        // a factory handed a bad path can take the whole process down (rig's
+        // loadResources exits on a missing corpus), and a persisted bad path
+        // would re-kill every subsequent boot. Generic — same path-shape rule
+        // as resolveConfigPaths, no ability-name knowledge.
+        const missingPath = Object.entries(resolvedValues).find(
+          ([k, v]) =>
+            typeof v === "string" &&
+            v !== "" &&
+            (/path$/i.test(k) || /^[~/.]/.test(v)) &&
+            !fs.existsSync(v),
+        );
+        if (missingPath) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: `${missingPath[0]}: path does not exist — ${String(missingPath[1])}`,
+          });
+          continue;
+        }
+
+        // Persist FIRST: if the disk save refuses (unreadable/newer
+        // harness.json, fs error), the outer catch surfaces it and the live
+        // session is untouched — no half-applied ability state. `prior` is
+        // kept so an enable failure below can restore the disk too.
+        const prior = (yield* configStore.get(cmd.name)) ?? null;
+        const saved = runner.saveConfig({
+          abilities: { [cmd.name]: resolvedValues },
+        });
+
         yield* configStore.set(cmd.name, resolvedValues);
 
         const factory = factoryFor(cmd.name);
@@ -542,7 +590,28 @@ export function* harness(
                 });
               }
             } catch (err) {
-              yield* configStore.clear(cmd.name);
+              // The new config failed to ENABLE — restore ALL the surfaces
+              // this command touched: the store, the LIVE registry (a
+              // previously working instance was disabled above — bring it
+              // back), and the disk. Best-effort throughout: the error toast
+              // below reports the original failure regardless.
+              if (prior && Object.keys(prior).length > 0) {
+                yield* configStore.set(cmd.name, prior);
+                try {
+                  yield* registry.enable(factory);
+                } catch {
+                  // The prior config no longer enables either — leave the
+                  // ability disabled rather than looping.
+                  yield* configStore.clear(cmd.name);
+                }
+              } else {
+                yield* configStore.clear(cmd.name);
+              }
+              try {
+                runner.saveConfig({ abilities: { [cmd.name]: prior ?? {} } });
+              } catch {
+                /* disk restore failed — the toast still reports the enable error */
+              }
               yield* agentEvents.send({
                 type: "ui:error",
                 message: `Cannot configure ${cmd.name}: ${errorMessage(err)}`,
@@ -556,12 +625,9 @@ export function* harness(
 
         participation[cmd.name] = true;
 
-        const saved = runner.saveConfig({
-          abilities: { [cmd.name]: resolvedValues },
-        });
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
@@ -575,19 +641,20 @@ export function* harness(
         });
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
           skipped: saved.skipped,
         });
       } else if (cmd.type === "set_effort") {
-        const saved = runner.saveConfig({
-          defaults: { ...runner.config().defaults, effort: cmd.effort },
-        });
+        // Save ONLY the changed key — spreading the whole defaults object
+        // would pin the untouched ones into harness.json, shadowing later
+        // harness.yml edits.
+        const saved = runner.saveConfig({ defaults: { effort: cmd.effort } });
         yield* agentEvents.send({
           type: "config:updated",
-          config: saved.config,
+          config: redactAbilities(saved.config),
           origin: saved.origin,
           savedTo: saved.path,
           gitignored: saved.gitignored,
