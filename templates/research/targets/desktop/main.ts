@@ -14,13 +14,13 @@
  * answer ONE snapshot per (re)load: the renderer seeds from it and applies only
  * events with `seq > snapshot.seq` (a consistent cut — no gap, no double-apply).
  */
-import { ability, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { reduce, initialState, type AppState } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
-/** Only http(s) links may leave the ability. */
+/** Only http(s) links may leave the app. */
 function isExternalUrl(url: string): boolean {
   try {
     const p = new URL(url).protocol;
@@ -99,7 +99,7 @@ function createWindow(): void {
     return { action: "deny" };
   });
   // Same for in-place navigations (a bare <a href> with no target): keep the
-  // renderer pinned to the ability, and hand http(s) links to the system browser.
+  // renderer pinned to the app, and hand http(s) links to the system browser.
   win.webContents.on("will-navigate", (e, url) => {
     if (url !== win?.webContents.getURL()) {
       e.preventDefault();
@@ -113,7 +113,7 @@ function createWindow(): void {
   }
 }
 
-ability.whenReady().then(() => {
+app.whenReady().then(() => {
   spawnEngine();
   createWindow();
   // renderer → engine (Command)
@@ -122,12 +122,12 @@ ability.whenReady().then(() => {
   });
   // renderer (re)load → consistent cut: reduced state + the seq it reflects.
   ipcMain.handle("harness:snapshot", () => ({ state: appState, seq }));
-  ability.on("activate", () => {
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-ability.on("window-all-closed", () => {
-  if (process.platform !== "darwin") ability.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
-ability.on("quit", () => engine?.kill());
+app.on("quit", () => engine?.kill());

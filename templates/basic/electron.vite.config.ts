@@ -6,7 +6,7 @@ import { resolve } from "node:path";
  * The desktop target's 3-process build (`npm run dev:desktop` / `build:desktop`).
  * `main` + `preload` run in Node (externalize node_modules; the local
  * `harness/*` sources bundle in — they're node-free). The `renderer` is a normal
- * Vite React ability rooted at `targets/desktop`, folding `harness/state.ts`'s
+ * Vite React app rooted at `targets/desktop`, folding `harness/state.ts`'s
  * `reduce`. Source lives in `targets/desktop/`; this config is at the project
  * root because that's where `electron-vite` looks for it.
  */

@@ -1,6 +1,6 @@
 # __NAME__
 
-A grounded multi-agent research harness. The models live *inside* the ability — no
+A grounded multi-agent research harness. The models live *inside* the app — no
 API key, and nothing on the inference path touches the network. Given a question
 it runs a pre-flight recon probe of each source, plans a set of research tasks, and
 dispatches a pool of agents that gather evidence in parallel (or in a dependency
@@ -33,7 +33,7 @@ same `reduce`, a different binding:
 ```sh
 npm run dev:desktop   # a native window (Electron): forks this cli as the engine
 npm run serve         # a local host serving browsers over ws://127.0.0.1:8787
-npm run dev:web       # …and the browser ability that talks to it (Vite, :5173)
+npm run dev:web       # …and the browser app that talks to it (Vite, :5173)
 ```
 
 ## The shape
@@ -51,10 +51,10 @@ prompts/         the 7 RACE/DRB-tuned .eta prompts — edit one to override it
 targets/
   cli/
     index.ts     boot: resolve the models, mount a view, run your harness
-    view.tsx     the terminal view (Ink) — swap it, or bring a whole ability
+    view.tsx     the terminal view (Ink) — swap it, or bring a whole app
   desktop/       the same harness in a native window (Electron + ipc binding)
     App.tsx      the shared React view (desktop + web) — folds the same reduce
-  web/           a local host (serve.ts) + browser ability, over the wss binding
+  web/           a local host (serve.ts) + browser app, over the wss binding
 models/
   llm/           the resident reasoning model (fetched on first run; gitignored)
   reranker/      the resident cross-encoder      (fetched on first run; gitignored)

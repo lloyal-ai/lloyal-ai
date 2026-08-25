@@ -36,6 +36,16 @@ export type ConfigApps = Record<string, Record<string, unknown>>;
  *  `applyServedGpuEnv`) rather than silently dropping to CPU. */
 export type ConfigGpu = 'default' | 'cuda' | 'vulkan';
 
+export const CONFIG_GPU_VALUES: readonly ConfigGpu[] = [
+  'default',
+  'cuda',
+  'vulkan',
+];
+
+export function isConfigGpu(v: unknown): v is ConfigGpu {
+  return typeof v === 'string' && (CONFIG_GPU_VALUES as readonly string[]).includes(v);
+}
+
 /** KV cache type for the attention layers. Mirrors the SDK's `KvCacheType`;
  *  restated here so this file stays dependency-free like `ConfigGpu`. */
 export type ConfigKvCache =

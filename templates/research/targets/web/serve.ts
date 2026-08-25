@@ -6,7 +6,7 @@
  * the browser connects with `connectWss` (see `web-bridge.ts`).
  *
  * `npm run serve` builds + starts this; then `npm run dev:web` serves the browser
- * ability that talks to it. Loopback + no-auth for local dev — token auth is a
+ * app that talks to it. Loopback + no-auth for local dev — token auth is a
  * front-door concern, deferred.
  *
  * ESBUILT (it injects `runServedSession` → the harness → its `.eta` prompts, so it
@@ -34,7 +34,8 @@ import { resolveModel } from "@lloyal-labs/rig/node";
 import { createServedHostDriver } from "./driver.js";
 import { runServedSession } from "../../harness/served-session.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import type { Config, ConfigKvCache } from "../../harness/config-types.js";
+import { isConfigGpu } from "../../harness/config-types.js";
+import type { Config, ConfigDefaults, ConfigGpu, ConfigKvCache } from "../../harness/config-types.js";
 
 interface ModelEntry {
   id?: string;
@@ -47,9 +48,18 @@ interface ModelEntry {
   /** KV cache type for the attention layers. Bounds the smallest meaningful
    *  score difference; raise it for precision, lower it for memory. */
   kvCache?: ConfigKvCache;
+  /** GPU backend variant. A configured value is a deliberate deploy choice —
+   *  the boot fails loud if the variant is unavailable, never silently CPU. */
+  gpu?: ConfigGpu;
 }
 
-function loadYaml(): { model?: { llm?: ModelEntry; reranker?: ModelEntry } } {
+interface HarnessYaml {
+  model?: { llm?: ModelEntry; reranker?: ModelEntry };
+  sources?: { outputDir?: string };
+  defaults?: Partial<ConfigDefaults>;
+}
+
+function loadYaml(): HarnessYaml {
   // Fail loud, like the cli boot: a missing or malformed harness.yml must not be
   // silently swallowed into `{}` (which would fall through to default model
   // resolution and serve an unexpected model).
@@ -61,13 +71,41 @@ function loadYaml(): { model?: { llm?: ModelEntry; reranker?: ModelEntry } } {
     process.exit(1);
   }
   try {
-    return (parse(raw) ?? {}) as { model?: { llm?: ModelEntry; reranker?: ModelEntry } };
+    return (parse(raw) ?? {}) as HarnessYaml;
   } catch (err) {
     process.stderr.write(
       `harness.yml is not valid YAML: ${err instanceof Error ? err.message : String(err)}\n`,
     );
     process.exit(1);
   }
+}
+
+/** Overlay harness.yml `defaults:` onto the shipped run defaults. Fails loud on
+ *  a value the pipeline can't run — a typo'd effort would otherwise crash
+ *  mid-query instead of at boot. */
+function parseDefaults(raw: Partial<ConfigDefaults> | undefined): ConfigDefaults {
+  const d: ConfigDefaults = { reasoningMode: "flat", effort: "high", maxTurns: 10 };
+  if (!raw) return d;
+  const fail = (msg: string): never => {
+    process.stderr.write(`harness.yml: ${msg}\n`);
+    process.exit(1);
+  };
+  if (raw.reasoningMode !== undefined) {
+    if (raw.reasoningMode !== "flat" && raw.reasoningMode !== "deep")
+      fail(`defaults.reasoningMode must be flat or deep (got "${raw.reasoningMode}")`);
+    d.reasoningMode = raw.reasoningMode;
+  }
+  if (raw.effort !== undefined) {
+    if (!["low", "medium", "high", "ultra"].includes(raw.effort))
+      fail(`defaults.effort must be low, medium, high, or ultra (got "${raw.effort}")`);
+    d.effort = raw.effort;
+  }
+  if (raw.maxTurns !== undefined) {
+    if (!Number.isInteger(raw.maxTurns) || raw.maxTurns < 1)
+      fail(`defaults.maxTurns must be a positive integer (got "${raw.maxTurns}")`);
+    d.maxTurns = raw.maxTurns;
+  }
+  return d;
 }
 
 function envInt(name: string, fallback: number): number {
@@ -88,6 +126,13 @@ function* resolveConfig(): Operation<Config> {
   const yaml = loadYaml();
   const llm: ModelEntry = yaml.model?.llm ?? {};
   const reranker: ModelEntry = yaml.model?.reranker ?? {};
+  if (llm.gpu !== undefined && !isConfigGpu(llm.gpu)) {
+    process.stderr.write(`harness.yml: model.llm.gpu must be default, cuda, or vulkan (got "${llm.gpu}")\n`);
+    process.exit(1);
+  }
+  // Validate BEFORE the model resolves — a typo'd defaults value must fail
+  // before any fetch, not after one.
+  const runDefaults = parseDefaults(yaml.defaults);
 
   // Resolve the resident reasoning model ONCE → every Session's context is created
   // over this one path (shared weights, weak-cached by lloyal.node's ModelRegistry).
@@ -119,15 +164,16 @@ function* resolveConfig(): Operation<Config> {
 
   return {
     version: 1,
-    sources: {},
+    sources: yaml.sources ?? {},
     abilities: {},
-    defaults: { reasoningMode: "flat", effort: "high", maxTurns: 10 },
+    defaults: runDefaults,
     model: {
       path: modelPath,
       reranker: rerankerPath,
       nCtx: llm.context ?? 32768,
       branches: llm.branches,
       kvCache: llm.kvCache,
+      gpu: llm.gpu,
     },
   };
 }

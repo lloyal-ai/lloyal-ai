@@ -152,14 +152,14 @@ function View({
   bootstrap: WorkflowEvent[];
 }): React.ReactElement {
   const [state, apply] = useReducer(reduce, bootstrap, seed);
-  const ability = useApp();
+  const app = useApp();
 
   useEffect(() => bus.subscribe((ev) => apply(ev)), [bus]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       dispatch({ type: "quit" });
-      ability.exit();
+      app.exit();
     }
   });
 

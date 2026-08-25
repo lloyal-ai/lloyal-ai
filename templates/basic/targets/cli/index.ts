@@ -13,7 +13,7 @@
  * the platform (`rig.resolveModel`), with no API key. Drop your own `.gguf`
  * into `models/llm/` (or point `path:` at one) to skip the fetch entirely.
  */
-import { closeSync, openSync, readFileSync, statSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -26,9 +26,10 @@ import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
 import { harness, abilities } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
-import { makeEdgeRunner } from "../../harness/served-runtime.js";
+import { applyServedGpuEnv, makeEdgeRunner } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
-import type { Config, ConfigKvCache } from "../../harness/config-types.js";
+import { isConfigGpu } from "../../harness/config-types.js";
+import type { Config, ConfigGpu, ConfigKvCache } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
 
 interface ModelEntry {
@@ -42,9 +43,13 @@ interface ModelEntry {
   /** KV cache type for the attention layers. Bounds the smallest meaningful
    *  score difference; raise it for precision, lower it for memory. */
   kvCache?: ConfigKvCache;
+  /** GPU backend variant. A configured value is a deliberate deploy choice —
+   *  the boot fails loud if the variant is unavailable, never silently CPU. */
+  gpu?: ConfigGpu;
 }
 interface HarnessConfig {
   model?: { llm?: ModelEntry; reranker?: ModelEntry };
+  sources?: { outputDir?: string };
 }
 
 function loadConfig(): HarnessConfig {
@@ -77,7 +82,8 @@ function fileSize(p: string): number {
 
 /** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
  *  in `sources.outputDir` (default: the project root) — the record the dev
- *  tools tail. Otherwise Null: production writes nothing. The random id keeps
+ *  tools tail (the directory is created if missing). Otherwise Null:
+ *  production writes nothing. The random id keeps
  *  concurrent writers apart and `"wx"` refuses to truncate an existing file; a
  *  failed open degrades to Null (tracing is observability, never a
  *  dependency). The caller owns the fd — `ensure(close)` it on its scope. */
@@ -85,6 +91,7 @@ function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; clos
   if (!dev) return { writer: new NullTraceWriter(), close: () => {} };
   try {
     const dir = cfg.sources.outputDir ?? process.cwd();
+    mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const fd = openSync(join(dir, `trace-${ts}-${randomUUID().slice(0, 8)}.jsonl`), "wx");
     return {
@@ -105,6 +112,10 @@ function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; clos
 const config = loadConfig();
 const llm: ModelEntry = config.model?.llm ?? {};
 const context = llm.context ?? 32768;
+if (llm.gpu !== undefined && !isConfigGpu(llm.gpu)) {
+  process.stderr.write(`harness.yml: model.llm.gpu must be default, cuda, or vulkan (got "${llm.gpu}")\n`);
+  process.exit(1);
+}
 
 main(function* () {
   // The resident model — a file in models/llm/, fetched + digest-verified on
@@ -130,14 +141,42 @@ main(function* () {
   }
   if (fetching) process.stderr.write("\n");
 
-  const ctx = yield* call(() =>
-    createContext({
-      modelPath,
+  // Which surface is mounting — decided once, here, then echoed into the boot
+  // header (as a measured fact) and used to pick the binding below.
+  const surface = process.env.RR_BRIDGE ? "desktop" : process.stdout.isTTY ? "cli" : "pipe";
+
+  // The live, in-memory config the harness reads via RunnerCtx — the edge
+  // substrate (config, trace sink, wind-down / cancel signals) every harness gets.
+  // Built BEFORE the context: a configured `gpu` must steer BOTH the resident
+  // context and any provisioned reranker (env steer), so it applies first.
+  // `model.id` + `model.sizeBytes` (stat'd here) + `surface` feed the measured
+  // boot header the harness emits on `ready`.
+  const cfg: Config = {
+    version: 1,
+    sources: config.sources ?? {},
+    abilities: {},
+    surface,
+    model: {
+      path: modelPath,
       nCtx: context,
-      nSeqMax: llm.branches ?? 32,
-      typeK: llm.kvCache ?? "q4_0",
-      typeV: llm.kvCache ?? "q4_0",
-    }),
+      gpu: llm.gpu,
+      id: llm.id ?? llm.path ?? "model",
+      sizeBytes: fileSize(modelPath),
+    },
+  };
+  applyServedGpuEnv(cfg);
+
+  const ctx = yield* call(() =>
+    createContext(
+      {
+        modelPath,
+        nCtx: context,
+        nSeqMax: llm.branches ?? 32,
+        typeK: llm.kvCache ?? "q4_0",
+        typeV: llm.kvCache ?? "q4_0",
+      },
+      llm.gpu ? { gpuVariant: llm.gpu } : undefined,
+    ),
   );
 
   // Provision any auxiliary model an enabled ability needs (a reranker, etc.) BEFORE
@@ -165,26 +204,6 @@ main(function* () {
   }
   if (fetchingReranker) process.stderr.write("\n");
 
-  // Which surface is mounting — decided once, here, then echoed into the boot
-  // header (as a measured fact) and used to pick the binding below.
-  const surface = process.env.RR_BRIDGE ? "desktop" : process.stdout.isTTY ? "cli" : "pipe";
-
-  // The live, in-memory config the harness reads via RunnerCtx — the edge
-  // substrate (config, trace sink, wind-down / cancel signals) every harness gets.
-  // `model.id` + `model.sizeBytes` (stat'd here) + `surface` feed the measured
-  // boot header the harness emits on `ready`.
-  const cfg: Config = {
-    version: 1,
-    sources: {},
-    abilities: {},
-    surface,
-    model: {
-      path: modelPath,
-      nCtx: context,
-      id: llm.id ?? llm.path ?? "model",
-      sizeBytes: fileSize(modelPath),
-    },
-  };
   // Dev observability is built HERE, not in the runner factory: the boot knows
   // its platform (Node), so it owns the fd and the env read, and the factory
   // just receives the sink. A boot over another binding (an RN shell over

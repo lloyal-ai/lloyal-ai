@@ -11,7 +11,7 @@
  * dispatches a query. Like the cli view it auto-accepts the planner's plan
  * (there is no plan-review editor here), so a query flows recon → plan → agents
  * → synth end-to-end. This is the floor — grow it into your product's UI (or
- * bring your own ability); the harness never changes.
+ * bring your own app); the harness never changes.
  *
  * SNAPSHOT: reasoning.run @ 0.8.0
  */
@@ -103,7 +103,13 @@ export function HarnessApp() {
     if (state.uiPhase === "clarifying") {
       window.harness.send({ type: "submit_clarification", answer: q });
     } else {
-      window.harness.send({ type: "submit_query", query: q, mode: "flat" });
+      // The run mode comes from the loaded config default (`config:loaded`
+      // seeds `state.config`); this view has no mode toggle.
+      window.harness.send({
+        type: "submit_query",
+        query: q,
+        mode: state.config?.defaults.reasoningMode ?? "flat",
+      });
     }
     setQuery("");
   };

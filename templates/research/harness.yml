@@ -14,7 +14,16 @@ model:
     context: 32768
     # branches: 32           # concurrent sequences (nSeqMax)
     # kvCache: q4_0          # attention KV type
+    # gpu: cuda              # backend (default · cuda · vulkan); boot fails if unavailable
   # The corpus + web abilities score retrievals with a reranker. It's resolved +
   # digest-verified into models/reranker/ on first run, then created per-boot.
   reranker:
     id: "qwen3-reranker-0.6b-q8"
+
+# sources:
+#   outputDir: runs          # where run artifacts and dev traces land
+
+# defaults:
+#   effort: high             # low · medium · high · ultra
+#   reasoningMode: flat      # flat · deep
+#   maxTurns: 10

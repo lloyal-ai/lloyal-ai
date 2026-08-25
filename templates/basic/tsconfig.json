@@ -23,7 +23,7 @@
   },
   "include": ["harness/**/*", "targets/**/*"],
   // Excluded here (built/typechecked by the sibling configs above): the whole
-  // Electron target (main/preload are CJS, Ability/view are DOM-React) and the web
+  // Electron target (main/preload are CJS, App/view are DOM-React) and the web
   // browser sources.
   "exclude": [
     "targets/_shared",

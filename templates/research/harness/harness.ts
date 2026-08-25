@@ -218,6 +218,15 @@ export function* harness(
   const runner = yield* RunnerCtx.expect();
   const oneShot = runner.mode === "oneshot";
 
+  // Seed the renderer's config view — the first event every surface folds.
+  // The runner is in-memory today, so there is no file `path`; a disk-backed
+  // runner adds it.
+  events.send({
+    type: "config:loaded",
+    config: runner.config(),
+    origin: runner.origin(),
+  });
+
   // ── Session + event forwarding ─────────────────────────────
   const runDirSink = new RunDirSink();
 
