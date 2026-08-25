@@ -21,7 +21,7 @@ import { harness, abilities } from "./harness.js";
 import { RunnerCtx } from "./runner-ctx.js";
 import { applyServedGpuEnv, makeServedRunner } from "./served-runtime.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
-import type { Config } from "./config-types.js";
+import type { Config, ConfigOrigin } from "./config-types.js";
 
 /**
  * Run ONE served Session end to end: provision its per-session reranker + ability
@@ -45,6 +45,7 @@ import type { Config } from "./config-types.js";
  */
 export function* runServedSession(
   cfg: Config,
+  origin: ConfigOrigin,
   ctx: SessionContext,
   events: EventBus<WorkflowEvent>,
   commands: Signal<Command, void>,
@@ -67,7 +68,7 @@ export function* runServedSession(
   // flushes every event synchronously, so nothing is pending at close) —
   // sequential sessions must not leak descriptors.
   yield* ensure(trace.close);
-  yield* RunnerCtx.set(makeServedRunner(cfg, { traceWriter: trace.writer, dev }));
+  yield* RunnerCtx.set(makeServedRunner(cfg, { traceWriter: trace.writer, dev, origin }));
   yield* harness(ctx, events, commands);
 }
 

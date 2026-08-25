@@ -17,10 +17,9 @@
  *
  * SNAPSHOT: reasoning.run @ main
  */
-import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { parse } from "yaml";
 import { main, call, ensure, createSignal } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
@@ -32,48 +31,10 @@ import { harness, abilities } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
 import { applyServedGpuEnv, makeEdgeRunner } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
-import { isConfigGpu } from "../../harness/config-types.js";
-import type { Config, ConfigDefaults, ConfigGpu, ConfigKvCache } from "../../harness/config-types.js";
+import { loadConfig, loadYml, saveLocalConfig } from "../../harness/config.js";
+import type { HarnessYml } from "../../harness/config.js";
+import type { Config, ConfigPatch, LoadedConfig } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
-
-interface ModelEntry {
-  id?: string;
-  path?: string;
-  context?: number;
-  /** Concurrent sequences (`nSeqMax`). Each one holds its own KV lease, and on
-   *  a hybrid/linear-attention model its own recurrent state — which is f32 and
-   *  not affected by `kvCache`. Lower this if the machine is memory-bound. */
-  branches?: number;
-  /** KV cache type for the attention layers. Bounds the smallest meaningful
-   *  score difference; raise it for precision, lower it for memory. */
-  kvCache?: ConfigKvCache;
-  /** GPU backend variant. A configured value is a deliberate deploy choice —
-   *  the boot fails loud if the variant is unavailable, never silently CPU. */
-  gpu?: ConfigGpu;
-}
-interface HarnessConfig {
-  model?: { llm?: ModelEntry; reranker?: ModelEntry };
-  sources?: { outputDir?: string };
-  defaults?: Partial<ConfigDefaults>;
-}
-
-function loadConfig(): HarnessConfig {
-  let raw: string;
-  try {
-    raw = readFileSync(join(process.cwd(), "harness.yml"), "utf8");
-  } catch {
-    process.stderr.write("harness.yml not found — run from your harness project root.\n");
-    process.exit(1);
-  }
-  try {
-    return (parse(raw) ?? {}) as HarnessConfig;
-  } catch (err) {
-    process.stderr.write(
-      `harness.yml is not valid YAML: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    process.exit(1);
-  }
-}
 
 /** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
  *  in `sources.outputDir` (default: the project root) — the record the dev
@@ -104,44 +65,22 @@ function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; clos
   }
 }
 
-/** Overlay harness.yml `defaults:` onto the shipped run defaults. Fails loud on
- *  a value the pipeline can't run — a typo'd effort would otherwise crash
- *  mid-query instead of at boot. */
-function parseDefaults(raw: Partial<ConfigDefaults> | undefined): ConfigDefaults {
-  const d: ConfigDefaults = { reasoningMode: "flat", effort: "high", maxTurns: 10 };
-  if (!raw) return d;
-  const fail = (msg: string): never => {
-    process.stderr.write(`harness.yml: ${msg}\n`);
+// The layered config: cli > env > harness.json > harness.yml > default. A bad
+// manifest or defaults value fails HERE — before any model fetch. `bootEnv` is
+// snapshotted before `applyServedGpuEnv` writes LLOYAL_GPU, so re-layering
+// after a save reads the user's env, never our own write.
+const bootEnv = { ...process.env };
+function loadOrExit(): { yml: HarnessYml; loaded: LoadedConfig } {
+  try {
+    const yml = loadYml();
+    return { yml, loaded: loadConfig(yml, {}, bootEnv) };
+  } catch (err) {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     process.exit(1);
-  };
-  if (raw.reasoningMode !== undefined) {
-    if (raw.reasoningMode !== "flat" && raw.reasoningMode !== "deep")
-      fail(`defaults.reasoningMode must be flat or deep (got "${raw.reasoningMode}")`);
-    d.reasoningMode = raw.reasoningMode;
   }
-  if (raw.effort !== undefined) {
-    if (!["low", "medium", "high", "ultra"].includes(raw.effort))
-      fail(`defaults.effort must be low, medium, high, or ultra (got "${raw.effort}")`);
-    d.effort = raw.effort;
-  }
-  if (raw.maxTurns !== undefined) {
-    if (!Number.isInteger(raw.maxTurns) || raw.maxTurns < 1)
-      fail(`defaults.maxTurns must be a positive integer (got "${raw.maxTurns}")`);
-    d.maxTurns = raw.maxTurns;
-  }
-  return d;
 }
-
-const config = loadConfig();
-const llm: ModelEntry = config.model?.llm ?? {};
-const context = llm.context ?? 32768;
-if (llm.gpu !== undefined && !isConfigGpu(llm.gpu)) {
-  process.stderr.write(`harness.yml: model.llm.gpu must be default, cuda, or vulkan (got "${llm.gpu}")\n`);
-  process.exit(1);
-}
-// Validated at module load — a typo'd defaults value must fail BEFORE any
-// model fetch, not after a 2.6 GB download.
-const runDefaults = parseDefaults(config.defaults);
+const { yml, loaded } = loadOrExit();
+const context = loaded.config.model.nCtx ?? 32768;
 
 main(function* () {
   // The reasoning model — a file in models/llm/, fetched + digest-verified on
@@ -153,11 +92,14 @@ main(function* () {
       resolveModel({
         projectRoot: process.cwd(),
         role: "llm",
-        spec: { id: llm.id, path: llm.path },
+        // A saved/yml `model.path` outranks the yml catalog id.
+        spec: loaded.config.model.path
+          ? { path: loaded.config.model.path }
+          : { id: yml.model?.llm?.id },
         onProgress: (got, total) => {
           fetching = true;
           const pct = total > 0 ? Math.round((100 * got) / total) : 0;
-          process.stderr.write(`\rfetching ${llm.id ?? "model"} — ${pct}%   `);
+          process.stderr.write(`\rfetching ${yml.model?.llm?.id ?? "model"} — ${pct}%   `);
         },
       }),
     );
@@ -167,15 +109,13 @@ main(function* () {
   }
   if (fetching) process.stderr.write("\n");
 
-  // The live, in-memory config the harness reads via RunnerCtx. Built BEFORE
-  // the context: a configured `gpu` must steer BOTH the resident context and
-  // the provisioned reranker (env steer), so it applies first.
+  // The live config the harness reads via RunnerCtx — the layered result with
+  // the model path RESOLVED. Built BEFORE the context: a configured `gpu` must
+  // steer BOTH the resident context and the provisioned reranker (env steer),
+  // so it applies first.
   const cfg: Config = {
-    version: 1,
-    sources: config.sources ?? {},
-    abilities: {},
-    defaults: runDefaults,
-    model: { path: modelPath, nCtx: context, gpu: llm.gpu },
+    ...loaded.config,
+    model: { ...loaded.config.model, path: modelPath, nCtx: context },
   };
   applyServedGpuEnv(cfg);
 
@@ -186,11 +126,11 @@ main(function* () {
       {
         modelPath,
         nCtx: context,
-        nSeqMax: llm.branches ?? 32,
-        typeK: llm.kvCache ?? "q4_0",
-        typeV: llm.kvCache ?? "q4_0",
+        nSeqMax: cfg.model.branches ?? 32,
+        typeK: cfg.model.kvCache ?? "q4_0",
+        typeV: cfg.model.kvCache ?? "q4_0",
       },
-      llm.gpu ? { gpuVariant: llm.gpu } : undefined,
+      cfg.model.gpu ? { gpuVariant: cfg.model.gpu } : undefined,
     ),
   );
 
@@ -204,7 +144,10 @@ main(function* () {
     yield* provisionAbilityModels({
       abilities,
       projectRoot: process.cwd(),
-      reranker: config.model?.reranker,
+      // A saved reranker path outranks the yml entry.
+      reranker: loaded.config.model.reranker
+        ? { path: loaded.config.model.reranker }
+        : yml.model?.reranker,
       // 10 leases (trunk + queryBranch + 8 scoring leaves); nCtx 16384 (rig
       // defaults 4096) sizes the reranker for longer rerank inputs.
       rerankerLoad: { nSeqMax: 10, nCtx: 16384 },
@@ -227,7 +170,15 @@ main(function* () {
   const dev = process.env.LLOYAL_DEV === "1";
   const trace = makeTraceWriter(cfg, dev);
   yield* ensure(trace.close);
-  yield* RunnerCtx.set(makeEdgeRunner(cfg, { traceWriter: trace.writer, dev }));
+  // Saves write harness.json, then re-layer for honest provenance (a field
+  // env still outranks keeps reading `env` after a save).
+  const persist = (patch: ConfigPatch) => ({
+    ...saveLocalConfig(patch),
+    origin: loadConfig(yml, {}, bootEnv).origin,
+  });
+  yield* RunnerCtx.set(
+    makeEdgeRunner(cfg, { traceWriter: trace.writer, dev, origin: loaded.origin, persist }),
+  );
 
   const events = createBus<WorkflowEvent>();
   const commands = createSignal<Command, void>();

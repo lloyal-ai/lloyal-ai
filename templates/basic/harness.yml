@@ -23,3 +23,6 @@ model:
 
 # sources:
 #   outputDir: runs          # where run artifacts and dev traces land
+
+# Local overrides the harness saves live in harness.json — gitignored,
+# layered over this file.

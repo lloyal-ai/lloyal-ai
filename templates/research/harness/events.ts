@@ -55,7 +55,9 @@ export type StepEvent =
       type: 'config:updated';
       config: Config;
       origin: ConfigOrigin;
-      savedTo: string;
+      /** The file the save landed in — null when nothing was persisted (a
+       *  served session's in-memory patch). */
+      savedTo: string | null;
       gitignored: boolean;
       skipped: string[];
     }

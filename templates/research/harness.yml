@@ -23,6 +23,9 @@ model:
 # sources:
 #   outputDir: runs          # where run artifacts and dev traces land
 
+# Local overrides the harness saves (set_effort, set_output_dir) live in
+# harness.json — gitignored, layered over this file.
+
 # defaults:
 #   effort: high             # low · medium · high · ultra
 #   reasoningMode: flat      # flat · deep

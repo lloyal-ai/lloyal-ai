@@ -90,17 +90,30 @@ export interface Config {
   model: ConfigModel;
 }
 
+/** One config rung, per field: which layer of
+ *  `cli > env > harness.json > harness.yml > default` supplied the value.
+ *  `file` = the local `harness.json`; `yml` = the committed manifest;
+ *  `session` = patched in-memory by a served session (never written to disk). */
+export type ConfigOriginValue = 'cli' | 'env' | 'file' | 'yml' | 'session' | 'default';
+
 /** Which layer supplied a given harness-level field — used for composer UI
  *  hints. Per-ability config lives in `Config.abilities` and carries no origin
  *  tracking (abilities validate their own config at enable time). */
 export interface ConfigOrigin {
-  reasoningMode: 'cli' | 'file' | 'default';
-  modelPath: 'cli' | 'file' | 'default';
-  reranker: 'cli' | 'file' | 'default';
-  nCtx: 'cli' | 'env' | 'file' | 'default';
-  gpu: 'cli' | 'env' | 'file' | 'default';
-  outputDir: 'cli' | 'file' | 'default';
+  reasoningMode: ConfigOriginValue;
+  modelPath: ConfigOriginValue;
+  reranker: ConfigOriginValue;
+  nCtx: ConfigOriginValue;
+  gpu: ConfigOriginValue;
+  outputDir: ConfigOriginValue;
 }
+
+/** A config write. `defaults` is PARTIAL here — a save carries only the keys
+ *  it changes, so harness.json never pins untouched defaults and a later
+ *  harness.yml edit still shows through. */
+export type ConfigPatch = Omit<Partial<Config>, 'defaults'> & {
+  defaults?: Partial<ConfigDefaults>;
+};
 
 export interface LoadedConfig {
   config: Config;
@@ -120,10 +133,14 @@ export interface CliOverrides {
 }
 
 export interface SaveResult {
-  path: string;
+  /** The file the save landed in, or null when nothing was persisted — a
+   *  served session's in-memory patch. */
+  path: string | null;
   /** true iff this save appended `harness.json` to `.gitignore` during this
-   *  call. Only ever true on the very first save in a git repo. */
+   *  call. Only ever true on the very first save in a git repo (scaffolds
+   *  ship it pre-listed). */
   gitignored: boolean;
-  /** Fields that were IN the patch but deliberately skipped (env won). */
+  /** Reserved: fields that were IN the patch but deliberately skipped. Env
+   *  fallbacks live in the owning ability's factory, not this layer. */
   skipped: string[];
 }

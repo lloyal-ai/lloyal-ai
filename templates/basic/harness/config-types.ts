@@ -90,21 +90,55 @@ export interface Config {
   surface?: string;
 }
 
+/** One config rung, per field: which layer of
+ *  `cli > env > harness.json > harness.yml > default` supplied the value.
+ *  `file` = the local `harness.json`; `yml` = the committed manifest;
+ *  `session` = patched in-memory by a served session (never written to disk). */
+export type ConfigOriginValue = 'cli' | 'env' | 'file' | 'yml' | 'session' | 'default';
+
 /** Which layer supplied a given harness-level field — used for composer UI
- *  hints. `basic`'s in-memory runner reports everything as `default`. */
+ *  hints. */
 export interface ConfigOrigin {
-  modelPath: 'cli' | 'file' | 'default';
-  reranker: 'cli' | 'file' | 'default';
-  nCtx: 'cli' | 'env' | 'file' | 'default';
-  gpu: 'cli' | 'env' | 'file' | 'default';
-  outputDir: 'cli' | 'file' | 'default';
+  modelPath: ConfigOriginValue;
+  reranker: ConfigOriginValue;
+  nCtx: ConfigOriginValue;
+  gpu: ConfigOriginValue;
+  outputDir: ConfigOriginValue;
+}
+
+/** A config write — same name as research's for a uniform Runner contract
+ *  (`basic` has no partial-able `defaults` block). */
+export type ConfigPatch = Partial<Config>;
+
+/** The layered load result — config + per-field provenance + where the local
+ *  file lives (whether or not it existed). */
+export interface LoadedConfig {
+  config: Config;
+  origin: ConfigOrigin;
+  path: string;
+  /** true iff harness.json existed on disk and was read successfully. */
+  loadedFromFile: boolean;
+}
+
+/** CLI-flag rung of the layering. No boot parses flags today; the rung exists
+ *  so a boot that grows them slots in without a contract change. */
+export interface CliOverrides {
+  modelPath?: string;
+  reranker?: string;
+  nCtx?: number;
+  gpu?: ConfigGpu;
+  outputDir?: string;
 }
 
 export interface SaveResult {
-  path: string;
-  /** true iff this save appended a config file to `.gitignore` during this call.
-   *  Always false for `basic`'s in-memory runner. */
+  /** The file the save landed in, or null when nothing was persisted — a
+   *  served session's in-memory patch. */
+  path: string | null;
+  /** true iff this save appended `harness.json` to `.gitignore` during this
+   *  call. Only ever true on the very first save in a git repo (scaffolds
+   *  ship it pre-listed). */
   gitignored: boolean;
-  /** Fields that were IN the patch but deliberately skipped (env won). */
+  /** Reserved: fields that were IN the patch but deliberately skipped. Env
+   *  fallbacks live in the owning ability's factory, not this layer. */
   skipped: string[];
 }

@@ -582,9 +582,10 @@ export function* harness(
           skipped: saved.skipped,
         });
       } else if (cmd.type === "set_effort") {
-        const saved = runner.saveConfig({
-          defaults: { ...runner.config().defaults, effort: cmd.effort },
-        });
+        // Save ONLY the changed key — spreading the whole defaults object
+        // would pin the untouched ones into harness.json, shadowing later
+        // harness.yml edits.
+        const saved = runner.saveConfig({ defaults: { effort: cmd.effort } });
         yield* agentEvents.send({
           type: "config:updated",
           config: saved.config,

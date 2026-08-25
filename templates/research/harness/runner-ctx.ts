@@ -22,7 +22,7 @@
 import { createContext } from "effection";
 import type { Signal } from "effection";
 import type { TraceWriter, BranchCheckpoint } from "@lloyal-labs/lloyal-agents";
-import type { Config, ConfigOrigin, SaveResult } from "./config-types.js";
+import type { Config, ConfigOrigin, ConfigPatch, SaveResult } from "./config-types.js";
 
 export interface Runner {
   /** The live, resolved config (CLI > env > file > default). */
@@ -32,13 +32,13 @@ export interface Runner {
   /** Persist a config patch to the config layer + reload; returns the new
    *  resolved state. Edge-only in practice — never sent over the served wire. */
   saveConfig(
-    patch: Partial<Config>,
+    patch: ConfigPatch,
   ): SaveResult & { config: Config; origin: ConfigOrigin };
   /** Persist a model/reranker/gpu change and request a runtime restart: the runner
    *  tears down the current `SessionContext` + rebuilds, then re-instantiates
    *  `harness` on the new context. The harness returns after calling this. No-op on
    *  a served/edge runner (the model is a fixed residency for the run). */
-  reloadRuntime(patch: Partial<Config>): void;
+  reloadRuntime(patch: ConfigPatch): void;
   /** Persistent graceful-wind-down signal (one per process, survives restarts). */
   windDown: Signal<void, void>;
   /** Persistent per-agent cancel signal (one per process, survives restarts). */

@@ -14,63 +14,20 @@
  * app that talks to it. Config from `harness.yml` + env (PORT / HOST /
  * MAX_SESSIONS). Loopback + no-auth for local dev — TLS/auth terminate upstream.
  */
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { statSync } from "node:fs";
 import { main, suspend, call } from "effection";
 import type { Signal } from "effection";
 import { WebSocketServer } from "ws";
 import type { WsServerSocket } from "@lloyal-labs/binding/node";
 import type { EventBus } from "@lloyal-labs/binding";
 import { resolveModel } from "@lloyal-labs/rig/node";
-import { parse } from "yaml";
 import { createServedHostDriver } from "./driver.js";
 import { abilities } from "../../harness/harness.js";
 import { runServedSession } from "../../harness/served-session.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import { isConfigGpu } from "../../harness/config-types.js";
-import type { Config, ConfigGpu, ConfigKvCache } from "../../harness/config-types.js";
-
-interface ModelEntry {
-  id?: string;
-  path?: string;
-  context?: number;
-  /** Concurrent sequences (`nSeqMax`). Each one holds its own KV lease, and on
-   *  a hybrid/linear-attention model its own recurrent state — which is f32 and
-   *  not affected by `kvCache`. Lower this if the machine is memory-bound. */
-  branches?: number;
-  /** KV cache type for the attention layers. Bounds the smallest meaningful
-   *  score difference; raise it for precision, lower it for memory. */
-  kvCache?: ConfigKvCache;
-  /** GPU backend variant. A configured value is a deliberate deploy choice —
-   *  the boot fails loud if the variant is unavailable, never silently CPU. */
-  gpu?: ConfigGpu;
-}
-
-interface HarnessYaml {
-  model?: { llm?: ModelEntry; reranker?: ModelEntry };
-  sources?: { outputDir?: string };
-}
-
-function loadConfig(): HarnessYaml {
-  // Fail loud, like the cli boot: a missing or malformed harness.yml must not be
-  // silently swallowed into `{}` (which would fall through to default model
-  // resolution and serve an unexpected model).
-  let raw: string;
-  try {
-    raw = readFileSync(join(process.cwd(), "harness.yml"), "utf8");
-  } catch {
-    process.stderr.write("harness.yml not found — run `npm run serve` from your harness project root.\n");
-    process.exit(1);
-  }
-  try {
-    return (parse(raw) ?? {}) as HarnessYaml;
-  } catch (err) {
-    process.stderr.write(
-      `harness.yml is not valid YAML: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    process.exit(1);
-  }
-}
+import { loadConfig, loadYml } from "../../harness/config.js";
+import type { HarnessYml } from "../../harness/config.js";
+import type { Config, LoadedConfig } from "../../harness/config-types.js";
 
 /** Best-effort file size for the boot header — never blocks the server boot. */
 function fileSize(p: string): number {
@@ -81,13 +38,19 @@ function fileSize(p: string): number {
   }
 }
 
-const config = loadConfig();
-const llm: ModelEntry = config.model?.llm ?? {};
-const reranker: ModelEntry = config.model?.reranker ?? {};
-if (llm.gpu !== undefined && !isConfigGpu(llm.gpu)) {
-  process.stderr.write(`harness.yml: model.llm.gpu must be default, cuda, or vulkan (got "${llm.gpu}")\n`);
-  process.exit(1);
+// The layered config: cli > env > harness.json > harness.yml > default. A bad
+// manifest fails HERE — before any model fetch or bind.
+const bootEnv = { ...process.env };
+function loadOrExit(): { yml: HarnessYml; loaded: LoadedConfig } {
+  try {
+    const yml = loadYml();
+    return { yml, loaded: loadConfig(yml, {}, bootEnv) };
+  } catch (err) {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  }
 }
+const { yml, loaded } = loadOrExit();
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST ?? "127.0.0.1";
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS) || 4;
@@ -99,10 +62,13 @@ main(function* () {
     resolveModel({
       projectRoot: process.cwd(),
       role: "llm",
-      spec: { id: llm.id, path: llm.path },
+      // A saved/yml `model.path` outranks the yml catalog id.
+      spec: loaded.config.model.path
+        ? { path: loaded.config.model.path }
+        : { id: yml.model?.llm?.id },
       onProgress: (got, total) => {
         const pct = total > 0 ? Math.round((100 * got) / total) : 0;
-        process.stderr.write(`\rfetching ${llm.id ?? "model"} — ${pct}%   `);
+        process.stderr.write(`\rfetching ${yml.model?.llm?.id ?? "model"} — ${pct}%   `);
       },
     }),
   );
@@ -119,7 +85,10 @@ main(function* () {
       resolveModel({
         projectRoot: process.cwd(),
         role: "reranker",
-        spec: { id: reranker.id, path: reranker.path },
+        // A saved reranker path outranks the yml entry.
+        spec: loaded.config.model.reranker
+          ? { path: loaded.config.model.reranker }
+          : { id: yml.model?.reranker?.id, path: yml.model?.reranker?.path },
         onProgress: (got, total) => {
           const pct = total > 0 ? Math.round((100 * got) / total) : 0;
           process.stderr.write(`\rfetching reranker — ${pct}%   `);
@@ -132,21 +101,17 @@ main(function* () {
   // Runner inside runServedSession). Every Session's context is created over the
   // one resident model; the reranker (if any) is loaded per-session by
   // provisionAbilityModels from this resolved path.
+  // The layered config with the model paths RESOLVED. `id` + `sizeBytes` feed
+  // the measured boot header the harness emits on `ready`.
   const cfg: Config = {
-    version: 1,
-    sources: config.sources ?? {},
-    abilities: {},
+    ...loaded.config,
     surface: "web",
-    // `id` + `sizeBytes` feed the measured boot header the harness emits on
-    // `ready`; every served session renders the same resident-model facts.
     model: {
+      ...loaded.config.model,
       path: modelPath,
       reranker: rerankerPath,
-      nCtx: llm.context ?? 32768,
-      branches: llm.branches,
-      kvCache: llm.kvCache,
-      gpu: llm.gpu,
-      id: llm.id ?? llm.path ?? "model",
+      nCtx: loaded.config.model.nCtx ?? 32768,
+      id: yml.model?.llm?.id ?? yml.model?.llm?.path ?? "model",
       sizeBytes: fileSize(modelPath),
     },
   };
@@ -159,6 +124,7 @@ main(function* () {
     run: (m) =>
       runServedSession(
         cfg,
+        loaded.origin,
         m.context,
         m.uiChannel as unknown as EventBus<WorkflowEvent>,
         m.commands as unknown as Signal<Command, void>,
