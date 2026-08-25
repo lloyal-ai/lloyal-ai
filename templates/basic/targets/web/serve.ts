@@ -27,7 +27,8 @@ import { createServedHostDriver } from "./driver.js";
 import { abilities } from "../../harness/harness.js";
 import { runServedSession } from "../../harness/served-session.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import type { Config, ConfigKvCache } from "../../harness/config-types.js";
+import { isConfigGpu } from "../../harness/config-types.js";
+import type { Config, ConfigGpu, ConfigKvCache } from "../../harness/config-types.js";
 
 interface ModelEntry {
   id?: string;
@@ -40,9 +41,17 @@ interface ModelEntry {
   /** KV cache type for the attention layers. Bounds the smallest meaningful
    *  score difference; raise it for precision, lower it for memory. */
   kvCache?: ConfigKvCache;
+  /** GPU backend variant. A configured value is a deliberate deploy choice —
+   *  the boot fails loud if the variant is unavailable, never silently CPU. */
+  gpu?: ConfigGpu;
 }
 
-function loadConfig(): { model?: { llm?: ModelEntry; reranker?: ModelEntry } } {
+interface HarnessYaml {
+  model?: { llm?: ModelEntry; reranker?: ModelEntry };
+  sources?: { outputDir?: string };
+}
+
+function loadConfig(): HarnessYaml {
   // Fail loud, like the cli boot: a missing or malformed harness.yml must not be
   // silently swallowed into `{}` (which would fall through to default model
   // resolution and serve an unexpected model).
@@ -54,7 +63,7 @@ function loadConfig(): { model?: { llm?: ModelEntry; reranker?: ModelEntry } } {
     process.exit(1);
   }
   try {
-    return (parse(raw) ?? {}) as { model?: { llm?: ModelEntry; reranker?: ModelEntry } };
+    return (parse(raw) ?? {}) as HarnessYaml;
   } catch (err) {
     process.stderr.write(
       `harness.yml is not valid YAML: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -75,6 +84,10 @@ function fileSize(p: string): number {
 const config = loadConfig();
 const llm: ModelEntry = config.model?.llm ?? {};
 const reranker: ModelEntry = config.model?.reranker ?? {};
+if (llm.gpu !== undefined && !isConfigGpu(llm.gpu)) {
+  process.stderr.write(`harness.yml: model.llm.gpu must be default, cuda, or vulkan (got "${llm.gpu}")\n`);
+  process.exit(1);
+}
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST ?? "127.0.0.1";
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS) || 4;
@@ -121,7 +134,7 @@ main(function* () {
   // provisionAbilityModels from this resolved path.
   const cfg: Config = {
     version: 1,
-    sources: {},
+    sources: config.sources ?? {},
     abilities: {},
     surface: "web",
     // `id` + `sizeBytes` feed the measured boot header the harness emits on
@@ -132,6 +145,7 @@ main(function* () {
       nCtx: llm.context ?? 32768,
       branches: llm.branches,
       kvCache: llm.kvCache,
+      gpu: llm.gpu,
       id: llm.id ?? llm.path ?? "model",
       sizeBytes: fileSize(modelPath),
     },

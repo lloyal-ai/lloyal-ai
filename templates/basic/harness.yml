@@ -15,7 +15,11 @@ model:
     context: 32768
     # branches: 32           # concurrent sequences (nSeqMax)
     # kvCache: q4_0          # attention KV type
+    # gpu: cuda              # backend (default · cuda · vulkan); boot fails if unavailable
   # An ability that needs a reranker (e.g. corpus, web) auto-provisions the catalog
   # default when it's enabled. Pin a specific one here to override:
   #   reranker:
   #     id: "qwen3-reranker-0.6b-q8"
+
+# sources:
+#   outputDir: runs          # where run artifacts and dev traces land

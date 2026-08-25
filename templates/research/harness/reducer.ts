@@ -13,7 +13,6 @@ import type { AppState, AgentRuntime, TimelineItem, SourceMeta } from './state-c
 import { initialState } from './state-core.js';
 import type { WorkflowEvent } from './events.js';
 import type { Config } from './config-types.js';
-import { shortPath } from './short-path.js';
 
 /** Seed/refresh `participation` from current config. The reducer holds NO
  *  per-ability knowledge: abilities default to included via the `!== false`
@@ -526,11 +525,10 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
 
     case 'config:updated': {
       const toastId = state.nextToastId + 1;
-      const message = ev.skipped.length > 0
-        ? `saved → ${shortPath(ev.savedTo)} (skipped: ${ev.skipped.join(', ')} — env active)`
-        : ev.gitignored
-          ? `saved → ${shortPath(ev.savedTo)} (added to .gitignore)`
-          : `saved → ${shortPath(ev.savedTo)}`;
+      // The runner holds config in memory — nothing is written to disk, so the
+      // toast must not claim a save. When a disk-backed runner lands, restore
+      // the path-bearing messages from `ev.savedTo`/`ev.gitignored`.
+      const message = 'applied for this session';
       // Reconfigure = strong signal of intent to use. Auto-include the
       // newly-(re)configured abilities; drop participation entries for abilities
       // whose config was just cleared.
