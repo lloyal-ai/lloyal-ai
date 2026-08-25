@@ -231,8 +231,14 @@ function readJsonForWrite(p: string): Partial<Config> | null {
   let raw: string;
   try {
     raw = fs.readFileSync(p, "utf8");
-  } catch {
-    return null;
+  } catch (err) {
+    // ONLY a missing file is a fresh config. Any other read failure (EACCES,
+    // EIO) means a file EXISTS that we cannot see — replacing it blind would
+    // destroy settings the promise above says we leave untouched.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error(
+      `${JSON_NAME} exists but cannot be read (${(err as NodeJS.ErrnoException).code ?? "unknown"}) — nothing was saved.`,
+    );
   }
   let parsed: Partial<Config> & { version?: number };
   try {

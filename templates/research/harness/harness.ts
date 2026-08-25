@@ -519,6 +519,35 @@ export function* harness(
         const resolvedValues = resolveConfigPaths(cmd.values);
         const isClear = Object.keys(resolvedValues).length === 0;
 
+        // Path-shaped values must EXIST before anything persists or enables:
+        // a factory handed a bad path can take the whole process down (rig's
+        // loadResources exits on a missing corpus), and a persisted bad path
+        // would re-kill every subsequent boot. Generic — same path-shape rule
+        // as resolveConfigPaths, no ability-name knowledge.
+        const missingPath = Object.entries(resolvedValues).find(
+          ([k, v]) =>
+            typeof v === "string" &&
+            v !== "" &&
+            (/path$/i.test(k) || /^[~/.]/.test(v)) &&
+            !fs.existsSync(v),
+        );
+        if (missingPath) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: `${missingPath[0]}: path does not exist — ${String(missingPath[1])}`,
+          });
+          continue;
+        }
+
+        // Persist FIRST: if the disk save refuses (unreadable/newer
+        // harness.json, fs error), the outer catch surfaces it and the live
+        // session is untouched — no half-applied ability state. `prior` is
+        // kept so an enable failure below can restore the disk too.
+        const prior = (yield* configStore.get(cmd.name)) ?? null;
+        const saved = runner.saveConfig({
+          abilities: { [cmd.name]: resolvedValues },
+        });
+
         yield* configStore.set(cmd.name, resolvedValues);
 
         const factory = factoryFor(cmd.name);
@@ -542,7 +571,15 @@ export function* harness(
                 });
               }
             } catch (err) {
+              // The config failed to ENABLE — neither the session nor the
+              // next boot should keep it. Restore the disk to the prior
+              // values (best-effort: the error toast below fires regardless).
               yield* configStore.clear(cmd.name);
+              try {
+                runner.saveConfig({ abilities: { [cmd.name]: prior ?? {} } });
+              } catch {
+                /* disk restore failed — the toast still reports the enable error */
+              }
               yield* agentEvents.send({
                 type: "ui:error",
                 message: `Cannot configure ${cmd.name}: ${errorMessage(err)}`,
@@ -556,9 +593,6 @@ export function* harness(
 
         participation[cmd.name] = true;
 
-        const saved = runner.saveConfig({
-          abilities: { [cmd.name]: resolvedValues },
-        });
         yield* agentEvents.send({
           type: "config:updated",
           config: saved.config,
