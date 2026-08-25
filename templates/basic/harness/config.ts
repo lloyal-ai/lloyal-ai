@@ -221,6 +221,33 @@ function resolveAppConfigPaths(
   return out;
 }
 
+/** Read harness.json for the WRITER. Unlike the loader — which treats an
+ *  unreadable or future-versioned file as an ignorable overlay — a save must
+ *  never rebuild over content it cannot understand: that would destroy a
+ *  newer runtime's settings. Absent file ⇒ null (a fresh write is safe);
+ *  anything else it can't use ⇒ throw, leaving the file untouched (the
+ *  harness surfaces the message as an error toast). */
+function readJsonForWrite(p: string): Partial<Config> | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: Partial<Config> & { version?: number };
+  try {
+    parsed = JSON.parse(raw) as Partial<Config> & { version?: number };
+  } catch {
+    throw new Error(`${JSON_NAME} is not valid JSON — fix or delete it; nothing was saved.`);
+  }
+  if (parsed.version !== 1) {
+    throw new Error(
+      `${JSON_NAME} is version ${String(parsed.version)}; this harness writes version 1 — not overwriting a newer runtime's settings.`,
+    );
+  }
+  return parsed;
+}
+
 // ── Save: atomic write + one-time .gitignore append ─────────────────
 
 /** Write a patch into `harness.json` atomically (tmp-file + rename).
@@ -235,7 +262,7 @@ export function saveLocalConfig(
   cwd: string = process.cwd(),
 ): SaveResult {
   const resolvedPath = jsonPath(cwd);
-  const current = readJsonIfExists(resolvedPath);
+  const current = readJsonForWrite(resolvedPath);
 
   const nextSources: ConfigSources = {
     ...(current?.sources ?? {}),
