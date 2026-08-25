@@ -13,8 +13,10 @@
  * resolved `{path}` when a reranker-using ability is enabled; absent, `provisionAbilityModels`
  * falls back to the platform catalog default (and is a no-op if no ability needs one).
  */
-import { openSync } from "node:fs";
+import { closeSync, openSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { ensure } from "effection";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
@@ -46,22 +48,38 @@ export function* runServedSession(
   // HERE (one trace file per admitted Session) and injected — the factory
   // stays binding-agnostic (see RunnerDevOpts).
   const dev = process.env.LLOYAL_DEV === "1";
-  yield* RunnerCtx.set(makeServedRunner(cfg, { traceWriter: makeTraceWriter(cfg, dev), dev }));
+  const trace = makeTraceWriter(cfg, dev);
+  // Per-session fd: closed when THIS session's scope unwinds (the writer
+  // flushes every event synchronously, so nothing is pending at close) —
+  // sequential sessions must not leak descriptors.
+  yield* ensure(trace.close);
+  yield* RunnerCtx.set(makeServedRunner(cfg, { traceWriter: trace.writer, dev }));
   yield* harness(ctx, events, commands);
 }
 
-/** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>.jsonl` in
- *  `sources.outputDir` (default: the project root) — the record the dev tools
- *  tail. Otherwise Null: production writes nothing. A failed open degrades to
- *  Null (tracing is observability, never a dependency); the fd lives for the
- *  process — the `TraceWriter` contract has no dispose. */
-function makeTraceWriter(cfg: Config, dev: boolean): TraceWriter {
-  if (!dev) return new NullTraceWriter();
+/** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
+ *  in `sources.outputDir` (default: the project root) — the record the dev
+ *  tools tail. Otherwise Null: production writes nothing. The random id keeps
+ *  concurrent writers apart and `"wx"` refuses to truncate an existing file; a
+ *  failed open degrades to Null (tracing is observability, never a
+ *  dependency). The caller owns the fd — `ensure(close)` it on its scope. */
+function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; close: () => void } {
+  if (!dev) return { writer: new NullTraceWriter(), close: () => {} };
   try {
     const dir = cfg.sources.outputDir ?? process.cwd();
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    return new JsonlTraceWriter(openSync(join(dir, `trace-${ts}.jsonl`), "w"));
+    const fd = openSync(join(dir, `trace-${ts}-${randomUUID().slice(0, 8)}.jsonl`), "wx");
+    return {
+      writer: new JsonlTraceWriter(fd),
+      close: () => {
+        try {
+          closeSync(fd);
+        } catch {
+          /* already closed */
+        }
+      },
+    };
   } catch {
-    return new NullTraceWriter();
+    return { writer: new NullTraceWriter(), close: () => {} };
   }
 }
