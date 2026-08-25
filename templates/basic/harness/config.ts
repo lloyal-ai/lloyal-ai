@@ -295,7 +295,13 @@ export function saveLocalConfig(
 
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
   const tmp = resolvedPath + ".tmp-" + process.pid;
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n", "utf8");
+  // 0600: ability config can carry credentials (e.g. an API key), so the file
+  // must never be group/world-readable — and because rename preserves the tmp
+  // file's mode, every save also TIGHTENS a previously looser file.
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n", {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   fs.renameSync(tmp, resolvedPath);
 
   const gitignored = maybeAppendGitignore(resolvedPath);

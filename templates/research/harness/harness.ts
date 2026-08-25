@@ -571,10 +571,23 @@ export function* harness(
                 });
               }
             } catch (err) {
-              // The config failed to ENABLE — neither the session nor the
-              // next boot should keep it. Restore the disk to the prior
-              // values (best-effort: the error toast below fires regardless).
-              yield* configStore.clear(cmd.name);
+              // The new config failed to ENABLE — restore ALL the surfaces
+              // this command touched: the store, the LIVE registry (a
+              // previously working instance was disabled above — bring it
+              // back), and the disk. Best-effort throughout: the error toast
+              // below reports the original failure regardless.
+              if (prior && Object.keys(prior).length > 0) {
+                yield* configStore.set(cmd.name, prior);
+                try {
+                  yield* registry.enable(factory);
+                } catch {
+                  // The prior config no longer enables either — leave the
+                  // ability disabled rather than looping.
+                  yield* configStore.clear(cmd.name);
+                }
+              } else {
+                yield* configStore.clear(cmd.name);
+              }
               try {
                 runner.saveConfig({ abilities: { [cmd.name]: prior ?? {} } });
               } catch {
