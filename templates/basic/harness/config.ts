@@ -126,14 +126,27 @@ export function loadConfig(
   // A hand-edited harness.json could carry a bad gpu value; ignore, don't error.
   const localGpu = isConfigGpu(local?.model?.gpu) ? local?.model?.gpu : undefined;
 
+  // "" is a CLEAR wherever a path is stored — normalize to absent BEFORE both
+  // selection and provenance, so an empty override can never claim a rung.
+  const str = (v: string | undefined): string | undefined => (v ? v : undefined);
+  const cliOutputDir = str(cli.outputDir);
+  const localOutputDir = str(local?.sources?.outputDir);
+  const ymlOutputDir = str(yml.sources?.outputDir);
+  const cliModelPath = str(cli.modelPath);
+  const localModelPath = str(local?.model?.path);
+  const ymlModelPath = str(llm.path);
+  const cliReranker = str(cli.reranker);
+  const localReranker = str(local?.model?.reranker);
+  const ymlReranker = str(yml.model?.reranker?.path);
+
   // Path-shaped fields resolve through resolvePath at this boundary (~ expansion
   // + relative→absolute; idempotent on absolute paths), so stale `~`-bearing
   // values in a hand-edited file still work downstream.
-  const rawOutputDir = cli.outputDir ?? local?.sources?.outputDir ?? yml.sources?.outputDir;
+  const rawOutputDir = cliOutputDir ?? localOutputDir ?? ymlOutputDir;
   const outputDir = rawOutputDir ? resolvePath(rawOutputDir) : undefined;
-  const rawModelPath = cli.modelPath ?? local?.model?.path ?? llm.path;
+  const rawModelPath = cliModelPath ?? localModelPath ?? ymlModelPath;
   const modelPath = rawModelPath ? resolvePath(rawModelPath) : undefined;
-  const rawReranker = cli.reranker ?? local?.model?.reranker ?? yml.model?.reranker?.path;
+  const rawReranker = cliReranker ?? localReranker ?? ymlReranker;
   const reranker = rawReranker ? resolvePath(rawReranker) : undefined;
   const nCtx = cli.nCtx ?? envNCtx ?? local?.model?.nCtx ?? llm.context;
   const gpu = cli.gpu ?? envGpu ?? localGpu ?? llm.gpu;
@@ -172,11 +185,11 @@ export function loadConfig(
     c !== undefined ? "cli" : e !== undefined ? "env" : l !== undefined ? "file" : y !== undefined ? "yml" : "default";
 
   const origin: ConfigOrigin = {
-    modelPath: rung(cli.modelPath, undefined, local?.model?.path, llm.path ?? llm.id),
-    reranker: rung(cli.reranker, undefined, local?.model?.reranker, yml.model?.reranker?.path ?? yml.model?.reranker?.id),
+    modelPath: rung(cliModelPath, undefined, localModelPath, ymlModelPath ?? str(llm.id)),
+    reranker: rung(cliReranker, undefined, localReranker, ymlReranker ?? str(yml.model?.reranker?.id)),
     nCtx: rung(cli.nCtx, envNCtx, local?.model?.nCtx, llm.context),
     gpu: rung(cli.gpu, envGpu, localGpu, llm.gpu),
-    outputDir: rung(cli.outputDir, undefined, local?.sources?.outputDir, yml.sources?.outputDir),
+    outputDir: rung(cliOutputDir, undefined, localOutputDir, ymlOutputDir),
   };
 
   return { config, origin, path: resolvedPath, loadedFromFile: !!local };
@@ -225,6 +238,11 @@ export function saveLocalConfig(
   };
   if (patch.sources?.outputDir === "") delete nextSources.outputDir;
 
+  const nextModel = { ...(current?.model ?? {}), ...(patch.model ?? {}) };
+  // Same clear rule as outputDir: an empty path deletes the key.
+  if (nextModel.path === "") delete nextModel.path;
+  if (nextModel.reranker === "") delete nextModel.reranker;
+
   const nextApps: ConfigApps = { ...(current?.abilities ?? {}) };
   for (const [name, cfg] of Object.entries(patch.abilities ?? {})) {
     nextApps[name] = { ...cfg };
@@ -234,10 +252,7 @@ export function saveLocalConfig(
     version: 1,
     sources: nextSources,
     abilities: nextApps,
-    model:
-      current?.model || patch.model
-        ? { ...(current?.model ?? {}), ...(patch.model ?? {}) }
-        : undefined,
+    model: current?.model || patch.model ? nextModel : undefined,
   };
 
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });

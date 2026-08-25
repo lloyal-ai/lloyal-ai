@@ -170,12 +170,13 @@ main(function* () {
   const dev = process.env.LLOYAL_DEV === "1";
   const trace = makeTraceWriter(cfg, dev);
   yield* ensure(trace.close);
-  // Saves write harness.json, then re-layer for honest provenance (a field
-  // env still outranks keeps reading `env` after a save).
-  const persist = (patch: ConfigPatch) => ({
-    ...saveLocalConfig(patch),
-    origin: loadConfig(yml, {}, bootEnv).origin,
-  });
+  // Saves write harness.json, then re-layer for honest values + provenance
+  // (a cleared key falls back to the rung beneath; env still outranks).
+  const persist = (patch: ConfigPatch) => {
+    const saved = saveLocalConfig(patch);
+    const relayered = loadConfig(yml, {}, bootEnv);
+    return { ...saved, config: relayered.config, origin: relayered.origin };
+  };
   yield* RunnerCtx.set(
     makeEdgeRunner(cfg, { traceWriter: trace.writer, dev, origin: loaded.origin, persist }),
   );

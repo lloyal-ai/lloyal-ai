@@ -112,7 +112,7 @@ export interface RunnerDevOpts {
  */
 export interface RunnerConfigOpts {
   origin: ConfigOrigin;
-  persist?: (patch: ConfigPatch) => SaveResult & { origin: ConfigOrigin };
+  persist?: (patch: ConfigPatch) => SaveResult & { config: Config; origin: ConfigOrigin };
 }
 
 /** Mark every origin-tracked field a patch touches as `session` — the honest
@@ -193,16 +193,25 @@ export function makeEdgeRunner(cfg: Config, opts: RunnerDevOpts & RunnerConfigOp
     config: () => sessionConfig,
     origin: () => sessionOrigin,
     saveConfig(patch) {
-      // The live config evolves by the patch (boot-resolved fields like the
-      // model path stay resolved); the persist writes harness.json and hands
-      // back the re-layered provenance, so a field env still outranks keeps
-      // reading `env` even after a save.
-      sessionConfig = mergeConfig(sessionConfig, patch);
       if (opts.persist) {
+        // Live-read fields (sources, defaults, abilities) reconcile from the
+        // re-layered files — value AND origin together, so clearing a key
+        // restores the rung beneath it and an env-outranked save shows the
+        // env value it actually runs with. The model block stays BOOT-FROZEN
+        // (value and origin): it describes the RUNNING residency, which a
+        // save cannot change — that is reloadRuntime + a relaunch.
         const saved = opts.persist(patch);
-        sessionOrigin = saved.origin;
+        sessionConfig = { ...saved.config, model: sessionConfig.model };
+        sessionOrigin = {
+          ...saved.origin,
+          modelPath: sessionOrigin.modelPath,
+          reranker: sessionOrigin.reranker,
+          nCtx: sessionOrigin.nCtx,
+          gpu: sessionOrigin.gpu,
+        };
         return { ...saved, config: sessionConfig, origin: sessionOrigin };
       }
+      sessionConfig = mergeConfig(sessionConfig, patch);
       sessionOrigin = markSession(sessionOrigin, patch);
       return {
         path: null,
