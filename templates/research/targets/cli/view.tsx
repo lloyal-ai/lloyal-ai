@@ -8,7 +8,7 @@
  * plan-review editor, a sources ledger, and a settings drawer; this view folds
  * the SAME state through a handful of lines. It auto-accepts the planner's plan
  * (no interactive plan-review here) so a query runs recon → plan → agents →
- * synth end-to-end. Swap it, or grow it, or bring a whole ability — the harness
+ * synth end-to-end. Swap it, or grow it, or bring a whole app — the harness
  * never changes; the framework holds the binding seam, never the UI.
  */
 import React, { useEffect, useReducer, useRef } from "react";
@@ -51,7 +51,7 @@ function View({
   bootstrap: WorkflowEvent[];
 }): React.ReactElement {
   const [state, apply] = useReducer(reduce, bootstrap, seed);
-  const ability = useApp();
+  const app = useApp();
   const acceptedRef = useRef(false);
 
   useEffect(() => bus.subscribe((ev) => apply(ev)), [bus]);
@@ -70,7 +70,7 @@ function View({
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       dispatch({ type: "quit" });
-      ability.exit();
+      app.exit();
     }
   });
 

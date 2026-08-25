@@ -11,7 +11,7 @@
  * dispatches a query. Like the cli view it auto-accepts the planner's plan
  * (there is no plan-review editor here), so a query flows recon → plan → agents
  * → synth end-to-end. This is the floor — grow it into your product's UI (or
- * bring your own ability); the harness never changes.
+ * bring your own app); the harness never changes.
  *
  * SNAPSHOT: reasoning.run @ 0.8.0
  */

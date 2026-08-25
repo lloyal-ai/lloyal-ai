@@ -11,7 +11,7 @@
  * (wss, here) differs.
  *
  * `npm run serve` builds + starts this; then `npm run dev:web` serves the browser
- * ability that talks to it. Config from `harness.yml` + env (PORT / HOST /
+ * app that talks to it. Config from `harness.yml` + env (PORT / HOST /
  * MAX_SESSIONS). Loopback + no-auth for local dev — TLS/auth terminate upstream.
  */
 import { readFileSync, statSync } from "node:fs";

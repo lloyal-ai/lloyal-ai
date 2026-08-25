@@ -36,7 +36,7 @@ export const TARGET_SCRIPTS: Record<PrunableTarget, string[]> = {
 /**
  * Per-target TOP-LEVEL package.json fields. `main` is Electron's entry point —
  * electron-vite refuses to launch without it ("No entry point found for electron
- * ability") — and it names a path under `out/`, which only a desktop build produces.
+ * app") — and it names a path under `out/`, which only a desktop build produces.
  * So it belongs to desktop and is dropped with it, exactly like a script or dep.
  */
 export const TARGET_PKG_FIELDS: Record<PrunableTarget, string[]> = {

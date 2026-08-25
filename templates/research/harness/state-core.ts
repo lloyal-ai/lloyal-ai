@@ -13,7 +13,7 @@ import type { Config, ConfigOrigin } from './config-types.js';
 
 export type Phase = 'idle' | 'recon' | 'query' | 'plan' | 'research' | 'synth' | 'done';
 
-/** Drives which top-level view the Ability renders. Distinct from `phase` —
+/** Drives which top-level view the App renders. Distinct from `phase` —
  *  `phase` tracks the workflow progress; `uiPhase` tracks what the user
  *  currently interacts with. */
 export type UiPhase =

@@ -77,7 +77,7 @@ describe('desktop target — the three things electron-vite needs', () => {
     '%s: package.json declares the Electron entry point',
     (template) => {
       // electron-vite refuses to launch without it: "No entry point found for
-      // electron ability, please add a 'main' field to package.json".
+      // electron app, please add a 'main' field to package.json".
       const pkgJson = JSON.parse(readFileSync(join(TEMPLATES, template, 'package.json'), 'utf8'));
       expect(pkgJson.main).toBe('out/main/main.js');
     },

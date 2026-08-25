@@ -1,6 +1,6 @@
 # __NAME__
 
-A vertical inference harness. The model lives *inside* the ability — no API key, and nothing on the inference path touches the network.
+A vertical inference harness. The model lives *inside* the app — no API key, and nothing on the inference path touches the network.
 
 ## Run it
 
@@ -26,7 +26,7 @@ harness/
 targets/
   <surface>/     one dir per surface — cli · desktop · web
     index.ts     boot: resolve the model, mount a view, run your harness
-    view.tsx     the view (Ink for cli, React for desktop/web) — or bring a whole ability
+    view.tsx     the view (Ink for cli, React for desktop/web) — or bring a whole app
 models/
   llm/           the resident model (fetched on first run; gitignored)
 vendor/          signed Abilities — Ed25519-verified tarballs, committed
