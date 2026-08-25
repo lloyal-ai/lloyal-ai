@@ -235,7 +235,6 @@ export function Wizard({
   const { exit } = useApp();
   const llms = modelsForRole('llm');
   const defaultLlm = llms[0]?.id ?? 'qwen3.5-4b';
-  const defaultLlmLabel = llms[0]?.label ?? defaultLlm;
 
   const [queue, setQueue] = useState<StepId[]>(() => initialQueue(prefill));
   const step = queue[0];
@@ -299,10 +298,12 @@ export function Wizard({
       setQueue(['byo', ...queue.slice(1)]);
       return;
     }
-    // 'recommended' and 'later' both write the catalog default; the difference
-    // is framing (the summary note nudges "later" toward editing harness.yml).
-    setLlm(defaultLlm);
-    advance(queue.slice(1), { llm: defaultLlm });
+    // 'later' writes the catalog default; the difference from picking that
+    // model outright is framing (the summary note nudges "later" toward
+    // editing harness.yml). Any other value is a catalog id chosen directly.
+    const chosen = value === 'later' ? defaultLlm : value;
+    setLlm(chosen);
+    advance(queue.slice(1), { llm: chosen });
   };
 
   const submitByo = (value: string): void => {
@@ -383,7 +384,13 @@ export function Wizard({
             <Text dimColor>{`  ${MODEL_FOOTPRINT_HINT}`}</Text>
             <Select
               options={[
-                { label: `Recommended — ${defaultLlmLabel}`, value: 'recommended' },
+                // One row per catalog LLM, so a bigger model is a visible
+                // choice rather than a harness.yml edit after the fact. The
+                // first row is the default and says so.
+                ...llms.map((m) => ({
+                  label: m.id === defaultLlm ? `Recommended — ${m.label}` : m.label,
+                  value: m.id,
+                })),
                 { label: 'Bring your own — a local .gguf you already have', value: 'byo' },
                 { label: 'Decide later — keep the default, edit harness.yml', value: 'later' },
               ]}

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from 'ink-testing-library';
 import { createElement } from 'react';
 import { Wizard, orderTargets } from '../src/commands/new-wizard.js';
-import { MODEL_FOOTPRINT_HINT } from '../src/scaffold/model-catalog.js';
+import { MODEL_FOOTPRINT_HINT, modelsForRole } from '../src/scaffold/model-catalog.js';
 import { join, dirname } from 'node:path';
 
 // COVERAGE BOUNDARY: the full keystroke-driven flow (name → targets → model →
@@ -35,18 +35,31 @@ describe('MODEL_FOOTPRINT_HINT — the hardware floor shown at the model step', 
   // `packages/rig/src/models.ts`, which was the sharpest form of the check but
   // is impossible now the CLI lives in its own repo.
   //
-  // SOURCE OF TRUTH: `MODEL_CATALOG` in @lloyal-labs/rig (`src/models.ts`),
-  // entry `qwen3.5-4b`, `sizeBytes: 2_600_000_000`. If rig swaps the
-  // recommended model or restates its size, this number and the hint in
-  // `src/scaffold/model-catalog.ts` must both move. Nothing enforces that
+  // SOURCE OF TRUTH: `MODEL_CATALOG` in @lloyal-labs/rig (`src/models.ts`). If
+  // rig restates any of these sizes, the matching label in
+  // `src/scaffold/model-catalog.ts` must move with it. Nothing enforces that
   // across the repo boundary any more — see lloyal-ai/lloyal-ai#1.
-  const RIG_RECOMMENDED_MODEL_BYTES = 2_600_000_000;
+  //
+  // The figures moved from the hint onto the rows when the catalog gained a
+  // 16.5 GB option, because one sentence cannot describe both. The guard
+  // followed them rather than being dropped.
+  const RIG_SIZE_BYTES: Record<string, number> = {
+    'qwen3.5-4b': 2_600_000_000,
+    'qwen3.8-27b-q4': 16_464_440_224,
+    'qwen3.8-27b-iq1': 6_192_222_208,
+  };
 
-  it('quotes a download size that matches rig’s sizeBytes for the recommended model', () => {
-    const quoted = Number(/([\d.]+)\s*GB download/.exec(MODEL_FOOTPRINT_HINT)?.[1] ?? NaN);
-    expect(Number.isFinite(quoted)).toBe(true);
-    // Same figure to one decimal, in GB as a human reads it (2_600_000_000 → 2.6).
-    expect(quoted).toBeCloseTo(RIG_RECOMMENDED_MODEL_BYTES / 1e9, 1);
+  it('every llm row quotes a download size matching rig’s sizeBytes', () => {
+    const llms = modelsForRole('llm');
+    expect(llms.length).toBeGreaterThan(0);
+    for (const m of llms) {
+      const expected = RIG_SIZE_BYTES[m.id];
+      expect(expected, `no pinned size for catalog id "${m.id}"`).toBeDefined();
+      const quoted = Number(/([\d.]+)\s*GB download/.exec(m.label)?.[1] ?? NaN);
+      expect(Number.isFinite(quoted), `label "${m.label}" quotes no size`).toBe(true);
+      // Same figure to one decimal, in GB as a human reads it.
+      expect(quoted).toBeCloseTo(expected / 1e9, 1);
+    }
   });
 
   it('states that concurrent agents do not multiply the requirement', () => {
