@@ -148,7 +148,10 @@ export function loadConfig(
   const modelPath = rawModelPath ? resolvePath(rawModelPath) : undefined;
   const rawReranker = cliReranker ?? localReranker ?? ymlReranker;
   const reranker = rawReranker ? resolvePath(rawReranker) : undefined;
-  const nCtx = cli.nCtx ?? envNCtx ?? local?.model?.nCtx ?? llm.context;
+  // Same resilient-overlay family as gpu/defaults: a hand-edited non-integer
+  // nCtx (null, a string) falls through instead of reaching createContext.
+  const localNCtx = Number.isInteger(local?.model?.nCtx) ? local?.model?.nCtx : undefined;
+  const nCtx = cli.nCtx ?? envNCtx ?? localNCtx ?? llm.context;
   const gpu = cli.gpu ?? envGpu ?? localGpu ?? llm.gpu;
 
   // Ability config is json-only (there is no yml rung for it); path-shaped
@@ -182,12 +185,14 @@ export function loadConfig(
     l: T | undefined,
     y: T | undefined,
   ): ConfigOrigin[keyof ConfigOrigin] =>
-    c !== undefined ? "cli" : e !== undefined ? "env" : l !== undefined ? "file" : y !== undefined ? "yml" : "default";
+    // `!= null` mirrors `??`: a hand-edited null is a clear on every rung,
+    // and provenance must agree with the selection by construction.
+    c != null ? "cli" : e != null ? "env" : l != null ? "file" : y != null ? "yml" : "default";
 
   const origin: ConfigOrigin = {
     modelPath: rung(cliModelPath, undefined, localModelPath, ymlModelPath ?? str(llm.id)),
     reranker: rung(cliReranker, undefined, localReranker, ymlReranker ?? str(yml.model?.reranker?.id)),
-    nCtx: rung(cli.nCtx, envNCtx, local?.model?.nCtx, llm.context),
+    nCtx: rung(cli.nCtx, envNCtx, localNCtx, llm.context),
     gpu: rung(cli.gpu, envGpu, localGpu, llm.gpu),
     outputDir: rung(cliOutputDir, undefined, localOutputDir, ymlOutputDir),
   };

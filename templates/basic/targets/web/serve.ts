@@ -111,7 +111,10 @@ main(function* () {
       path: modelPath,
       reranker: rerankerPath,
       nCtx: loaded.config.model.nCtx ?? 32768,
-      id: yml.model?.llm?.id ?? yml.model?.llm?.path ?? "model",
+      // The display id mirrors the SAME selection resolution used: the
+      // layered path when one won (a saved model must not display as the old
+      // catalog id), else the yml catalog id.
+      id: loaded.config.model.path ?? yml.model?.llm?.id ?? "model",
       sizeBytes: fileSize(modelPath),
     },
   };
