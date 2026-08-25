@@ -45,6 +45,11 @@ export interface Runner {
   cancelAgent: Signal<{ agentId: number }, void>;
   /** Observability sink threaded into `initAgents`. */
   traceWriter: TraceWriter;
+  /** True when the boot mounted dev observability (trace sink + pool
+   *  epistemics). Set by each boot from ITS platform's dev signal —
+   *  `LLOYAL_DEV=1` on the Node boots — so harness code reads this, never
+   *  `process.env`, and stays portable across bindings. */
+  dev: boolean;
   /** Replay-mode spine checkpoint (edge `--replay-trace`); null normally + served. */
   replayCheckpoint: BranchCheckpoint | null;
   /** `--findings-budget` cap (edge flag); undefined = default. */

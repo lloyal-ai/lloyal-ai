@@ -17,12 +17,14 @@
  *
  * SNAPSHOT: reasoning.run @ main
  */
-import { readFileSync } from "node:fs";
+import { openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { main, call, ensure, createSignal } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
+import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
+import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
 import { harness, abilities } from "../../harness/harness.js";
@@ -63,6 +65,22 @@ function loadConfig(): HarnessConfig {
       `harness.yml is not valid YAML: ${err instanceof Error ? err.message : String(err)}\n`,
     );
     process.exit(1);
+  }
+}
+
+/** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>.jsonl` in
+ *  `sources.outputDir` (default: the project root) — the record the dev tools
+ *  tail. Otherwise Null: production writes nothing. A failed open degrades to
+ *  Null (tracing is observability, never a dependency); the fd lives for the
+ *  process — the `TraceWriter` contract has no dispose. */
+function makeTraceWriter(cfg: Config, dev: boolean): TraceWriter {
+  if (!dev) return new NullTraceWriter();
+  try {
+    const dir = cfg.sources.outputDir ?? process.cwd();
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    return new JsonlTraceWriter(openSync(join(dir, `trace-${ts}.jsonl`), "w"));
+  } catch {
+    return new NullTraceWriter();
   }
 }
 
@@ -140,7 +158,12 @@ main(function* () {
     defaults: { reasoningMode: "flat", effort: "high", maxTurns: 10 },
     model: { path: modelPath, nCtx: context },
   };
-  yield* RunnerCtx.set(makeEdgeRunner(cfg));
+  // Dev observability is built HERE, not in the runner factory: the boot knows
+  // its platform (Node), so it owns the fd and the env read, and the factory
+  // just receives the sink. A boot over another binding (an RN shell over
+  // nitro-llama) passes its own — see RunnerDevOpts.
+  const dev = process.env.LLOYAL_DEV === "1";
+  yield* RunnerCtx.set(makeEdgeRunner(cfg, { traceWriter: makeTraceWriter(cfg, dev), dev }));
 
   const events = createBus<WorkflowEvent>();
   const commands = createSignal<Command, void>();

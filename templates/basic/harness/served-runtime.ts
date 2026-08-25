@@ -18,9 +18,7 @@ import { createSignal } from "effection";
 import type { Signal } from "effection";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import type { SessionContext } from "@lloyal-labs/sdk";
-import { openSync } from "node:fs";
-import { join } from "node:path";
-import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
+import { NullTraceWriter } from "@lloyal-labs/lloyal-agents";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createBus, type EventBus } from "@lloyal-labs/binding";
 import type { Runner } from "./runner-ctx.js";
@@ -97,38 +95,33 @@ function mergeConfig(base: Config, patch: Partial<Config>): Config {
 }
 
 /**
- * The dev-gated trace sink. `LLOYAL_DEV=1` writes `trace-<ts>.jsonl` into
- * `sources.outputDir` (default: the project root) — the record the dev tools
- * tail; anything else stays Null, so production writes nothing to disk. A
- * failed open degrades to Null rather than blocking boot: tracing is
- * observability, never a dependency. The fd lives for the process (dev-only;
- * nothing closes it — the TraceWriter contract has no dispose).
+ * Platform-owned observability, injected by the boot. The factories stay
+ * binding-agnostic — no `node:fs`, no env reads — so a boot over a DIFFERENT
+ * binding (a React Native shell over nitro-llama instead of lloyal.node) can
+ * supply its own trace sink and dev signal without this file changing.
+ * Omitted ⇒ Null sink, dev off: production behaviour needs no opts.
  */
-function makeTraceWriter(cfg: Config): TraceWriter {
-  if (process.env.LLOYAL_DEV !== "1") return new NullTraceWriter();
-  try {
-    const dir = cfg.sources.outputDir ?? process.cwd();
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    return new JsonlTraceWriter(openSync(join(dir, `trace-${ts}.jsonl`), "w"));
-  } catch {
-    return new NullTraceWriter();
-  }
+export interface RunnerDevOpts {
+  /** Where trace events land. The Node boots pass a `JsonlTraceWriter` under
+   *  `LLOYAL_DEV=1`; omitted, the no-op writer. */
+  traceWriter?: TraceWriter;
+  /** The boot's dev signal — gates pool epistemics and the dev pane. */
+  dev?: boolean;
 }
 
 /**
  * Build the served `Runner` for ONE Session. Everything here is per-session: its
  * OWN config clone (in-memory `saveConfig`), fresh wind-down / cancel signals, and
- * a null trace sink — so no runner state and no user data crosses between tenants.
+ * its own injected trace sink — so no runner state and no user data crosses between tenants.
  * The reranker is NOT a Runner concern: `runServedSession`'s `provisionAbilityModels`
  * publishes a per-session reranker on `RerankerCtx`. `reloadRuntime` is a no-op:
  * the model is a fixed host residency, so a config change that would rebuild it
  * just ends that Session.
  */
-export function makeServedRunner(cfg: Config): Runner {
+export function makeServedRunner(cfg: Config, opts: RunnerDevOpts = {}): Runner {
   let sessionConfig = structuredClone(cfg);
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
-  const traceWriter = makeTraceWriter(cfg);
   return {
     config: () => sessionConfig,
     origin: () => EPHEMERAL_ORIGIN,
@@ -147,7 +140,8 @@ export function makeServedRunner(cfg: Config): Runner {
     },
     windDown,
     cancelAgent,
-    traceWriter,
+    traceWriter: opts.traceWriter ?? new NullTraceWriter(),
+    dev: opts.dev ?? false,
     replayCheckpoint: null,
     findingsMaxChars: undefined,
     mode: "interactive",
@@ -161,15 +155,14 @@ export function makeServedRunner(cfg: Config): Runner {
  * ephemeral mirror of {@link makeServedRunner}: `saveConfig` mutates a private
  * clone (so config edits survive within a session but not across restarts — a
  * cold path, fine for an austere CLI), `reloadRuntime` is a no-op (the boot owns
- * the `SessionContext` lifetime), a NullTraceWriter, no replay, `interactive`
+ * the `SessionContext` lifetime), the boot's injected trace sink, no replay, `interactive`
  * mode. The reranker is NOT here: the boot's `provisionAbilityModels` publishes it on
  * `RerankerCtx` before `harness` runs.
  */
-export function makeEdgeRunner(cfg: Config): Runner {
+export function makeEdgeRunner(cfg: Config, opts: RunnerDevOpts = {}): Runner {
   let sessionConfig = structuredClone(cfg);
   const windDown = createSignal<void, void>();
   const cancelAgent = createSignal<{ agentId: number }, void>();
-  const traceWriter = makeTraceWriter(cfg);
   return {
     config: () => sessionConfig,
     origin: () => EPHEMERAL_ORIGIN,
@@ -189,7 +182,8 @@ export function makeEdgeRunner(cfg: Config): Runner {
     },
     windDown,
     cancelAgent,
-    traceWriter,
+    traceWriter: opts.traceWriter ?? new NullTraceWriter(),
+    dev: opts.dev ?? false,
     replayCheckpoint: null,
     findingsMaxChars: undefined,
     mode: "interactive",

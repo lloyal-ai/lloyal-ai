@@ -51,6 +51,7 @@ import {
 import type { AgentEvent, Ability, AgentRenderCtx, Agent, DefaultAgentPolicyOpts } from "@lloyal-labs/lloyal-agents";
 import type { StepEvent } from "./protocol.js";
 import type { OpTiming } from "./state.js";
+import { RunnerCtx } from "./runner-ctx.js";
 import {
   reportTool,
   ReportTool,
@@ -554,6 +555,7 @@ export function* runPreflight(
 
   const abilities = yield* effectiveAbilities(filter);
 
+  const runner = yield* RunnerCtx.expect();
   yield* send({ type: "preflight:start", query, appCount: abilities.length });
   const timer = startTimer();
 
@@ -575,7 +577,7 @@ export function* runPreflight(
       const preflight = yield* resolvePrompt("preflight");
       const reconRecover = yield* resolvePrompt("preflight-recover");
       const probe = yield* agentPool({
-        trace: process.env.LLOYAL_DEV === "1", // dev-pane epistemics (per-token entropy/surprisal)
+        trace: runner.dev, // dev-pane epistemics (per-token entropy/surprisal; Runner-read — no env, portable)
         tools: reconTools,
         parent: reconSpine,
         terminal: reportTool,
@@ -890,6 +892,7 @@ export function* runResearchPlan(
   const send = (ev: StepEvent): Operation<void> =>
     events.send(ev as unknown as AgentEvent);
 
+  const runner = yield* RunnerCtx.expect();
   const tasks = plan.tasks;
   const currentDate = today();
 
@@ -953,7 +956,7 @@ export function* runResearchPlan(
 
       const recoveryPrompt = yield* resolvePrompt("recovery");
       const research = yield* agentPool({
-        trace: process.env.LLOYAL_DEV === "1", // dev-pane epistemics (per-token entropy/surprisal)
+        trace: runner.dev, // dev-pane epistemics (per-token entropy/surprisal; Runner-read — no env, portable)
         tools: researchTools,
         parent: querySpine,
         terminal: citedReportTool,
