@@ -236,22 +236,46 @@ function WorkRows({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
   return <>{rows}</>;
 }
 
-/** One research agent, live: colored accent, header (task · elapsed · tok),
- *  and its chronological work stream. */
+/** One research agent: colored accent, header (task · elapsed · tok), and a
+ *  CLAMPED, tail-following work stream — the card's height is stable while
+ *  the agent runs, so parallel columns never push each other around. A
+ *  finished agent collapses to its header (click to re-open) — the
+ *  reference app's rule: live cards never collapse mid-stream, done cards do. */
 function AgentCard({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
   const color = agentColor(a.taskIndex ?? 0);
   const elapsed = Number.isFinite(a.startedAt) ? (a.endedAt ?? now) - a.startedAt : NaN;
+  const terminal = a.phase === "done" || a.phase === "failed";
+  const [expanded, setExpanded] = useState(false);
+  const showBody = terminal ? expanded : true;
+
+  // Pin the work stream to its own tail while live — each column follows its
+  // agent like a terminal; the page never scrolls on its behalf.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!terminal && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  });
+
   return (
-    <div style={{ ...S.card, borderLeft: `3px solid ${color}`, opacity: a.phase === "done" ? 0.78 : 1 }}>
-      <div style={S.cardHead}>
+    <div style={{ ...S.card, borderLeft: `3px solid ${color}`, opacity: terminal && !expanded ? 0.72 : 1, margin: 0 }}>
+      <div
+        style={{ ...S.cardHead, cursor: terminal ? "pointer" : "default" }}
+        onClick={terminal ? () => setExpanded((e) => !e) : undefined}
+        title={terminal ? (expanded ? "collapse" : "expand") : undefined}
+      >
         <span style={{ color, fontWeight: 600 }}>{a.label}</span>
         {a.taskDescription && <span style={S.cardTask}>{a.taskDescription}</span>}
         <span style={S.cardMeta}>
+          {a.phase === "failed" ? "✗ " : a.phase === "done" ? "✓ " : ""}
           {fmtElapsed(elapsed)} · {a.tokenCount.toLocaleString()} tok
           {a.toolCallCount > 0 ? ` · ${a.toolCallCount} tools` : ""}
+          {terminal && <span style={{ marginLeft: 6, opacity: 0.6 }}>{expanded ? "▾" : "▸"}</span>}
         </span>
       </div>
-      <WorkRows a={a} now={now} />
+      {showBody && (
+        <div ref={bodyRef} style={terminal ? undefined : S.cardBody}>
+          <WorkRows a={a} now={now} />
+        </div>
+      )}
     </div>
   );
 }
@@ -455,9 +479,22 @@ export function HarnessApp() {
         </div>
       ) : null}
 
-      {liveAgents.map((a) => (
-        <AgentCard key={a.id} a={a} now={now} />
-      ))}
+      {liveAgents.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              liveAgents.length > 1 ? "repeat(auto-fit, minmax(250px, 1fr))" : "1fr",
+            gap: 10,
+            alignItems: "start",
+            margin: "10px 0",
+          }}
+        >
+          {liveAgents.map((a) => (
+            <AgentCard key={a.id} a={a} now={now} />
+          ))}
+        </div>
+      )}
 
       {synthLive ? (
         <div style={S.card}>
@@ -504,11 +541,12 @@ export function HarnessApp() {
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: 20, maxWidth: 860, margin: "0 auto" },
+  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: 20, maxWidth: 1100, margin: "0 auto" },
   head: { opacity: 0.55, fontSize: 12, marginBottom: 14, letterSpacing: 0.3 },
   qcard: { fontSize: 19, fontWeight: 600, lineHeight: 1.4, margin: "4px 0 14px" },
   card: { background: "#11141b", border: "1px solid #222836", borderRadius: 10, padding: "12px 14px", margin: "10px 0" },
   cardHead: { display: "flex", alignItems: "baseline", gap: 8, fontSize: 13, marginBottom: 6 },
+  cardBody: { maxHeight: 340, overflowY: "auto", overscrollBehavior: "contain" },
   cardTask: { opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
   cardMeta: { opacity: 0.5, fontSize: 12, whiteSpace: "nowrap" },
   wrow: { padding: "4px 0 4px 2px", fontSize: 13, borderTop: "1px solid #1a1f2b" },
