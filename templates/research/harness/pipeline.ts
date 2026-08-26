@@ -51,7 +51,10 @@ import {
 import type { AgentEvent, Ability, AgentRenderCtx, Agent, DefaultAgentPolicyOpts } from "@lloyal-labs/lloyal-agents";
 import type { StepEvent } from "./protocol.js";
 import type { OpTiming } from "./state.js";
-import { RunnerCtx } from "./runner-ctx.js";
+// A deliberate, deferred-use-only cycle — harness.ts imports this file too.
+// Every RunnerCtx read here happens inside an operation body, after both
+// modules have initialized; never at module-eval time.
+import { RunnerCtx } from "./harness.js";
 import {
   reportTool,
   ReportTool,

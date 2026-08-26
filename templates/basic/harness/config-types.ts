@@ -1,17 +1,25 @@
 /**
  * The harness config *schema* — the node-free type block.
  *
- * The `Runner` ({@link ./runner-ctx}) hands the harness its live config; this is
- * that config's shape. NO `node:fs`/`node:path` — a browser/renderer surface and
- * the served-runner factory both import these types, so the file must stay
- * runtime-free. `basic`'s runner (`makeEdgeRunner`) holds config in memory, so
- * there are no on-disk loaders to carve out — this is the whole config surface.
+ * The `Runner` (`RunnerCtx` in `./harness.ts`) hands the harness its live
+ * config; this is that config's shape. NO runtime code — a browser/renderer
+ * surface imports these types, so the file stays erasable (`import type`
+ * only). The base plumbing types (`ConfigOriginValue`, `ConfigPatch`,
+ * `SaveResult`, `LoadedConfig`) come from `@lloyal-labs/rig`; this file
+ * specializes them to THIS harness's shapes.
  *
  * It's deliberately lean: `abilities` (per-ability config the harness seeds the config
  * store from) + `model` (where the resident model lives). Grow it as your harness
  * grows — the reference `research` template's version adds run `defaults`
  * (reasoning mode / effort) the same way.
  */
+import type {
+  ConfigOriginValue,
+  ConfigPatch as RigConfigPatch,
+  LoadedConfig as RigLoadedConfig,
+} from "@lloyal-labs/rig";
+
+export type { ConfigOriginValue, SaveResult } from "@lloyal-labs/rig";
 
 export interface ConfigSources {
   /** Where a harness that writes run artifacts (reports, traces) puts them.
@@ -90,35 +98,22 @@ export interface Config {
   surface?: string;
 }
 
-/** One config rung, per field: which layer of
- *  `cli > env > harness.json > harness.yml > default` supplied the value.
- *  `file` = the local `harness.json`; `yml` = the committed manifest;
- *  `session` = patched in-memory by a served session (never written to disk). */
-export type ConfigOriginValue = 'cli' | 'env' | 'file' | 'yml' | 'session' | 'default';
-
 /** Which layer supplied a given harness-level field — used for composer UI
- *  hints. */
-export interface ConfigOrigin {
+ *  hints. A type alias (not an interface) so it satisfies the factories'
+ *  `Record<string, ConfigOriginValue>` bound structurally. */
+export type ConfigOrigin = {
   modelPath: ConfigOriginValue;
   reranker: ConfigOriginValue;
   nCtx: ConfigOriginValue;
   gpu: ConfigOriginValue;
   outputDir: ConfigOriginValue;
-}
+};
 
-/** A config write — same name as research's for a uniform Runner contract
- *  (`basic` has no partial-able `defaults` block). */
-export type ConfigPatch = Partial<Config>;
+/** This harness's config write — rig's one-level-deep patch over `Config`. */
+export type ConfigPatch = RigConfigPatch<Config>;
 
-/** The layered load result — config + per-field provenance + where the local
- *  file lives (whether or not it existed). */
-export interface LoadedConfig {
-  config: Config;
-  origin: ConfigOrigin;
-  path: string;
-  /** true iff harness.json existed on disk and was read successfully. */
-  loadedFromFile: boolean;
-}
+/** The layered load result, specialized to this harness's shapes. */
+export type LoadedConfig = RigLoadedConfig<Config, ConfigOrigin>;
 
 /** CLI-flag rung of the layering. No boot parses flags today; the rung exists
  *  so a boot that grows them slots in without a contract change. */
@@ -128,17 +123,4 @@ export interface CliOverrides {
   nCtx?: number;
   gpu?: ConfigGpu;
   outputDir?: string;
-}
-
-export interface SaveResult {
-  /** The file the save landed in, or null when nothing was persisted — a
-   *  served session's in-memory patch. */
-  path: string | null;
-  /** true iff this save appended `harness.json` to `.gitignore` during this
-   *  call. Only ever true on the very first save in a git repo (scaffolds
-   *  ship it pre-listed). */
-  gitignored: boolean;
-  /** Reserved: fields that were IN the patch but deliberately skipped. Env
-   *  fallbacks live in the owning ability's factory, not this layer. */
-  skipped: string[];
 }

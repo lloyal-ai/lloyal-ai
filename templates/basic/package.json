@@ -39,7 +39,7 @@
     "@lloyal-labs/host": "^0.1.0",
     "@lloyal-labs/lloyal-agents": "^5.0.0",
     "@lloyal-labs/lloyal.node": "^3.1.0",
-    "@lloyal-labs/rig": "^5.0.1",
+    "@lloyal-labs/rig": "^5.3.0",
     "@lloyal-labs/sdk": "^3.0.3",
     "effection": "^4.0.2",
     "ink": "^5.0.1",
