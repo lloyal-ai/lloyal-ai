@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
+    "@lloyal-labs/dev-tools": "^0.1.0",
     "@lloyal-labs/binding": "^0.1.0",
     "@lloyal-labs/host": "^0.1.0",
     "@lloyal-labs/lloyal-agents": "^5.0.0",

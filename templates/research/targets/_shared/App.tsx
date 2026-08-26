@@ -16,6 +16,8 @@
  * SNAPSHOT: reasoning.run @ 0.8.0
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { DevPane } from "@lloyal-labs/dev-tools/react";
+import type { DevControl } from "@lloyal-labs/dev-tools";
 import { reduce, initialState, type AppState, type AgentRuntime } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
@@ -32,6 +34,32 @@ declare global {
 /** Terminal glyph per agent phase — the same vocabulary the Ink view uses. */
 const glyph = (p: AgentRuntime["phase"]): string =>
   p === "done" ? "✓" : p === "failed" ? "✗" : p === "tool" ? "◍" : p === "idle" ? "·" : "●";
+
+/**
+ * This harness's dev-pane Settings contribution — pure DATA. Each row becomes
+ * a segmented control that dispatches the SAME command the composer already
+ * sends; the pane itself ships in `@lloyal-labs/dev-tools` and renders only
+ * under `LLOYAL_DEV=1` (the `config:loaded.dev` gate).
+ */
+const DEV_CONTROLS: readonly DevControl[] = [
+  {
+    key: "defaults.effort",
+    values: ["low", "medium", "high", "ultra"],
+    command: "set_effort",
+    field: "effort",
+    note: "applies next run",
+    read: (c) => (c.defaults as { effort?: string } | undefined)?.effort,
+  },
+  {
+    key: "defaults.reasoningMode",
+    originKey: "reasoningMode",
+    values: ["flat", "deep"],
+    command: "change_mode",
+    field: "mode",
+    note: "applies next run",
+    read: (c) => (c.defaults as { reasoningMode?: string } | undefined)?.reasoningMode,
+  },
+];
 
 /** Where the input line is offered — the harness is idle and awaiting a query. */
 const CAN_INPUT = new Set<AppState["uiPhase"]>(["boot", "composer", "done", "clarifying"]);
@@ -187,6 +215,7 @@ export function HarnessApp() {
           </button>
         </div>
       )}
+      <DevPane bridge={window.harness} controls={DEV_CONTROLS} title="__NAME__" />
     </div>
   );
 }

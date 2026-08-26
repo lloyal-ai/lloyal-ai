@@ -252,6 +252,7 @@ export function* harness(
     type: "config:loaded",
     config: redactAbilities(runner.config()),
     origin: runner.origin(),
+    dev: runner.dev,
   });
 
   // ── Session + event forwarding ─────────────────────────────

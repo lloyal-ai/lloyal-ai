@@ -74,7 +74,7 @@ const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
  */
 export const DEFAULT_ABILITIES: Record<TemplateKind, string[]> = {
   basic: ['lloyal/wikipedia@2.0.0'],
-  research: ['lloyal/corpus@2.0.0', 'lloyal/web@2.0.0'],
+  research: ['lloyal/corpus@2.0.1', 'lloyal/web@2.0.1'],
 };
 
 interface ScaffoldPlan {

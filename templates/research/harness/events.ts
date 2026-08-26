@@ -50,7 +50,15 @@ export type StepEvent =
   // ── UI / config events driven by main.ts ────────────────────────
   // `path` is the file the config was loaded from — absent for the in-memory
   // runner (nothing is read from disk today).
-  | { type: 'config:loaded'; config: Config; origin: ConfigOrigin; path?: string }
+  | {
+      type: 'config:loaded';
+      config: Config;
+      origin: ConfigOrigin;
+      path?: string;
+      /** The boot's LLOYAL_DEV signal on the wire — the dev pane's gate.
+       *  Absent/false ⇒ no dev surface renders, ever. */
+      dev?: boolean;
+    }
   | {
       type: 'config:updated';
       config: Config;

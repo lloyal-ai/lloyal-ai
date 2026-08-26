@@ -11,6 +11,7 @@
  * the same way in a terminal, an Electron window, or a browser tab.
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
+import type { Config, ConfigOrigin } from "./config-types.js";
 
 /**
  * The measured facts the boot surface renders — every line a runtime truth,
@@ -32,6 +33,10 @@ export type WorkflowEvent =
   | AgentEvent
   // Boot finished — the surface may accept a query. Carries the measured facts.
   | { type: "ready"; facts: BootFacts }
+  // The resolved config + per-field provenance — the first event every surface
+  // folds. Ability values are REDACTED to key-presence before this rides any
+  // wire. `dev` is the boot's LLOYAL_DEV signal: the dev pane's gate.
+  | { type: "config:loaded"; config: Config; origin: ConfigOrigin; dev?: boolean }
   // A turn began. Emitted BEFORE any work, so the surface knows a new turn
   // started without having to infer it from the first `agent:spawn` — which is
   // both late and unable to tell a new turn's first agent from an extra agent
