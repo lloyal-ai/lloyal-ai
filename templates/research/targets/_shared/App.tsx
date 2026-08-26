@@ -5,20 +5,24 @@
  *
  * It is transport-agnostic: it only reads `window.harness` — a bridge injected
  * by desktop's preload (contextBridge over IPC) or web's boot (`connectWss` over
- * a socket). Austere on purpose — it renders the same slice the cli's Ink view
- * does: the phase, the live research agents (glyph · label · task · tokens ·
- * tools), a KV pressure gauge, the streaming synth answer, and one input that
- * dispatches a query. Like the cli view it auto-accepts the planner's plan
- * (there is no plan-review editor here), so a query flows recon → plan → agents
- * → synth end-to-end. This is the floor — grow it into your product's UI (or
- * bring your own app); the harness never changes.
+ * a socket). It renders the run the way the reference app does: the asked
+ * question, the plan with live per-task status, one card per research agent
+ * streaming its thought / tool work / report as it happens, and the synthesized
+ * answer as markdown. Everything shown is already in `AppState` — this file is
+ * only a renderer, and it is YOURS: grow it into your product's UI (or bring
+ * your own app); the harness never changes.
  *
- * SNAPSHOT: reasoning.run @ 0.8.0
+ * SNAPSHOT: reasoning.run @ 0.8.0 (view: the desktop renderer's card grammar)
  */
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl } from "@lloyal-labs/dev-tools";
-import { reduce, initialState, type AppState, type AgentRuntime } from "../../harness/state.js";
+import {
+  reduce, initialState, extractStreamingReport,
+  type AppState, type AgentRuntime, type TimelineItem,
+} from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
 declare global {
@@ -30,10 +34,6 @@ declare global {
     };
   }
 }
-
-/** Terminal glyph per agent phase — the same vocabulary the Ink view uses. */
-const glyph = (p: AgentRuntime["phase"]): string =>
-  p === "done" ? "✓" : p === "failed" ? "✗" : p === "tool" ? "◍" : p === "idle" ? "·" : "●";
 
 /**
  * This harness's dev-pane Settings contribution — pure DATA. Each row becomes
@@ -63,6 +63,267 @@ const DEV_CONTROLS: readonly DevControl[] = [
 
 /** Where the input line is offered — the harness is idle and awaiting a query. */
 const CAN_INPUT = new Set<AppState["uiPhase"]>(["boot", "composer", "done", "clarifying"]);
+
+// Per-agent accent colors, assigned by task index — the same idea as the
+// reference app's --a1..--a5.
+const AGENT_COLORS = ["#669df6", "#7ee2a8", "#e3c04a", "#e28aa8", "#9aa7ff"];
+const agentColor = (i: number): string => AGENT_COLORS[((i % AGENT_COLORS.length) + AGENT_COLORS.length) % AGENT_COLORS.length];
+
+/** Compact elapsed: "8s", "45s", "2m 10s". Empty for a non-finite input. */
+function fmtElapsed(ms: number): string {
+  if (!Number.isFinite(ms)) return "";
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+/** Re-render every second while `active`, so live elapsed timers tick even
+ *  when no token stream drives a render (e.g. every agent parked on a tool). */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  return now;
+}
+
+/**
+ * Extracts the report markdown from a `report` item's body — it MAY be raw
+ * markdown OR the report-tool's JSON argument `{"result":"## …"}`; unwrap
+ * `.result` only when parsing yields exactly that shape.
+ */
+function extractReportBody(body: string): string {
+  const trimmed = body.trimStart();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(body) as { result?: unknown };
+      if (parsed && typeof parsed === "object" && typeof parsed.result === "string") return parsed.result;
+    } catch { /* not JSON — raw markdown */ }
+  }
+  return body;
+}
+
+function toolVerb(tool: string, done: boolean): string {
+  if (/search/i.test(tool)) return done ? "Searched" : "Searching";
+  return done ? "Read" : "Reading";
+}
+
+function resultMeta(r: Extract<TimelineItem, { kind: "tool_result" }>): string {
+  const head = r.resultCount != null ? `${r.resultCount} results` : `${(r.byteLength / 1000).toFixed(1)} kb`;
+  const hosts = r.hosts.slice(0, 2).join(" · ");
+  return hosts ? `${head} · ${hosts}` : head;
+}
+
+const md = (text: string): ReactElement => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      a: ({ href, children }) => (
+        <a href={href} target="_blank" rel="noreferrer">{children}</a>
+      ),
+    }}
+  >
+    {text}
+  </ReactMarkdown>
+);
+
+// ── work rows: an agent's chronological stream ───────────────────
+
+/** A think row — collapsed by default (bodies can be huge); auto-open only
+ *  while live AND short, without clobbering an explicit user toggle. */
+function ThinkRow({ it }: { it: Extract<TimelineItem, { kind: "think" }> }): ReactElement {
+  const autoOpen = it.live && it.body.length < 280;
+  const [open, setOpen] = useState(autoOpen);
+  const prevAuto = useRef(autoOpen);
+  useEffect(() => {
+    if (autoOpen !== prevAuto.current) {
+      setOpen(autoOpen);
+      prevAuto.current = autoOpen;
+    }
+  }, [autoOpen]);
+  return (
+    <div style={S.wrow}>
+      <button type="button" style={S.wtoggle} onClick={() => setOpen((o) => !o)}>
+        <span style={{ opacity: 0.75 }}>{it.live ? "Thinking" : "Thought"}</span>
+        <span style={S.chev}>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div style={S.think}>
+          {it.body}
+          {it.live && <span className="rr-caret" />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportRow({ body, tokenCount }: { body: string; tokenCount: number }): ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={S.wrow}>
+      <button type="button" style={S.wtoggle} onClick={() => setOpen((o) => !o)}>
+        <span style={{ opacity: 0.9 }}>✓ Report</span>
+        <span style={S.metaInline}>{tokenCount.toLocaleString()} tok</span>
+        <span style={S.chev}>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && <div style={S.reportBody}>{md(extractReportBody(body))}</div>}
+    </div>
+  );
+}
+
+function WorkRows({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
+  const rows: ReactElement[] = [];
+  for (const it of a.timeline) {
+    if (it.kind === "think") rows.push(<ThinkRow key={`t${it.id}`} it={it} />);
+    else if (it.kind === "tool_call") {
+      // Pair the call with its result (callId back-reference) so the verb and
+      // its "N results · host" meta render as one row.
+      const result = a.timeline.find(
+        (r): r is Extract<TimelineItem, { kind: "tool_result" }> =>
+          r.kind === "tool_result" && r.callId === it.id,
+      );
+      rows.push(
+        <div key={`c${it.id}`} style={S.wrow}>
+          <div style={S.toolRow}>
+            <span style={{ opacity: 0.9 }}>{toolVerb(it.tool, !!result)}</span>
+            <span style={S.toolArgs}>{it.argsSummary}</span>
+            {result && <span style={S.metaInline}>{resultMeta(result)}</span>}
+            {!result && a.retry === null && <span className="rr-spin" />}
+          </div>
+        </div>,
+      );
+    } else if (it.kind === "report") {
+      rows.push(<ReportRow key={`r${it.id}`} body={it.body} tokenCount={it.tokenCount} />);
+    }
+  }
+
+  // The park, narrated: the provider rate-limited and the pool will quietly
+  // re-execute — a waiting agent must never read as hung.
+  if (a.retry) {
+    const left = Math.max(0, Math.ceil((a.retry.retryAt - now) / 1000));
+    rows.push(
+      <div key="retry" style={{ ...S.wrow, color: "#e3c04a" }}>
+        {a.retry.tool} rate-limited — {left > 0 ? `retrying in ~${left}s` : "retrying…"}
+        {a.retry.attempt > 1 ? ` (attempt ${a.retry.attempt})` : ""}
+      </div>,
+    );
+  }
+
+  // Live "Writing report" — the model is streaming the terminal report body
+  // (voluntary: between the report tool's markers; recovery: raw prose).
+  const streaming = a.recovering ? a.contentBuffer : extractStreamingReport(a.contentBuffer);
+  if (streaming && a.phase !== "done") {
+    rows.push(
+      <div key="writing" style={S.wrow}>
+        <div style={{ opacity: 0.75, marginBottom: 3 }}>Writing report</div>
+        <div style={S.think}>
+          …{streaming.slice(-400)}
+          <span className="rr-caret" />
+        </div>
+      </div>,
+    );
+  }
+
+  if (a.failReason) {
+    rows.push(
+      <div key="fail" style={{ ...S.wrow, color: "#ff7a7a" }}>
+        ✗ {a.failReason}
+      </div>,
+    );
+  }
+  return <>{rows}</>;
+}
+
+/** One research agent, live: colored accent, header (task · elapsed · tok),
+ *  and its chronological work stream. */
+function AgentCard({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
+  const color = agentColor(a.taskIndex ?? 0);
+  const elapsed = Number.isFinite(a.startedAt) ? (a.endedAt ?? now) - a.startedAt : NaN;
+  return (
+    <div style={{ ...S.card, borderLeft: `3px solid ${color}`, opacity: a.phase === "done" ? 0.78 : 1 }}>
+      <div style={S.cardHead}>
+        <span style={{ color, fontWeight: 600 }}>{a.label}</span>
+        {a.taskDescription && <span style={S.cardTask}>{a.taskDescription}</span>}
+        <span style={S.cardMeta}>
+          {fmtElapsed(elapsed)} · {a.tokenCount.toLocaleString()} tok
+          {a.toolCallCount > 0 ? ` · ${a.toolCallCount} tools` : ""}
+        </span>
+      </div>
+      <WorkRows a={a} now={now} />
+    </div>
+  );
+}
+
+// ── the plan card: tasks with live status ────────────────────────
+
+type TaskStatus = "pending" | "running" | "paused" | "done" | "failed";
+
+function agentForTask(s: AppState, taskIndex: number): AgentRuntime | null {
+  for (const a of s.agents.values()) if (a.taskIndex === taskIndex) return a;
+  for (const it of s.scrollback) {
+    if (it.kind === "agent" && it.agent.taskIndex === taskIndex) return it.agent;
+  }
+  return null;
+}
+
+/** Pool-level: while any agent is in a tool dispatch the pool holds, so a
+ *  "running" spinner would lie — render paused instead. */
+function poolDispatching(s: AppState): boolean {
+  for (const a of s.agents.values()) {
+    if (a.taskIndex !== null && (a.phase === "tool" || a.pendingToolCallId !== null)) return true;
+  }
+  return false;
+}
+
+function taskStatus(s: AppState, taskIndex: number, dispatching: boolean): { status: TaskStatus; agent: AgentRuntime | null } {
+  const agent = agentForTask(s, taskIndex);
+  if (!agent) return { status: "pending", agent: null };
+  if (agent.phase === "done") return { status: "done", agent };
+  if (agent.phase === "failed") return { status: "failed", agent };
+  return { status: dispatching ? "paused" : "running", agent };
+}
+
+function StatusGlyph({ status, color }: { status: TaskStatus; color: string }): ReactElement {
+  const c = status === "failed" ? "#ff7a7a" : color;
+  return (
+    <span style={{ color: c, width: 16, display: "inline-flex", justifyContent: "center" }}>
+      {status === "pending" && <span style={S.ring} />}
+      {status === "running" && <span className="rr-spin" style={{ borderTopColor: c }} />}
+      {status === "paused" && "❚❚"}
+      {status === "done" && "✓"}
+      {status === "failed" && "✗"}
+    </span>
+  );
+}
+
+function PlanCard({ s }: { s: AppState }): ReactElement | null {
+  const tasks = s.plan?.tasks;
+  if (!tasks || tasks.length === 0) return null;
+  const dispatching = poolDispatching(s);
+  const anyLive = [...s.agents.values()].some((a) => a.taskIndex !== null && a.endedAt === null);
+  const now = useNow(anyLive);
+  return (
+    <div style={S.card}>
+      <div style={S.planHead}>Plan · {tasks.length} tasks</div>
+      {tasks.map((t, i) => {
+        const { status, agent } = taskStatus(s, i, dispatching);
+        const elapsed = agent && Number.isFinite(agent.startedAt) ? (agent.endedAt ?? now) - agent.startedAt : null;
+        return (
+          <div key={i} style={S.planRow}>
+            <span style={{ ...S.planN, color: agentColor(i) }}>{i + 1}</span>
+            <span style={S.planDesc}>{t.description}</span>
+            {elapsed != null && <span style={S.metaInline}>{fmtElapsed(elapsed)}</span>}
+            <StatusGlyph status={status} color={agentColor(i)} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── the app ──────────────────────────────────────────────────────
 
 export function HarnessApp() {
   const [state, setState] = useState<AppState>(initialState);
@@ -114,9 +375,9 @@ export function HarnessApp() {
     };
   }, []);
 
-  // Auto-accept the planner's plan — this austere view has no plan-review editor,
-  // so a query flows straight through to research. `acceptedRef` de-bounces the
-  // one transition into `plan_review` (mirrors the cli view).
+  // Auto-accept the planner's plan — this view has no plan-review editor, so a
+  // query flows straight through to research. `acceptedRef` de-bounces the one
+  // transition into `plan_review` (mirrors the cli view).
   useEffect(() => {
     if (state.uiPhase === "plan_review" && !acceptedRef.current) {
       acceptedRef.current = true;
@@ -142,16 +403,18 @@ export function HarnessApp() {
     setQuery("");
   };
 
-  // Recon + research agents (skip the tool-less synth agent — taskIndex null).
-  const agents: AgentRuntime[] = [...state.agents.values()].filter((a) => a.taskIndex !== null);
+  // Live research agents (skip the tool-less synth agent — taskIndex null),
+  // plus finished snapshots from scrollback so completed work stays visible.
+  const liveAgents: AgentRuntime[] = [...state.agents.values()].filter((a) => a.taskIndex !== null);
+  const anyLive = liveAgents.some((a) => a.endedAt === null);
+  const now = useNow(anyLive);
 
   // The streaming answer: the live synth buffer, else the finalized answer, else
   // the most recent synth body pushed to scrollback.
   const lastSynth = [...state.scrollback].reverse().find((s) => s.kind === "synth");
-  const streaming =
-    (state.synth.open && state.synth.buffer) ||
-    state.answer ||
-    (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : "");
+  const synthLive = state.synth.open && state.synth.buffer;
+  const answer =
+    state.answer || (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : "");
 
   const kvPct =
     state.pressure && state.pressure.nCtx > 0
@@ -162,34 +425,54 @@ export function HarnessApp() {
 
   return (
     <div style={S.page}>
+      {/* keyframes for the caret + spinner — one style tag, no assets */}
+      <style>{`
+        .rr-caret { display:inline-block; width:7px; height:14px; background:#cfe6ff; margin-left:2px; vertical-align:-2px; animation: rrblink 1s steps(2) infinite; }
+        .rr-spin { display:inline-block; width:11px; height:11px; border:2px solid #2b3140; border-top-color:#669df6; border-radius:50%; animation: rrspin .8s linear infinite; }
+        @keyframes rrblink { 50% { opacity: 0; } }
+        @keyframes rrspin { to { transform: rotate(360deg); } }
+        a { color: #8ab4f8; }
+      `}</style>
+
       <div style={S.head}>
         __NAME__ · {state.phase}
         {state.uiPhase !== state.phase ? ` · ${state.uiPhase}` : ""}
         {kvPct !== null && ` · kv ${kvPct}%`}
       </div>
 
-      {agents.map((a) => (
-        <div key={a.id} style={{ ...S.agent, opacity: a.phase === "done" ? 0.65 : 1 }}>
-          <div style={S.meta}>
-            {glyph(a.phase)} {a.label}
-            {a.taskDescription ? ` · ${a.taskDescription}` : ""} · {a.tokenCount} tok
-            {a.toolCallCount > 0 ? ` · ${a.toolCallCount} tools` : ""}
-          </div>
-        </div>
-      ))}
+      {state.query && (
+        <div style={S.qcard}>{state.query}</div>
+      )}
+
+      <PlanCard s={state} />
 
       {state.uiPhase === "clarifying" && state.plan?.clarifyQuestions?.length ? (
         <div style={S.clarify}>
-          <div style={S.clarifyHead}>The planner needs to clarify:</div>
+          <div style={{ marginBottom: 4, fontWeight: 600 }}>The planner needs to clarify:</div>
           {state.plan.clarifyQuestions.map((q, i) => (
-            <div key={i}>
-              {i + 1}. {q}
-            </div>
+            <div key={i}>{i + 1}. {q}</div>
           ))}
         </div>
       ) : null}
 
-      {streaming ? <div style={S.answer}>{streaming}</div> : null}
+      {liveAgents.map((a) => (
+        <AgentCard key={a.id} a={a} now={now} />
+      ))}
+
+      {synthLive ? (
+        <div style={S.card}>
+          <div style={{ opacity: 0.75, marginBottom: 6 }}>Writing answer</div>
+          <div style={S.answerMd}>
+            {md(state.synth.buffer)}
+            <span className="rr-caret" />
+          </div>
+        </div>
+      ) : answer ? (
+        <div style={S.card}>
+          <div style={S.answerMd}>{md(answer)}</div>
+        </div>
+      ) : null}
+
       {state.bootError && (
         <div style={S.error}>
           boot error ({state.bootError.kind}): {state.bootError.message}
@@ -221,13 +504,28 @@ export function HarnessApp() {
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: 20, maxWidth: 820, margin: "0 auto" },
+  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: 20, maxWidth: 860, margin: "0 auto" },
   head: { opacity: 0.55, fontSize: 12, marginBottom: 14, letterSpacing: 0.3 },
-  agent: { borderLeft: "2px solid #2b3140", paddingLeft: 12, margin: "8px 0" },
-  meta: { fontSize: 13 },
+  qcard: { fontSize: 19, fontWeight: 600, lineHeight: 1.4, margin: "4px 0 14px" },
+  card: { background: "#11141b", border: "1px solid #222836", borderRadius: 10, padding: "12px 14px", margin: "10px 0" },
+  cardHead: { display: "flex", alignItems: "baseline", gap: 8, fontSize: 13, marginBottom: 6 },
+  cardTask: { opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
+  cardMeta: { opacity: 0.5, fontSize: 12, whiteSpace: "nowrap" },
+  wrow: { padding: "4px 0 4px 2px", fontSize: 13, borderTop: "1px solid #1a1f2b" },
+  wtoggle: { display: "flex", alignItems: "center", gap: 6, background: "none", border: 0, color: "inherit", font: "inherit", cursor: "pointer", padding: 0 },
+  chev: { opacity: 0.45, fontSize: 10 },
+  metaInline: { opacity: 0.5, fontSize: 12, marginLeft: 8, whiteSpace: "nowrap" },
+  think: { whiteSpace: "pre-wrap", opacity: 0.62, fontSize: 12.5, lineHeight: 1.55, marginTop: 4, maxHeight: 180, overflowY: "auto" },
+  reportBody: { marginTop: 6, maxHeight: 300, overflowY: "auto", fontSize: 13, lineHeight: 1.6 },
+  toolRow: { display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 },
+  toolArgs: { opacity: 0.6, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  planHead: { opacity: 0.75, fontSize: 12, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 },
+  planRow: { display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", borderTop: "1px solid #1a1f2b", fontSize: 13.5 },
+  planN: { fontWeight: 700, width: 14, textAlign: "right" },
+  planDesc: { flex: 1, lineHeight: 1.45 },
+  ring: { display: "inline-block", width: 9, height: 9, borderRadius: "50%", border: "2px solid #3a4358" },
   clarify: { margin: "10px 0", color: "#e3c04a" },
-  clarifyHead: { marginBottom: 4 },
-  answer: { marginTop: 16, whiteSpace: "pre-wrap", lineHeight: 1.6, color: "#cfe6ff" },
+  answerMd: { lineHeight: 1.65, color: "#dfe7f3", fontSize: 14.5 },
   error: { marginTop: 16, color: "#ff7a7a" },
   composer: { display: "flex", gap: 8, marginTop: 22 },
   input: { flex: 1, padding: "9px 12px", background: "#12151c", color: "#e6e9ef", border: "1px solid #2b3140", borderRadius: 8, outline: "none" },
