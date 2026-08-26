@@ -1,0 +1,39 @@
+// A COMMITTED yml `abilities:` corpus must enable + index at boot (the deploy-
+// declared rung). Self-provisioning: builds a corpus fixture inside the
+// scaffold, appends the abilities block to harness.yml, and restores the
+// original yml on exit.
+const { fork } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const priorYml = fs.readFileSync("harness.yml", "utf8");
+// A UNIQUE temp dir — a fixed in-scaffold name could collide with (and then
+// recursively delete) a user's real directory.
+const corpusDir = fs.mkdtempSync(path.join(os.tmpdir(), "ymlcorpus-"));
+fs.writeFileSync(path.join(corpusDir, "a.md"), "# Alpha\n\nThe alpha document.\n");
+fs.writeFileSync(path.join(corpusDir, "b.md"), "# Beta\n\nThe beta document.\n");
+// JSON.stringify: a JSON string is a valid YAML double-quoted scalar with
+// backslashes/quotes escaped — a raw Windows path would parse as YAML escapes.
+fs.appendFileSync("harness.yml", `\nabilities:\n  corpus:\n    corpusPath: ${JSON.stringify(corpusDir)}\n`);
+const cleanup = () => {
+  try { fs.writeFileSync("harness.yml", priorYml); } catch {}
+  try { fs.rmSync(corpusDir, { recursive: true, force: true }); } catch {}
+};
+process.on("exit", cleanup); // belt: restore the tracked yml even on an interrupt
+const child = fork("dist/targets/cli/index.mjs", [], {
+  cwd: process.cwd(), env: { ...process.env, RR_BRIDGE: "1" },
+  stdio: ["ignore", "ignore", "inherit", "ipc"],
+});
+let done = false; let sawCorpus = false;
+const finish = (c) => { if (done) return; done = true; child.kill(); cleanup(); process.exit(c); };
+child.on("message", (m) => {
+  const ev = m?.payload;
+  if (ev?.type === "corpus:indexed") { sawCorpus = true; console.log(`corpus:indexed files=${ev.fileCount}`); }
+  if (ev?.type === "config:loaded") console.log(`config:loaded abilities=${JSON.stringify(ev.config.abilities)}`);
+  if (ev?.type === "abilities:state") {
+    console.log(`abilities:state: ${ev.abilities.map(a => a.name).join(", ")}`);
+    finish(sawCorpus ? 0 : 1);
+  }
+});
+child.on("exit", () => finish(1));
+setTimeout(() => finish(1), 120_000);

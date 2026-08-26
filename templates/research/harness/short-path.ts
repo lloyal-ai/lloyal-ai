@@ -7,7 +7,7 @@
  * `process` global exists (Node), and returns the path unchanged in a browser
  * or for any path outside home. Its inverse — `resolvePath` (`~` expansion for
  * config
- * input, genuinely `node:`) — stays in `./path-utils`, the runner-side module.
+ * input, genuinely `node:`) — lives in `@lloyal-labs/rig/node` (`resolvePath`).
  */
 export function shortPath(p: string): string {
   if (!p) return p;

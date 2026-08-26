@@ -2,12 +2,19 @@
  * The harness config *schema* — the node-free type block.
  *
  * Carved from reasoning.run's `src/tui-ink/config.ts` (the `Config` family +
- * `ConfigOrigin` + `SaveResult`). NO `node:fs`/`node:path` — a browser/renderer
- * surface, the `reduce` graph, and the served-runner factory all import these
- * types, so the file must stay runtime-free. The config *loaders*
- * (`loadConfig`/`saveConfig`) that touched disk are deliberately NOT copied —
- * this template's runner (`makeEdgeRunner`) holds config in memory.
+ * `ConfigOrigin`). NO runtime code — a browser/renderer surface and the
+ * `reduce` graph import these types, so the file stays erasable
+ * (`import type` only). The base plumbing types (`ConfigOriginValue`,
+ * `ConfigPatch`, `SaveResult`, `LoadedConfig`) come from `@lloyal-labs/rig`;
+ * this file specializes them to THIS harness's shapes.
  */
+import type {
+  ConfigOriginValue,
+  ConfigPatch as RigConfigPatch,
+  LoadedConfig as RigLoadedConfig,
+} from "@lloyal-labs/rig";
+
+export type { ConfigOriginValue, SaveResult } from "@lloyal-labs/rig";
 
 export interface ConfigSources {
   /** Where per-query run-dirs (report.md + annexure-N.md) and the session
@@ -90,38 +97,27 @@ export interface Config {
   model: ConfigModel;
 }
 
-/** One config rung, per field: which layer of
- *  `cli > env > harness.json > harness.yml > default` supplied the value.
- *  `file` = the local `harness.json`; `yml` = the committed manifest;
- *  `session` = patched in-memory by a served session (never written to disk). */
-export type ConfigOriginValue = 'cli' | 'env' | 'file' | 'yml' | 'session' | 'default';
-
 /** Which layer supplied a given harness-level field — used for composer UI
  *  hints. Per-ability config lives in `Config.abilities` and carries no origin
- *  tracking (abilities validate their own config at enable time). */
-export interface ConfigOrigin {
+ *  tracking (abilities validate their own config at enable time). A type
+ *  alias (not an interface) so it satisfies the factories'
+ *  `Record<string, ConfigOriginValue>` bound structurally. */
+export type ConfigOrigin = {
   reasoningMode: ConfigOriginValue;
   modelPath: ConfigOriginValue;
   reranker: ConfigOriginValue;
   nCtx: ConfigOriginValue;
   gpu: ConfigOriginValue;
   outputDir: ConfigOriginValue;
-}
-
-/** A config write. `defaults` is PARTIAL here — a save carries only the keys
- *  it changes, so harness.json never pins untouched defaults and a later
- *  harness.yml edit still shows through. */
-export type ConfigPatch = Omit<Partial<Config>, 'defaults'> & {
-  defaults?: Partial<ConfigDefaults>;
 };
 
-export interface LoadedConfig {
-  config: Config;
-  origin: ConfigOrigin;
-  path: string;
-  /** true iff harness.json existed on disk and was read successfully. */
-  loadedFromFile: boolean;
-}
+/** This harness's config write — rig's one-level-deep patch over `Config`:
+ *  `defaults` is PARTIAL, so a save carries only the keys it changes and
+ *  harness.json never pins untouched defaults over a later harness.yml edit. */
+export type ConfigPatch = RigConfigPatch<Config>;
+
+/** The layered load result, specialized to this harness's shapes. */
+export type LoadedConfig = RigLoadedConfig<Config, ConfigOrigin>;
 
 export interface CliOverrides {
   reasoningMode?: 'flat' | 'deep';
@@ -130,17 +126,4 @@ export interface CliOverrides {
   nCtx?: number;
   gpu?: ConfigGpu;
   outputDir?: string;
-}
-
-export interface SaveResult {
-  /** The file the save landed in, or null when nothing was persisted — a
-   *  served session's in-memory patch. */
-  path: string | null;
-  /** true iff this save appended `harness.json` to `.gitignore` during this
-   *  call. Only ever true on the very first save in a git repo (scaffolds
-   *  ship it pre-listed). */
-  gitignored: boolean;
-  /** Reserved: fields that were IN the patch but deliberately skipped. Env
-   *  fallbacks live in the owning ability's factory, not this layer. */
-  skipped: string[];
 }

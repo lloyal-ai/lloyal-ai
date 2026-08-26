@@ -1,6 +1,6 @@
 /**
  * Served (B-host) placement — the harness-RUNNING half the driver INJECTS.
- * Isolated from the factories in `./served-runtime` because it imports the
+ * Isolated from the compute glue in `./served-runtime` because it imports the
  * `harness`: the web target's `serve.ts` hands it to the driver as `run`, and the
  * host calls it once per admitted Session as a structured child.
  *
@@ -23,9 +23,10 @@ import type { EventBus } from "@lloyal-labs/binding";
 import { provisionAbilityModels } from "@lloyal-labs/rig/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
-import { harness, abilities } from "./harness.js";
-import { RunnerCtx } from "./runner-ctx.js";
-import { applyServedGpuEnv, makeServedRunner } from "./served-runtime.js";
+import { makeServedRunner } from "@lloyal-labs/rig";
+import { harness, abilities, RunnerCtx } from "./harness.js";
+import { applyServedGpuEnv } from "./served-runtime.js";
+import { SESSION_ORIGIN_MAP } from "./config.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
 import type { Config, ConfigOrigin } from "./config-types.js";
 
@@ -54,7 +55,14 @@ export function* runServedSession(
   // flushes every event synchronously, so nothing is pending at close) —
   // sequential sessions must not leak descriptors.
   yield* ensure(trace.close);
-  yield* RunnerCtx.set(makeServedRunner(cfg, { traceWriter: trace.writer, dev, origin }));
+  yield* RunnerCtx.set(
+    makeServedRunner<Config, ConfigOrigin>(cfg, {
+      traceWriter: trace.writer,
+      dev,
+      origin,
+      sessionOriginMap: SESSION_ORIGIN_MAP,
+    }),
+  );
   yield* harness(ctx, events, commands);
 }
 

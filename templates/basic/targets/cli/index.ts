@@ -23,13 +23,13 @@ import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
-import { harness, abilities } from "../../harness/harness.js";
-import { RunnerCtx } from "../../harness/runner-ctx.js";
-import { applyServedGpuEnv, makeEdgeRunner } from "../../harness/served-runtime.js";
+import { makeEdgeRunner } from "@lloyal-labs/rig";
+import { harness, abilities, RunnerCtx } from "../../harness/harness.js";
+import { applyServedGpuEnv } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
-import { loadConfig, loadYml, saveLocalConfig } from "../../harness/config.js";
+import { loadConfig, loadYml, saveLocalConfig, SESSION_ORIGIN_MAP } from "../../harness/config.js";
 import type { HarnessYml } from "../../harness/config.js";
-import type { Config, ConfigPatch, LoadedConfig } from "../../harness/config-types.js";
+import type { Config, ConfigOrigin, ConfigPatch, LoadedConfig } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
 
 /** Best-effort file size for the boot header — a stat failure never blocks boot
@@ -197,7 +197,13 @@ main(function* () {
     return { ...saved, config: relayered.config, origin: relayered.origin };
   };
   yield* RunnerCtx.set(
-    makeEdgeRunner(cfg, { traceWriter: trace.writer, dev, origin: loaded.origin, persist }),
+    makeEdgeRunner<Config, ConfigOrigin>(cfg, {
+      traceWriter: trace.writer,
+      dev,
+      origin: loaded.origin,
+      persist,
+      sessionOriginMap: SESSION_ORIGIN_MAP,
+    }),
   );
 
   const events = createBus<WorkflowEvent>();

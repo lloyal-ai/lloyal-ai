@@ -9,7 +9,7 @@
  * TYPES ONLY — this surface must stay `node:`-free so a browser/renderer surface
  * can import it for the plan/event types. The config *schema* it re-exports lives
  * in `./config-types.ts` (also node-free); the runner that resolves + holds that
- * config (`makeEdgeRunner` / `makeServedRunner` in `./served-runtime.ts`) is
+ * config (`makeEdgeRunner` / `makeServedRunner` from `@lloyal-labs/rig`) is
  * node-side and set on `RunnerCtx` by a target's boot.
  */
 export type { StepEvent, WorkflowEvent } from "./events.js";

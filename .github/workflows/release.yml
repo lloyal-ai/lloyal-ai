@@ -44,7 +44,7 @@ jobs:
             const need=['bin/run.js','LICENSE','package.json'];
             for (const n of need) if(!f.includes(n)) throw new Error('missing '+n);
             const t=f.filter(x=>x.startsWith('templates/')).length;
-            if (t !== 102) throw new Error('expected 102 template files, got '+t);
+            if (t !== 98) throw new Error('expected 98 template files, got '+t);
             if (!f.some(x=>x.startsWith('dist/'))) throw new Error('no dist output');
             console.log('tarball ok:', f.length, 'files');
           "

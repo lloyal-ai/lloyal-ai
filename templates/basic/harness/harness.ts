@@ -15,7 +15,7 @@
  * own program; nothing else in the project needs to know what you wrote here.
  */
 import { spawn, each, call } from "effection";
-import type { Operation, Signal } from "effection";
+import type { Context, Operation, Signal } from "effection";
 import type { EventBus } from "@lloyal-labs/binding";
 import type { Session, SessionContext } from "@lloyal-labs/sdk";
 import {
@@ -38,10 +38,18 @@ import {
   renderSpine,
   renderAgentPreamble,
 } from "@lloyal-labs/rig";
+import { RunnerCtx as RigRunnerCtx } from "@lloyal-labs/rig";
+import type { Runner } from "@lloyal-labs/rig";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
-import { RunnerCtx } from "./runner-ctx.js";
 import { reportBody } from "./state.js";
 import type { Command, WorkflowEvent } from "./protocol.js";
+import type { Config, ConfigOrigin } from "./config-types.js";
+
+/** The runner ↔ harness seam, typed to THIS harness's config. The context and
+ *  the `Runner` machinery are rig's (`makeEdgeRunner` / `makeServedRunner`);
+ *  only the `Config`/`ConfigOrigin` shapes are yours, and this cast marries
+ *  them — the boots import it from here. */
+export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
 
 /**
  * The Abilities this harness enables. Before enabling, the boot provisions

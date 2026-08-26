@@ -6,7 +6,7 @@
  * surface is mounted; `commands` delivers that surface's `Command`s back. This
  * harness runs the RACE/DRB-tuned pipeline — pre-flight recon → planner →
  * parallel/chain research pool → synthesis — over the substrate a target's boot
- * established. It reads `RunnerCtx` (see ./runner-ctx.ts) for the edge-shell
+ * established. It reads `RunnerCtx` (bound below, over rig's Runner) for the edge-shell
  * concerns it can't own: the wind-down / cancel signals, the live config, the
  * trace sink. (The reranker is NOT a Runner concern — the boot's
  * `provisionAbilityModels` publishes it on `RerankerCtx`.)
@@ -23,7 +23,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, each, call } from "effection";
-import type { Operation, Task, Signal } from "effection";
+import type { Context, Operation, Task, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import {
   initAgents,
@@ -46,7 +46,8 @@ import type { PlanResult } from "@lloyal-labs/rig";
 import { TASK_ROUTING_KEY } from "@lloyal-labs/rig";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
-import { RunnerCtx } from "./runner-ctx.js";
+import { RunnerCtx as RigRunnerCtx } from "@lloyal-labs/rig";
+import type { Runner } from "@lloyal-labs/rig";
 import {
   runQuery,
   runResearchPlan,
@@ -60,7 +61,14 @@ import type { Config } from "./config-types.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
 import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
-import { resolvePath } from "./path-utils.js";
+import { resolvePath } from "@lloyal-labs/rig/node";
+import type { ConfigOrigin } from "./config-types.js";
+
+/** The runner ↔ harness seam, typed to THIS harness's config. The context and
+ *  the `Runner` machinery are rig's (`makeEdgeRunner` / `makeServedRunner`);
+ *  only the `Config`/`ConfigOrigin` shapes are yours, and this cast marries
+ *  them — the boots and `pipeline.ts` import it from here. */
+export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
 
 // The two first-party ability factories this harness enables. Before enabling, the
 // boot's `provisionAbilityModels` reads whatever Services each ability declares
