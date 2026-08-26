@@ -12,7 +12,9 @@ const priorYml = fs.readFileSync("harness.yml", "utf8");
 const corpusDir = fs.mkdtempSync(path.join(os.tmpdir(), "ymlcorpus-"));
 fs.writeFileSync(path.join(corpusDir, "a.md"), "# Alpha\n\nThe alpha document.\n");
 fs.writeFileSync(path.join(corpusDir, "b.md"), "# Beta\n\nThe beta document.\n");
-fs.appendFileSync("harness.yml", `\nabilities:\n  corpus:\n    corpusPath: "${corpusDir}"\n`);
+// JSON.stringify: a JSON string is a valid YAML double-quoted scalar with
+// backslashes/quotes escaped — a raw Windows path would parse as YAML escapes.
+fs.appendFileSync("harness.yml", `\nabilities:\n  corpus:\n    corpusPath: ${JSON.stringify(corpusDir)}\n`);
 const cleanup = () => {
   try { fs.writeFileSync("harness.yml", priorYml); } catch {}
   try { fs.rmSync(corpusDir, { recursive: true, force: true }); } catch {}

@@ -88,6 +88,9 @@ log("ok: host ALIVE after enable-fail — #110 contained through rig 5.3.0");
 
 A.client.send({ type: "set_effort", effort: "low" });
 await until("A still serviceable after everything", () => A.updated.length === 2);
+// Per-session isolation holds to the END: A's second update must not have
+// broadcast to either sibling.
+if (B.updated.length || C.updated.length) die(`A's set_effort broadcast to a sibling (B=${B.updated.length} C=${C.updated.length})`);
 // The counter runs for the WHOLE gate: a raw secret serialized into any later
 // frame (A's second update, B's errors, C's load) must still fail it.
 if (secretOnWire) die("secret literal appeared on a wire AFTER the initial redaction check");

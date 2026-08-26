@@ -56,7 +56,8 @@ await until("A and B both admitted (ready)", () => A.ready && B.ready, 120_000);
 const [a0, b0] = [A.produced, B.produced];
 await until("A and B produce CONCURRENTLY (+10 each)", () => A.produced >= a0 + 10 && B.produced >= b0 + 10, 180_000);
 
-log(`dropping A mid-run at ${A.produced} produces`);
+if (A.answer !== null) die("A already answered — this would test an idle close, not a mid-run drop");
+log(`dropping A mid-run at ${A.produced} produces (no answer yet)`);
 A.client.close();
 const bMark = B.produced;
 await until("B still streaming after A dropped (+10)", () => B.produced >= bMark + 10, 120_000);
