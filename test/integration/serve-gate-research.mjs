@@ -8,7 +8,9 @@ import { connectWss } from "@lloyal-labs/binding/web";
 
 const SECRET = "tvly-SUPERSECRET-e2e-gate-9x7q";
 const log = (m) => console.log(`[gate] ${m}`);
-const host = spawn("node", ["bin/serve.js"], { stdio: ["ignore", "pipe", "pipe"] });
+// Dedicated port: an ambient dev tab retrying ws://8787 would admit a
+// phantom session and poison the isolation/cap assertions.
+const host = spawn("node", ["bin/serve.js"], { env: { ...process.env, PORT: "18787" }, stdio: ["ignore", "pipe", "pipe"] });
 let hostDead = false;
 host.on("exit", (c) => { hostDead = true; log(`host exited ${c}`); });
 const die = (m) => { log(`FAIL: ${m}`); host.kill("SIGKILL"); process.exit(1); };
@@ -17,7 +19,7 @@ let secretOnWire = 0;
 function open(name) {
   const s = { name, ready: false, loaded: null, updated: [], errors: [], events: 0, client: null };
   s.connect = () => {
-    s.client = connectWss("ws://127.0.0.1:8787", {
+    s.client = connectWss("ws://127.0.0.1:18787", {
       onEvent: (ev) => {
         s.events++;
         if (JSON.stringify(ev).includes(SECRET)) { secretOnWire++; log(`SECRET ON ${name}'s WIRE: ${ev.type}`); }
@@ -67,7 +69,9 @@ await until("B got the path-guard error", () => B.errors.length === 1);
 if (A.errors.length) die("A received B's error");
 B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: "/tmp/empty-corpus-probe" } });
 await until("B got the enable-fail error (#110 path)", () => B.errors.length === 2, 180_000);
-log(`ok: B errors isolated to B: ${B.errors.map((e) => e.slice(0, 40)).join(" | ")}`);
+if (A.errors.length || C.errors.length) die("B's errors leaked to a sibling");
+if (C.updated.length) die("C received a config:updated it never caused");
+log(`ok: B errors isolated to B (A and C clean): ${B.errors.map((e) => e.slice(0, 40)).join(" | ")}`);
 await new Promise((r) => setTimeout(r, 1500));
 if (hostDead) die("host died after corpus enable-fail (#110 REGRESSION)");
 log("ok: host ALIVE after enable-fail — #110 contained through rig 5.3.0");

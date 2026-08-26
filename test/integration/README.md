@@ -1,6 +1,7 @@
-# Template E2E battery
+# Template integration battery
 
-Live gates for scaffolded harnesses (the G3/G4 gates of the promotion arc).
+Real-model gates for scaffolded harnesses (the G3/G4 gates of the promotion
+arc) — the same tier liblloyal calls `tests/integration/`.
 These are NOT part of `npm test` — they need a scaffold with resident model
 weights and drive it headless over the desktop ipc surface (`RR_BRIDGE=1`
 fork + `{t:"command",payload}` frames; the pipe surface is emit-only).
@@ -10,6 +11,13 @@ then run a driver FROM THE SCAFFOLD's directory:
 
     cd <scaffold> && npm run build
     node <this dir>/drive-produce.cjs
+
+Every driver provisions its own fixtures (temp corpus dirs, the version-2
+harness.json, the yml `abilities:` block) and restores what it touched on
+exit. Two caveats: `drive-refuse` refuses to run if a real `harness.json`
+exists (it would clobber your state — delete or move it first), and
+`drive-ymlcorpus` rewrites `harness.yml` around the run (committed scaffolds
+only; it restores the original bytes on exit).
 
 Drivers fork `dist/targets/cli/index.js` (basic, plain tsc) or
 `dist/targets/cli/index.mjs` (research, esbuild) — each script hardcodes the
@@ -28,9 +36,9 @@ entry it targets.
 | drive-redact.cjs | research | ability-config values never ride the bus (key-presence only) |
 | drive-appcfg.cjs | research | bad corpus path → guard, nothing saved |
 | drive-rollback.cjs | research | enable-failure → full rollback, process ALIVE (hdk#110) |
-| drive-reroll.cjs | research | re-enable after a rollback works |
+| drive-reroll.cjs | research | rollback, then a GOOD config re-enables + indexes |
 | drive-ymlcorpus.cjs | research | a committed yml `abilities:` corpus boots + indexes |
-| serve-gate-basic.mjs | basic | concurrent sessions stream; mid-run disconnect isolated; re-admission |
+| serve-gate-basic.mjs | basic | at cap (MAX_SESSIONS=2): concurrent streams; mid-run disconnect releases the slot; re-admission |
 | serve-gate-research.mjs | research | per-session config isolation; secrets never on the wire; #110 contained |
 
 The serve gates import `@lloyal-labs/binding/web` — copy them into the

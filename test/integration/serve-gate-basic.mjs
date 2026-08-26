@@ -7,7 +7,14 @@ import { spawn } from "node:child_process";
 import { connectWss } from "@lloyal-labs/binding/web";
 
 const log = (m) => console.log(`[gate] ${new Date().toISOString().slice(11, 19)} ${m}`);
-const host = spawn("node", ["bin/serve.js"], { stdio: ["ignore", "pipe", "pipe"] });
+// MAX_SESSIONS=2: A+B fill capacity, so D can ONLY admit if dropping A
+// actually released its slot — with the default cap of 4 this gate would
+// pass even if release were broken. Dedicated port: an ambient dev tab
+// retrying ws://8787 would admit a phantom session and eat a slot.
+const host = spawn("node", ["bin/serve.js"], {
+  env: { ...process.env, MAX_SESSIONS: "2", PORT: "18787" },
+  stdio: ["ignore", "pipe", "pipe"],
+});
 let hostDead = false;
 host.on("exit", (c) => { hostDead = true; log(`host exited ${c}`); });
 const die = (m) => { log(`FAIL: ${m}`); host.kill("SIGKILL"); process.exit(1); };
@@ -16,7 +23,7 @@ process.on("unhandledRejection", (e) => die(e.message ?? e));
 function open(name, query) {
   const s = { name, produced: 0, answer: null, closed: false, ready: false, client: null };
   s.connect = () => {
-    s.client = connectWss("ws://127.0.0.1:8787", {
+    s.client = connectWss("ws://127.0.0.1:18787", {
       onEvent: (ev) => {
         if (ev?.type === "ready") { s.ready = true; s.client.send({ type: "submit_query", query }); }
         if (ev?.type === "agent:produce") s.produced++;
