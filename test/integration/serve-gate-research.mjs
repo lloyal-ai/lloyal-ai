@@ -16,6 +16,10 @@ const log = (m) => console.log(`[gate] ${m}`);
 const emptyDir = mkdtempSync(join(tmpdir(), "empty-corpus-"));
 process.on("exit", () => { try { rmSync(emptyDir, { recursive: true, force: true }); } catch {} });
 const host = spawn("node", ["bin/serve.js"], { env: { ...process.env, PORT: "18787" }, stdio: ["ignore", "pipe", "pipe"] });
+// Drain both pipes: llama.cpp's boot/session logging otherwise fills the 64KB
+// pipe buffer and BLOCKS the host — a false timeout that looks like a hang.
+host.stdout.resume();
+host.stderr.resume();
 let hostDead = false;
 host.on("exit", (c) => { hostDead = true; log(`host exited ${c}`); });
 const die = (m) => { log(`FAIL: ${m}`); host.kill("SIGKILL"); process.exit(1); };
@@ -84,6 +88,9 @@ log("ok: host ALIVE after enable-fail — #110 contained through rig 5.3.0");
 
 A.client.send({ type: "set_effort", effort: "low" });
 await until("A still serviceable after everything", () => A.updated.length === 2);
+// The counter runs for the WHOLE gate: a raw secret serialized into any later
+// frame (A's second update, B's errors, C's load) must still fail it.
+if (secretOnWire) die("secret literal appeared on a wire AFTER the initial redaction check");
 log("PASS: per-session isolation + wire redaction + #110 containment on the served path");
 host.kill("SIGKILL");
 process.exit(0);

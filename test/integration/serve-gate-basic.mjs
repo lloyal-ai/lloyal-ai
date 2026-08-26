@@ -15,6 +15,10 @@ const host = spawn("node", ["bin/serve.js"], {
   env: { ...process.env, MAX_SESSIONS: "2", PORT: "18787" },
   stdio: ["ignore", "pipe", "pipe"],
 });
+// Drain both pipes: llama.cpp's boot/session logging otherwise fills the 64KB
+// pipe buffer and BLOCKS the host — a false timeout that looks like a hang.
+host.stdout.resume();
+host.stderr.resume();
 let hostDead = false;
 host.on("exit", (c) => { hostDead = true; log(`host exited ${c}`); });
 const die = (m) => { log(`FAIL: ${m}`); host.kill("SIGKILL"); process.exit(1); };

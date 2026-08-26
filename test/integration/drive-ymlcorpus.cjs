@@ -4,14 +4,18 @@
 // original yml on exit.
 const { fork } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const priorYml = fs.readFileSync("harness.yml", "utf8");
-fs.mkdirSync("corpus-fixture-ymlgate", { recursive: true });
-fs.writeFileSync("corpus-fixture-ymlgate/a.md", "# Alpha\n\nThe alpha document.\n");
-fs.writeFileSync("corpus-fixture-ymlgate/b.md", "# Beta\n\nThe beta document.\n");
-fs.appendFileSync("harness.yml", '\nabilities:\n  corpus:\n    corpusPath: "./corpus-fixture-ymlgate"\n');
+// A UNIQUE temp dir — a fixed in-scaffold name could collide with (and then
+// recursively delete) a user's real directory.
+const corpusDir = fs.mkdtempSync(path.join(os.tmpdir(), "ymlcorpus-"));
+fs.writeFileSync(path.join(corpusDir, "a.md"), "# Alpha\n\nThe alpha document.\n");
+fs.writeFileSync(path.join(corpusDir, "b.md"), "# Beta\n\nThe beta document.\n");
+fs.appendFileSync("harness.yml", `\nabilities:\n  corpus:\n    corpusPath: "${corpusDir}"\n`);
 const cleanup = () => {
   try { fs.writeFileSync("harness.yml", priorYml); } catch {}
-  try { fs.rmSync("corpus-fixture-ymlgate", { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(corpusDir, { recursive: true, force: true }); } catch {}
 };
 process.on("exit", cleanup); // belt: restore the tracked yml even on an interrupt
 const child = fork("dist/targets/cli/index.mjs", [], {
