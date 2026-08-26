@@ -11,6 +11,7 @@ if (fs.existsSync("harness.json")) {
 const V2 = '{\n  "version": 2,\n  "fromTheFuture": "keep-me-intact"\n}\n';
 fs.writeFileSync("harness.json", V2);
 const cleanup = () => { try { fs.unlinkSync("harness.json"); } catch {} };
+process.on("exit", cleanup); // belt: remove the fixture even on an interrupt
 const child = fork("dist/targets/cli/index.mjs", [], {
   cwd: process.cwd(), env: { ...process.env, RR_BRIDGE: "1" },
   stdio: ["ignore", "ignore", "inherit", "ipc"],

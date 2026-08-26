@@ -5,11 +5,16 @@
 //   4. B sets a bad corpus path -> ui:error on B only; then an EMPTY corpus (enable-fail #110) -> host ALIVE
 import { spawn } from "node:child_process";
 import { connectWss } from "@lloyal-labs/binding/web";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SECRET = "tvly-SUPERSECRET-e2e-gate-9x7q";
 const log = (m) => console.log(`[gate] ${m}`);
 // Dedicated port: an ambient dev tab retrying ws://8787 would admit a
 // phantom session and poison the isolation/cap assertions.
+const emptyDir = mkdtempSync(join(tmpdir(), "empty-corpus-"));
+process.on("exit", () => { try { rmSync(emptyDir, { recursive: true, force: true }); } catch {} });
 const host = spawn("node", ["bin/serve.js"], { env: { ...process.env, PORT: "18787" }, stdio: ["ignore", "pipe", "pipe"] });
 let hostDead = false;
 host.on("exit", (c) => { hostDead = true; log(`host exited ${c}`); });
@@ -67,8 +72,9 @@ log(`ok: fresh C pristine (web=${cWeb}) — A's save was per-session`);
 B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: "/nonexistent-corpus-xyz" } });
 await until("B got the path-guard error", () => B.errors.length === 1);
 if (A.errors.length) die("A received B's error");
-B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: "/tmp/empty-corpus-probe" } });
+B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: emptyDir } });
 await until("B got the enable-fail error (#110 path)", () => B.errors.length === 2, 180_000);
+if (!/no \.md\(x\) files matched/.test(B.errors[1])) die(`second error was not the ENABLE failure: ${B.errors[1]}`);
 if (A.errors.length || C.errors.length) die("B's errors leaked to a sibling");
 if (C.updated.length) die("C received a config:updated it never caused");
 log(`ok: B errors isolated to B (A and C clean): ${B.errors.map((e) => e.slice(0, 40)).join(" | ")}`);

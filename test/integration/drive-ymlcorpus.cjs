@@ -13,6 +13,7 @@ const cleanup = () => {
   try { fs.writeFileSync("harness.yml", priorYml); } catch {}
   try { fs.rmSync("corpus-fixture-ymlgate", { recursive: true, force: true }); } catch {}
 };
+process.on("exit", cleanup); // belt: restore the tracked yml even on an interrupt
 const child = fork("dist/targets/cli/index.mjs", [], {
   cwd: process.cwd(), env: { ...process.env, RR_BRIDGE: "1" },
   stdio: ["ignore", "ignore", "inherit", "ipc"],
