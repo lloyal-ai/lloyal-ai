@@ -168,10 +168,15 @@ function View({
   const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => bus.subscribe((ev) => {
-    foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
-    if (ev.type !== "agent:produce" && ev.type !== "agent:tick") {
-      devTail.current.push(ev.type);
-      if (devTail.current.length > 24) devTail.current.shift();
+    // Truly wire-gated: only config:loaded can flip the gate, so until it
+    // says dev, the ONLY event folded is config:loaded itself — a non-dev
+    // run never pays the per-token fold.
+    if (devModel.dev || ev.type === "config:loaded") {
+      foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
+      if (devModel.dev && ev.type !== "agent:produce" && ev.type !== "agent:tick") {
+        devTail.current.push(ev.type);
+        if (devTail.current.length > 24) devTail.current.shift();
+      }
     }
     apply(ev);
   }), [bus]);
