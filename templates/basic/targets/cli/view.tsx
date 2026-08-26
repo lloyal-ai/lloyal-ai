@@ -159,12 +159,16 @@ function View({
   // The dev overlay's model + a SHORT formatted tail — folded alongside the
   // view's own reduce from the same subscription. The overlay renders nothing
   // unless config:loaded carried dev: true (LLOYAL_DEV).
-  const devModel = useRef(createPaneModel());
+  // Lazy init: an inline initializer would allocate a fresh model every
+  // render only to be discarded after the first.
+  const devModelRef = useRef<ReturnType<typeof createPaneModel> | null>(null);
+  devModelRef.current ??= createPaneModel();
+  const devModel = devModelRef.current;
   const devTail = useRef<string[]>([]);
   const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => bus.subscribe((ev) => {
-    foldEvent(devModel.current, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
+    foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
     if (ev.type !== "agent:produce" && ev.type !== "agent:tick") {
       devTail.current.push(ev.type);
       if (devTail.current.length > 24) devTail.current.shift();
@@ -262,7 +266,7 @@ function View({
 
         {state.error && <Text color="red">error: {state.error}</Text>}
 
-        {devOpen && <DevOverlay model={devModel.current} tail={devTail.current} />}
+        {devOpen && <DevOverlay model={devModel} tail={devTail.current} />}
 
         {!working && (
           <Box>
