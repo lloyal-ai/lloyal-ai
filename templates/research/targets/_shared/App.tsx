@@ -296,6 +296,9 @@ function AgentCard({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
         title={terminal ? (expanded ? "collapse" : "expand") : undefined}
       >
         <span style={{ color, fontWeight: 600 }}>{a.label}</span>
+        {/* The stable identity shared with the dev pane's timeline — the
+            pane's lane says "research #N", this card says the same N. */}
+        <span style={{ opacity: 0.45, fontSize: 11, fontFamily: "ui-monospace, Menlo, monospace" }}>#{a.id}</span>
         {a.taskDescription && <span style={S.cardTask}>{a.taskDescription}</span>}
         <span style={S.cardMeta}>
           {a.phase === "failed" ? "✗ " : a.phase === "done" ? "✓ " : ""}
