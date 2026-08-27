@@ -25,11 +25,11 @@
     "prestart": "node bin/preflight-abilities.js && tsc",
     "start": "node bin/run.js",
     "predev:desktop": "node bin/preflight-abilities.js && node bin/ensure-electron.js",
-    "dev:desktop": "tsc && electron-vite dev",
+    "dev:desktop": "tsc && cross-env LLOYAL_DEV=1 electron-vite dev",
     "prebuild:desktop": "node bin/preflight-abilities.js && node bin/ensure-electron.js",
     "build:desktop": "tsc && electron-vite build",
     "serve": "tsc && node bin/serve.js",
-    "dev:web": "concurrently -k -n serve,web -c blue,magenta \"npm run serve\" \"vite --config targets/web/vite.web.config.ts\"",
+    "dev:web": "concurrently -k -n serve,web -c blue,magenta \"cross-env LLOYAL_DEV=1 npm run serve\" \"vite --config targets/web/vite.web.config.ts\"",
     "dev:web:client": "vite --config targets/web/vite.web.config.ts",
     "build:web": "vite build --config targets/web/vite.web.config.ts"
   },
@@ -62,6 +62,7 @@
     "electron-vite": "^5.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "cross-env": "^10.1.0"
   }
 }
