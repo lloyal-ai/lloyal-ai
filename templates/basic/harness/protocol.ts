@@ -12,6 +12,7 @@
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/dev-tools";
+import type { AbilityDescriptor } from "@lloyal-labs/rig";
 import type { Config, ConfigOrigin } from "./config-types.js";
 
 /**
@@ -34,6 +35,9 @@ export type WorkflowEvent =
   | AgentEvent
   // Dev-gated host samples for the pane's pressure strip (cpu/rss/mem).
   | HostResourcesEvent
+  // Every INSTALLED ability (enabled or not), config redacted to
+  // key-presence — the pane's Settings source.
+  | { type: "abilities:state"; abilities: AbilityDescriptor[] }
   // Boot finished — the surface may accept a query. Carries the measured facts.
   | { type: "ready"; facts: BootFacts }
   // The resolved config + per-field provenance — the first event every surface
