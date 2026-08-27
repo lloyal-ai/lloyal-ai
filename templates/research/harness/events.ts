@@ -8,6 +8,7 @@
  */
 
 import type { AgentEvent } from '@lloyal-labs/lloyal-agents';
+import type { HostResourcesEvent } from '@lloyal-labs/dev-tools';
 import type { PlanIntent, ResearchTask } from '@lloyal-labs/rig';
 import type { AbilityDescriptor, OpTiming } from './state-core.js';
 import type { Config, ConfigOrigin } from './config-types.js';
@@ -130,4 +131,4 @@ export type StepEvent =
   // falls back to manifest-only fields on any catalog fetch failure.
   | { type: 'abilities:state'; abilities: AbilityDescriptor[] };
 
-export type WorkflowEvent = AgentEvent | StepEvent;
+export type WorkflowEvent = AgentEvent | StepEvent | HostResourcesEvent;

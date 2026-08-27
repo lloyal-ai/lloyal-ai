@@ -11,6 +11,7 @@
  * the same way in a terminal, an Electron window, or a browser tab.
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
+import type { HostResourcesEvent } from "@lloyal-labs/dev-tools";
 import type { Config, ConfigOrigin } from "./config-types.js";
 
 /**
@@ -31,6 +32,8 @@ export interface BootFacts {
 export type WorkflowEvent =
   // Forwarded verbatim from the agent pool (spawn / produce / return / …).
   | AgentEvent
+  // Dev-gated host samples for the pane's pressure strip (cpu/rss/mem).
+  | HostResourcesEvent
   // Boot finished — the surface may accept a query. Carries the measured facts.
   | { type: "ready"; facts: BootFacts }
   // The resolved config + per-field provenance — the first event every surface

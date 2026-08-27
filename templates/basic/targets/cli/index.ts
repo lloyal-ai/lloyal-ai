@@ -20,6 +20,7 @@ import { main, call, ensure, createSignal } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
+import { startHostResources } from "@lloyal-labs/dev-tools/node";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
@@ -229,5 +230,7 @@ main(function* () {
   yield* ensure(() => dispose());
 
   // Run the harness. Returns when it sees `quit` (or the scope unwinds).
+  // Machine pressure beside model pressure — dev-gated, dies with this scope.
+  if (dev) yield* ensure(startHostResources((ev) => events.send(ev)));
   yield* harness(ctx, events, commands);
 });

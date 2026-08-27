@@ -21,6 +21,7 @@ import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
 import { provisionAbilityModels } from "@lloyal-labs/rig/node";
+import { startHostResources } from "@lloyal-labs/dev-tools/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { makeServedRunner } from "@lloyal-labs/rig";
@@ -50,6 +51,10 @@ export function* runServedSession(
   // HERE (one trace file per admitted Session) and injected — the factory
   // stays binding-agnostic (see RunnerDevOpts).
   const dev = process.env.LLOYAL_DEV === "1";
+  // Machine pressure beside model pressure: the pane overlays these samples
+  // on the kv strip. Dev-gated like the trace sink; the timer dies with
+  // this session's scope.
+  if (dev) yield* ensure(startHostResources((ev) => events.send(ev)));
   const trace = makeTraceWriter(cfg, dev);
   // Per-session fd: closed when THIS session's scope unwinds (the writer
   // flushes every event synchronously, so nothing is pending at close) —
