@@ -484,7 +484,7 @@ export function HarnessApp() {
           style={{
             display: "grid",
             gridTemplateColumns:
-              liveAgents.length > 1 ? "repeat(auto-fit, minmax(250px, 1fr))" : "1fr",
+              liveAgents.length > 1 ? "repeat(auto-fit, minmax(340px, 1fr))" : "1fr",
             gap: 10,
             alignItems: "start",
             margin: "10px 0",
@@ -541,12 +541,12 @@ export function HarnessApp() {
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: 20, maxWidth: 1100, margin: "0 auto" },
+  page: { font: "14px/1.55 ui-sans-serif, system-ui, sans-serif", color: "#e6e9ef", padding: "18px 28px 28px" },
   head: { opacity: 0.55, fontSize: 12, marginBottom: 14, letterSpacing: 0.3 },
   qcard: { fontSize: 19, fontWeight: 600, lineHeight: 1.4, margin: "4px 0 14px" },
   card: { background: "#11141b", border: "1px solid #222836", borderRadius: 10, padding: "12px 14px", margin: "10px 0" },
   cardHead: { display: "flex", alignItems: "baseline", gap: 8, fontSize: 13, marginBottom: 6 },
-  cardBody: { maxHeight: 340, overflowY: "auto", overscrollBehavior: "contain" },
+  cardBody: { maxHeight: "max(340px, 42vh)", overflowY: "auto", overscrollBehavior: "contain" },
   cardTask: { opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
   cardMeta: { opacity: 0.5, fontSize: 12, whiteSpace: "nowrap" },
   wrow: { padding: "4px 0 4px 2px", fontSize: 13, borderTop: "1px solid #1a1f2b" },
@@ -563,7 +563,7 @@ const S: Record<string, CSSProperties> = {
   planDesc: { flex: 1, lineHeight: 1.45 },
   ring: { display: "inline-block", width: 9, height: 9, borderRadius: "50%", border: "2px solid #3a4358" },
   clarify: { margin: "10px 0", color: "#e3c04a" },
-  answerMd: { lineHeight: 1.65, color: "#dfe7f3", fontSize: 14.5 },
+  answerMd: { lineHeight: 1.65, color: "#dfe7f3", fontSize: 14.5, maxWidth: "100ch" },
   error: { marginTop: 16, color: "#ff7a7a" },
   composer: { display: "flex", gap: 8, marginTop: 22 },
   input: { flex: 1, padding: "9px 12px", background: "#12151c", color: "#e6e9ef", border: "1px solid #2b3140", borderRadius: 8, outline: "none" },
