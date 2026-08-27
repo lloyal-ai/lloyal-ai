@@ -18,9 +18,20 @@ function resolveWssUrl(): string {
   return "ws://127.0.0.1:8787";
 }
 
+/** Frames kept for replay. A session is one conversation; produce frames are
+ *  tiny, so a generous cap covers long runs while bounding a pathological
+ *  session. */
+const MAX_HISTORY = 50_000;
+
 export function installWebBridge(): void {
   let client: WssClient<Command> | null = null;
   let seq = 0;
+  // The session's frame log. A view remount mid-run — fast refresh of
+  // App.tsx, the one file a dev edits while a run streams — subscribes LATE;
+  // replaying the log through the view's normal seed path rebuilds the run
+  // instead of blanking it. This is the bridge's job because this module
+  // survives view edits; state kept in the view dies with the edit.
+  let history: { seq: number; ev: WorkflowEvent }[] = [];
   const listeners = new Set<(f: { seq: number; ev: WorkflowEvent }) => void>();
 
   const api = {
@@ -31,9 +42,14 @@ export function installWebBridge(): void {
       client ??= connectWss<WorkflowEvent, Command>(resolveWssUrl(), {
         onEvent: (ev) => {
           const frame = { seq: ++seq, ev };
+          history.push(frame);
+          if (history.length > MAX_HISTORY) history.shift();
           for (const l of listeners) l(frame);
         },
       });
+      // Replay the session so far to the new subscriber — synchronously,
+      // before any live frame, so seq order holds.
+      for (const f of history) cb(f);
       return () => {
         listeners.delete(cb);
         // Last listener gone (view unmount / HMR): close the socket so it isn't
@@ -43,6 +59,7 @@ export function installWebBridge(): void {
           client?.close();
           client = null;
           seq = 0;
+          history = [];
         }
       };
     },

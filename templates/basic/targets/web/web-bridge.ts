@@ -18,11 +18,21 @@ function resolveWssUrl(): string {
   return "ws://127.0.0.1:8787";
 }
 
+/** Frames kept for replay. A session is one conversation; frames are tiny, so
+ *  a generous cap covers long runs while bounding a pathological session. */
+const MAX_HISTORY = 50_000;
+
 export function installWebBridge(): void {
   let client: WssClient<Command> | null = null;
   let seq = 0;
   let active = false; // at least one subscriber wants the stream
   let retry: ReturnType<typeof setTimeout> | null = null;
+  // The session's frame log. A view remount mid-run — fast refresh of
+  // App.tsx, the one file a dev edits while a run streams — subscribes LATE;
+  // replaying the log through the view's normal seed path rebuilds the run
+  // instead of blanking it. Kept here because this module survives view
+  // edits; state kept in the view dies with the edit.
+  let history: { seq: number; ev: WorkflowEvent }[] = [];
   const listeners = new Set<(f: { seq: number; ev: WorkflowEvent }) => void>();
 
   const clearRetry = (): void => {
@@ -40,10 +50,15 @@ export function installWebBridge(): void {
     client = connectWss<WorkflowEvent, Command>(resolveWssUrl(), {
       onEvent: (ev) => {
         const frame = { seq: ++seq, ev }; // synthesize a monotonic seq the wire doesn't carry
+        history.push(frame);
+        if (history.length > MAX_HISTORY) history.shift();
         for (const l of listeners) l(frame);
       },
       onClose: () => {
         client = null;
+        // The session died with the socket — its frames must not replay into
+        // whatever session the retry lands on.
+        history = [];
         if (active) {
           clearRetry();
           retry = setTimeout(connect, 1000);
@@ -60,6 +75,9 @@ export function installWebBridge(): void {
         active = true;
         connect();
       }
+      // Replay the session so far to the new subscriber — synchronously,
+      // before any live frame, so seq order holds.
+      for (const f of history) cb(f);
       return () => {
         listeners.delete(cb);
         // Last listener gone (view unmount / HMR): stop retrying, close the
@@ -72,6 +90,7 @@ export function installWebBridge(): void {
           client?.close();
           client = null;
           seq = 0;
+          history = [];
         }
       };
     },
