@@ -76,6 +76,7 @@ export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
 // backing model, and publishes it on `RerankerCtx` — so the harness stays IO-free.
 // Install more with `lloyal install <ability>` and add the factory here.
 export const abilities: AbilityFactory[] = [createCorpusAbility, createWebAbility];
+const abilitiesInstalled: readonly AbilityFactory[] = abilities;
 
 const WEB_APP = "web";
 const CORPUS_APP = "corpus";
@@ -168,13 +169,19 @@ function redactAbilities(config: Config): Config {
   };
 }
 
-/** Build view-ready descriptors for every registry-enabled ability, from each ability's
- *  own manifest. Display-only — never throws on a missing field. */
+/** Build view-ready descriptors for every INSTALLED ability — enabled ones
+ *  from the registry, the rest straight off each factory's static manifest
+ *  (that is why the manifest rides the factory: readable before enable).
+ *  A not-yet-enabled ability still shows in Settings so it can be
+ *  configured; its config takes effect at the next session boot.
+ *  Display-only — never throws on a missing field. */
 function* buildAppDescriptors(
   registry: AbilityRegistry,
   configStore: AbilityConfigStore,
+  installed: readonly AbilityFactory[],
 ): Operation<AbilityDescriptor[]> {
   const descriptors: AbilityDescriptor[] = [];
+  const seen = new Set<string>();
   for (const ability of registry.enabled()) {
     const manifest = ability.manifest;
     const config = (yield* configStore.get(manifest.name)) ?? {};
@@ -189,6 +196,23 @@ function* buildAppDescriptors(
       // Key-presence only — see redactAbilities.
       config: Object.fromEntries(Object.keys(config).map((k) => [k, true])),
       enabled: true,
+    });
+    seen.add(manifest.name);
+  }
+  for (const factory of installed) {
+    const manifest = factory.manifest;
+    if (!manifest || seen.has(manifest.name)) continue;
+    const config = (yield* configStore.get(manifest.name)) ?? {};
+    descriptors.push({
+      name: manifest.name,
+      title: manifest.hints?.shortName ?? manifest.protocol.name,
+      description: manifest.hints?.description ?? manifest.protocol.useWhen,
+      iconUrl: undefined,
+      tools: [...manifest.protocol.tools],
+      entitlements: [],
+      configSchema: manifest.configSchema,
+      config: Object.fromEntries(Object.keys(config).map((k) => [k, true])),
+      enabled: false,
     });
   }
   return descriptors;
@@ -252,6 +276,7 @@ export function* harness(
     type: "config:loaded",
     config: redactAbilities(runner.config()),
     origin: runner.origin(),
+    dev: runner.dev,
   });
 
   // ── Session + event forwarding ─────────────────────────────
@@ -339,7 +364,7 @@ export function* harness(
   // Surface the installed Abilities into the renderer. Re-call after every
   // registry enable/disable/config change so the drawer stays in sync.
   function* emitAbilities(): Operation<void> {
-    const abilities = yield* buildAppDescriptors(registry, configStore);
+    const abilities = yield* buildAppDescriptors(registry, configStore, abilitiesInstalled);
     yield* agentEvents.send({ type: "abilities:state", abilities });
   }
 

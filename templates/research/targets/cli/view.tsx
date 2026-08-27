@@ -11,13 +11,15 @@
  * synth end-to-end. Swap it, or grow it, or bring a whole app — the harness
  * never changes; the framework holds the binding seam, never the UI.
  */
-import React, { useEffect, useReducer, useRef } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput } from "ink";
 import { TextInput } from "@inkjs/ui";
 import type { EventBus } from "@lloyal-labs/binding";
 import { initialState, reduce } from "../../harness/state.js";
 import type { AgentRuntime, AppState } from "../../harness/state.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
+import { DevOverlay } from "@lloyal-labs/dev-tools/ink";
+import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
 
 const seed = (bootstrap: WorkflowEvent[]): AppState =>
   bootstrap.reduce(reduce, initialState);
@@ -54,7 +56,30 @@ function View({
   const app = useApp();
   const acceptedRef = useRef(false);
 
-  useEffect(() => bus.subscribe((ev) => apply(ev)), [bus]);
+  // The dev overlay's model + a SHORT formatted tail — folded alongside the
+  // view's own reduce from the same subscription. The overlay renders nothing
+  // unless config:loaded carried dev: true (LLOYAL_DEV).
+  // Lazy init: an inline initializer would allocate a fresh model every
+  // render only to be discarded after the first.
+  const devModelRef = useRef<ReturnType<typeof createPaneModel> | null>(null);
+  devModelRef.current ??= createPaneModel();
+  const devModel = devModelRef.current;
+  const devTail = useRef<string[]>([]);
+  const [devOpen, setDevOpen] = useState(false);
+
+  useEffect(() => bus.subscribe((ev) => {
+    // Truly wire-gated: only config:loaded can flip the gate, so until it
+    // says dev, the ONLY event folded is config:loaded itself — a non-dev
+    // run never pays the per-token fold.
+    if (devModel.dev || ev.type === "config:loaded") {
+      foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
+      if (devModel.dev && ev.type !== "agent:produce" && ev.type !== "agent:tick") {
+        devTail.current.push(ev.type);
+        if (devTail.current.length > 24) devTail.current.shift();
+      }
+    }
+    apply(ev);
+  }), [bus]);
 
   // Auto-accept the planner's plan — this austere view has no plan-review editor,
   // so a query flows straight through to research. `acceptedRef` de-bounces the
@@ -72,6 +97,7 @@ function View({
       dispatch({ type: "quit" });
       app.exit();
     }
+    if (key.ctrl && input === "g") setDevOpen((v) => !v);
   });
 
   // Recon + research agents (skip the tool-less synth agent — taskIndex null).
@@ -147,6 +173,8 @@ function View({
         <Text color="red">boot error ({state.bootError.kind}): {state.bootError.message}</Text>
       )}
       {state.toast?.tone === "error" && <Text color="red">error: {state.toast.message}</Text>}
+
+      {devOpen && <DevOverlay model={devModel} tail={devTail.current} />}
 
       {canInput && (
         <Box>

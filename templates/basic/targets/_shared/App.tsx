@@ -15,6 +15,7 @@
  */
 import "./app.css";
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import { DevPane } from "@lloyal-labs/dev-tools/react";
 import {
   reduce,
   initialState,
@@ -347,6 +348,10 @@ export function HarnessApp(): ReactElement {
           )}
         </main>
       </div>
+      {/* Renders nothing unless config:loaded carried dev: true (LLOYAL_DEV).
+          basic has no config commands yet, so its Settings tab is the
+          read-only inspector — controls arrive with the command protocol. */}
+      <DevPane bridge={window.harness} controls={[]} title="__NAME__" />
     </div>
   );
 }

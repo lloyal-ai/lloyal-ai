@@ -59,6 +59,20 @@ export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
  */
 export const abilities: AbilityFactory[] = [createWikipediaAbility];
 
+/** Ability config values never ride the event bus — the served transport ends
+ *  in every tenant's renderer. Redact to key-presence (`key: true`). */
+function redactAbilities(config: Config): Config {
+  return {
+    ...config,
+    abilities: Object.fromEntries(
+      Object.entries(config.abilities).map(([name, cfg]) => [
+        name,
+        Object.fromEntries(Object.keys(cfg).map((k) => [k, true])),
+      ]),
+    ),
+  };
+}
+
 const MAX_TURNS = 8;
 
 /** The whole "plan": two fixed research angles. A real harness would *compute*
@@ -174,6 +188,15 @@ export function* harness(
   // reads the exact same shape, so growing into config persistence or tracing
   // never means migrating to a different seam.
   const runner = yield* RunnerCtx.expect();
+
+  // Seed every surface's config view — the first event on the bus. Redacted;
+  // `dev` gates the dev pane.
+  events.send({
+    type: "config:loaded",
+    config: redactAbilities(runner.config()),
+    origin: runner.origin(),
+    dev: runner.dev,
+  });
 
   // Agent runtime over the resident model, threading the Runner's trace sink so
   // an observability run captures every spawn / token. `agentEvents` is the pool's
