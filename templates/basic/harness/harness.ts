@@ -38,6 +38,7 @@ import {
   renderSpine,
   renderAgentPreamble,
 } from "@lloyal-labs/rig";
+import { buildAbilityDescriptors } from "@lloyal-labs/rig";
 import { RunnerCtx as RigRunnerCtx } from "@lloyal-labs/rig";
 import type { Runner } from "@lloyal-labs/rig";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
@@ -230,6 +231,12 @@ export function* harness(
   }
   const registry = yield* createAbilityRegistry({ configStore });
   for (const ability of abilities) yield* registry.enable(ability);
+  // Surface the installed Abilities to every renderer (the dev pane's
+  // Settings reads this) — ONE rig builder, redaction structural inside it.
+  events.send({
+    type: "abilities:state",
+    abilities: yield* buildAbilityDescriptors(registry, configStore, abilities),
+  });
 
   // Boot done — announce it with MEASURED facts, not hardcoded strings: the
   // model's id + on-disk size (the boot stat'd the weight into the config), the

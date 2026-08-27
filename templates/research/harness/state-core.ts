@@ -250,33 +250,9 @@ export interface AppEntitlement {
   label: string;
 }
 
-/** A view-ready descriptor for one installed (registry-enabled) Ability.
- *  Joins the ability's local manifest with its signed catalog metadata
- *  (title/iconUrl/entitlements from apps.lloyal.ai) so the Settings drawer
- *  can render the ability card, its tools, its config schema, and its current
- *  stored config. Built engine-side by main.ts and forwarded via the
- *  `abilities:state` event; the reducer drops it whole into `AppState.abilities`. */
-export interface AbilityDescriptor {
-  /** manifest.name (e.g. "web") — routing key + config-store key. */
-  name: string;
-  /** catalog metadata.title ?? manifest.hints?.shortName ?? protocol.name */
-  title: string;
-  /** manifest.hints?.description ?? protocol.useWhen */
-  description: string;
-  /** catalog metadata.iconUrl (apps.lloyal.ai asset) — else undefined → glyph. */
-  iconUrl?: string;
-  /** manifest.protocol.tools — the protocol's tool-name list. */
-  tools: string[];
-  /** catalog metadata.entitlements — capability keys
-   *  (network|data-egress|local-files|credentials). */
-  entitlements: string[];
-  /** manifest.configSchema (JSON Schema) — fields render read-only this increment. */
-  configSchema?: unknown;
-  /** Current stored config from configStore.get(name). */
-  config: Record<string, unknown>;
-  /** Registry participation/enabled state. */
-  enabled: boolean;
-}
+/** The ability descriptor is rig substrate now — one builder, one shape. */
+import type { AbilityDescriptor } from "@lloyal-labs/rig";
+export type { AbilityDescriptor };
 
 export interface AppState {
   query: string;
