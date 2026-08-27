@@ -113,10 +113,35 @@ function extractReportBody(body: string): string {
 function splitThink(text: string, streaming: boolean): { thinking: string | null; body: string } {
   const close = text.lastIndexOf("</think>");
   if (close !== -1) {
-    return { thinking: null, body: text.slice(close + "</think>".length).replace(/^\s+/, "") };
+    const thinking = text.slice(0, close).replace(/^<think>\s*/, "").trim();
+    return {
+      thinking: thinking || null,
+      body: text.slice(close + "</think>".length).replace(/^\s+/, ""),
+    };
   }
   if (streaming) return { thinking: text, body: "" };
   return { thinking: null, body: text };
+}
+
+/** The synth's deliberation, in the same grammar as agent thoughts: a
+ *  collapsed row above the answer, expandable; live with a caret while the
+ *  think block is still open. */
+function SynthThought({ body, live }: { body: string; live: boolean }): ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <button type="button" style={S.wtoggle} onClick={() => setOpen((o) => !o)}>
+        <span style={{ opacity: 0.75 }}>{live ? "Thinking" : "Thought"}</span>
+        <span style={S.chev}>{open ? "▾" : "▸"}</span>
+      </button>
+      {(open || live) && (
+        <div style={S.think}>
+          {live && !open ? `…${body.slice(-300)}` : body}
+          {live && <span className="rr-caret" />}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function toolVerb(tool: string, done: boolean): string {
@@ -446,7 +471,7 @@ export function HarnessApp() {
   const answer = splitThink(
     state.answer || (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : ""),
     false,
-  ).body;
+  );
 
   const kvPct =
     state.pressure && state.pressure.nCtx > 0
@@ -506,24 +531,23 @@ export function HarnessApp() {
 
       {synthLive && synthSplit ? (
         <div style={S.card}>
-          <div style={{ opacity: 0.75, marginBottom: 6 }}>
-            {synthSplit.body ? "Writing answer" : "Thinking"}
-          </div>
           {synthSplit.body ? (
-            <div style={S.answerMd}>
-              {md(synthSplit.body)}
-              <span className="rr-caret" />
-            </div>
+            <>
+              <div style={{ opacity: 0.75, marginBottom: 6 }}>Writing answer</div>
+              {synthSplit.thinking && <SynthThought body={synthSplit.thinking} live={false} />}
+              <div style={S.answerMd}>
+                {md(synthSplit.body)}
+                <span className="rr-caret" />
+              </div>
+            </>
           ) : (
-            <div style={S.think}>
-              …{(synthSplit.thinking ?? "").slice(-300)}
-              <span className="rr-caret" />
-            </div>
+            <SynthThought body={synthSplit.thinking ?? ""} live />
           )}
         </div>
-      ) : answer ? (
+      ) : answer.body ? (
         <div style={S.card}>
-          <div style={S.answerMd}>{md(answer)}</div>
+          {answer.thinking && <SynthThought body={answer.thinking} live={false} />}
+          <div style={S.answerMd}>{md(answer.body)}</div>
         </div>
       ) : null}
 
