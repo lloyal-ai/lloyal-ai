@@ -105,6 +105,20 @@ function extractReportBody(body: string): string {
   return body;
 }
 
+/** The synth stream carries the model's think block before the answer (only
+ *  the close marker survives into the buffer). Split it: while the think is
+ *  still open, the text is THINKING — rendered dimmed in the agents' own
+ *  grammar, never leaked as answer prose; after `</think>`, only the answer
+ *  body renders. Finalized answers strip through the last close marker. */
+function splitThink(text: string, streaming: boolean): { thinking: string | null; body: string } {
+  const close = text.lastIndexOf("</think>");
+  if (close !== -1) {
+    return { thinking: null, body: text.slice(close + "</think>".length).replace(/^\s+/, "") };
+  }
+  if (streaming) return { thinking: text, body: "" };
+  return { thinking: null, body: text };
+}
+
 function toolVerb(tool: string, done: boolean): string {
   if (/search/i.test(tool)) return done ? "Searched" : "Searching";
   return done ? "Read" : "Reading";
@@ -424,11 +438,15 @@ export function HarnessApp() {
   const now = useNow(anyLive);
 
   // The streaming answer: the live synth buffer, else the finalized answer, else
-  // the most recent synth body pushed to scrollback.
+  // the most recent synth body pushed to scrollback. Think blocks never render
+  // as answer prose — see splitThink.
   const lastSynth = [...state.scrollback].reverse().find((s) => s.kind === "synth");
   const synthLive = state.synth.open && state.synth.buffer;
-  const answer =
-    state.answer || (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : "");
+  const synthSplit = synthLive ? splitThink(state.synth.buffer, true) : null;
+  const answer = splitThink(
+    state.answer || (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : ""),
+    false,
+  ).body;
 
   const kvPct =
     state.pressure && state.pressure.nCtx > 0
@@ -486,13 +504,22 @@ export function HarnessApp() {
         </div>
       )}
 
-      {synthLive ? (
+      {synthLive && synthSplit ? (
         <div style={S.card}>
-          <div style={{ opacity: 0.75, marginBottom: 6 }}>Writing answer</div>
-          <div style={S.answerMd}>
-            {md(state.synth.buffer)}
-            <span className="rr-caret" />
+          <div style={{ opacity: 0.75, marginBottom: 6 }}>
+            {synthSplit.body ? "Writing answer" : "Thinking"}
           </div>
+          {synthSplit.body ? (
+            <div style={S.answerMd}>
+              {md(synthSplit.body)}
+              <span className="rr-caret" />
+            </div>
+          ) : (
+            <div style={S.think}>
+              …{(synthSplit.thinking ?? "").slice(-300)}
+              <span className="rr-caret" />
+            </div>
+          )}
         </div>
       ) : answer ? (
         <div style={S.card}>
