@@ -51,7 +51,9 @@ export function installWebBridge(): void {
       onEvent: (ev) => {
         const frame = { seq: ++seq, ev }; // synthesize a monotonic seq the wire doesn't carry
         history.push(frame);
-        if (history.length > MAX_HISTORY) history.shift();
+        // Amortized: one splice per MAX_HISTORY/2 events, not an O(n)
+        // shift per event once the cap is hit. Same drop-oldest semantics.
+        if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY / 2);
         for (const l of listeners) l(frame);
       },
       onClose: () => {

@@ -214,15 +214,17 @@ function ReportRow({ body, tokenCount }: { body: string; tokenCount: number }): 
 
 function WorkRows({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
   const rows: ReactElement[] = [];
+  // Results indexed once — the per-call find() made this O(n²) in timeline length.
+  const resultsByCall = new Map<string, Extract<TimelineItem, { kind: "tool_result" }>>();
+  for (const r of a.timeline) {
+    if (r.kind === "tool_result") resultsByCall.set(r.callId, r);
+  }
   for (const it of a.timeline) {
     if (it.kind === "think") rows.push(<ThinkRow key={`t${it.id}`} it={it} />);
     else if (it.kind === "tool_call") {
       // Pair the call with its result (callId back-reference) so the verb and
       // its "N results · host" meta render as one row.
-      const result = a.timeline.find(
-        (r): r is Extract<TimelineItem, { kind: "tool_result" }> =>
-          r.kind === "tool_result" && r.callId === it.id,
-      );
+      const result = resultsByCall.get(it.id);
       rows.push(
         <div key={`c${it.id}`} style={S.wrow}>
           <div style={S.toolRow}>
