@@ -6,8 +6,8 @@
   // (or `npm run typecheck`) to typecheck them in your editor / CI.
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node10",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "lib": ["ES2022"],
     "types": ["node"],
     "strict": true,
