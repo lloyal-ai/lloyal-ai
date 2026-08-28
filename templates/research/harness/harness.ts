@@ -761,6 +761,24 @@ export function* harness(
             body: fs.readFileSync(resolved, "utf8"),
           });
         }
+      } else if (cmd.type === "library_delete") {
+        // Same confinement as the read; deleting a brief removes its WHOLE
+        // run dir (report + annexures) and re-indexes the corpus — the
+        // system unlearns it. A run in flight can't be targeted: its dir
+        // has no report.md until it settles, so the list never offers it.
+        const root = path.resolve(libraryDir());
+        const resolved = path.resolve(cmd.path);
+        const confined =
+          resolved.startsWith(root + path.sep) &&
+          path.basename(resolved) === "report.md";
+        if (confined && fs.existsSync(resolved)) {
+          fs.rmSync(path.dirname(resolved), { recursive: true, force: true });
+          yield* reindexCorpus();
+        }
+        yield* agentEvents.send({
+          type: "library:list",
+          entries: listReports(libraryDir()),
+        });
       } else if (cmd.type === "set_effort") {
         // Save ONLY the changed key — spreading the whole defaults object
         // would pin the untouched ones into harness.json, shadowing later
