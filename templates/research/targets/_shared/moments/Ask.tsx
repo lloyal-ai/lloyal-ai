@@ -27,10 +27,21 @@ export function Ask({ shape, onShape }: {
               <p style={S.byline}>
                 Drawing on{" "}
                 {libraries.map((l, i) => (
-                  <span key={l.title}>
+                  <span key={l.name}>
                     {i > 0 && (i === libraries.length - 1 ? " and " : ", ")}
-                    <b style={S.libName}>{l.title}</b>
-                    {l.detail ? ` (${l.detail})` : ""}
+                    <button
+                      type="button"
+                      style={{ ...S.lib, ...(l.included ? null : S.libOff) }}
+                      title={
+                        l.included
+                          ? "Leave this library out of the next brief"
+                          : "Include it again"
+                      }
+                      onClick={() => send({ type: "toggle_participation", name: l.name })}
+                    >
+                      {l.title}
+                      {l.detail ? ` (${l.detail})` : ""}
+                    </button>
                   </span>
                 ))}
                 .
@@ -121,7 +132,11 @@ const S: Record<string, CSSProperties> = {
   stack: { position: "relative", textAlign: "center", maxWidth: "60ch", padding: "0 24px" },
   h1: { font: `600 30px/1.3 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 9px" },
   byline: { font: `14px ${font.ui}`, color: color.dim, margin: 0 },
-  libName: { color: color.ink },
+  lib: {
+    font: `600 14px ${font.ui}`, color: color.ink, background: "none", border: 0,
+    padding: 0, cursor: "pointer",
+  },
+  libOff: { color: color.dim, fontWeight: 400, textDecoration: "line-through" },
   shapes: { display: "flex", gap: 10, justifyContent: "center", marginTop: 26 },
   shape: shapeBase,
   shapeOn: { ...shapeBase, borderColor: color.ink, boxShadow: `0 0 0 1px ${color.ink}` },

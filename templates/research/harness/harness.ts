@@ -822,8 +822,7 @@ export function* harness(
         if (currentAbilityFilter().length === 0) {
           yield* agentEvents.send({
             type: "ui:error",
-            message:
-              "All sources excluded. Tab to a chip and press Space to include at least one.",
+            message: "All sources excluded. Include at least one.",
           });
           continue;
         }

@@ -1,11 +1,11 @@
 /** The application shell: sidebar (wordmark · library · trust), run bar,
  *  canvas, and the docked composer. Moments render inside the canvas. */
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
   etaOf, selectControls, selectDepth, selectElapsed, selectLive,
-  selectRunShape, selectStatus, selectTaskCount, selectTitle,
+  selectNotice, selectRunShape, selectStatus, selectTaskCount, selectTitle,
 } from "../select.js";
 import { paceFor } from "../pace.js";
 
@@ -102,12 +102,39 @@ export function Shell({ children, dock, library }: {
       </aside>
       <div style={S.main}>
         <RunBar />
+        <Notice />
         <div style={S.canvas}>{children}</div>
         <div style={S.dock}>{dock}</div>
       </div>
     </div>
   );
 }
+
+/** The one transient notice, docked under the run bar — a save
+ *  confirmation, an error the run surfaced. Fades on its own; a new
+ *  notice re-shows. Nothing in the register floats. */
+function Notice(): ReactElement | null {
+  const notice = useBrief(selectNotice);
+  const [expired, setExpired] = useState<number | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setExpired(notice.id), 6500);
+    return () => clearTimeout(t);
+  }, [notice?.id]);
+  if (!notice || expired === notice.id) return null;
+  return (
+    <div role="status" style={{ ...S.notice, ...NOTICE_TONE[notice.tone] }}>
+      {notice.message}
+    </div>
+  );
+}
+
+const NOTICE_TONE: Record<"info" | "success" | "warn" | "error", CSSProperties> = {
+  info: {},
+  success: { color: color.ok, background: color.okWash },
+  warn: { color: color.wait, background: color.waitWash },
+  error: { color: color.danger, background: "#F7E2DF" },
+};
 
 /** The gradient sweep is reserved for live model streams. */
 export function Thinking({ children }: { children: ReactNode }): ReactElement {
@@ -155,6 +182,10 @@ const S: Record<string, CSSProperties> = {
     position: "relative",
   },
   eta: { color: color.dim, whiteSpace: "nowrap" },
+  notice: {
+    font: `13px ${font.ui}`, color: color.dim, background: color.card2,
+    borderBottom: `1px solid ${color.line}`, padding: "8px 26px", flex: "none",
+  },
   control: {
     font: `600 12.5px ${font.ui}`, background: color.card, color: color.ink,
     border: `1px solid ${color.line}`, borderRadius: radius.control,

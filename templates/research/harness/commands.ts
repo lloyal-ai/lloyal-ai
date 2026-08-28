@@ -24,7 +24,10 @@ export type Command =
   | { type: 'set_output_dir'; path: string }
   // The library — settled briefs on disk (the sidebar's Completed reports).
   // Replies ride the event bus one-way, like `corpus:indexed`. All paths
-  // are confined to report.md files under the output dir.
+  // are confined to report.md files under the output dir. On a SERVED host
+  // the library is deliberately shared: every session on the appliance
+  // reads, restores, and curates the same reports/ — a team's collective
+  // research memory, not a per-tenant store.
   // `library_read` RESTORES the report as the session's settled document —
   // the standard `query`/`answer`/`complete` events seed the fold, so the
   // canvas, Ask, and Extend behave exactly as over a fresh settle (the

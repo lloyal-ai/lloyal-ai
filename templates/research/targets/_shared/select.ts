@@ -49,10 +49,13 @@ export const selectLive = (app: AppState): boolean =>
 
 // ── ask ──────────────────────────────────────────────────────────
 
-/** One knowledge source the brief can draw on, for the Ask byline. */
+/** One knowledge source the brief can draw on. `included` mirrors the
+ *  per-query participation bit — the Ask byline's names toggle it. */
 export interface Library {
+  name: string;
   title: string;
   detail: string | null;
+  included: boolean;
 }
 
 /** Library names in the product's voice; anything unlisted keeps its
@@ -65,14 +68,24 @@ const LIBRARY_NAMES: Record<string, string> = {
 
 export const selectLibraries = (app: AppState): Library[] =>
   app.abilities
-    .filter((a) => a.enabled && app.participation[a.name] !== false)
+    .filter((a) => a.enabled)
     .map((a) => ({
+      name: a.name,
       title: LIBRARY_NAMES[a.name] ?? a.title,
       detail:
         a.name === "corpus" && app.corpusStatus
           ? `${app.corpusStatus.fileCount} files`
           : null,
+      included: app.participation[a.name] !== false,
     }));
+
+/** The one transient notice — a save confirmation, an error the run
+ *  surfaced. Nothing else in the register floats, so this renders as a
+ *  docked strip, not a toast. */
+export const selectNotice = (
+  app: AppState,
+): { id: number; message: string; tone: "info" | "success" | "warn" | "error" } | null =>
+  app.toast;
 
 export type Depth = "low" | "medium" | "high" | "ultra";
 
