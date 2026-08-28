@@ -91,16 +91,16 @@ function Park({ text, retryAt, closing }: { text: string; retryAt: number; closi
   return (
     <>
       {text} — {left > 0 ? `retrying in ${left}s` : "retrying…"}
-      {!closing && <span style={{ color: color.faint }}> Closing the brief keeps what's already here.</span>}
+      {!closing && <span style={{ color: color.dim }}> Closing the brief keeps what's already here.</span>}
     </>
   );
 }
 
 const STEP_STYLE: Record<WorkStep["kind"], CSSProperties> = {
-  thought: { fontStyle: "italic", color: color.faint },
+  thought: { fontStyle: "italic", color: color.dim },
   call: { color: color.dim, fontWeight: 500 },
   result: { color: color.dim, fontWeight: 500 },
-  tokens: { color: color.faint, fontFamily: font.mono, fontSize: 11.5 },
+  tokens: { color: color.dim, fontFamily: font.mono, fontSize: 11.5 },
 };
 
 const S: Record<string, CSSProperties> = {

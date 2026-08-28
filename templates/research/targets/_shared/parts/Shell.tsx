@@ -154,7 +154,7 @@ const S: Record<string, CSSProperties> = {
     borderBottom: `1px solid ${color.line}`, fontSize: 13, color: color.dim, flex: "none",
     position: "relative",
   },
-  eta: { color: color.faint, whiteSpace: "nowrap" },
+  eta: { color: color.dim, whiteSpace: "nowrap" },
   control: {
     font: `600 12.5px ${font.ui}`, background: color.card, color: color.ink,
     border: `1px solid ${color.line}`, borderRadius: radius.control,

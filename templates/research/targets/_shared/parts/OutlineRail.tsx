@@ -32,7 +32,7 @@ export function OutlineRail({ entries }: { entries: OutlineEntry[] }): ReactElem
 const LEVEL_STYLE: Record<OutlineEntry["level"], CSSProperties> = {
   0: { fontWeight: 700, marginTop: 10 },
   1: { paddingLeft: 14 },
-  2: { paddingLeft: 26, color: color.faint },
+  2: { paddingLeft: 26, color: color.dim },
 };
 
 const S: Record<string, CSSProperties> = {

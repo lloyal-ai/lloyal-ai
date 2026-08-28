@@ -45,7 +45,7 @@ const S: Record<string, CSSProperties> = {
   spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 6px", textWrap: "balance" },
   byline: {
-    font: `12.5px ${font.ui}`, color: color.faint, margin: "0 0 22px",
+    font: `12.5px ${font.ui}`, color: color.dim, margin: "0 0 22px",
     display: "flex", gap: 14,
   },
 };

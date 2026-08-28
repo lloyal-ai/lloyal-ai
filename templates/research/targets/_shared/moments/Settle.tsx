@@ -133,7 +133,7 @@ const S: Record<string, CSSProperties> = {
   spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 6px", textWrap: "balance" },
   byline: {
-    font: `12.5px ${font.ui}`, color: color.faint, margin: "0 0 18px",
+    font: `12.5px ${font.ui}`, color: color.dim, margin: "0 0 18px",
     display: "flex", gap: 14, alignItems: "baseline",
   },
   action: {
@@ -151,7 +151,7 @@ const S: Record<string, CSSProperties> = {
     padding: 0, cursor: "pointer", marginBottom: 10,
   },
   thinking: {
-    font: `12.5px/1.6 ${font.ui}`, color: color.faint, whiteSpace: "pre-wrap",
+    font: `12.5px/1.6 ${font.ui}`, color: color.dim, whiteSpace: "pre-wrap",
     borderLeft: `2px solid ${color.line}`, padding: "2px 0 2px 12px", margin: "0 0 18px",
   },
   exchange: { borderTop: `1px solid ${color.line}`, margin: "26px 0 0", paddingTop: 18 },

@@ -126,7 +126,7 @@ const S: Record<string, CSSProperties> = {
   shape: shapeBase,
   shapeOn: { ...shapeBase, borderColor: color.ink, boxShadow: `0 0 0 1px ${color.ink}` },
   shapeTitle: { font: `600 13px ${font.ui}`, letterSpacing: "-.01em" },
-  shapeDetail: { font: `12px ${font.ui}`, color: color.faint },
+  shapeDetail: { font: `12px ${font.ui}`, color: color.dim },
   bootCard: {
     background: color.card, border: `1px solid ${color.line}`, borderRadius: radius.panel,
     boxShadow: shadow.card, padding: "18px 22px", textAlign: "left", minWidth: 380,
@@ -135,7 +135,7 @@ const S: Record<string, CSSProperties> = {
   dlLabel: { width: 130, color: color.ink, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   dlBar: { flex: 1, height: 4, borderRadius: 2, background: color.card2, overflow: "hidden" },
   dlFill: { display: "block", height: "100%", background: color.ember, transition: "width .4s ease" },
-  dlMeta: { color: color.faint, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  dlMeta: { color: color.dim, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
   offerHead: { font: `600 15px ${font.ui}`, margin: "0 0 6px" },
   offerBody: { font: `13.5px/1.6 ${font.ui}`, color: color.dim, margin: "0 0 14px" },
   offerRow: { display: "flex", gap: 8 },

@@ -16,19 +16,30 @@ export function Sources({ citations, notes }: {
         Sources<span style={S.count}>{citations.length}</span>
       </h2>
       <div style={S.grid}>
-        {citations.map((c) => (
-          <a key={c.url} href={c.url} target="_blank" rel="noreferrer" style={S.card}>
-            <span style={S.tile}>{c.ordinal}</span>
-            <span style={S.body}>
-              <span style={S.title}>{c.title}</span>
-              <span style={S.meta}>
-                {c.host}
-                {c.cited > 1 && ` · cited ×${c.cited}`}
+        {citations.map((c) => {
+          const external = /^https?:\/\//.test(c.url);
+          const body = (
+            <>
+              <span style={S.tile}>{c.ordinal}</span>
+              <span style={S.body}>
+                <span style={S.title}>{c.title}</span>
+                <span style={S.meta}>
+                  {c.host}
+                  {c.cited > 1 && ` · cited ×${c.cited}`}
+                </span>
+                {notes.get(c.url) && <span style={S.note}>{notes.get(c.url)}</span>}
               </span>
-              {notes.get(c.url) && <span style={S.note}>{notes.get(c.url)}</span>}
-            </span>
-          </a>
-        ))}
+            </>
+          );
+          // A corpus citation names a local file — a card, not a hyperlink.
+          return external ? (
+            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" style={S.card}>
+              {body}
+            </a>
+          ) : (
+            <span key={c.url} style={S.card}>{body}</span>
+          );
+        })}
       </div>
     </section>
   );
@@ -40,7 +51,7 @@ const S: Record<string, CSSProperties> = {
     font: `600 17px/1.3 ${font.ui}`, letterSpacing: "-.012em", margin: "0 0 12px",
     display: "flex", alignItems: "baseline", gap: 8,
   },
-  count: { font: `600 11.5px ${font.mono}`, color: color.faint },
+  count: { font: `600 11.5px ${font.mono}`, color: color.dim },
   grid: {
     display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10,
   },
@@ -58,7 +69,7 @@ const S: Record<string, CSSProperties> = {
     font: `600 12.5px/1.35 ${font.ui}`, overflow: "hidden", display: "-webkit-box",
     WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
   },
-  meta: { font: `11px ${font.ui}`, color: color.faint },
+  meta: { font: `11px ${font.ui}`, color: color.dim },
   note: {
     font: `11.5px/1.5 ${font.ui}`, color: color.dim, overflow: "hidden",
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",

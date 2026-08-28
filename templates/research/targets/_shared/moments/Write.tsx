@@ -74,10 +74,10 @@ const S: Record<string, CSSProperties> = {
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 10px", textWrap: "balance" },
   section: { margin: "0 0 26px" },
   head: { font: `600 17px/1.35 ${font.ui}`, letterSpacing: "-.012em", margin: "22px 0 10px", textWrap: "balance" },
-  headPending: { color: color.faint },
-  inherits: { font: `12.5px ${font.ui}`, color: color.faint, margin: "0 0 8px" },
+  headPending: { color: color.dim },
+  inherits: { font: `12.5px ${font.ui}`, color: color.dim, margin: "0 0 8px" },
   deliberating: {
-    font: `12.5px/1.6 ${font.ui}`, color: color.faint, whiteSpace: "pre-wrap",
+    font: `12.5px/1.6 ${font.ui}`, color: color.dim, whiteSpace: "pre-wrap",
     borderLeft: `2px solid ${color.line}`, padding: "2px 0 2px 12px", margin: 0,
   },
 };

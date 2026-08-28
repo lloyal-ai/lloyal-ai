@@ -101,7 +101,7 @@ const S: Record<string, CSSProperties> = {
   },
   kicker: {
     font: `600 10px ${font.ui}`, letterSpacing: ".14em", textTransform: "uppercase",
-    color: color.faint, margin: "0 6px 7px",
+    color: color.dim, margin: "0 6px 7px",
   },
   list: { display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", minHeight: 0 },
   entry: {
@@ -115,7 +115,7 @@ const S: Record<string, CSSProperties> = {
     overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical", fontWeight: 500,
   },
-  entryMeta: { font: `10.5px ${font.ui}`, color: color.faint },
+  entryMeta: { font: `10.5px ${font.ui}`, color: color.dim },
   trash: {
     font: `600 10px ${font.ui}`, color: color.faint, background: "none", border: 0,
     borderRadius: 6, padding: "2px 3px", cursor: "pointer", flex: "none", marginTop: 1,

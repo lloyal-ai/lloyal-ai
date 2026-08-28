@@ -188,7 +188,7 @@ const S: Record<string, CSSProperties> = {
     display: "flex", gap: 13, alignItems: "baseline", padding: "10px 13px",
     borderRadius: 10, fontSize: 14.5,
   },
-  lineN: { font: `500 12px ${font.mono}`, flex: "none", width: 15, color: color.faint },
+  lineN: { font: `500 12px ${font.mono}`, flex: "none", width: 15, color: color.dim },
   lineText: lineTextBase,
   lineInput: {
     ...lineTextBase, cursor: "auto", outline: "none",
@@ -201,7 +201,7 @@ const S: Record<string, CSSProperties> = {
   },
   addLine: {
     display: "flex", gap: 13, alignItems: "baseline", padding: "10px 13px",
-    borderRadius: 10, fontSize: 14.5, color: color.faint, background: "none",
+    borderRadius: 10, fontSize: 14.5, color: color.dim, background: "none",
     border: `1px dashed ${color.line}`, cursor: "pointer", textAlign: "left", font: "inherit",
   },
   foot: {

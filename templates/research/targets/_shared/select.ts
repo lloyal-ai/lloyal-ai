@@ -462,11 +462,13 @@ export interface Citation {
   cited: number;
 }
 
-const MD_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+// Any link target counts as a citation — the weave cites web urls and
+// corpus file paths alike; a non-url target IS a corpus file.
+const MD_LINK = /\[([^\]]+)\]\(([^\s)]+)\)/g;
 const BARE_ORDINAL = /^\[?\d+\]?$/;
 
 const hostOf = (url: string): string => {
-  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "your corpus"; }
 };
 
 /** Numbered chips, derived from the woven answer alone — links in first-
