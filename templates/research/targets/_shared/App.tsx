@@ -497,103 +497,104 @@ export function HarnessApp() {
   const canInput = CAN_INPUT.has(state.uiPhase);
 
   return (
-    <div style={S.page}>
-      {/* keyframes for the caret + spinner — one style tag, no assets */}
-      <style>{`
-        .rr-caret { display:inline-block; width:7px; height:14px; background:#cfe6ff; margin-left:2px; vertical-align:-2px; animation: rrblink 1s steps(2) infinite; }
-        .rr-spin { display:inline-block; width:11px; height:11px; border:2px solid #2b3140; border-top-color:#669df6; border-radius:50%; animation: rrspin .8s linear infinite; }
-        @keyframes rrblink { 50% { opacity: 0; } }
-        @keyframes rrspin { to { transform: rotate(360deg); } }
-        a { color: #8ab4f8; }
-      `}</style>
+    <DevPane bridge={window.harness} controls={DEV_CONTROLS} title="__NAME__" runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }}>
+      <div style={S.page}>
+        {/* keyframes for the caret + spinner — one style tag, no assets */}
+        <style>{`
+          .rr-caret { display:inline-block; width:7px; height:14px; background:#cfe6ff; margin-left:2px; vertical-align:-2px; animation: rrblink 1s steps(2) infinite; }
+          .rr-spin { display:inline-block; width:11px; height:11px; border:2px solid #2b3140; border-top-color:#669df6; border-radius:50%; animation: rrspin .8s linear infinite; }
+          @keyframes rrblink { 50% { opacity: 0; } }
+          @keyframes rrspin { to { transform: rotate(360deg); } }
+          a { color: #8ab4f8; }
+        `}</style>
 
-      <div style={S.head}>
-        __NAME__ · {state.phase}
-        {state.uiPhase !== state.phase ? ` · ${state.uiPhase}` : ""}
-        {kvPct !== null && ` · kv ${kvPct}%`}
-      </div>
-
-      {state.query && (
-        <div style={S.qcard}>{state.query}</div>
-      )}
-
-      <PlanCard s={state} />
-
-      {state.uiPhase === "clarifying" && state.plan?.clarifyQuestions?.length ? (
-        <div style={S.clarify}>
-          <div style={{ marginBottom: 4, fontWeight: 600 }}>The planner needs to clarify:</div>
-          {state.plan.clarifyQuestions.map((q, i) => (
-            <div key={i}>{i + 1}. {q}</div>
-          ))}
+        <div style={S.head}>
+          __NAME__ · {state.phase}
+          {state.uiPhase !== state.phase ? ` · ${state.uiPhase}` : ""}
+          {kvPct !== null && ` · kv ${kvPct}%`}
         </div>
-      ) : null}
 
-      {liveAgents.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              liveAgents.length > 1 ? "repeat(auto-fit, minmax(340px, 1fr))" : "1fr",
-            gap: 10,
-            alignItems: "start",
-            margin: "10px 0",
-          }}
-        >
-          {liveAgents.map((a) => (
-            <AgentCard key={a.id} a={a} now={now} />
-          ))}
-        </div>
-      )}
+        {state.query && (
+          <div style={S.qcard}>{state.query}</div>
+        )}
 
-      {synthLive && synthSplit ? (
-        <div style={S.card}>
-          {synthSplit.body ? (
-            <>
-              <div style={{ opacity: 0.75, marginBottom: 6 }}>Writing answer</div>
-              {synthSplit.thinking && <SynthThought body={synthSplit.thinking} live={false} />}
-              <div style={S.answerMd}>
-                {md(synthSplit.body)}
-                <span className="rr-caret" />
-              </div>
-            </>
-          ) : (
-            <SynthThought body={synthSplit.thinking ?? ""} live />
-          )}
-        </div>
-      ) : answer.body ? (
-        <div style={S.card}>
-          {answer.thinking && <SynthThought body={answer.thinking} live={false} />}
-          <div style={S.answerMd}>{md(answer.body)}</div>
-        </div>
-      ) : null}
+        <PlanCard s={state} />
 
-      {state.bootError && (
-        <div style={S.error}>
-          boot error ({state.bootError.kind}): {state.bootError.message}
-        </div>
-      )}
-      {state.toast?.tone === "error" && <div style={S.error}>error: {state.toast.message}</div>}
+        {state.uiPhase === "clarifying" && state.plan?.clarifyQuestions?.length ? (
+          <div style={S.clarify}>
+            <div style={{ marginBottom: 4, fontWeight: 600 }}>The planner needs to clarify:</div>
+            {state.plan.clarifyQuestions.map((q, i) => (
+              <div key={i}>{i + 1}. {q}</div>
+            ))}
+          </div>
+        ) : null}
 
-      {canInput && (
-        <div style={S.composer}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
+        {liveAgents.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                liveAgents.length > 1 ? "repeat(auto-fit, minmax(340px, 1fr))" : "1fr",
+              gap: 10,
+              alignItems: "start",
+              margin: "10px 0",
             }}
-            placeholder={
-              state.uiPhase === "clarifying" ? "Answer the planner…" : "Ask something…"
-            }
-            style={S.input}
-          />
-          <button type="button" onClick={submit} style={S.send}>
-            Send
-          </button>
-        </div>
-      )}
-      <DevPane bridge={window.harness} controls={DEV_CONTROLS} title="__NAME__" runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }} />
-    </div>
+          >
+            {liveAgents.map((a) => (
+              <AgentCard key={a.id} a={a} now={now} />
+            ))}
+          </div>
+        )}
+
+        {synthLive && synthSplit ? (
+          <div style={S.card}>
+            {synthSplit.body ? (
+              <>
+                <div style={{ opacity: 0.75, marginBottom: 6 }}>Writing answer</div>
+                {synthSplit.thinking && <SynthThought body={synthSplit.thinking} live={false} />}
+                <div style={S.answerMd}>
+                  {md(synthSplit.body)}
+                  <span className="rr-caret" />
+                </div>
+              </>
+            ) : (
+              <SynthThought body={synthSplit.thinking ?? ""} live />
+            )}
+          </div>
+        ) : answer.body ? (
+          <div style={S.card}>
+            {answer.thinking && <SynthThought body={answer.thinking} live={false} />}
+            <div style={S.answerMd}>{md(answer.body)}</div>
+          </div>
+        ) : null}
+
+        {state.bootError && (
+          <div style={S.error}>
+            boot error ({state.bootError.kind}): {state.bootError.message}
+          </div>
+        )}
+        {state.toast?.tone === "error" && <div style={S.error}>error: {state.toast.message}</div>}
+
+        {canInput && (
+          <div style={S.composer}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+              placeholder={
+                state.uiPhase === "clarifying" ? "Answer the planner…" : "Ask something…"
+              }
+              style={S.input}
+            />
+            <button type="button" onClick={submit} style={S.send}>
+              Send
+            </button>
+          </div>
+        )}
+      </div>
+    </DevPane>
   );
 }
 
