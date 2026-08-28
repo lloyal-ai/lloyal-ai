@@ -9,6 +9,7 @@ import {
   DEPTHS, SHAPES, estimateLabel, fmtElapsed,
   selectDepth, selectLive, selectTaskCount, type Shape,
 } from "../select.js";
+import { paceOf } from "../pace.js";
 
 export function Composer({ shape, placeholder }: {
   shape: Shape;
@@ -44,16 +45,20 @@ export function Composer({ shape, placeholder }: {
       />
       {live && <Clock />}
       <div style={S.depths}>
-        {DEPTHS.map((d) => (
-          <button
-            key={d.depth}
-            type="button"
-            style={d.depth === depth ? S.depthOn : S.depth}
-            onClick={() => send({ type: "set_effort", effort: d.depth })}
-          >
-            {d.title} · {estimateLabel(d.depth, shape, tasks)}
-          </button>
-        ))}
+        {DEPTHS.map((d) => {
+          const est = estimateLabel(d.depth, tasks, paceOf(d.depth, shape));
+          return (
+            <button
+              key={d.depth}
+              type="button"
+              style={d.depth === depth ? S.depthOn : S.depth}
+              title={est === null ? "runs on this machine set the pace" : undefined}
+              onClick={() => send({ type: "set_effort", effort: d.depth })}
+            >
+              {d.title}{est !== null && ` · ${est}`}
+            </button>
+          );
+        })}
       </div>
       <button type="button" style={S.send} onClick={submit} aria-label="Send">↑</button>
     </div>

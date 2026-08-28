@@ -3,7 +3,11 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
 import { send, useBrief } from "../store.js";
-import { selectControls, selectEta, selectLive, selectStatus, selectTitle } from "../select.js";
+import {
+  etaOf, selectControls, selectDepth, selectElapsed, selectLive,
+  selectRunShape, selectStatus, selectTaskCount, selectTitle,
+} from "../select.js";
+import { paceOf } from "../pace.js";
 
 export function Wordmark(): ReactElement {
   return (
@@ -31,7 +35,11 @@ function RunBar(): ReactElement {
   const status = useBrief(selectStatus);
   const title = useBrief(selectTitle);
   const { paused, closing } = useBrief(selectControls);
-  const eta = useBrief(selectEta);
+  const depth = useBrief(selectDepth);
+  const shape = useBrief(selectRunShape);
+  const tasks = useBrief(selectTaskCount);
+  const elapsed = useBrief(selectElapsed);
+  const eta = live ? etaOf(paceOf(depth, shape), tasks, elapsed) : null;
   const word = live && closing ? "Closing" : live && paused ? "Held" : status;
   return (
     <div style={S.runbar}>

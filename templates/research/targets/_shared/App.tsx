@@ -9,11 +9,15 @@
  * This file only maps the current moment onto the shell. It is YOURS: grow
  * it into your product's UI; the harness never changes.
  */
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl } from "@lloyal-labs/dev-tools";
 import { useBrief } from "./store.js";
-import { selectLive, selectMoment, selectShape, type Shape } from "./select.js";
+import {
+  selectDepth, selectLive, selectMoment, selectRunShape, selectShape,
+  selectTaskCount, type Shape,
+} from "./select.js";
+import { recordPace } from "./pace.js";
 import { Shell } from "./parts/Shell.js";
 import { Composer } from "./parts/Composer.js";
 import { Ask } from "./moments/Ask.js";
@@ -59,6 +63,21 @@ export function HarnessApp(): ReactElement {
   useEffect(() => {
     document.title = live ? "● __NAME__" : "__NAME__";
   }, [live]);
+
+  // Each settled brief teaches the pickers this machine's pace — recorded
+  // once, on the edge into settle. Warm follow-ups (one synthetic task,
+  // no research) would poison the figure, so single-task runs don't count.
+  const depth = useBrief(selectDepth);
+  const runShape = useBrief(selectRunShape);
+  const tasks = useBrief(selectTaskCount);
+  const banked = useBrief((app) => app.pipelineElapsedMs);
+  const prevMoment = useRef(moment);
+  useEffect(() => {
+    if (moment === "settle" && prevMoment.current !== "settle" && tasks !== null && tasks >= 2) {
+      recordPace(depth, runShape, tasks, banked);
+    }
+    prevMoment.current = moment;
+  }, [moment, depth, runShape, tasks, banked]);
 
   return (
     <DevPane

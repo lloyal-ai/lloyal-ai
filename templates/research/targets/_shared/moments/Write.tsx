@@ -8,25 +8,28 @@ import type { CSSProperties, ReactElement } from "react";
 import { color, font } from "../theme.js";
 import { useBrief } from "../store.js";
 import {
-  selectControls, selectSections, selectSettling, selectTitle,
+  selectControls, selectRail, selectSections, selectSettling, selectTitle,
 } from "../select.js";
 import { Thinking, doc } from "../parts/Shell.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
+import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose } from "../parts/Prose.js";
 
 export function Write(): ReactElement {
   const title = useBrief(selectTitle);
   const sections = useBrief(selectSections);
   const settling = useBrief(selectSettling);
+  const rail = useBrief(selectRail);
   const { closing } = useBrief(selectControls);
 
   return (
+    <div style={S.spread}>
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
 
       {sections.map((s) => (
         <section key={s.index} style={S.section}>
-          <h2 style={{ ...S.head, ...(s.inquiry ? null : S.headPending) }} title={s.task}>
+          <h2 id={`s${s.index}`} style={{ ...S.head, ...(s.inquiry ? null : S.headPending) }} title={s.task}>
             {s.title}
             {s.streaming && <Thinking> writing…</Thinking>}
           </h2>
@@ -38,7 +41,7 @@ export function Write(): ReactElement {
           )}
           {s.prose && (
             <>
-              <Prose markdown={s.prose} />
+              <Prose markdown={s.prose} anchorPrefix={`s${s.index}`} />
               {s.streaming && <span className="fn-caret" />}
             </>
           )}
@@ -61,10 +64,13 @@ export function Write(): ReactElement {
         </section>
       )}
     </div>
+    <OutlineRail entries={rail} />
+    </div>
   );
 }
 
 const S: Record<string, CSSProperties> = {
+  spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 10px", textWrap: "balance" },
   section: { margin: "0 0 26px" },
   head: { font: `600 17px/1.3 ${font.ui}`, letterSpacing: "-.012em", margin: "22px 0 10px" },

@@ -81,20 +81,18 @@ export const DEPTHS: readonly { depth: Depth; title: string }[] = [
   { depth: "high", title: "Thorough" },
 ];
 
-/** Wall estimate: the preset's soft budget prices a nominal 4-task brief;
- *  a chain scales with the plan (sections run one after another), a survey
- *  overlaps its tool waits to roughly half the chain's wall. Clamped to the
- *  preset's hard wall — the run never outlives it. No plan yet → nominal. */
-const NOMINAL_TASKS = 4;
-export const estimateLabel = (depth: Depth, shape: Shape, tasks: number | null): string => {
-  const p = EFFORT_PRESETS[depth];
-  const n = tasks ?? NOMINAL_TASKS;
-  const overlap = shape === "investigation" ? 1 : 0.6;
-  const ms = Math.min(
-    p.budget.time.hardLimit,
-    Math.max(45_000, p.budget.time.softLimit * (n / NOMINAL_TASKS) * overlap),
-  );
-  return `~${Math.max(1, Math.round(ms / 60_000))} min`;
+/** Minutes for the picker, quoted ONLY from this machine's observed pace
+ *  (`paceOf` — null until a brief of this depth and shape has settled).
+ *  No plan yet → the preset's own breadth. Pure: pace arrives as an
+ *  argument so the seam stays derivation-only. */
+export const estimateLabel = (
+  depth: Depth,
+  tasks: number | null,
+  perTaskMs: number | null,
+): string | null => {
+  if (perTaskMs === null) return null;
+  const n = tasks ?? EFFORT_PRESETS[depth].maxTasks;
+  return `~${Math.max(1, Math.round((perTaskMs * n) / 60_000))} min`;
 };
 
 export const selectTaskCount = (app: AppState): number | null =>
@@ -123,6 +121,11 @@ export const SHAPES: readonly {
 
 export const selectShape = (app: AppState): Shape =>
   (app.config?.defaults.reasoningMode ?? "flat") === "deep" ? "investigation" : "survey";
+
+/** The shape of the run in flight (the submitted mode), not the config
+ *  default — the pace record and the eta both speak about THIS run. */
+export const selectRunShape = (app: AppState): Shape =>
+  app.mode === "deep" ? "investigation" : "survey";
 
 // ── boot, rendered in the shell's voice ──────────────────────────
 
@@ -416,6 +419,66 @@ export const selectSections = (app: AppState): Section[] =>
     };
   });
 
+// ── the floating outline ─────────────────────────────────────────
+
+export interface OutlineEntry {
+  anchor: string;
+  text: string;
+  /** 0 = a section (task); 1–2 = headings inside its prose. */
+  level: 0 | 1 | 2;
+  /** Owning section index, for identity color. */
+  index: number;
+}
+
+const slugify = (text: string): string =>
+  text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "h";
+
+/** Every markdown heading in document order, anchored under `prefix`.
+ *  Pure and shared with `Prose`, which assigns these same ids in render
+ *  order — the rail and the document cannot disagree. Fences are skipped;
+ *  inline markup is stripped from the shown text. */
+export const anchorsOf = (
+  markdown: string,
+  prefix: string,
+): { anchor: string; text: string; depth: number }[] => {
+  const out: { anchor: string; text: string; depth: number }[] = [];
+  let fenced = false;
+  for (const line of markdown.split("\n")) {
+    if (line.startsWith("```")) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const m = /^(#{1,4})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (!m) continue;
+    const text = m[2].replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_`]/g, "");
+    out.push({ anchor: `${prefix}-${slugify(text)}`, text, depth: m[1].length });
+  }
+  return out;
+};
+
+const railLevel = (depth: number): 1 | 2 => (depth <= 2 ? 1 : 2);
+
+/** The rail: sections and the headings streaming into them while the brief
+ *  writes; the settled answer's own headings once it lands. */
+export const selectRail = (app: AppState): OutlineEntry[] => {
+  const moment = selectMoment(app);
+  if (moment === "write") {
+    return selectSections(app).flatMap((s): OutlineEntry[] => [
+      { anchor: `s${s.index}`, text: s.title, level: 0, index: s.index },
+      ...(s.prose ? anchorsOf(s.prose, `s${s.index}`) : []).map((h): OutlineEntry => ({
+        anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: s.index,
+      })),
+    ]);
+  }
+  if (moment === "settle") {
+    const body = selectAnswer(app)?.body;
+    return body
+      ? anchorsOf(body, "a").map((h): OutlineEntry => ({
+          anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: 0,
+        }))
+      : [];
+  }
+  return [];
+};
+
 // ── the disclosed work stream ────────────────────────────────────
 
 /** One step of an inquiry's disclosed stream. `tokens` is the raw tail of
@@ -485,18 +548,25 @@ export const selectControls = (app: AppState): RunControls => ({
   closing: app.closing,
 });
 
-/** Honest remaining time from the active depth's budget, in the product's
- *  voice. The presets are plain data, importable by any renderer. */
-export const selectEta = (app: AppState): { label: string; fraction: number } | null => {
-  if (!selectLive(app)) return null;
-  const soft = EFFORT_PRESETS[selectDepth(app)].budget.time.softLimit;
-  const elapsed = selectElapsed(app);
-  const left = soft - elapsed;
+/** Remaining time against this machine's observed pace — null when no pace
+ *  is known yet (the clock alone is honest then). Past the estimate it says
+ *  so instead of pretending to wrap. Pure: pace arrives as an argument. */
+export interface Eta { label: string; fraction: number }
+
+export const etaOf = (
+  perTaskMs: number | null,
+  tasks: number | null,
+  elapsedMs: number,
+): Eta | null => {
+  if (perTaskMs === null || tasks === null || tasks < 1) return null;
+  const total = perTaskMs * tasks;
+  const left = total - elapsedMs;
   const label =
     left > 90_000 ? `about ${Math.round(left / 60_000)} minutes left`
     : left > 20_000 ? "under a minute left"
-    : "wrapping up";
-  return { label, fraction: Math.min(1, Math.max(0, elapsed / soft)) };
+    : left > -30_000 ? "wrapping up"
+    : "taking longer than usual";
+  return { label, fraction: Math.min(1, Math.max(0, elapsedMs / total)) };
 };
 
 // ── shared formatting ────────────────────────────────────────────
