@@ -1,12 +1,15 @@
 /**
- * Ink TUI — AppState shape.
+ * AppState — the ONE fold every target shares.
  *
- * Populated by reducer.ts from StepEvent + AgentEvent. Components render
- * from this state and nothing else; no ambient ANSI, no side-effect logging.
+ * Populated by reducer.ts from the WorkflowEvent stream; node-free, so the
+ * cli's Ink view, the desktop main process (the authoritative fold behind
+ * `harness:snapshot`), and the browser page all fold the same state.
+ * Renderers derive from this state and nothing else — the React view
+ * through `select.ts` (the domain seam), the Ink view directly.
  *
- * Layout model: each research agent owns a vertical `timeline` of items
- * (think blocks, tool calls, tool results, reports). Flat mode renders those
- * timelines as side-by-side columns; chain mode stacks them vertically.
+ * Each research agent owns a vertical `timeline` of items (think blocks,
+ * tool calls, tool results, reports); how a renderer lays those out —
+ * columns, sections, panes — is the renderer's business, not this file's.
  */
 
 import type { Config, ConfigOrigin } from './config-types.js';
