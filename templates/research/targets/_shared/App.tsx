@@ -215,9 +215,9 @@ function ReportRow({ body, tokenCount }: { body: string; tokenCount: number }): 
 function WorkRows({ a, now }: { a: AgentRuntime; now: number }): ReactElement {
   const rows: ReactElement[] = [];
   // Results indexed once — the per-call find() made this O(n²) in timeline length.
-  const resultsByCall = new Map<string, Extract<TimelineItem, { kind: "tool_result" }>>();
+  const resultsByCall = new Map<number, Extract<TimelineItem, { kind: "tool_result" }>>();
   for (const r of a.timeline) {
-    if (r.kind === "tool_result") resultsByCall.set(r.callId, r);
+    if (r.kind === "tool_result" && r.callId !== null) resultsByCall.set(r.callId, r);
   }
   for (const it of a.timeline) {
     if (it.kind === "think") rows.push(<ThinkRow key={`t${it.id}`} it={it} />);
@@ -483,6 +483,12 @@ export function HarnessApp() {
       ? Math.min(100, Math.round((100 * state.pressure.cellsUsed) / state.pressure.nCtx))
       : null;
 
+  // The browser tab mirrors run state — a dot while a run is live.
+  const tabLive = !CAN_INPUT.has(state.uiPhase);
+  useEffect(() => {
+    document.title = tabLive ? "● __NAME__" : "__NAME__";
+  }, [tabLive]);
+
   const canInput = CAN_INPUT.has(state.uiPhase);
 
   return (
@@ -581,7 +587,7 @@ export function HarnessApp() {
           </button>
         </div>
       )}
-      <DevPane bridge={window.harness} controls={DEV_CONTROLS} title="__NAME__" />
+      <DevPane bridge={window.harness} controls={DEV_CONTROLS} title="__NAME__" runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }} />
     </div>
   );
 }

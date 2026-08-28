@@ -207,6 +207,10 @@ export function HarnessApp(): ReactElement {
       : `${research.length} agent${plural(research.length)} researched this page.`;
   const sources = wikipediaSources(agents);
   const working = state.phase === "working";
+  // The browser tab mirrors run state — a dot while working, like an unread badge.
+  useEffect(() => {
+    document.title = working ? "● __NAME__" : "__NAME__";
+  }, [working]);
   // The article prose = the final answer, or the synth's report streaming in
   // (the synth writes free text: `reportBody` strips its `<think>` reasoning).
   const liveSynth = synth && synth.body.includes("</think>") ? reportBody(synth.body) : "";

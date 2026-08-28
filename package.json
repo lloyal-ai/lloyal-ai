@@ -1,6 +1,6 @@
 {
   "name": "lloyal-ai",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "The Harness Development Kit CLI \u2014 scaffold HDK harnesses and apps.",
   "bin": {
     "lloyal": "bin/run.js"
