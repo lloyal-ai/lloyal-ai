@@ -9,10 +9,10 @@
  * This file only maps the current moment onto the shell. It is YOURS: grow
  * it into your product's UI; the harness never changes.
  */
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl } from "@lloyal-labs/dev-tools";
-import { send, useBrief } from "./store.js";
+import { useBrief } from "./store.js";
 import { selectLive, selectMoment, selectShape, type Shape } from "./select.js";
 import { Shell } from "./parts/Shell.js";
 import { Composer } from "./parts/Composer.js";
@@ -55,18 +55,6 @@ export function HarnessApp(): ReactElement {
   const configuredShape = useBrief(selectShape);
   const [chosenShape, setChosenShape] = useState<Shape | null>(null);
   const shape = chosenShape ?? configuredShape;
-
-  // Until the Frame moment grows its outline editor, a plan flows straight
-  // through review — debounced across the one transition into plan_review.
-  const uiPhase = useBrief((app) => app.uiPhase);
-  const acceptedRef = useRef(false);
-  useEffect(() => {
-    if (uiPhase === "plan_review" && !acceptedRef.current) {
-      acceptedRef.current = true;
-      send({ type: "accept_plan" });
-    }
-    if (uiPhase !== "plan_review") acceptedRef.current = false;
-  }, [uiPhase]);
 
   useEffect(() => {
     document.title = live ? "● __NAME__" : "__NAME__";

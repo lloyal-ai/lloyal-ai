@@ -829,6 +829,18 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       if (state.phase === 'synth' && state.synth.open) {
         return { ...state, synth: { ...state.synth, buffer: state.synth.buffer + ev.text } };
       }
+      // Planner stream: the outline drafts itself in the view — accumulate
+      // the planner's grammar JSON so a renderer can lift task descriptions
+      // as they complete (the plan grammar opens no think block).
+      if (state.phase === 'plan') {
+        const planner = state.agents.get(ev.agentId);
+        if (!planner) return state;
+        return replaceAgent(state, planner.id, (a) => ({
+          ...a,
+          tokenCount: ev.tokenCount,
+          contentBuffer: a.contentBuffer + ev.text,
+        }));
+      }
       // Muted phases. 'recon' streams through the same path as 'research'
       // (its agent has taskIndex 0), so it's allowed past the gate.
       if (state.phase !== 'research' && state.phase !== 'recon') return state;

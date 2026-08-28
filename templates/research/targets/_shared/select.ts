@@ -149,6 +149,43 @@ export const selectStatus = (app: AppState): string =>
     done: "Settled",
   })[app.uiPhase];
 
+/** The outline as the planner drafts it, live — complete `"description"`
+ *  strings lifted from the grammar-forced JSON stream, plus the trailing
+ *  partial under the caret. The planner is the one agent alive while
+ *  `planning`; its tokens accumulate in the live think body (the plan
+ *  grammar emits no think markers) and the content buffer. */
+export interface OutlineDraft {
+  settled: string[];
+  partial: string | null;
+}
+
+const DESC_COMPLETE = /"description"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+const DESC_PARTIAL = /"description"\s*:\s*"((?:[^"\\]|\\.)*)$/;
+const unescape = (raw: string): string => {
+  try { return JSON.parse(`"${raw}"`) as string; } catch { return raw; }
+};
+
+export const selectOutlineDraft = (app: AppState): OutlineDraft | null => {
+  if (app.uiPhase !== "planning") return null;
+  const planner = [...app.agents.values()].find((a) => a.endedAt === null);
+  if (!planner) return { settled: [], partial: null };
+  const think = planner.timeline.find(
+    (t) => t.kind === "think" && t.id === planner.currentThinkId,
+  );
+  const buffer = (think?.kind === "think" ? think.body : "") + planner.contentBuffer;
+  const settled = [...buffer.matchAll(DESC_COMPLETE)].map((m) => unescape(m[1]));
+  const tail = buffer.match(DESC_PARTIAL);
+  const partial = tail && !settled.includes(unescape(tail[1])) ? unescape(tail[1]) : null;
+  return { settled, partial };
+};
+
+/** The settled plan, editable while the harness holds it for review. */
+export const selectOutline = (app: AppState): string[] =>
+  app.plan?.tasks.map((t) => t.description) ?? [];
+
+export const selectReviewing = (app: AppState): boolean =>
+  app.uiPhase === "plan_review";
+
 /** The planner's questions, when it needs the user before framing. */
 export const selectClarify = (app: AppState): string[] =>
   app.uiPhase === "clarifying" ? (app.plan?.clarifyQuestions ?? []) : [];
