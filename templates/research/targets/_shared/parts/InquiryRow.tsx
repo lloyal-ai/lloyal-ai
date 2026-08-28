@@ -122,7 +122,7 @@ const S: Record<string, CSSProperties> = {
   },
   stopGlyph: { width: 8, height: 8, background: color.dim, borderRadius: 2, display: "block" },
   disclose: {
-    font: `10px ${font.ui}`, color: color.faint, background: "none", border: 0,
+    font: `10px ${font.ui}`, color: color.dim, background: "none", border: 0,
     cursor: "pointer", flex: "none", padding: 2,
   },
   work: {

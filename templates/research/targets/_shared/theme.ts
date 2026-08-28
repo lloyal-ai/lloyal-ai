@@ -11,9 +11,10 @@ export const color = {
   line: "#E5E5DF",
   ink: "#1B1B1F",
   dim: "#6C6C74",
-  /** Ornament only — rules, glyphs, disabled affordances. WORDS never use
-   *  faint: at small sizes it falls under legibility on the ground; the
-   *  quietest a word gets is `dim`. */
+  /** Pure ornament only — rules, dividers, decoration. WORDS never use
+   *  faint (at small sizes it falls under legibility on the ground), and
+   *  neither does anything CLICKABLE — the quietest a word or a control
+   *  gets is `dim`. */
   faint: "#A2A2AA",
   ember: "#DD6B4A",
   emberDeep: "#C4522F",

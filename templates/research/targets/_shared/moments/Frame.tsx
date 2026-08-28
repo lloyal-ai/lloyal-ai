@@ -195,7 +195,7 @@ const S: Record<string, CSSProperties> = {
     borderBottom: `1px solid ${color.ember}`, background: color.card,
   },
   strike: {
-    font: `11px ${font.ui}`, color: color.faint, background: color.card,
+    font: `11px ${font.ui}`, color: color.dim, background: color.card,
     border: `1px solid ${color.line}`, borderRadius: 7, width: 22, height: 22,
     cursor: "pointer", flex: "none",
   },

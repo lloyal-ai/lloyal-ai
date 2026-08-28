@@ -107,7 +107,7 @@ const S: Record<string, CSSProperties> = {
   },
   list: { display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", minHeight: 0 },
   entry: {
-    display: "flex", alignItems: "flex-start", gap: 6,
+    display: "flex", alignItems: "center", gap: 6,
     font: `12px/1.4 ${font.ui}`, color: color.dim,
     borderRadius: radius.control, padding: "6px 6px", cursor: "pointer", flex: "none",
   },
@@ -119,10 +119,11 @@ const S: Record<string, CSSProperties> = {
   },
   entryMeta: { font: `10.5px ${font.ui}`, color: color.dim },
   trash: {
-    font: `600 10px ${font.ui}`, color: color.faint, background: "none", border: 0,
-    borderRadius: 6, padding: "2px 3px", cursor: "pointer", flex: "none", marginTop: 1,
+    font: `600 10px ${font.ui}`, color: color.dim, background: "none", border: 0,
+    borderRadius: 6, width: 22, height: 22, padding: 0, display: "grid",
+    placeItems: "center", cursor: "pointer", flex: "none",
   },
-  trashArmed: { color: color.danger, background: "#F7E2DF", padding: "2px 6px" },
+  trashArmed: { color: color.danger, background: "#F7E2DF", width: "auto", padding: "0 6px" },
   back: {
     font: `600 11.5px ${font.ui}`, color: color.dim, background: "none", border: 0,
     textAlign: "left", padding: "8px 6px 0", cursor: "pointer", flex: "none",
