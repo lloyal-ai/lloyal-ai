@@ -5,6 +5,7 @@
  *  pass) and are replaced by what THIS machine actually does: each settled
  *  brief records its wall time, keyed by depth and shape, halved toward
  *  the newest run. */
+import { EFFORT_PRESETS } from "../../harness/effort-presets.js";
 import type { Depth, Shape } from "./select.js";
 
 export interface Pace {
@@ -14,10 +15,16 @@ export interface Pace {
   observed: boolean;
 }
 
+/** Anchored at Standard; `depthFactor` scales them — a Thorough inquiry
+ *  works its task longer than a Quick one, in proportion to its budget. */
 const PRIOR: Record<Shape, { perTaskMs: number; synthMs: number }> = {
   investigation: { perTaskMs: 240_000, synthMs: 240_000 },
   survey: { perTaskMs: 120_000, synthMs: 360_000 },
 };
+
+const depthFactor = (depth: Depth): number =>
+  EFFORT_PRESETS[depth].budget.time.softLimit /
+  EFFORT_PRESETS.medium.budget.time.softLimit;
 
 interface KV {
   getItem(k: string): string | null;
@@ -39,10 +46,10 @@ const read = (): Paces => {
 
 export const paceFor = (depth: Depth, shape: Shape): Pace => {
   const stored = read()[`${depth}/${shape}`];
-  const { synthMs } = PRIOR[shape];
+  const { perTaskMs, synthMs } = PRIOR[shape];
   return stored != null
     ? { perTaskMs: stored, synthMs, observed: true }
-    : { ...PRIOR[shape], observed: false };
+    : { perTaskMs: perTaskMs * depthFactor(depth), synthMs, observed: false };
 };
 
 /** Halved toward the newest run, so a machine that warms up (or throttles
