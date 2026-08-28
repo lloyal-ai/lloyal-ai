@@ -483,8 +483,13 @@ export function HarnessApp() {
       ? Math.min(100, Math.round((100 * state.pressure.cellsUsed) / state.pressure.nCtx))
       : null;
 
-  // The browser tab mirrors run state — a dot while a run is live.
-  const tabLive = !CAN_INPUT.has(state.uiPhase);
+  // The browser tab mirrors run state — a dot while work is actually in
+  // progress. Named phases, not !CAN_INPUT: boot errors, downloads and
+  // dialogs awaiting the user (plan_review) are not a live run.
+  const tabLive =
+    state.uiPhase === "discovering" ||
+    state.uiPhase === "planning" ||
+    state.uiPhase === "research";
   useEffect(() => {
     document.title = tabLive ? "● __NAME__" : "__NAME__";
   }, [tabLive]);

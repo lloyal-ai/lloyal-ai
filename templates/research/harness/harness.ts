@@ -401,6 +401,11 @@ export function* harness(
     body: (clearIfCurrent: () => void) => Operation<void>,
   ): Operation<void> {
     if (runTask) yield* haltRun();
+    // A NEW run never inherits the old run's lifecycle flags. The halted
+    // task's clearIfCurrent cannot reset them (haltRun already nulled
+    // runTask, so its guard fails) — reset here, where the run begins.
+    paused = false;
+    woundDown = false;
     const task = yield* spawn(() =>
       body(() => {
         if (runTask === task) { runTask = null; paused = false; woundDown = false; }
