@@ -223,139 +223,141 @@ export function HarnessApp(): ReactElement {
   // every surface); the local one only covers the instant before `query` lands.
   const title = state.topic || topic || "__NAME__";
 
+  // The dev shell: the wiki view lives in the shell's scroll container and
+  // the pane docks below it (dev-gated by config:loaded dev: true). basic
+  // has no config commands yet, so its Settings tab is the read-only
+  // inspector — controls arrive with the command protocol.
   return (
-    <div className="wiki">
-      <header className="wiki-top">
-        <div className="wiki-brand">
-          <span className="wiki-brand-name">__NAME__</span>
-          <span className="wiki-brand-sub">
-            {state.boot
-              ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${state.boot.surface}`
-              : state.phase}
-            {state.kv.total > 0 && ` · kv ${Math.round((100 * state.kv.used) / state.kv.total)}%`}
-          </span>
-        </div>
-        <form
-          className="wiki-search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Wikipedia…"
-            disabled={working}
-          />
-          <button type="submit" disabled={working || !query.trim()}>
-            {working ? "Researching…" : "Ask"}
-          </button>
-        </form>
-      </header>
+    <DevPane bridge={window.harness} controls={[]} title="__NAME__">
+      <div className="wiki">
+        <header className="wiki-top">
+          <div className="wiki-brand">
+            <span className="wiki-brand-name">__NAME__</span>
+            <span className="wiki-brand-sub">
+              {state.boot
+                ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${state.boot.surface}`
+                : state.phase}
+              {state.kv.total > 0 && ` · kv ${Math.round((100 * state.kv.used) / state.kv.total)}%`}
+            </span>
+          </div>
+          <form
+            className="wiki-search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search Wikipedia…"
+              disabled={working}
+            />
+            <button type="submit" disabled={working || !query.trim()}>
+              {working ? "Researching…" : "Ask"}
+            </button>
+          </form>
+        </header>
 
-      <div className="wiki-cols">
-        <nav className="wiki-toc" aria-label="Contents">
-          <div className="wiki-toc-head">Contents</div>
-          <ul>
-            <li>
-              <button type="button" onClick={() => scrollTo("top")}>
-                (Top)
-              </button>
-            </li>
-            {headings.map((h, i) => (
-              <li key={i} className={`wiki-toc-l${h.level}`}>
-                <button type="button" onClick={() => scrollTo(h.slug)}>
-                  {h.text}
-                </button>
-              </li>
-            ))}
-            {research.length > 0 && (
+        <div className="wiki-cols">
+          <nav className="wiki-toc" aria-label="Contents">
+            <div className="wiki-toc-head">Contents</div>
+            <ul>
               <li>
-                <button type="button" onClick={() => scrollTo("research")}>
-                  Research
+                <button type="button" onClick={() => scrollTo("top")}>
+                  (Top)
                 </button>
               </li>
-            )}
-            {sources.length > 0 && (
-              <li>
-                <button type="button" onClick={() => scrollTo("sources")}>
-                  Sources
-                </button>
-              </li>
-            )}
-          </ul>
-        </nav>
-
-        <main className="wiki-article" id="top">
-          <h1 className="wiki-title">{title}</h1>
-          <hr className="wiki-rule" />
-
-          {/* Fetched articles as a Wikipedia-style image gallery — a wrapping
-              grid of uniform cards, so they read as a gallery, not a stack. */}
-          {sources.length > 0 && (
-            <div className="wiki-figs">
-              {sources.map((s) => (
-                <SourceFigure key={s.url || s.title} s={s} />
+              {headings.map((h, i) => (
+                <li key={i} className={`wiki-toc-l${h.level}`}>
+                  <button type="button" onClick={() => scrollTo(h.slug)}>
+                    {h.text}
+                  </button>
+                </li>
               ))}
-            </div>
-          )}
-
-          {report ? (
-            <div className="wiki-prose md">
-              <Markdown text={report} />
-            </div>
-          ) : synth ? (
-            <div>
-              <p className="wiki-lead">Writing the report…</p>
-              {synthThinking && (
-                <p className="wiki-synth-think">
-                  {synthThinking}
-                  <span className="wiki-caret">▍</span>
-                </p>
+              {research.length > 0 && (
+                <li>
+                  <button type="button" onClick={() => scrollTo("research")}>
+                    Research
+                  </button>
+                </li>
               )}
-            </div>
-          ) : working ? (
-            <p className="wiki-lead">Researching Wikipedia… The report will appear here.</p>
-          ) : (
-            <p className="wiki-lead">Ask a question above to research it across Wikipedia.</p>
-          )}
+              {sources.length > 0 && (
+                <li>
+                  <button type="button" onClick={() => scrollTo("sources")}>
+                    Sources
+                  </button>
+                </li>
+              )}
+            </ul>
+          </nav>
 
-          {state.error && <p className="wiki-error">Error: {state.error}</p>}
+          <main className="wiki-article" id="top">
+            <h1 className="wiki-title">{title}</h1>
+            <hr className="wiki-rule" />
 
-          {research.length > 0 && (
-            <section id="research" className="wiki-log">
-              <h2>Research</h2>
-              <p className="wiki-log-note">
-                {researchNote} Expand an agent to follow its reasoning and findings.
-              </p>
-              {research.map((a) => (
-                <AgentEntry key={a.id} a={a} />
-              ))}
-            </section>
-          )}
-
-          {sources.length > 0 && (
-            <section id="sources" className="wiki-refs">
-              <h2>Sources</h2>
-              <ol>
-                {sources.map((s, i) => (
-                  <li key={i}>
-                    <a href={s.url || undefined} target="_blank" rel="noopener noreferrer">
-                      {s.title}
-                    </a>
-                    {s.url && <span className="wiki-refs-host"> — {hostOf(s.url)}</span>}
-                  </li>
+            {/* Fetched articles as a Wikipedia-style image gallery — a wrapping
+                grid of uniform cards, so they read as a gallery, not a stack. */}
+            {sources.length > 0 && (
+              <div className="wiki-figs">
+                {sources.map((s) => (
+                  <SourceFigure key={s.url || s.title} s={s} />
                 ))}
-              </ol>
-            </section>
-          )}
-        </main>
+              </div>
+            )}
+
+            {report ? (
+              <div className="wiki-prose md">
+                <Markdown text={report} />
+              </div>
+            ) : synth ? (
+              <div>
+                <p className="wiki-lead">Writing the report…</p>
+                {synthThinking && (
+                  <p className="wiki-synth-think">
+                    {synthThinking}
+                    <span className="wiki-caret">▍</span>
+                  </p>
+                )}
+              </div>
+            ) : working ? (
+              <p className="wiki-lead">Researching Wikipedia… The report will appear here.</p>
+            ) : (
+              <p className="wiki-lead">Ask a question above to research it across Wikipedia.</p>
+            )}
+
+            {state.error && <p className="wiki-error">Error: {state.error}</p>}
+
+            {research.length > 0 && (
+              <section id="research" className="wiki-log">
+                <h2>Research</h2>
+                <p className="wiki-log-note">
+                  {researchNote} Expand an agent to follow its reasoning and findings.
+                </p>
+                {research.map((a) => (
+                  <AgentEntry key={a.id} a={a} />
+                ))}
+              </section>
+            )}
+
+            {sources.length > 0 && (
+              <section id="sources" className="wiki-refs">
+                <h2>Sources</h2>
+                <ol>
+                  {sources.map((s, i) => (
+                    <li key={i}>
+                      <a href={s.url || undefined} target="_blank" rel="noopener noreferrer">
+                        {s.title}
+                      </a>
+                      {s.url && <span className="wiki-refs-host"> — {hostOf(s.url)}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+          </main>
+        </div>
       </div>
-      {/* Renders nothing unless config:loaded carried dev: true (LLOYAL_DEV).
-          basic has no config commands yet, so its Settings tab is the
-          read-only inspector — controls arrive with the command protocol. */}
-      <DevPane bridge={window.harness} controls={[]} title="__NAME__" />
-    </div>
+    </DevPane>
   );
 }
