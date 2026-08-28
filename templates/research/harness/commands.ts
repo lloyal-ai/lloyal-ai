@@ -49,6 +49,10 @@ export type Command =
   // tools settle, and folds the cohort into a recovered answer + synth. No-op
   // when no run is active. Distinct from `stop` (abort → composer).
   | { type: 'wrap_up' }
+  // Hold the run at the tick boundary / release it. Refused when not
+  // plainly running (the pane's buttons mirror these rules as affordance).
+  | { type: 'pause' }
+  | { type: 'resume' }
   // Per-agent cancel: discard one LIVE flat-mode research agent (halt its tool +
   // prune its KV + terminal agent:failed(user_cancel)); siblings keep running. The
   // renderer only offers this on a live, non-recovering flat-mode card.

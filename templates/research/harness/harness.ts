@@ -30,6 +30,7 @@ import {
   WindDown,
   CancelAgent,
   reconstructBranch,
+  Pause,
 } from "@lloyal-labs/lloyal-agents";
 import type {
   Ability,
@@ -262,6 +263,7 @@ export function* harness(
   // to render the spine and resolve per-spawn tool scope.
   yield* WindDown.set(runner.windDown);
   yield* CancelAgent.set(runner.cancelAgent);
+  yield* Pause.set(runner.pauseRun);
   const configStore = createInMemoryConfigStore();
   // Seed the config store generically from the per-ability config map — no ability-name
   // knowledge. Each ability's factory reads its own entry on enable.
@@ -389,14 +391,24 @@ export function* harness(
   // The heavy operations run in a CHILD fiber so the command loop keeps polling
   // `each(commands)` while a run is in flight. `stop` halts the held Task.
   let runTask: Task<void> | null = null;
+  // Lifecycle sequencing is the harness's job (the pool holds regardless):
+  // pause only while plainly running; wrap_up refused while paused; both
+  // flags reset when the run ends or is stopped.
+  let paused = false;
+  let woundDown = false;
 
   function* startRun(
     body: (clearIfCurrent: () => void) => Operation<void>,
   ): Operation<void> {
     if (runTask) yield* haltRun();
+    // A NEW run never inherits the old run's lifecycle flags. The halted
+    // task's clearIfCurrent cannot reset them (haltRun already nulled
+    // runTask, so its guard fails) — reset here, where the run begins.
+    paused = false;
+    woundDown = false;
     const task = yield* spawn(() =>
       body(() => {
-        if (runTask === task) runTask = null;
+        if (runTask === task) { runTask = null; paused = false; woundDown = false; }
       }),
     );
     runTask = task;
@@ -478,6 +490,8 @@ export function* harness(
       if (cmd.type === "stop") {
         if (runTask) {
           yield* haltRun();
+          paused = false;
+          woundDown = false;
           pendingPlan = null;
           yield* agentEvents.send({ type: "ui:composer" });
         }
@@ -485,7 +499,28 @@ export function* harness(
       }
 
       if (cmd.type === "wrap_up") {
-        if (runTask) runner.windDown.send();
+        // Refused while paused — press play first (the pane disables the
+        // button; this guard covers raw wire clients).
+        if (runTask && !paused) {
+          woundDown = true;
+          runner.windDown.send();
+        }
+        continue;
+      }
+
+      if (cmd.type === "pause") {
+        if (runTask && !paused && !woundDown) {
+          paused = true;
+          runner.pauseRun.send(true);
+        }
+        continue;
+      }
+
+      if (cmd.type === "resume") {
+        if (paused) {
+          paused = false;
+          runner.pauseRun.send(false);
+        }
         continue;
       }
 
