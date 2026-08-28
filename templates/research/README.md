@@ -92,14 +92,15 @@ reads what it has written:
    follow-ups are warm. The trash deletes a brief's whole run dir and
    re-indexes: the system unlearns it.
 
-If you know [Hermes Agent's memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory),
-this is the same family — an agent's own files on disk feeding its
-future sessions — with one deliberate difference: Hermes distills
+This is the same learning loop that made
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)
+the local agent to beat — an agent's own files on disk feeding its
+future sessions — with one deliberate difference. Hermes distills
 trajectories into skills and curated memories the agent loads; this
 harness keeps the **whole evidential product** and re-enters it at
-retrieval time through the reranker. Memory as evidence, not technique:
-nothing is summarized away, relevance is judged per question, and
-forgetting is a user gesture.
+retrieval time through the reranker. **Memory as evidence, not
+technique**: nothing is summarized away, relevance is judged per
+question, and forgetting is a user gesture.
 
 ## The shape
 
