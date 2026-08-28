@@ -356,6 +356,10 @@ export interface AppState {
   /** Wind-down began (`run:windingDown`): agents drain to reports. The
    *  view's cue to read "closing" and refuse pause / a second close. */
   closing: boolean;
+  /** The run wound down before finishing on its own (user close or time) —
+   *  sticky through `complete` so the settled brief can say so; reset only
+   *  by the next query. */
+  closedEarly: boolean;
   /** Per-ability participation in the next query, keyed by `manifest.name`.
    *  `true` = included; `false` = configured-but-excluded (user opted out
    *  for this session); missing key = treat as included by default. The
@@ -409,6 +413,7 @@ export const initialState: AppState = {
   bootError: null,
   paused: false,
   closing: false,
+  closedEarly: false,
   participation: {},
   abilities: [],
 };

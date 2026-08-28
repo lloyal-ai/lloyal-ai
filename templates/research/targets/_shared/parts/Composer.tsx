@@ -1,25 +1,35 @@
 /** The docked composer: one field, the run's clock, depth priced in honest
  *  minutes for the plan at hand, send. It answers the planner when the
- *  planner asked; otherwise it opens a brief in the chosen shape. Depth
- *  applies on selection (`set_effort` — next run). */
+ *  planner asked; otherwise it opens a brief in the chosen shape. Over a
+ *  settled brief it carries the Ask/Extend choice: Ask answers from the
+ *  warm context (skipPlanner — instant); Extend reframes fully as a new
+ *  run. Depth applies on selection (`set_effort` — next run). */
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
   DEPTHS, SHAPES, estimateLabel, fmtElapsed,
-  selectDepth, selectLive, selectTaskCount, type Shape,
+  selectDepth, selectLive, selectMoment, selectTaskCount, type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
+
+const INTENTS = [
+  { intent: "ask", label: "Ask", hint: "answers from the warm context — instant" },
+  { intent: "extend", label: "Extend", hint: "a fresh brief that reframes fully" },
+] as const;
+type Intent = (typeof INTENTS)[number]["intent"];
 
 export function Composer({ shape, placeholder }: {
   shape: Shape;
   placeholder: string;
 }): ReactElement {
   const [draft, setDraft] = useState("");
+  const [intent, setIntent] = useState<Intent>("ask");
   const depth = useBrief(selectDepth);
   const live = useBrief(selectLive);
   const tasks = useBrief(selectTaskCount);
   const uiPhase = useBrief((app) => app.uiPhase);
+  const settled = useBrief((app) => selectMoment(app) === "settle");
 
   const submit = (): void => {
     const text = draft.trim();
@@ -27,9 +37,7 @@ export function Composer({ shape, placeholder }: {
     if (uiPhase === "clarifying") send({ type: "submit_clarification", answer: text });
     else {
       const mode = SHAPES.find((s) => s.shape === shape)?.mode ?? "flat";
-      // A question asked over a settled brief answers from the warm context
-      // (skipPlanner) — instant, no fresh plan. A new topic reframes fully.
-      send({ type: "submit_query", query: text, mode, skipPlanner: uiPhase === "done" });
+      send({ type: "submit_query", query: text, mode, skipPlanner: settled && intent === "ask" });
     }
     setDraft("");
   };
@@ -44,6 +52,21 @@ export function Composer({ shape, placeholder }: {
         placeholder={placeholder}
       />
       {live && <Clock />}
+      {settled && (
+        <div style={S.depths}>
+          {INTENTS.map((i) => (
+            <button
+              key={i.intent}
+              type="button"
+              style={i.intent === intent ? S.depthOn : S.depth}
+              title={i.hint}
+              onClick={() => setIntent(i.intent)}
+            >
+              {i.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={S.depths}>
         {DEPTHS.map((d) => {
           const pace = paceFor(d.depth, shape);

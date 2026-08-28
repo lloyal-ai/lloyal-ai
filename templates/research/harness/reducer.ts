@@ -1183,7 +1183,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     case 'run:resumed':
       return { ...state, paused: false };
     case 'run:windingDown':
-      return { ...state, closing: true };
+      return { ...state, closing: true, closedEarly: true };
 
     default:
       return state;

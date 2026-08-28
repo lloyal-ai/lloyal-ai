@@ -419,6 +419,87 @@ export const selectSections = (app: AppState): Section[] =>
     };
   });
 
+// ── the settled document ─────────────────────────────────────────
+
+export interface Citation {
+  ordinal: number;
+  title: string;
+  url: string;
+  host: string;
+  cited: number;
+}
+
+const MD_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+const BARE_ORDINAL = /^\[?\d+\]?$/;
+
+const hostOf = (url: string): string => {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+};
+
+/** Numbered chips, derived from the woven answer alone — links in first-
+ *  appearance order, one ordinal per url, repeats collapsed into `cited`.
+ *  A bare "[1]"-style link keeps its slot but takes a real title from any
+ *  later appearance. Never re-weaves. */
+export const selectCitations = (app: AppState): Citation[] => {
+  const body = selectAnswer(app)?.body ?? "";
+  const byUrl = new Map<string, Citation>();
+  for (const m of body.matchAll(MD_LINK)) {
+    const [, title, url] = m;
+    const seen = byUrl.get(url);
+    if (seen) {
+      seen.cited += 1;
+      if (BARE_ORDINAL.test(seen.title) && !BARE_ORDINAL.test(title)) seen.title = title;
+      continue;
+    }
+    byUrl.set(url, { ordinal: byUrl.size + 1, title, url, host: hostOf(url), cited: 1 });
+  }
+  return [...byUrl.values()];
+};
+
+/** The weave (and the synth) end the document with a bare source list —
+ *  the sources grid replaces it, so the prose sheds it. Anything that
+ *  doesn't match the trailing-list shape is left alone. */
+const TRAILING_SOURCES =
+  /\n(?:#{1,4}\s+|\*\*)?(?:sources|references)(?:\*\*)?\s*:?\s*\n(?:\s*(?:[-*]|\d+\.)?\s*\[[^\]]*\]\([^)]*\)[^\n]*\n?)+\s*$/i;
+
+export const selectSettleProse = (app: AppState): string =>
+  (selectAnswer(app)?.body ?? "").replace(TRAILING_SOURCES, "").trimEnd();
+
+/** Structural margin marks — facts of the run, never judgments of the
+ *  content: how it ended, how much it rests on, what closed unsettled. */
+export const selectMarks = (app: AppState): string[] => {
+  const marks: string[] = [];
+  if (app.closedEarly) marks.push("Closed early — settled with what it had.");
+  const cited = selectCitations(app).length;
+  if (cited === 1) marks.push("Rests on one source — read it before you lean on it.");
+  else if (cited === 2) marks.push("Rests on two sources.");
+  let unsettled = 0;
+  for (const a of app.agents.values()) if (a.failReason !== null && a.taskIndex !== null) unsettled += 1;
+  for (const s of app.scrollback) {
+    if (s.kind === "agent" && s.agent.failReason !== null && s.agent.taskIndex !== null) unsettled += 1;
+  }
+  if (unsettled === 1) marks.push("One line of inquiry closed without settling.");
+  else if (unsettled > 1) marks.push(`${unsettled} lines of inquiry closed without settling.`);
+  return marks;
+};
+
+/** What the run itself read about each source: the first snippet any tool
+ *  result carried for a url, for the source cards. */
+export const selectSourceNotes = (app: AppState): Map<string, string> => {
+  const notes = new Map<string, string>();
+  const harvest = (a: AgentRuntime): void => {
+    for (const t of a.timeline) {
+      if (t.kind !== "tool_result" || !t.sources) continue;
+      for (const s of t.sources) {
+        if (s.url && s.snippet && !notes.has(s.url)) notes.set(s.url, s.snippet);
+      }
+    }
+  };
+  for (const a of app.agents.values()) harvest(a);
+  for (const s of app.scrollback) if (s.kind === "agent") harvest(s.agent);
+  return notes;
+};
+
 // ── the floating outline ─────────────────────────────────────────
 
 export interface OutlineEntry {
@@ -469,12 +550,15 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
     ]);
   }
   if (moment === "settle") {
-    const body = selectAnswer(app)?.body;
-    return body
-      ? anchorsOf(body, "a").map((h): OutlineEntry => ({
-          anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: 0,
-        }))
-      : [];
+    const body = selectSettleProse(app);
+    if (!body) return [];
+    const entries = anchorsOf(body, "a").map((h): OutlineEntry => ({
+      anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: 0,
+    }));
+    if (selectCitations(app).length > 0) {
+      entries.push({ anchor: "a-sources", text: "Sources", level: 1, index: 0 });
+    }
+    return entries;
   }
   return [];
 };
