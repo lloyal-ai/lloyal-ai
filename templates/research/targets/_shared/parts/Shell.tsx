@@ -167,7 +167,7 @@ const S: Record<string, CSSProperties> = {
 };
 
 export const doc: CSSProperties = {
-  width: "66ch", maxWidth: "calc(100% - 92px)", margin: "0 auto", position: "relative",
+  width: "94ch", maxWidth: "calc(100% - 92px)", margin: "0 auto", position: "relative",
 };
 
 export { radius };

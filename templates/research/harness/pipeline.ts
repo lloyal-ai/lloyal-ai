@@ -1104,6 +1104,7 @@ export function* runResearchPlan(
         parent: querySpine,
         policy: new DirectAnswerPolicy(),
         maxTurns: opts.maxTurns,
+        trace: runner.dev, // dev-pane epistemics + compiled prompt, same as the pools
       });
 
       synthTimeMs = synthT();

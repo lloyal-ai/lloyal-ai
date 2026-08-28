@@ -7,10 +7,12 @@ import { useMemo, useState, type CSSProperties, type ReactElement } from "react"
 import { color, font, radius } from "../theme.js";
 import { useBrief } from "../store.js";
 import {
-  DEPTHS, SHAPES, selectAnswer, selectCitations, selectDepth, selectMarks,
-  selectRail, selectRunShape, selectSettleProse, selectSourceNotes, selectTitle,
+  DEPTHS, SHAPES, selectAnswer, selectAsk, selectCitations, selectDepth,
+  selectExchanges, selectMarks, selectRail, selectRunShape, selectSettleProse,
+  selectSourceNotes, selectTitle,
 } from "../select.js";
-import { doc } from "../parts/Shell.js";
+import { Thinking, doc } from "../parts/Shell.js";
+import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
@@ -25,6 +27,8 @@ export function Settle(): ReactElement {
   const shape = useBrief(selectRunShape);
   const depth = useBrief(selectDepth);
   const rail = useBrief(selectRail);
+  const exchanges = useBrief(selectExchanges);
+  const ask = useBrief(selectAsk);
   const [showThinking, setShowThinking] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -96,6 +100,29 @@ export function Settle(): ReactElement {
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
       <Sources citations={citations} notes={notes} />
+      {exchanges.map((x, i) => (
+        <section key={i} style={S.exchange}>
+          <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
+          <Prose markdown={x.body} />
+        </section>
+      ))}
+      {ask && (
+        <section style={S.exchange}>
+          <h2 style={S.exchangeHead}>
+            {ask.question}
+            <Thinking> answering…</Thinking>
+          </h2>
+          {ask.inquiry && ask.inquiry.verb.kind !== "settled" && (
+            <InquiryRow inquiry={ask.inquiry} closing={false} />
+          )}
+          {ask.body && (
+            <>
+              <Prose markdown={ask.body} />
+              <span className="fn-caret" />
+            </>
+          )}
+        </section>
+      )}
     </div>
     <OutlineRail entries={rail} />
     </div>
@@ -126,5 +153,9 @@ const S: Record<string, CSSProperties> = {
   thinking: {
     font: `12.5px/1.6 ${font.ui}`, color: color.faint, whiteSpace: "pre-wrap",
     borderLeft: `2px solid ${color.line}`, padding: "2px 0 2px 12px", margin: "0 0 18px",
+  },
+  exchange: { borderTop: `1px solid ${color.line}`, margin: "26px 0 0", paddingTop: 18 },
+  exchangeHead: {
+    font: `italic 600 16px/1.4 ${font.ui}`, letterSpacing: "-.008em", margin: "0 0 10px",
   },
 };

@@ -29,7 +29,7 @@ export function Write(): ReactElement {
 
       {sections.map((s) => (
         <section key={s.index} style={S.section}>
-          <h2 id={`s${s.index}`} style={{ ...S.head, ...(s.inquiry ? null : S.headPending) }} title={s.task}>
+          <h2 id={`s${s.index}`} style={{ ...S.head, ...(s.inquiry ? null : S.headPending) }}>
             {s.title}
             {s.streaming && <Thinking> writing…</Thinking>}
           </h2>
@@ -73,7 +73,7 @@ const S: Record<string, CSSProperties> = {
   spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 10px", textWrap: "balance" },
   section: { margin: "0 0 26px" },
-  head: { font: `600 17px/1.3 ${font.ui}`, letterSpacing: "-.012em", margin: "22px 0 10px" },
+  head: { font: `600 17px/1.35 ${font.ui}`, letterSpacing: "-.012em", margin: "22px 0 10px", textWrap: "balance" },
   headPending: { color: color.faint },
   inherits: { font: `12.5px ${font.ui}`, color: color.faint, margin: "0 0 8px" },
   deliberating: {

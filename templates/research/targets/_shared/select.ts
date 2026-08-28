@@ -33,10 +33,12 @@ const MOMENT_OF: Record<AppState["uiPhase"], Moment> = {
 
 /** After the answer lands the harness returns to `composer` for the next
  *  query — but the settled brief IS the document, so it keeps the canvas
- *  until a new query resets the fold. */
+ *  until a cold query resets the fold. A warm ask keeps it too: the ask
+ *  streams beneath the document, never over it. */
 export const selectMoment = (app: AppState): Moment => {
   const moment = MOMENT_OF[app.uiPhase];
-  return moment === "ask" && app.answer ? "settle" : moment;
+  if (app.answer && (moment === "ask" || app.ask !== null)) return "settle";
+  return moment;
 };
 
 /** The tab dot and the run-state lamp: work is actually in progress. */
@@ -292,12 +294,9 @@ export interface Section {
   streaming: boolean;
 }
 
-/** A short head lifted from the task sentence: the text before the first
- *  " — ", clipped as a title. The full task stays as the tooltip. */
-const sectionTitle = (task: string): string => {
-  const head = task.split(" — ")[0];
-  return head.length > 72 ? `${head.slice(0, 69)}…` : head;
-};
+/** The section head IS the task, whole — the reader always sees exactly
+ *  what its inquiry is answering. Long heads wrap; the rail ellipsizes. */
+const sectionTitle = (task: string): string => task;
 
 const TOOL_DOING: Record<string, string> = {
   web_search: "Searching",
@@ -483,6 +482,30 @@ export const selectMarks = (app: AppState): string[] => {
   return marks;
 };
 
+/** The document's warm-ask exchanges, settled beneath it. */
+export const selectExchanges = (app: AppState): { question: string; body: string }[] =>
+  app.exchanges;
+
+/** The warm ask in flight: its question, whatever of its answer has
+ *  streamed, and its worker as a full inquiry — verbs, park honesty, and
+ *  the disclosure — numbered after the document's own inquiries. */
+export const selectAsk = (
+  app: AppState,
+): { question: string; body: string; inquiry: Inquiry | null } | null => {
+  if (app.ask === null) return null;
+  const index = (app.plan?.tasks.length ?? 0) + app.exchanges.length;
+  for (const a of app.agents.values()) {
+    if (a.endedAt === null) {
+      return {
+        question: app.ask,
+        body: liveProse(a) ?? "",
+        inquiry: { id: a.id, index, verb: verbOf(a), startedAt: a.startedAt, endedAt: a.endedAt },
+      };
+    }
+  }
+  return { question: app.ask, body: "", inquiry: null };
+};
+
 /** What the run itself read about each source: the first snippet any tool
  *  result carried for a url, for the source cards. */
 export const selectSourceNotes = (app: AppState): Map<string, string> => {
@@ -558,6 +581,9 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
     if (selectCitations(app).length > 0) {
       entries.push({ anchor: "a-sources", text: "Sources", level: 1, index: 0 });
     }
+    app.exchanges.forEach((x, i) => {
+      entries.push({ anchor: `e${i}`, text: x.question, level: 0, index: i + 1 });
+    });
     return entries;
   }
   return [];

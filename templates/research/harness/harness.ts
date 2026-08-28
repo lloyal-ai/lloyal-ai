@@ -704,15 +704,18 @@ export function* harness(
         }
         if (cmd.skipPlanner) {
           const plan = singleTaskPlan(cmd.query);
-          yield* agentEvents.send({
-            type: "plan:start",
-            query: cmd.query,
-            mode: cmd.mode,
-          });
+          // `query` first, matching runPlanner's order — the fold's warm-ask
+          // branch must see the ask before the synthetic plan:start arrives,
+          // or the plan:start retitles the settled document.
           yield* agentEvents.send({
             type: "query",
             query: cmd.query,
             warm: !!session.trunk,
+          });
+          yield* agentEvents.send({
+            type: "plan:start",
+            query: cmd.query,
+            mode: cmd.mode,
           });
           yield* agentEvents.send({
             type: "plan",

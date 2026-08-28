@@ -327,6 +327,24 @@ function closeThink(state: AppState, agentId: number, finalBody: string): AppSta
 export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query':
+      // A WARM query is an ask over the settled brief: the document stays —
+      // root query/answer/exchanges untouched, prior agents kept (sources
+      // and marks still read them) — and only the little run's own state
+      // resets. The ask question is stashed beside the document.
+      if (ev.warm && state.answer) {
+        return {
+          ...state,
+          ask: ev.query,
+          warm: true,
+          phase: 'plan',
+          paused: false,
+          closing: false,
+          synth: initialState.synth,
+          startedAt: Date.now(),
+          pipelineElapsedMs: 0,
+          pipelineResumedAt: Date.now(),
+        };
+      }
       // Preserve session-level fields across queries. Notably `mode` — a
       // `query` event fires at the start of every `runPlanner` call
       // (including re-plans on T toggle), and wiping mode would make the
@@ -478,6 +496,15 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     }
 
     case 'answer':
+      // A warm ask's answer lands as a new exchange beneath the document —
+      // the root answer is never overwritten.
+      if (state.ask !== null) {
+        return {
+          ...state,
+          exchanges: [...state.exchanges, { question: state.ask, body: ev.text }],
+          ask: null,
+        };
+      }
       return { ...state, answer: ev.text };
 
     case 'stats':
@@ -611,6 +638,11 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       return state;
 
     case 'plan:start': {
+      // A warm ask's synthetic plan must not retitle the document, change
+      // its mode, or leave the settled canvas — the ask streams beneath it.
+      if (state.ask !== null) {
+        return { ...state, phase: 'plan', plan: null, pipelineResumedAt: Date.now() };
+      }
       // Fresh submission (from composer / done) → reset the pipeline timer
       // to zero. Re-plan from plan_review → keep the accumulator so the
       // displayed elapsed continues past the dwell.

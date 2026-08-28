@@ -360,6 +360,12 @@ export interface AppState {
    *  sticky through `complete` so the settled brief can say so; reset only
    *  by the next query. */
   closedEarly: boolean;
+  /** Warm-ask exchanges appended beneath the settled brief — the document
+   *  grows, it is never replaced. A full (cold) query clears them. */
+  exchanges: { question: string; body: string }[];
+  /** The warm ask in flight (its question); null otherwise. While set, the
+   *  root `query`/`answer` stay untouched — the ask streams beneath them. */
+  ask: string | null;
   /** Per-ability participation in the next query, keyed by `manifest.name`.
    *  `true` = included; `false` = configured-but-excluded (user opted out
    *  for this session); missing key = treat as included by default. The
@@ -414,6 +420,8 @@ export const initialState: AppState = {
   paused: false,
   closing: false,
   closedEarly: false,
+  exchanges: [],
+  ask: null,
   participation: {},
   abilities: [],
 };
