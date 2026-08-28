@@ -7,7 +7,7 @@ import {
   etaOf, selectControls, selectDepth, selectElapsed, selectLive,
   selectRunShape, selectStatus, selectTaskCount, selectTitle,
 } from "../select.js";
-import { paceOf } from "../pace.js";
+import { paceFor } from "../pace.js";
 
 export function Wordmark(): ReactElement {
   return (
@@ -39,7 +39,7 @@ function RunBar(): ReactElement {
   const shape = useBrief(selectRunShape);
   const tasks = useBrief(selectTaskCount);
   const elapsed = useBrief(selectElapsed);
-  const eta = live ? etaOf(paceOf(depth, shape), tasks, elapsed) : null;
+  const eta = live ? etaOf(paceFor(depth, shape), tasks, elapsed) : null;
   const word = live && closing ? "Closing" : live && paused ? "Held" : status;
   return (
     <div style={S.runbar}>

@@ -9,7 +9,7 @@ import {
   DEPTHS, SHAPES, estimateLabel, fmtElapsed,
   selectDepth, selectLive, selectTaskCount, type Shape,
 } from "../select.js";
-import { paceOf } from "../pace.js";
+import { paceFor } from "../pace.js";
 
 export function Composer({ shape, placeholder }: {
   shape: Shape;
@@ -46,16 +46,16 @@ export function Composer({ shape, placeholder }: {
       {live && <Clock />}
       <div style={S.depths}>
         {DEPTHS.map((d) => {
-          const est = estimateLabel(d.depth, tasks, paceOf(d.depth, shape));
+          const pace = paceFor(d.depth, shape);
           return (
             <button
               key={d.depth}
               type="button"
               style={d.depth === depth ? S.depthOn : S.depth}
-              title={est === null ? "runs on this machine set the pace" : undefined}
+              title={pace.observed ? undefined : "estimated — runs on this machine refine it"}
               onClick={() => send({ type: "set_effort", effort: d.depth })}
             >
-              {d.title}{est !== null && ` · ${est}`}
+              {d.title} · {estimateLabel(d.depth, tasks, pace)}
             </button>
           );
         })}

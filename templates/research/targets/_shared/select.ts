@@ -9,6 +9,7 @@ import {
   type TimelineItem,
 } from "../../harness/state.js";
 import { EFFORT_PRESETS } from "../../harness/effort-presets.js";
+import type { Pace } from "./pace.js";
 
 // ── moments ──────────────────────────────────────────────────────
 
@@ -81,21 +82,17 @@ export const DEPTHS: readonly { depth: Depth; title: string }[] = [
   { depth: "high", title: "Thorough" },
 ];
 
-/** Minutes for the picker, quoted ONLY from this machine's observed pace
- *  (`paceOf` — null until a brief of this depth and shape has settled).
- *  The plan's task count is clamped to each depth's own breadth — a depth
- *  never quotes more inquiries than it would actually run. No plan yet →
- *  the preset's breadth. Pure: pace arrives as an argument so the seam
- *  stays derivation-only. */
-export const estimateLabel = (
-  depth: Depth,
-  tasks: number | null,
-  perTaskMs: number | null,
-): string | null => {
-  if (perTaskMs === null) return null;
+/** Minutes for the picker, from the machine's pace (`paceFor` — a stated
+ *  prior until a brief of this depth and shape has settled): inquiries at
+ *  the per-task rate plus the settling pass. The plan's task count is
+ *  clamped to each depth's own breadth — a depth never quotes more
+ *  inquiries than it would actually run. No plan yet → the preset's
+ *  breadth. Pure: pace arrives as an argument so the seam stays
+ *  derivation-only. */
+export const estimateLabel = (depth: Depth, tasks: number | null, pace: Pace): string => {
   const breadth = EFFORT_PRESETS[depth].maxTasks;
   const n = Math.min(tasks ?? breadth, breadth);
-  return `~${Math.max(1, Math.round((perTaskMs * n) / 60_000))} min`;
+  return `~${Math.max(1, Math.round((pace.perTaskMs * n + pace.synthMs) / 60_000))} min`;
 };
 
 export const selectTaskCount = (app: AppState): number | null =>
@@ -551,18 +548,18 @@ export const selectControls = (app: AppState): RunControls => ({
   closing: app.closing,
 });
 
-/** Remaining time against this machine's observed pace — null when no pace
- *  is known yet (the clock alone is honest then). Past the estimate it says
- *  so instead of pretending to wrap. Pure: pace arrives as an argument. */
+/** Remaining time against the machine's pace — null until the plan gives
+ *  a task count. Past the estimate it says so instead of pretending to
+ *  wrap. Pure: pace arrives as an argument. */
 export interface Eta { label: string; fraction: number }
 
 export const etaOf = (
-  perTaskMs: number | null,
+  pace: Pace,
   tasks: number | null,
   elapsedMs: number,
 ): Eta | null => {
-  if (perTaskMs === null || tasks === null || tasks < 1) return null;
-  const total = perTaskMs * tasks;
+  if (tasks === null || tasks < 1) return null;
+  const total = pace.perTaskMs * tasks + pace.synthMs;
   const left = total - elapsedMs;
   const label =
     left > 90_000 ? `about ${Math.round(left / 60_000)} minutes left`

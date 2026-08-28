@@ -1,10 +1,23 @@
-/** Observed pace, remembered per machine. The presets' time budgets are
- *  policy walls, not predictions — the same brief runs orders of magnitude
- *  apart on a laptop and a served GPU, so minutes are only ever quoted from
- *  what THIS machine actually did. Each settled brief records its wall time
- *  per line of inquiry, keyed by depth and shape; until one exists, no
- *  minutes show anywhere. */
+/** Observed pace, remembered per machine — seeded with stated priors. The
+ *  presets' time budgets are policy walls, not predictions, so minutes
+ *  start from an honest guess (~4 min an inquiry in a chain, ~2 min
+ *  effective side by side where tool waits overlap, plus the settling
+ *  pass) and are replaced by what THIS machine actually does: each settled
+ *  brief records its wall time, keyed by depth and shape, halved toward
+ *  the newest run. */
 import type { Depth, Shape } from "./select.js";
+
+export interface Pace {
+  perTaskMs: number;
+  synthMs: number;
+  /** False while the figure is still the prior, not this machine's. */
+  observed: boolean;
+}
+
+const PRIOR: Record<Shape, { perTaskMs: number; synthMs: number }> = {
+  investigation: { perTaskMs: 240_000, synthMs: 240_000 },
+  survey: { perTaskMs: 120_000, synthMs: 360_000 },
+};
 
 interface KV {
   getItem(k: string): string | null;
@@ -24,18 +37,24 @@ const read = (): Paces => {
   }
 };
 
-/** Halved toward the newest run, so a machine that warms up (or a model
- *  swap) re-prices within a couple of briefs. */
+export const paceFor = (depth: Depth, shape: Shape): Pace => {
+  const stored = read()[`${depth}/${shape}`];
+  const { synthMs } = PRIOR[shape];
+  return stored != null
+    ? { perTaskMs: stored, synthMs, observed: true }
+    : { ...PRIOR[shape], observed: false };
+};
+
+/** Halved toward the newest run, so a machine that warms up (or throttles
+ *  on battery) re-prices within a couple of briefs. The settling pass is
+ *  netted out at its prior before the per-inquiry figure is stored. */
 export const recordPace = (depth: Depth, shape: Shape, tasks: number, ms: number): void => {
   if (tasks < 1 || ms <= 0) return;
   const paces = read();
   const key = `${depth}/${shape}`;
-  const perTask = ms / tasks;
+  const perTask = Math.max(30_000, (ms - PRIOR[shape].synthMs) / tasks);
   paces[key] = paces[key] ? (paces[key] + perTask) / 2 : perTask;
   try {
     storage?.setItem(KEY, JSON.stringify(paces));
-  } catch { /* private mode — minutes just stay unquoted */ }
+  } catch { /* private mode — the priors just stay */ }
 };
-
-export const paceOf = (depth: Depth, shape: Shape): number | null =>
-  read()[`${depth}/${shape}`] ?? null;
