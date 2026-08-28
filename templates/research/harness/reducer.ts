@@ -502,6 +502,8 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         ...state,
         phase: 'done',
         uiPhase: 'done',
+        paused: false,
+        closing: false,
         pipelineElapsedMs: accrued,
         pipelineResumedAt: null,
       };
@@ -1175,6 +1177,13 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
           nCtx: ev.nCtx,
         },
       };
+
+    case 'run:paused':
+      return { ...state, paused: true };
+    case 'run:resumed':
+      return { ...state, paused: false };
+    case 'run:windingDown':
+      return { ...state, closing: true };
 
     default:
       return state;

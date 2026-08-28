@@ -215,7 +215,7 @@ const S: Record<string, CSSProperties> = {
   query: {
     background: color.card, border: `1px solid ${color.line}`, borderLeft: `3px solid ${color.ember}`,
     borderRadius: "0 11px 11px 0", padding: "13px 17px", margin: "18px 0 0",
-    font: `italic 400 15.5px/1.55 ${font.serif}`,
+    font: `italic 400 15px/1.55 ${font.ui}`,
   },
   queryKicker: {
     display: "block", font: `600 10px ${font.ui}`, fontStyle: "normal",

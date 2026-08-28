@@ -2,8 +2,8 @@
  *  canvas, and the docked composer. Moments render inside the canvas. */
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
-import { useBrief } from "../store.js";
-import { selectLive, selectStatus, selectTitle } from "../select.js";
+import { send, useBrief } from "../store.js";
+import { selectControls, selectEta, selectLive, selectStatus, selectTitle } from "../select.js";
 
 export function Wordmark(): ReactElement {
   return (
@@ -30,13 +30,48 @@ function RunBar(): ReactElement {
   const live = useBrief(selectLive);
   const status = useBrief(selectStatus);
   const title = useBrief(selectTitle);
+  const { paused, closing } = useBrief(selectControls);
+  const eta = useBrief(selectEta);
+  const word = live && closing ? "Closing" : live && paused ? "Held" : status;
   return (
     <div style={S.runbar}>
       <span style={S.status}>
-        {live && <span className="fn-lamp" style={{ ...S.lamp, background: color.ember }} />}
-        {status}
+        {live && (
+          <span
+            className={paused ? undefined : "fn-lamp"}
+            style={{ ...S.lamp, background: paused ? color.wait : color.ember }}
+          />
+        )}
+        {word}
       </span>
       {title && <span style={S.runTitle}>{title}</span>}
+      <span style={{ flex: 1 }} />
+      {live && eta && !paused && !closing && <span style={S.eta}>{eta.label}</span>}
+      {live && (
+        <>
+          <button
+            type="button"
+            style={{ ...S.control, ...(closing ? S.controlOff : null) }}
+            disabled={closing}
+            title={closing ? "the brief is closing" : paused ? "the next step continues from here" : "hold the run — everything stays in place"}
+            onClick={() => send({ type: paused ? "resume" : "pause" })}
+          >
+            {paused ? "▶ Resume" : "⏸ Hold"}
+          </button>
+          <button
+            type="button"
+            style={{ ...S.control, ...(paused || closing ? S.controlOff : null) }}
+            disabled={paused || closing}
+            title={closing ? "closing" : paused ? "resume first" : "settle the brief with what it has"}
+            onClick={() => send({ type: "wrap_up" })}
+          >
+            {closing ? "Closing…" : "Close the brief"}
+          </button>
+        </>
+      )}
+      {live && eta && (
+        <span style={{ ...S.progress, width: `${Math.round(eta.fraction * 100)}%` }} />
+      )}
     </div>
   );
 }
@@ -94,7 +129,7 @@ const S: Record<string, CSSProperties> = {
     padding: "18px 14px 14px", display: "flex", flexDirection: "column",
   },
   brand: { display: "flex", alignItems: "center", gap: 9, padding: "2px 6px", font: `600 14.5px ${font.ui}` },
-  mark: { font: `italic 700 20px/1 ${font.serif}`, color: color.ink },
+  mark: { font: `italic 700 20px/1 ${font.math}`, color: color.ink },
   upright: { fontStyle: "normal", fontWeight: 600, fontSize: "1.04em" },
   divider: { width: 1, height: 14, background: "#C6C6BE", flex: "none" },
   sideFoot: { borderTop: `1px solid ${color.line}`, paddingTop: 11, fontSize: 12, lineHeight: 1.4 },
@@ -104,6 +139,18 @@ const S: Record<string, CSSProperties> = {
   runbar: {
     height: 48, display: "flex", alignItems: "center", gap: 13, padding: "0 26px",
     borderBottom: `1px solid ${color.line}`, fontSize: 13, color: color.dim, flex: "none",
+    position: "relative",
+  },
+  eta: { color: color.faint, whiteSpace: "nowrap" },
+  control: {
+    font: `600 12.5px ${font.ui}`, background: color.card, color: color.ink,
+    border: `1px solid ${color.line}`, borderRadius: radius.control,
+    padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap",
+  },
+  controlOff: { opacity: 0.45, cursor: "default" },
+  progress: {
+    position: "absolute", left: 0, bottom: -1, height: 2, background: thinking,
+    borderRadius: 2, transition: "width .6s ease",
   },
   status: { display: "flex", alignItems: "center", gap: 8, fontWeight: 600, color: color.ink },
   runTitle: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },

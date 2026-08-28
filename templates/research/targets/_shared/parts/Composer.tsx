@@ -1,10 +1,14 @@
-/** The docked composer: one field, depth in honest minutes, send. It answers
- *  the planner when the planner asked; otherwise it opens a brief in the
- *  chosen shape. Depth applies on selection (`set_effort` — next run). */
-import { useState, type CSSProperties, type ReactElement } from "react";
+/** The docked composer: one field, the run's clock, depth priced in honest
+ *  minutes for the plan at hand, send. It answers the planner when the
+ *  planner asked; otherwise it opens a brief in the chosen shape. Depth
+ *  applies on selection (`set_effort` — next run). */
+import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
-import { DEPTHS, SHAPES, selectDepth, type Shape } from "../select.js";
+import {
+  DEPTHS, SHAPES, estimateLabel, fmtElapsed,
+  selectDepth, selectLive, selectTaskCount, type Shape,
+} from "../select.js";
 
 export function Composer({ shape, placeholder }: {
   shape: Shape;
@@ -12,6 +16,8 @@ export function Composer({ shape, placeholder }: {
 }): ReactElement {
   const [draft, setDraft] = useState("");
   const depth = useBrief(selectDepth);
+  const live = useBrief(selectLive);
+  const tasks = useBrief(selectTaskCount);
   const uiPhase = useBrief((app) => app.uiPhase);
 
   const submit = (): void => {
@@ -36,6 +42,7 @@ export function Composer({ shape, placeholder }: {
         onKeyDown={(e) => e.key === "Enter" && submit()}
         placeholder={placeholder}
       />
+      {live && <Clock />}
       <div style={S.depths}>
         {DEPTHS.map((d) => (
           <button
@@ -44,12 +51,35 @@ export function Composer({ shape, placeholder }: {
             style={d.depth === depth ? S.depthOn : S.depth}
             onClick={() => send({ type: "set_effort", effort: d.depth })}
           >
-            {d.label}
+            {d.title} · {estimateLabel(d.depth, shape, tasks)}
           </button>
         ))}
       </div>
       <button type="button" style={S.send} onClick={submit} aria-label="Send">↑</button>
     </div>
+  );
+}
+
+/** The run's wall clock, ticking beside the picker while work is live.
+ *  Wall time is composed here, not in a selector — the fold's memo would
+ *  freeze a Date.now() between events. */
+function Clock(): ReactElement {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const banked = useBrief((app) => app.pipelineElapsedMs);
+  const resumedAt = useBrief((app) => app.pipelineResumedAt);
+  const elapsed = banked + (resumedAt !== null ? Math.max(0, now - resumedAt) : 0);
+  return (
+    <span style={S.clock}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      {fmtElapsed(elapsed)}
+    </span>
   );
 }
 
@@ -66,6 +96,10 @@ const S: Record<string, CSSProperties> = {
   input: {
     flex: 1, border: 0, outline: 0, font: `14.5px ${font.ui}`, color: color.ink,
     background: "none", minWidth: 0,
+  },
+  clock: {
+    display: "inline-flex", alignItems: "center", gap: 5, flex: "none",
+    font: `500 12px ${font.mono}`, color: color.dim, fontVariantNumeric: "tabular-nums",
   },
   depths: {
     display: "flex", gap: 3, background: color.card2, borderRadius: 9, padding: 3, flex: "none",

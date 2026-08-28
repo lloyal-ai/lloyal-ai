@@ -1,12 +1,13 @@
-/** The brief's prose — the one place the serif lives. Markdown from the
- *  harness (already inline-cited by the weave) rendered in the document's
- *  voice; links open outward. */
-import type { CSSProperties, ReactElement } from "react";
+/** The brief's prose — markdown from the harness (already inline-cited by
+ *  the weave), set in the document's one face; links open outward. */
+import { memo, type CSSProperties, type ReactElement } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { color, font } from "../theme.js";
 
-export function Prose({ markdown }: { markdown: string }): ReactElement {
+/** Memoized on the markdown string: settled sections keep their parse while
+ *  a sibling streams — only the growing block re-renders per token. */
+export const Prose = memo(function Prose({ markdown }: { markdown: string }): ReactElement {
   return (
     <div style={S.prose}>
       <ReactMarkdown
@@ -21,8 +22,8 @@ export function Prose({ markdown }: { markdown: string }): ReactElement {
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 const S: Record<string, CSSProperties> = {
-  prose: { font: `400 16px/1.72 ${font.serif}`, color: color.ink },
+  prose: { font: `400 15.5px/1.7 ${font.ui}`, color: color.ink },
 };

@@ -8,6 +8,7 @@ import {
   type AgentRuntime,
   type TimelineItem,
 } from "../../harness/state.js";
+import { EFFORT_PRESETS } from "../../harness/effort-presets.js";
 
 // ── moments ──────────────────────────────────────────────────────
 
@@ -29,7 +30,13 @@ const MOMENT_OF: Record<AppState["uiPhase"], Moment> = {
   done: "settle",
 };
 
-export const selectMoment = (app: AppState): Moment => MOMENT_OF[app.uiPhase];
+/** After the answer lands the harness returns to `composer` for the next
+ *  query — but the settled brief IS the document, so it keeps the canvas
+ *  until a new query resets the fold. */
+export const selectMoment = (app: AppState): Moment => {
+  const moment = MOMENT_OF[app.uiPhase];
+  return moment === "ask" && app.answer ? "settle" : moment;
+};
 
 /** The tab dot and the run-state lamp: work is actually in progress. */
 export const selectLive = (app: AppState): boolean =>
@@ -66,12 +73,37 @@ export const selectLibraries = (app: AppState): Library[] =>
 
 export type Depth = "low" | "medium" | "high" | "ultra";
 
-/** Depth, in the product's voice — effort labeled by what it costs. */
-export const DEPTHS: readonly { depth: Depth; label: string }[] = [
-  { depth: "low", label: "Quick · 1 min" },
-  { depth: "medium", label: "Standard · 3 min" },
-  { depth: "high", label: "Thorough · 6 min" },
+/** Depth, in the product's voice — the minutes are priced per plan by
+ *  `estimateLabel`, never flat. */
+export const DEPTHS: readonly { depth: Depth; title: string }[] = [
+  { depth: "low", title: "Quick" },
+  { depth: "medium", title: "Standard" },
+  { depth: "high", title: "Thorough" },
 ];
+
+/** Wall estimate: the preset's soft budget prices a nominal 4-task brief;
+ *  a chain scales with the plan (sections run one after another), a survey
+ *  overlaps its tool waits to roughly half the chain's wall. Clamped to the
+ *  preset's hard wall — the run never outlives it. No plan yet → nominal. */
+const NOMINAL_TASKS = 4;
+export const estimateLabel = (depth: Depth, shape: Shape, tasks: number | null): string => {
+  const p = EFFORT_PRESETS[depth];
+  const n = tasks ?? NOMINAL_TASKS;
+  const overlap = shape === "investigation" ? 1 : 0.6;
+  const ms = Math.min(
+    p.budget.time.hardLimit,
+    Math.max(45_000, p.budget.time.softLimit * (n / NOMINAL_TASKS) * overlap),
+  );
+  return `~${Math.max(1, Math.round(ms / 60_000))} min`;
+};
+
+export const selectTaskCount = (app: AppState): number | null =>
+  app.plan?.tasks.length ?? null;
+
+/** Wall time the run has actually spent (paused spans excluded). */
+export const selectElapsed = (app: AppState): number =>
+  app.pipelineElapsedMs +
+  (app.pipelineResumedAt !== null ? Date.now() - app.pipelineResumedAt : 0);
 
 export const selectDepth = (app: AppState): Depth =>
   (app.config?.defaults.effort ?? "high") as Depth;
@@ -134,7 +166,7 @@ export const selectTitle = (app: AppState): string =>
 
 /** The run bar's one status word. */
 export const selectStatus = (app: AppState): string =>
-  ({
+  selectMoment(app) === "settle" ? "Settled" : ({
     boot: "Starting",
     downloading: "Fetching the model",
     loading: "Loading",
@@ -223,6 +255,248 @@ export const selectAnswer = (app: AppState): Answer | null => {
   const settled = [...app.scrollback].reverse().find((s) => s.kind === "synth");
   const text = app.answer ?? (settled?.kind === "synth" ? settled.body : "");
   return text ? { ...splitThink(text, false), streaming: false } : null;
+};
+
+// ── the sections: watch it write ─────────────────────────────────
+
+/** One step of an inquiry's activity, in the librarian's voice. */
+export interface InquiryVerb {
+  kind: "thinking" | "working" | "waiting" | "writing" | "settled" | "kept" | "failed";
+  text: string;
+  /** For "waiting": when the retry fires (ms epoch), for the countdown. */
+  retryAt?: number;
+}
+
+export interface Inquiry {
+  /** Stable identity shared with the dev pane's lanes. */
+  id: number;
+  index: number;
+  verb: InquiryVerb;
+  startedAt: number;
+  endedAt: number | null;
+}
+
+export interface Section {
+  index: number;
+  title: string;
+  task: string;
+  /** Deep mode: this section opens from its predecessors' findings. */
+  inherits: boolean;
+  inquiry: Inquiry | null;
+  /** The section's prose: the inquiry's report (draft) — streaming while
+   *  it writes, settled when it lands. Already inline-cited by the weave. */
+  prose: string | null;
+  streaming: boolean;
+}
+
+/** A short head lifted from the task sentence: the text before the first
+ *  " — ", clipped as a title. The full task stays as the tooltip. */
+const sectionTitle = (task: string): string => {
+  const head = task.split(" — ")[0];
+  return head.length > 72 ? `${head.slice(0, 69)}…` : head;
+};
+
+const TOOL_DOING: Record<string, string> = {
+  web_search: "Searching",
+  fetch_page: "Reading",
+  search: "Searching",
+};
+const TOOL_DONE: Record<string, string> = {
+  web_search: "Searched",
+  fetch_page: "Read",
+  search: "Searched",
+};
+const doing = (tool: string): string =>
+  TOOL_DOING[tool] ?? (/search/i.test(tool) ? "Searching" : "Reading");
+const doneVerb = (tool: string): string =>
+  TOOL_DONE[tool] ?? (/search/i.test(tool) ? "Searched" : "Read");
+
+const resultMeta = (t: Extract<TimelineItem, { kind: "tool_result" }>): string => {
+  const meta = t.resultCount != null
+    ? `${t.resultCount} results`
+    : `${(t.byteLength / 1000).toFixed(1)} kb`;
+  return `${doneVerb(t.tool)} — ${meta}${t.hosts[0] ? ` · ${t.hosts[0]}` : ""}`;
+};
+
+/** The live report stream, extracted through the terminal tool's envelope
+ *  once it opens — recovery streams re-emit the envelope too, so it is never
+ *  rendered. A recovery stream that never opens one is bare prose; leading
+ *  tag fragments are held back until real text arrives. */
+const liveProse = (a: AgentRuntime): string | null => {
+  const report = extractStreamingReport(a.contentBuffer);
+  if (report !== null) return report;
+  if (!a.recovering) return null;
+  return a.contentBuffer.replace(/^(?:\s*<[^>\n]*>?\n?)*/, "") || null;
+};
+
+/** The report body may arrive as the report tool's raw JSON argument —
+ *  unwrap `.result` only when parsing yields exactly that shape. */
+const reportBody = (body: string): string => {
+  if (body.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(body) as { result?: unknown };
+      if (typeof parsed?.result === "string") return parsed.result;
+    } catch { /* raw markdown */ }
+  }
+  return body;
+};
+
+const agentForTask = (app: AppState, index: number): AgentRuntime | null => {
+  for (const a of app.agents.values()) if (a.taskIndex === index) return a;
+  for (const s of app.scrollback) {
+    if (s.kind === "agent" && s.agent.taskIndex === index) return s.agent;
+  }
+  return null;
+};
+
+/** Failure, in the librarian's voice. Unlisted reasons are mechanical
+ *  (decode errors) — the dev pane keeps the detail. */
+const FAIL_TEXT: Record<string, string> = {
+  user_cancel: "dropped — left out of the brief",
+  time_exceeded: "out of time — kept what it had",
+  wind_down: "closed early — kept what it had",
+};
+const failText = (reason: string): string =>
+  FAIL_TEXT[reason] ?? "couldn't finish this line of inquiry";
+
+const verbOf = (a: AgentRuntime): InquiryVerb => {
+  if (a.failReason) return { kind: "failed", text: failText(a.failReason) };
+  if (a.phase === "done") {
+    const kept = a.timeline.some((t) => t.kind === "report");
+    return kept
+      ? { kind: "settled", text: "wrote its section" }
+      : { kind: "kept", text: "kept what it had" };
+  }
+  if (a.retry) {
+    return {
+      kind: "waiting",
+      text: `${a.retry.tool.replace(/_/g, " ")} is rate-limited`,
+      retryAt: a.retry.retryAt,
+    };
+  }
+  if (a.recovering || liveProse(a) !== null) {
+    return { kind: "writing", text: "settling the section into the brief" };
+  }
+  const lastCall = [...a.timeline].reverse().find((t) => t.kind === "tool_call");
+  if (lastCall?.kind === "tool_call" && a.pendingToolCallId === lastCall.id) {
+    return { kind: "working", text: `${doing(lastCall.tool)} — ${lastCall.argsSummary}` };
+  }
+  const lastResult = [...a.timeline].reverse().find((t) => t.kind === "tool_result");
+  if (lastResult?.kind === "tool_result") {
+    return { kind: "working", text: resultMeta(lastResult) };
+  }
+  return { kind: "thinking", text: "thinking it through" };
+};
+
+const proseOf = (a: AgentRuntime): { prose: string | null; streaming: boolean } => {
+  const report = [...a.timeline].reverse().find((t) => t.kind === "report");
+  if (report?.kind === "report") return { prose: reportBody(report.body), streaming: false };
+  const live = a.phase !== "done" ? liveProse(a) : null;
+  return live ? { prose: live, streaming: true } : { prose: null, streaming: false };
+};
+
+export const selectSections = (app: AppState): Section[] =>
+  (app.plan?.tasks ?? []).map((task, index) => {
+    const a = agentForTask(app, index);
+    const { prose, streaming } = a ? proseOf(a) : { prose: null, streaming: false };
+    return {
+      index,
+      title: sectionTitle(task.description),
+      task: task.description,
+      inherits: app.mode === "deep" && index > 0,
+      inquiry: a && {
+        id: a.id,
+        index,
+        verb: verbOf(a),
+        startedAt: a.startedAt,
+        endedAt: a.endedAt,
+      },
+      prose,
+      streaming,
+    };
+  });
+
+// ── the disclosed work stream ────────────────────────────────────
+
+/** One step of an inquiry's disclosed stream. `tokens` is the raw tail of
+ *  the move being written — visible progress even at a few tokens a second. */
+export interface WorkStep {
+  kind: "thought" | "call" | "result" | "tokens";
+  text: string;
+  live: boolean;
+}
+
+const stepOf = (t: TimelineItem): WorkStep | null =>
+  t.kind === "think" ? { kind: "thought", text: t.body, live: t.live }
+  : t.kind === "tool_call" ? { kind: "call", text: `${doing(t.tool)} — ${t.argsSummary}`, live: false }
+  : t.kind === "tool_result" ? { kind: "result", text: resultMeta(t), live: false }
+  : null;
+
+const agentById = (app: AppState, id: number): AgentRuntime | null => {
+  const live = app.agents.get(id);
+  if (live) return live;
+  for (const s of app.scrollback) {
+    if (s.kind === "agent" && s.agent.id === id) return s.agent;
+  }
+  return null;
+};
+
+const workSelectors = new Map<number, (app: AppState) => WorkStep[]>();
+
+/** A stable selector per inquiry (`useBrief` memoizes by selector identity):
+ *  the whole stream, ready to disclose — thoughts as the fold parsed them,
+ *  calls and results in the librarian's verbs, and the raw token tail while
+ *  the model writes its next move. The report tail is omitted: it is already
+ *  streaming in place as the section's prose. */
+export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
+  const cached = workSelectors.get(id);
+  if (cached) return cached;
+  const select = (app: AppState): WorkStep[] => {
+    const a = agentById(app, id);
+    if (!a) return [];
+    const steps = a.timeline
+      .map(stepOf)
+      .filter((s): s is WorkStep => s !== null);
+    if (a.phase !== "done" && a.contentBuffer && liveProse(a) === null) {
+      steps.push({ kind: "tokens", text: a.contentBuffer, live: true });
+    }
+    return steps;
+  };
+  workSelectors.set(id, select);
+  return select;
+};
+
+/** The settling pass: after the inquiries, the brief is edited into one
+ *  voice — the synth stream, deliberation split out. */
+export const selectSettling = (app: AppState): Answer | null =>
+  app.phase === "synth" && app.synth.open && app.synth.buffer
+    ? { ...splitThink(app.synth.buffer, true), streaming: true }
+    : null;
+
+// ── run controls ─────────────────────────────────────────────────
+
+export interface RunControls {
+  paused: boolean;
+  closing: boolean;
+}
+
+export const selectControls = (app: AppState): RunControls => ({
+  paused: app.paused,
+  closing: app.closing,
+});
+
+/** Honest remaining time from the active depth's budget, in the product's
+ *  voice. The presets are plain data, importable by any renderer. */
+export const selectEta = (app: AppState): { label: string; fraction: number } | null => {
+  if (!selectLive(app)) return null;
+  const soft = EFFORT_PRESETS[selectDepth(app)].budget.time.softLimit;
+  const elapsed = selectElapsed(app);
+  const left = soft - elapsed;
+  const label =
+    left > 90_000 ? `about ${Math.round(left / 60_000)} minutes left`
+    : left > 20_000 ? "under a minute left"
+    : "wrapping up";
+  return { label, fraction: Math.min(1, Math.max(0, elapsed / soft)) };
 };
 
 // ── shared formatting ────────────────────────────────────────────

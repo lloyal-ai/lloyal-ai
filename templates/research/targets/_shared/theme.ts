@@ -2,7 +2,6 @@
  *  local-first promise both rule out remote stylesheets). */
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
-import "@fontsource-variable/source-serif-4";
 
 export const color = {
   ground: "#F6F6F3",
@@ -32,7 +31,8 @@ export const inquiryColor = (index: number): string =>
 
 export const font = {
   ui: "'Geist Variable', 'Segoe UI', system-ui, sans-serif",
-  serif: "'Source Serif 4 Variable', Georgia, serif",
+  /** The wordmark's math-notation italic only — never running text. */
+  math: "Georgia, 'Times New Roman', serif",
   mono: "'Geist Mono Variable', ui-monospace, Menlo, monospace",
 } as const;
 
