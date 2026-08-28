@@ -20,7 +20,7 @@
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { main, call, ensure, createSignal } from "effection";
+import { main, call, ensure } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
@@ -30,7 +30,7 @@ import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
 import { makeEdgeRunner } from "@lloyal-labs/rig";
 import { harness, abilities, RunnerCtx } from "../../harness/harness.js";
-import { applyServedGpuEnv } from "../../harness/served-runtime.js";
+import { applyServedGpuEnv, bufferedCommandSignal } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
 import { loadConfig, loadYml, saveLocalConfig, SESSION_ORIGIN_MAP } from "../../harness/config.js";
 import type { HarnessYml } from "../../harness/config.js";
@@ -189,7 +189,10 @@ main(function* () {
   );
 
   const events = createBus<WorkflowEvent>();
-  const commands = createSignal<Command, void>();
+  // Buffered: the bindings dispatch from the moment they mount, but the
+  // harness's command loop only arms after boot — a desktop renderer's (or a
+  // pipe's) early command must wait, not vanish.
+  const commands = bufferedCommandSignal<Command>();
   const dispatch = (c: Command): void => {
     commands.send(c);
   };

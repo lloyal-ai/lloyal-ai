@@ -559,7 +559,7 @@ export function* runPreflight(
   const abilities = yield* effectiveAbilities(filter);
 
   const runner = yield* RunnerCtx.expect();
-  yield* send({ type: "preflight:start", query, appCount: abilities.length });
+  yield* send({ type: "preflight:start", query, abilityCount: abilities.length });
   const timer = startTimer();
 
   const reconTools = [...abilities.flatMap((a) => [...a.tools]), reportTool];

@@ -20,12 +20,13 @@ model:
   reranker:
     id: "qwen3-reranker-0.6b-q8"
 
-# sources:
-#   outputDir: runs          # where run artifacts and dev traces land
+sources:
+  outputDir: reports         # settled briefs land here — the sidebar's Completed reports
 
 # abilities:                 # per-ability config committed with the deploy
 #   corpus:
-#     corpusPath: docs       # secrets go in env (e.g. TAVILY_API_KEY), not here
+#     corpusPath: reports    # your own settled briefs become searchable ground
+#                            # (secrets go in env, e.g. TAVILY_API_KEY, not here)
 
 # Local overrides the harness saves (set_effort, set_output_dir) live in
 # harness.json — gitignored, layered over this file.

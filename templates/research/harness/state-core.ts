@@ -360,6 +360,14 @@ export interface AppState {
    *  sticky through `complete` so the settled brief can say so; reset only
    *  by the next query. */
   closedEarly: boolean;
+  /** Settled briefs on disk (`library:list` / `library:report`). `report`
+   *  holds ONE fetched body at a time, replaced on the next read — bodies
+   *  must never accumulate here: the desktop snapshot re-sends this state
+   *  wholesale and the web bridge replays it to late subscribers. */
+  library: {
+    entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
+    report: { path: string; body: string } | null;
+  };
   /** Warm-ask exchanges appended beneath the settled brief — the document
    *  grows, it is never replaced. A full (cold) query clears them. */
   exchanges: { question: string; body: string }[];
@@ -371,7 +379,7 @@ export interface AppState {
    *  for this session); missing key = treat as included by default. The
    *  filter is applied at submit time in main.ts; `runQuery`'s
    *  `abilityFilter` opt carries the included-names array. Reset to `true`
-   *  on reconfigure (`set_app_config`) — a config
+   *  on reconfigure (`set_ability_config`) — a config
    *  change is a strong signal of intent to use the ability. */
   participation: Record<string, boolean>;
   /** Installed Abilities surfaced into the renderer — one descriptor per
@@ -420,6 +428,7 @@ export const initialState: AppState = {
   paused: false,
   closing: false,
   closedEarly: false,
+  library: { entries: [], report: null },
   exchanges: [],
   ask: null,
   participation: {},

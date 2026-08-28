@@ -19,9 +19,12 @@ const INTENTS = [
 ] as const;
 type Intent = (typeof INTENTS)[number]["intent"];
 
-export function Composer({ shape, placeholder }: {
+export function Composer({ shape, placeholder, reframe = false }: {
   shape: Shape;
   placeholder: string;
+  /** A reopened report is beneath the composer — every question reframes
+   *  fully (the report is local, just not warm), never a warm ask. */
+  reframe?: boolean;
 }): ReactElement {
   const [draft, setDraft] = useState("");
   const [intent, setIntent] = useState<Intent>("ask");
@@ -29,7 +32,7 @@ export function Composer({ shape, placeholder }: {
   const live = useBrief(selectLive);
   const tasks = useBrief(selectTaskCount);
   const uiPhase = useBrief((app) => app.uiPhase);
-  const settled = useBrief((app) => selectMoment(app) === "settle");
+  const settled = useBrief((app) => selectMoment(app) === "settle") && !reframe;
 
   const submit = (): void => {
     const text = draft.trim();

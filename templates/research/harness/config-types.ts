@@ -91,7 +91,7 @@ export interface Config {
   sources: ConfigSources;
   /** Per-ability stored config, keyed by `manifest.name`. The harness seeds
    *  `configStore` from this on boot (loop over entries) and whole-replaces
-   *  an ability's entry on `set_app_config`. Persisted under `abilities[name]`. */
+   *  an ability's entry on `set_ability_config`. Persisted under `abilities[name]`. */
   abilities: ConfigApps;
   defaults: ConfigDefaults;
   model: ConfigModel;

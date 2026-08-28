@@ -74,7 +74,7 @@ export type StepEvent =
   // ── each source for the query's entities BEFORE planning to ground routing.
   // ── Its probe calls also stream as agent:* events (rendered live), so these
   // ── two only bracket the phase; the per-probe detail is the agent stream.
-  | { type: 'preflight:start'; query: string; appCount: number }
+  | { type: 'preflight:start'; query: string; abilityCount: number }
   | {
       type: 'preflight:done';
       coverage: string;
@@ -105,6 +105,14 @@ export type StepEvent =
   | { type: 'weights:label'; label: string }
   | { type: 'weights:done' }
   | { type: 'corpus:indexed'; corpusPath: string; fileCount: number; chunkCount: number }
+  // ── The library: settled briefs on disk (the sidebar's Completed reports).
+  // ── `library:report` carries ONE report body and echoes its path — the
+  // ── fold keeps a single slot, so bodies never accumulate in state.
+  | {
+      type: 'library:list';
+      entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
+    }
+  | { type: 'library:report'; path: string; body: string }
   | { type: 'boot:error'; kind: 'llm' | 'reranker' | 'backend-pack'; message: string }
   /** Boot-time BACKEND_DL pack offer: a CUDA GPU was probed and a signed
    *  full-arch pack is available for it. Rendered as a Download / Not now
@@ -124,7 +132,7 @@ export type StepEvent =
   // side effects; main.ts derives `abilityFilter` from `state.participation`
   // at submit time and threads it into runQuery / runResearchPlan.
   | { type: 'participation:toggled'; name: string }
-  // Installed-AgentApps snapshot for the Settings drawer. Emitted by main.ts
+  // Installed-Abilities snapshot for the Settings drawer. Emitted by main.ts
   // after boot completes AND after every registry enable/disable/config
   // change. The reducer drops it whole into `state.abilities`. Display-only — the
   // catalog-metadata join (title/iconUrl/entitlements) is best-effort and

@@ -20,8 +20,14 @@ export type Command =
   | { type: 'add_task'; afterIndex: number }
   | { type: 'delete_task'; index: number }
   | { type: 'move_task'; from: number; to: number }
-  | { type: 'set_app_config'; name: string; values: Record<string, unknown> }
+  | { type: 'set_ability_config'; name: string; values: Record<string, unknown> }
   | { type: 'set_output_dir'; path: string }
+  // The library — settled briefs on disk (the sidebar's Completed reports).
+  // Replies ride the event bus one-way, like `corpus:indexed`: `library_list`
+  // → `library:list`; `library_read` → `library:report` echoing the path.
+  // Reads are confined to report.md files under the output dir.
+  | { type: 'library_list' }
+  | { type: 'library_read'; path: string }
   // Global run-effort setting (pure policy preset). Set in Settings → Effort;
   // persisted to harness.json and applied to every subsequent query.
   | { type: 'set_effort'; effort: 'low' | 'medium' | 'high' | 'ultra' }

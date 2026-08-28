@@ -14,3 +14,4 @@ models/**/*.gguf
 *.log
 .DS_Store
 harness.json
+reports/

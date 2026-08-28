@@ -84,12 +84,17 @@ function RunBar(): ReactElement {
   );
 }
 
-export function Shell({ children, dock }: { children: ReactNode; dock: ReactNode }): ReactElement {
+export function Shell({ children, dock, library }: {
+  children: ReactNode;
+  dock: ReactNode;
+  library?: ReactNode;
+}): ReactElement {
   return (
     <div style={S.app}>
       <style>{KEYFRAMES}</style>
       <aside style={S.side}>
         <Wordmark />
+        {library}
         <div style={{ flex: 1 }} />
         <div style={S.sideFoot}>
           <TrustStrip />

@@ -21,7 +21,7 @@ import { shortPath } from './short-path.js';
  *  nothing to seed here on a plain config load. The included-by-default set
  *  is the registry-enabled abilities surfaced via `abilities:state`; per-ability intent is
  *  driven explicitly through `participation:toggled` (chip toggle) and
- *  `set_app_config` (configuring → main.ts sets the bit + re-emits state).
+ *  `set_ability_config` (configuring → main.ts sets the bit + re-emits state).
  *  Returns `prev` unchanged — kept as a function so config events have a
  *  single, named place to hook future participation policy. */
 function seedParticipation(
@@ -360,6 +360,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         scrollback: state.scrollback,
         participation: state.participation,
         abilities: state.abilities,
+        library: state.library,
         query: ev.query,
         warm: ev.warm,
         phase: 'plan',
@@ -596,7 +597,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     }
 
     case 'abilities:state':
-      // Whole-replace the installed-AgentApps snapshot. Display-only — drives
+      // Whole-replace the installed-Abilities snapshot. Display-only — drives
       // the Settings drawer. Emitted on boot completion + every registry
       // enable/disable/config change.
       return { ...state, abilities: ev.abilities };
@@ -621,6 +622,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         toast: state.toast,
         scrollback: state.scrollback,
         corpusStatus: state.corpusStatus,
+        library: state.library,
         participation: state.participation,
         abilities: state.abilities,
         query: ev.query,
@@ -1216,6 +1218,15 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       return { ...state, paused: false };
     case 'run:windingDown':
       return { ...state, closing: true, closedEarly: true };
+
+    case 'library:list':
+      return { ...state, library: { ...state.library, entries: ev.entries } };
+
+    case 'library:report':
+      return {
+        ...state,
+        library: { ...state.library, report: { path: ev.path, body: ev.body } },
+      };
 
     default:
       return state;
