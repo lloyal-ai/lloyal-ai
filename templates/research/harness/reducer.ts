@@ -1220,13 +1220,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       return { ...state, closing: true, closedEarly: true };
 
     case 'library:list':
-      return { ...state, library: { ...state.library, entries: ev.entries } };
-
-    case 'library:report':
-      return {
-        ...state,
-        library: { ...state.library, report: { path: ev.path, body: ev.body } },
-      };
+      return { ...state, library: { entries: ev.entries } };
 
     default:
       return state;

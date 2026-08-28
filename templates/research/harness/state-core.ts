@@ -360,13 +360,11 @@ export interface AppState {
    *  sticky through `complete` so the settled brief can say so; reset only
    *  by the next query. */
   closedEarly: boolean;
-  /** Settled briefs on disk (`library:list` / `library:report`). `report`
-   *  holds ONE fetched body at a time, replaced on the next read — bodies
-   *  must never accumulate here: the desktop snapshot re-sends this state
-   *  wholesale and the web bridge replays it to late subscribers. */
+  /** Settled briefs on disk (`library:list`). Opening one restores it as
+   *  the session document via the standard query/answer/complete events —
+   *  no report body is ever held here. */
   library: {
     entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
-    report: { path: string; body: string } | null;
   };
   /** Warm-ask exchanges appended beneath the settled brief — the document
    *  grows, it is never replaced. A full (cold) query clears them. */
@@ -428,7 +426,7 @@ export const initialState: AppState = {
   paused: false,
   closing: false,
   closedEarly: false,
-  library: { entries: [], report: null },
+  library: { entries: [] },
   exchanges: [],
   ask: null,
   participation: {},

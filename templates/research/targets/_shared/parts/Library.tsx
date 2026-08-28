@@ -1,14 +1,15 @@
 /** Completed reports — every settled brief on disk, newest first. Clicking
- *  one opens it in place of the canvas; asking over it reframes fully
- *  (local, just not warm). The list is the run dirs themselves: whatever
- *  the corpus ability ingests for cross-report memory, the reader browses
- *  here — and the trash removes a brief's whole run dir and re-indexes,
- *  so the system unlearns it. Two taps: the first arms, the second (within
- *  a beat) deletes. */
+ *  one RESTORES it as the session document (the canvas, Ask, and Extend
+ *  behave exactly as over a fresh settle; the report prefills the trunk on
+ *  the first question). The list is the run dirs themselves: whatever the
+ *  corpus ability ingests for cross-report memory, the reader browses here
+ *  — and the trash removes a brief's whole run dir and re-indexes, so the
+ *  system unlearns it. Two taps: the first arms, the second (within a
+ *  beat) deletes. */
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { send, useBrief } from "../store.js";
-import { selectLibrary } from "../select.js";
+import { selectLibrary, selectTitle } from "../select.js";
 
 const day = (iso: string): string => {
   const d = new Date(iso);
@@ -17,11 +18,9 @@ const day = (iso: string): string => {
     : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
-export function Library({ open, onOpen }: {
-  open: string | null;
-  onOpen: (path: string | null) => void;
-}): ReactElement | null {
+export function Library(): ReactElement | null {
   const entries = useBrief(selectLibrary);
+  const title = useBrief(selectTitle);
   const [arming, setArming] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export function Library({ open, onOpen }: {
   const remove = (path: string): void => {
     send({ type: "library_delete", path });
     setArming(null);
-    if (open === path) onOpen(null);
   };
 
   return (
@@ -47,16 +45,10 @@ export function Library({ open, onOpen }: {
             key={e.path}
             role="button"
             tabIndex={0}
-            style={{ ...S.entry, ...(open === e.path ? S.entryOn : null) }}
-            onClick={() => {
-              send({ type: "library_read", path: e.path });
-              onOpen(e.path);
-            }}
+            style={{ ...S.entry, ...(title && e.title === title ? S.entryOn : null) }}
+            onClick={() => send({ type: "library_read", path: e.path })}
             onKeyDown={(ev) => {
-              if (ev.key === "Enter") {
-                send({ type: "library_read", path: e.path });
-                onOpen(e.path);
-              }
+              if (ev.key === "Enter") send({ type: "library_read", path: e.path });
             }}
           >
             <span style={S.entryBody}>
@@ -88,11 +80,6 @@ export function Library({ open, onOpen }: {
           </div>
         ))}
       </div>
-      {open !== null && (
-        <button type="button" style={S.back} onClick={() => onOpen(null)}>
-          ← Back
-        </button>
-      )}
     </nav>
   );
 }
@@ -124,8 +111,4 @@ const S: Record<string, CSSProperties> = {
     placeItems: "center", cursor: "pointer", flex: "none",
   },
   trashArmed: { color: color.danger, background: "#F7E2DF", width: "auto", padding: "0 6px" },
-  back: {
-    font: `600 11.5px ${font.ui}`, color: color.dim, background: "none", border: 0,
-    textAlign: "left", padding: "8px 6px 0", cursor: "pointer", flex: "none",
-  },
 };

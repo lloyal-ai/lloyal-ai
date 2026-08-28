@@ -105,14 +105,13 @@ export type StepEvent =
   | { type: 'weights:label'; label: string }
   | { type: 'weights:done' }
   | { type: 'corpus:indexed'; corpusPath: string; fileCount: number; chunkCount: number }
-  // ── The library: settled briefs on disk (the sidebar's Completed reports).
-  // ── `library:report` carries ONE report body and echoes its path — the
-  // ── fold keeps a single slot, so bodies never accumulate in state.
+  // ── The library: settled briefs on disk (the sidebar's Completed
+  // ── reports). Opening one restores it through the STANDARD
+  // ── query/answer/complete events — no dedicated body event exists.
   | {
       type: 'library:list';
       entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
     }
-  | { type: 'library:report'; path: string; body: string }
   | { type: 'boot:error'; kind: 'llm' | 'reranker' | 'backend-pack'; message: string }
   /** Boot-time BACKEND_DL pack offer: a CUDA GPU was probed and a signed
    *  full-arch pack is available for it. Rendered as a Download / Not now

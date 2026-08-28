@@ -447,6 +447,12 @@ export function* harness(
 
   // Per-query run effort, set at submit_query and read by every research path.
   let currentEffort: Effort = runner.config().defaults.effort;
+  // The library report currently restored as the session document (set by
+  // library_read, consumed by the first submit over it), and the reports
+  // already committed to the trunk — a report prefills once; later asks
+  // over it are simply warm.
+  let openedReport: { path: string; title: string; body: string } | null = null;
+  const committedReports = new Set<string>();
   let pendingPlan: {
     plan: PlanResult;
     query: string;
@@ -742,8 +748,11 @@ export function* harness(
           entries: listReports(libraryDir()),
         });
       } else if (cmd.type === "library_read") {
-        // Reads are confined to the library: a report.md under the output
-        // dir, nothing else — the wire never becomes an arbitrary file read.
+        // Confined to the library: a report.md under the output dir,
+        // nothing else. RESTORES the report as the session's settled
+        // document — the standard query/answer/complete seed the fold, so
+        // everything downstream (canvas, chips, Ask, Extend) is the fresh-
+        // settle path. The trunk commit waits for the first submit over it.
         const root = path.resolve(libraryDir());
         const resolved = path.resolve(cmd.path);
         const confined =
@@ -754,12 +763,22 @@ export function* harness(
             type: "ui:error",
             message: "That report is no longer there.",
           });
-        } else {
+        } else if (runTask) {
           yield* agentEvents.send({
-            type: "library:report",
-            path: cmd.path,
-            body: fs.readFileSync(resolved, "utf8"),
+            type: "ui:error",
+            message: "A brief is in flight — close it before opening another.",
           });
+        } else {
+          const text = fs.readFileSync(resolved, "utf8");
+          const lines = text.split("\n");
+          openedReport = {
+            path: resolved,
+            title: (lines[0] ?? "").replace(/^#\s*/, "") || "Reopened report",
+            body: lines.slice(3).join("\n").trim(),
+          };
+          yield* agentEvents.send({ type: "query", query: openedReport.title, warm: false });
+          yield* agentEvents.send({ type: "answer", text: openedReport.body });
+          yield* agentEvents.send({ type: "complete", data: {} });
         }
       } else if (cmd.type === "library_delete") {
         // Same confinement as the read; deleting a brief removes its WHOLE
@@ -813,6 +832,17 @@ export function* harness(
         if (runTask) {
           yield* haltRun();
           pendingPlan = null;
+        }
+        // First submit over a restored report: commit it to the trunk —
+        // its prefill is the ask's warmup; from here the warm-ask and
+        // extend paths below need no special handling at all.
+        if (openedReport !== null) {
+          if (!committedReports.has(openedReport.path)) {
+            committedReports.add(openedReport.path);
+            const { title: rTitle, body: rBody } = openedReport;
+            yield* call(() => session.commitTurn(rTitle, rBody));
+          }
+          openedReport = null;
         }
         if (cmd.skipPlanner) {
           const plan = singleTaskPlan(cmd.query);

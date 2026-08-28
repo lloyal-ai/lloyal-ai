@@ -23,9 +23,12 @@ export type Command =
   | { type: 'set_ability_config'; name: string; values: Record<string, unknown> }
   | { type: 'set_output_dir'; path: string }
   // The library — settled briefs on disk (the sidebar's Completed reports).
-  // Replies ride the event bus one-way, like `corpus:indexed`: `library_list`
-  // → `library:list`; `library_read` → `library:report` echoing the path.
-  // All three are confined to report.md files under the output dir.
+  // Replies ride the event bus one-way, like `corpus:indexed`. All paths
+  // are confined to report.md files under the output dir.
+  // `library_read` RESTORES the report as the session's settled document —
+  // the standard `query`/`answer`/`complete` events seed the fold, so the
+  // canvas, Ask, and Extend behave exactly as over a fresh settle (the
+  // report is committed to the trunk on the first submit over it).
   // `library_delete` removes the brief's WHOLE run dir (report + annexures)
   // and re-indexes the corpus — the system unlearns it; replies with the
   // refreshed `library:list`.

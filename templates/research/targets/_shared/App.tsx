@@ -14,8 +14,8 @@ import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl } from "@lloyal-labs/dev-tools";
 import { send, useBrief } from "./store.js";
 import {
-  selectDepth, selectFetched, selectLive, selectMoment, selectRunShape,
-  selectShape, selectTaskCount, type Shape,
+  selectDepth, selectLive, selectMoment, selectRunShape, selectShape,
+  selectTaskCount, type Shape,
 } from "./select.js";
 import { recordPace } from "./pace.js";
 import { Shell } from "./parts/Shell.js";
@@ -25,7 +25,6 @@ import { Ask } from "./moments/Ask.js";
 import { Frame } from "./moments/Frame.js";
 import { Write } from "./moments/Write.js";
 import { Settle } from "./moments/Settle.js";
-import { Reopen } from "./moments/Reopen.js";
 
 /** The dev pane's Settings contribution — pure data, dev-gated by the wire. */
 const DEV_CONTROLS: readonly DevControl[] = [
@@ -59,23 +58,17 @@ export function HarnessApp(): ReactElement {
   const moment = useBrief(selectMoment);
   const live = useBrief(selectLive);
   const configuredShape = useBrief(selectShape);
-  const fetched = useBrief(selectFetched);
   const [chosenShape, setChosenShape] = useState<Shape | null>(null);
-  const [openReport, setOpenReport] = useState<string | null>(null);
   const shape = chosenShape ?? configuredShape;
 
   useEffect(() => {
     document.title = live ? "● __NAME__" : "__NAME__";
   }, [live]);
 
-  // The library lists on arrival; a submitted query takes the canvas back
-  // from any reopened report.
+  // The library lists on arrival (the bridge queues until connected).
   useEffect(() => {
     send({ type: "library_list" });
   }, []);
-  useEffect(() => {
-    if (live) setOpenReport(null);
-  }, [live]);
 
   // Each settled brief teaches the pickers this machine's pace — recorded
   // once, on the edge into settle. Warm follow-ups (one synthetic task,
@@ -94,8 +87,6 @@ export function HarnessApp(): ReactElement {
     prevMoment.current = moment;
   }, [moment, depth, runShape, tasks, banked]);
 
-  const reopened = openReport !== null && fetched?.path === openReport;
-
   return (
     <DevPane
       bridge={window.harness}
@@ -104,25 +95,13 @@ export function HarnessApp(): ReactElement {
       runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }}
     >
       <Shell
-        library={<Library open={openReport} onOpen={setOpenReport} />}
-        dock={
-          <Composer
-            shape={shape}
-            placeholder={reopened ? COMPOSER_HINT.ask : COMPOSER_HINT[moment]}
-            reframe={reopened}
-          />
-        }
+        library={<Library />}
+        dock={<Composer shape={shape} placeholder={COMPOSER_HINT[moment]} />}
       >
-        {reopened ? (
-          <Reopen body={fetched.body} />
-        ) : (
-          <>
-            {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
-            {moment === "frame" && <Frame />}
-            {moment === "write" && <Write />}
-            {moment === "settle" && <Settle />}
-          </>
-        )}
+        {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
+        {moment === "frame" && <Frame />}
+        {moment === "write" && <Write />}
+        {moment === "settle" && <Settle />}
       </Shell>
     </DevPane>
   );

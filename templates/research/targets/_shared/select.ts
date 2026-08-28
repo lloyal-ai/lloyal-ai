@@ -427,30 +427,9 @@ export interface ReportEntry {
   mode: "flat" | "deep" | null;
 }
 
-/** Every settled brief on disk, newest first. */
+/** Every settled brief on disk, newest first. Opening one restores it as
+ *  the session document — no body is ever held view-side. */
 export const selectLibrary = (app: AppState): ReportEntry[] => app.library.entries;
-
-/** The one fetched report body — the reader's current pick. */
-export const selectFetched = (app: AppState): { path: string; body: string } | null =>
-  app.library.report;
-
-/** A saved report.md, split for rendering: its own title line, the byline
- *  facts, and the brief (reasoning stripped for reports saved before the
- *  sink learned to strip it). Never re-derives — the file is the truth. */
-export const parseReport = (
-  body: string,
-): { title: string; savedAt: string; mode: "flat" | "deep" | null; prose: string } => {
-  const lines = body.split("\n");
-  const title = (lines[0] ?? "").replace(/^#\s*/, "");
-  const meta = /^>\s*(\S+) · (flat|deep)/.exec(lines[2] ?? "");
-  const rest = lines.slice(3).join("\n");
-  return {
-    title,
-    savedAt: meta?.[1] ?? "",
-    mode: meta?.[2] === "flat" || meta?.[2] === "deep" ? meta[2] : null,
-    prose: splitThink(rest, false).body.trim(),
-  };
-};
 
 // ── the settled document ─────────────────────────────────────────
 
