@@ -83,15 +83,18 @@ export const DEPTHS: readonly { depth: Depth; title: string }[] = [
 
 /** Minutes for the picker, quoted ONLY from this machine's observed pace
  *  (`paceOf` — null until a brief of this depth and shape has settled).
- *  No plan yet → the preset's own breadth. Pure: pace arrives as an
- *  argument so the seam stays derivation-only. */
+ *  The plan's task count is clamped to each depth's own breadth — a depth
+ *  never quotes more inquiries than it would actually run. No plan yet →
+ *  the preset's breadth. Pure: pace arrives as an argument so the seam
+ *  stays derivation-only. */
 export const estimateLabel = (
   depth: Depth,
   tasks: number | null,
   perTaskMs: number | null,
 ): string | null => {
   if (perTaskMs === null) return null;
-  const n = tasks ?? EFFORT_PRESETS[depth].maxTasks;
+  const breadth = EFFORT_PRESETS[depth].maxTasks;
+  const n = Math.min(tasks ?? breadth, breadth);
   return `~${Math.max(1, Math.round((perTaskMs * n) / 60_000))} min`;
 };
 
