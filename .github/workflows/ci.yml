@@ -34,7 +34,7 @@ jobs:
             console.log(p.files.filter(f=>f.path.startsWith('templates/')).length);
           ")
           echo "template files in tarball: $COUNT"
-          test "$COUNT" -eq 113
+          test "$COUNT" -eq 114
 
   # The front door, on every platform a developer actually uses.
   #

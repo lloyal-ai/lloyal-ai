@@ -39,6 +39,14 @@ export type UiPhase =
  *  everywhere — no 'chain' alias. */
 export type Mode = 'flat' | 'deep';
 
+/** One settled brief on disk — a sidebar library row (`library:list`). */
+export interface LibraryEntry {
+  path: string;
+  title: string;
+  savedAt: string;
+  mode: Mode | null;
+}
+
 /** One cited source, extracted CONSUMER-side from a tool result (the Ability
  *  Protocol prescribes no result schema). Web tools populate url/title/snippet
  *  today; image (og:image) + icon (favicon) arrive once the web ability ≥1.2.0
@@ -366,9 +374,7 @@ export interface AppState {
   /** Settled briefs on disk (`library:list`). Opening one restores it as
    *  the session document via the standard query/answer/complete events —
    *  no report body is ever held here. */
-  library: {
-    entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
-  };
+  library: { entries: LibraryEntry[] };
   /** Warm-ask exchanges appended beneath the settled brief — the document
    *  grows, it is never replaced. A full (cold) query clears them. */
   exchanges: { question: string; body: string }[];

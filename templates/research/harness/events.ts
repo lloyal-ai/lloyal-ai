@@ -1,17 +1,35 @@
 /**
- * Event union consumed by the Ink reducer.
+ * WorkflowEvent — everything the harness says on the wire.
  *
- * These mirror the StepEvent variants emitted by examples/deep-research/harness.ts
- * (formerly in examples/deep-research/tui.ts) plus the AgentEvent stream coming
- * from @lloyal-labs/lloyal-agents. The harness continues to emit the same events
- * — only the rendering layer is replaced.
+ * `StepEvent` is this harness's own vocabulary (pipeline phases, plan edits,
+ * boot, config, the library); `AgentEvent` streams from
+ * @lloyal-labs/lloyal-agents; `HostResourcesEvent` is the dev pane's machine
+ * telemetry. Every target folds the same union through ONE `reduce`.
  */
 
 import type { AgentEvent } from '@lloyal-labs/lloyal-agents';
 import type { HostResourcesEvent } from '@lloyal-labs/dev-tools';
 import type { PlanIntent, ResearchTask } from '@lloyal-labs/rig';
-import type { AbilityDescriptor, OpTiming } from './state-core.js';
+import type { AbilityDescriptor, LibraryEntry, OpTiming } from './state-core.js';
 import type { Config, ConfigOrigin } from './config-types.js';
+
+/** The terminal event's stats payload. Everything optional: the research
+ *  path fills the research fields, passthrough its own, and a library
+ *  restore sends `{}` — the fold keys off the EVENT, not this payload. */
+export interface CompleteData {
+  intent?: string;
+  planTokens?: number;
+  agentTokens?: number;
+  synthTokens?: number;
+  passthroughTokens?: number;
+  totalToolCalls?: number;
+  agentCount?: number;
+  wallTimeMs?: number;
+  planMs?: number;
+  researchMs?: number;
+  synthMs?: number;
+  passthroughMs?: number;
+}
 
 export type StepEvent =
   | { type: 'query'; query: string; warm: boolean }
@@ -47,7 +65,7 @@ export type StepEvent =
       ctxPos: number;
       ctxTotal: number;
     }
-  | { type: 'complete'; data: Record<string, unknown> }
+  | { type: 'complete'; data: CompleteData }
   // ── UI / config events driven by main.ts ────────────────────────
   // `path` is the file the config was loaded from — absent for the in-memory
   // runner (nothing is read from disk today).
@@ -108,10 +126,7 @@ export type StepEvent =
   // ── The library: settled briefs on disk (the sidebar's Completed
   // ── reports). Opening one restores it through the STANDARD
   // ── query/answer/complete events — no dedicated body event exists.
-  | {
-      type: 'library:list';
-      entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
-    }
+  | { type: 'library:list'; entries: LibraryEntry[] }
   | { type: 'boot:error'; kind: 'llm' | 'reranker' | 'backend-pack'; message: string }
   /** Boot-time BACKEND_DL pack offer: a CUDA GPU was probed and a signed
    *  full-arch pack is available for it. Rendered as a Download / Not now

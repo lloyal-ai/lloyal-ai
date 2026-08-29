@@ -322,6 +322,68 @@ function closeThink(state: AppState, agentId: number, finalBody: string): AppSta
   );
 }
 
+/** Close any live think block, keeping whatever body it holds — the
+ *  recovery and tool-call paths may reach here without a `</think>`. */
+function closeLiveThink(state: AppState, agentId: number): AppState {
+  const agent = state.agents.get(agentId);
+  if (!agent || agent.currentThinkId === null) return state;
+  const item = agent.timeline.find((it) => it.id === agent.currentThinkId);
+  const finalBody = item && item.kind === 'think' ? item.body : '';
+  return closeThink(state, agentId, finalBody);
+}
+
+/** Advance the agent's live think block with freshly-produced text: append
+ *  until `</think>` arrives, then close on the marker and seed contentBuffer
+ *  with the tail so no token is lost at the boundary. */
+function advanceThink(
+  state: AppState,
+  agentId: number,
+  text: string,
+  tokenCount: number,
+): AppState {
+  const agent = state.agents.get(agentId);
+  if (!agent || agent.currentThinkId === null) return state;
+  const thinkId = agent.currentThinkId;
+  const item = agent.timeline.find((it) => it.id === thinkId);
+  if (!item || item.kind !== 'think') return state;
+
+  const combined = item.body + text;
+  const markerIdx = combined.indexOf(THINK_CLOSE);
+  if (markerIdx === -1) {
+    return replaceAgent(state, agentId, (a) =>
+      updateTimeline({ ...a, tokenCount }, thinkId, (it) =>
+        it.kind === 'think' ? { ...it, body: combined } : it,
+      ),
+    );
+  }
+  const finalBody = combined.slice(0, markerIdx);
+  const tail = combined.slice(markerIdx + THINK_CLOSE.length);
+  const closed = closeThink(state, agentId, finalBody);
+  return replaceAgent(closed, agentId, (a) => ({
+    ...a,
+    tokenCount,
+    contentBuffer: tail,
+  }));
+}
+
+/** Freeze a finished research agent out of the live tree: push its panel
+ *  into scrollback as a Static item and drop it from researchAgentIds so
+ *  the renderer stops drawing it live. Keeps the dynamic tree small (only
+ *  currently-streaming agents render live) — Ink would otherwise wipe
+ *  terminal scrollback on overflow at later phase transitions. */
+function freezeIntoScrollback(state: AppState, agentId: number): AppState {
+  const agent = state.agents.get(agentId);
+  if (!agent || !state.researchAgentIds.includes(agentId)) return state;
+  return {
+    ...state,
+    scrollback: [
+      ...state.scrollback,
+      { key: `agent-${agentId}-${state.scrollback.length}`, kind: 'agent' as const, agent },
+    ],
+    researchAgentIds: state.researchAgentIds.filter((id) => id !== agentId),
+  };
+}
+
 // ── reducer entry ────────────────────────────────────────────────
 
 export function reduce(state: AppState, ev: WorkflowEvent): AppState {
@@ -917,39 +979,12 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       if (acting.phase !== 'thinking' || acting.currentThinkId === null) {
         if (acting.phase === 'tool' || acting.phase === 'idle') {
           working = openThink(working, acting.id);
-          acting = working.agents.get(acting.id)!;
         } else {
           // done — drop.
           return replaceAgent(working, acting.id, (a) => ({ ...a, tokenCount: ev.tokenCount }));
         }
       }
-
-      const thinkId = acting.currentThinkId!;
-      const item = acting.timeline.find((it) => it.id === thinkId);
-      if (!item || item.kind !== 'think') return working;
-
-      const combined = item.body + ev.text;
-      const markerIdx = combined.indexOf(THINK_CLOSE);
-
-      if (markerIdx === -1) {
-        return replaceAgent(working, acting.id, (a) =>
-          updateTimeline({ ...a, tokenCount: ev.tokenCount }, thinkId, (it) =>
-            it.kind === 'think' ? { ...it, body: combined } : it,
-          ),
-        );
-      }
-
-      // Close on </think>. Anything AFTER </think> in this same produce event
-      // is content-phase prose — seed the contentBuffer with it so no tokens
-      // are lost at the boundary.
-      const finalBody = combined.slice(0, markerIdx);
-      const tail = combined.slice(markerIdx + THINK_CLOSE.length);
-      const closed = closeThink(working, acting.id, finalBody);
-      return replaceAgent(closed, acting.id, (a) => ({
-        ...a,
-        tokenCount: ev.tokenCount,
-        contentBuffer: tail,
-      }));
+      return advanceThink(working, acting.id, ev.text, ev.tokenCount);
     }
 
     case 'agent:tool_call': {
@@ -957,12 +992,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       if (!agent) return state;
 
       // Force-close any live think block first.
-      let working = state;
-      if (agent.currentThinkId !== null) {
-        const thinkItem = agent.timeline.find((it) => it.id === agent.currentThinkId);
-        const finalBody = thinkItem && thinkItem.kind === 'think' ? thinkItem.body : '';
-        working = closeThink(working, ev.agentId, finalBody);
-      }
+      let working = closeLiveThink(state, ev.agentId);
 
       // Skip timeline entry for non-research agents (synth may also emit tool_calls).
       if (working.agents.get(ev.agentId)?.taskIndex == null) {
@@ -1069,13 +1099,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       const agent = state.agents.get(ev.agentId);
       if (!agent) return state;
 
-      // Force-close any live think (recovery path may bypass </think>).
-      let working = state;
-      if (agent.currentThinkId !== null) {
-        const thinkItem = agent.timeline.find((it) => it.id === agent.currentThinkId);
-        const finalBody = thinkItem && thinkItem.kind === 'think' ? thinkItem.body : '';
-        working = closeThink(working, ev.agentId, finalBody);
-      }
+      const working = closeLiveThink(state, ev.agentId);
 
       if (working.agents.get(ev.agentId)?.taskIndex == null) {
         return replaceAgent(working, ev.agentId, (a) => ({
@@ -1100,34 +1124,10 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         ),
       );
 
-      // Push the finished panel into scrollback as a Static item, and drop
-      // it from researchAgentIds so Narrative stops rendering it live. This
-      // keeps the dynamic tree small (only currently-streaming agents stay
-      // in Narrative), avoiding the clearTerminal-on-overflow scrollback
-      // wipe at later phase transitions. The frozen panel survives in
-      // terminal scrollback for the rest of the session.
-      const finalAgent = next.agents.get(ev.agentId);
-      const isResearch = next.researchAgentIds.includes(ev.agentId);
-      const scrollback = isResearch && finalAgent
-        ? [
-            ...next.scrollback,
-            {
-              key: `agent-${ev.agentId}-${next.scrollback.length}`,
-              kind: 'agent' as const,
-              agent: finalAgent,
-            },
-          ]
-        : next.scrollback;
-      const researchAgentIds = isResearch
-        ? next.researchAgentIds.filter((id) => id !== ev.agentId)
-        : next.researchAgentIds;
-
-      return {
-        ...next,
-        nextTimelineId: working.nextTimelineId + 1,
-        scrollback,
-        researchAgentIds,
-      };
+      return freezeIntoScrollback(
+        { ...next, nextTimelineId: working.nextTimelineId + 1 },
+        ev.agentId,
+      );
     }
 
     case 'agent:failed': {
@@ -1137,12 +1137,8 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // terminally `failed` → cross glyph + frozen timer. There is no report.
       const agent = state.agents.get(ev.agentId);
       if (!agent || agent.phase === 'done' || agent.phase === 'failed') return state;
-      let working = state;
-      if (agent.currentThinkId !== null) {
-        const thinkItem = agent.timeline.find((it) => it.id === agent.currentThinkId);
-        const finalBody = thinkItem && thinkItem.kind === 'think' ? thinkItem.body : '';
-        working = closeThink(working, ev.agentId, finalBody);
-      }
+      const working = closeLiveThink(state, ev.agentId);
+      // Frozen with no `report` item — the cross glyph + failReason tell why.
       const next = replaceAgent(working, ev.agentId, (a) => ({
         ...a,
         phase: 'failed',
@@ -1151,24 +1147,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         recovering: false,
         failReason: ev.reason,
       }));
-      // Move it out of the live tree into scrollback (like a finished agent) so
-      // Narrative stops rendering it live — but with no `report` item.
-      const finalAgent = next.agents.get(ev.agentId);
-      const isResearch = next.researchAgentIds.includes(ev.agentId);
-      const scrollback = isResearch && finalAgent
-        ? [
-            ...next.scrollback,
-            {
-              key: `agent-${ev.agentId}-${next.scrollback.length}`,
-              kind: 'agent' as const,
-              agent: finalAgent,
-            },
-          ]
-        : next.scrollback;
-      const researchAgentIds = isResearch
-        ? next.researchAgentIds.filter((id) => id !== ev.agentId)
-        : next.researchAgentIds;
-      return { ...next, scrollback, researchAgentIds };
+      return freezeIntoScrollback(next, ev.agentId);
     }
 
     case 'agent:done': {
@@ -1185,12 +1164,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // a tool_call; recovery refills it with the actual forced report.
       const agent = state.agents.get(ev.agentId);
       if (!agent || agent.phase === 'done') return state;
-      let working = state;
-      if (agent.currentThinkId !== null) {
-        const thinkItem = agent.timeline.find((it) => it.id === agent.currentThinkId);
-        const finalBody = thinkItem && thinkItem.kind === 'think' ? thinkItem.body : '';
-        working = closeThink(working, ev.agentId, finalBody);
-      }
+      const working = closeLiveThink(state, ev.agentId);
       return replaceAgent(working, ev.agentId, (a) => ({
         ...a,
         phase: 'idle',

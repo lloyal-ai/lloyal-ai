@@ -23,7 +23,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, each, call } from "effection";
-import type { Context, Operation, Task, Signal } from "effection";
+import type { Operation, Task, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import {
   initAgents,
@@ -48,9 +48,8 @@ import type { PlanResult } from "@lloyal-labs/rig";
 import { TASK_ROUTING_KEY } from "@lloyal-labs/rig";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
-import { RunnerCtx as RigRunnerCtx } from "@lloyal-labs/rig";
-import type { Runner } from "@lloyal-labs/rig";
 import {
+  abilityToc,
   runQuery,
   runResearchPlan,
   singleTaskPlan,
@@ -64,13 +63,9 @@ import type { WorkflowEvent, Command } from "./protocol.js";
 import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
 import { resolvePath } from "@lloyal-labs/rig/node";
+import { RunnerCtx } from "./runner-ctx.js";
+import { confinedReport, listReports, readReport, removeReport } from "./library.js";
 import type { ConfigOrigin } from "./config-types.js";
-
-/** The runner ↔ harness seam, typed to THIS harness's config. The context and
- *  the `Runner` machinery are rig's (`makeEdgeRunner` / `makeServedRunner`);
- *  only the `Config`/`ConfigOrigin` shapes are yours, and this cast marries
- *  them — the boots and `pipeline.ts` import it from here. */
-export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
 
 // The two first-party ability factories this harness enables. Before enabling, the
 // boot's `provisionAbilityModels` reads whatever Services each ability declares
@@ -123,6 +118,18 @@ function resolveConfigPaths(
 
 const MAX_TOOL_TURNS = 10;
 
+/** The corpus:indexed payload for a freshly-(re)enabled ability: file count
+ *  from its `toc` advert (one line per file). */
+function corpusIndexedEvent(ability: Ability, corpusPath: unknown) {
+  const toc = abilityToc(ability);
+  return {
+    type: "corpus:indexed" as const,
+    corpusPath: String(corpusPath ?? ""),
+    fileCount: toc ? toc.split("\n").filter(Boolean).length : 0,
+    chunkCount: 0,
+  };
+}
+
 // ── Planner context ──────────────────────────────────────────────
 
 /** Summarize the registered abilities for the planner prompt: the source catalog the
@@ -137,8 +144,8 @@ function buildPlannerContext(abilities: readonly Ability[]): string {
   for (const ability of abilities) {
     const protocol = ability.manifest.protocol;
     lines.push("", `### ${protocol.name}`, protocol.useWhen);
-    const toc = ability.source.promptData()["toc"];
-    if (typeof toc === "string" && toc) {
+    const toc = abilityToc(ability);
+    if (toc) {
       lines.push("Files and top-level topics available in this source:", toc);
     }
   }
@@ -169,58 +176,6 @@ function redactAbilities(config: Config): Config {
       ]),
     ),
   };
-}
-
-// ── The library: settled briefs on disk ──────────────────────────
-
-/** A client-supplied library path is trusted only once its REAL location
- *  (symlinks resolved) is a report.md inside the library — realpath on both
- *  sides, so a planted link can't lead the read outside the output dir.
- *  Missing paths land in the catch: null means "not a library report". */
-function confinedReport(outputDir: string, candidate: string): string | null {
-  try {
-    const root = fs.realpathSync(path.resolve(outputDir));
-    const resolved = fs.realpathSync(path.resolve(candidate));
-    return resolved.startsWith(root + path.sep) &&
-      path.basename(resolved) === "report.md"
-      ? resolved
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-/** One sidebar entry per run dir that actually settled — error runs leave no
- *  report.md. Title and byline come from the report's own first lines
- *  (`# query` / `> ISO · mode · …`, RunDirSink's format), newest first. */
-function listReports(
-  outputDir: string,
-): { path: string; title: string; savedAt: string; mode: "flat" | "deep" | null }[] {
-  if (!fs.existsSync(outputDir)) return [];
-  const entries: {
-    path: string;
-    title: string;
-    savedAt: string;
-    mode: "flat" | "deep" | null;
-  }[] = [];
-  for (const name of fs.readdirSync(outputDir)) {
-    const reportPath = path.join(outputDir, name, "report.md");
-    let text: string;
-    try {
-      text = fs.readFileSync(reportPath, "utf8");
-    } catch {
-      continue;
-    }
-    const [titleLine = "", , metaLine = ""] = text.split("\n");
-    const meta = /^> (\S+) · (flat|deep)/.exec(metaLine);
-    entries.push({
-      path: reportPath,
-      title: titleLine.replace(/^#\s*/, "") || name,
-      savedAt: meta?.[1] ?? name,
-      mode: meta?.[2] === "flat" || meta?.[2] === "deep" ? meta[2] : null,
-    });
-  }
-  return entries.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
 }
 
 // ── Clarify helpers ──────────────────────────────────────────────
@@ -256,6 +211,18 @@ class HarnessExit extends Error {
     super(message);
     this.name = "HarnessExit";
   }
+}
+
+/** A planner result held for review. Carried whole between the plan-review
+ *  commands (edit, change-mode, clarify, accept) so a re-plan keeps the
+ *  submission's own clock, filter, and clarify history. */
+interface PendingPlan {
+  plan: PlanResult;
+  query: string;
+  clarifyExchanged: boolean;
+  mode: "flat" | "deep";
+  wallStartMs: number;
+  abilityFilter: readonly string[];
 }
 
 // ── harness — the Layer-3 entrypoint (platform contract) ─────────
@@ -341,14 +308,7 @@ export function* harness(
     events.send({ type: "weights:label", label: "Indexing corpus…" });
     try {
       const corpusAbility = yield* registry.enable(createCorpusAbility);
-      const pdToc = corpusAbility.source.promptData()["toc"];
-      const pd = { toc: typeof pdToc === "string" ? pdToc : undefined };
-      events.send({
-        type: "corpus:indexed",
-        corpusPath: String(corpusBootCfg.corpusPath ?? ""),
-        fileCount: pd?.toc ? pd.toc.split("\n").filter(Boolean).length : 0,
-        chunkCount: 0,
-      });
+      events.send(corpusIndexedEvent(corpusAbility, corpusBootCfg.corpusPath));
     } catch (err) {
       events.send({
         type: "ui:error",
@@ -407,16 +367,7 @@ export function* harness(
     try {
       yield* registry.disable(CORPUS_ABILITY);
       const ability = yield* registry.enable(createCorpusAbility);
-      const pdToc = ability.source.promptData()["toc"];
-      events.send({
-        type: "corpus:indexed",
-        corpusPath: String(cfg.corpusPath ?? ""),
-        fileCount:
-          typeof pdToc === "string" && pdToc
-            ? pdToc.split("\n").filter(Boolean).length
-            : 0,
-        chunkCount: 0,
-      });
+      events.send(corpusIndexedEvent(ability, cfg.corpusPath));
       yield* emitAbilities();
     } catch (err) {
       yield* agentEvents.send({
@@ -460,7 +411,7 @@ export function* harness(
     return;
   }
 
-  // ── Ink TTY command loop ───────────────────────────────────
+  // ── The command loop — every interactive surface ───────────
 
   // Per-query run effort, set at submit_query and read by every research path.
   let currentEffort: Effort = runner.config().defaults.effort;
@@ -470,45 +421,41 @@ export function* harness(
   // over it are simply warm.
   let openedReport: { path: string; title: string; body: string } | null = null;
   const committedReports = new Set<string>();
-  let pendingPlan: {
-    plan: PlanResult;
-    query: string;
-    clarifyExchanged: boolean;
-    mode: "flat" | "deep";
-    wallStartMs: number;
-    abilityFilter: readonly string[];
-  } | null = null;
+  let pendingPlan: PendingPlan | null = null;
 
-  // ── Run-in-fiber (Stop escape hatch) ───────────────────────
-  // The heavy operations run in a CHILD fiber so the command loop keeps polling
-  // `each(commands)` while a run is in flight. `stop` halts the held Task.
-  let runTask: Task<void> | null = null;
-  // Lifecycle sequencing is the harness's job (the pool holds regardless):
-  // pause only while plainly running; wrap_up refused while paused; both
-  // flags reset when the run ends or is stopped.
-  let paused = false;
-  let woundDown = false;
+  // ── The run lifecycle — ONE place ──────────────────────────
+  // The heavy operations run in a CHILD fiber so the command loop keeps
+  // polling `each(commands)` while a run is in flight. startRun/haltRun own
+  // every transition of these three fields; nothing else writes them. A NEW
+  // run never inherits the old run's flags — startRun resets them, and the
+  // fiber's own finally clears them only while it is still the current run.
+  const run: { task: Task<void> | null; paused: boolean; woundDown: boolean } = {
+    task: null,
+    paused: false,
+    woundDown: false,
+  };
 
-  function* startRun(
-    body: (clearIfCurrent: () => void) => Operation<void>,
-  ): Operation<void> {
-    if (runTask) yield* haltRun();
-    // A NEW run never inherits the old run's lifecycle flags. The halted
-    // task's clearIfCurrent cannot reset them (haltRun already nulled
-    // runTask, so its guard fails) — reset here, where the run begins.
-    paused = false;
-    woundDown = false;
-    const task = yield* spawn(() =>
-      body(() => {
-        if (runTask === task) { runTask = null; paused = false; woundDown = false; }
-      }),
-    );
-    runTask = task;
+  function* startRun(body: () => Operation<void>): Operation<void> {
+    if (run.task) yield* haltRun();
+    run.paused = false;
+    run.woundDown = false;
+    const task = yield* spawn(function* () {
+      try {
+        yield* body();
+      } finally {
+        if (run.task === task) {
+          run.task = null;
+          run.paused = false;
+          run.woundDown = false;
+        }
+      }
+    });
+    run.task = task;
   }
 
   function* haltRun(): Operation<void> {
-    const task = runTask;
-    runTask = null;
+    const task = run.task;
+    run.task = null;
     if (!task) return;
     try {
       yield* task.halt();
@@ -533,558 +480,506 @@ export function* harness(
       .map((a) => a.manifest.name);
   seedParticipation();
 
-  // Auto-submit --query only on the first iteration.
-  if (runner.isFirstIteration && runner.initialQuery) {
-    const mode = runner.config().defaults.reasoningMode;
-    const wallStartMs = performance.now();
-    const submissionFilter = currentAbilityFilter();
-    const result = yield* runQuery(runner.initialQuery, session, {
-      ...harnessOpts,
-      reasoningMode: mode,
-      wallStartMs,
-      abilityFilter: submissionFilter,
-      onStart: () => startRunDir(runner.initialQuery!, mode),
-    });
-    if (result.type === "research_plan") {
-      pendingPlan = {
-        plan: result.plan,
-        query: runner.initialQuery,
-        clarifyExchanged: false,
-        mode,
-        wallStartMs,
-        abilityFilter: submissionFilter,
-      };
-      yield* agentEvents.send({ type: "ui:plan_review" });
-    } else if (result.type === "clarify") {
-      yield* call(() =>
-        session.commitTurn(
-          runner.initialQuery!,
-          formatClarifyAsAssistantMsg(result.plan.clarifyQuestions),
-        ),
-      );
-      pendingPlan = {
-        plan: result.plan,
-        query: runner.initialQuery,
-        clarifyExchanged: false,
-        mode,
-        wallStartMs,
-        abilityFilter: submissionFilter,
-      };
-    } else {
-      yield* agentEvents.send({ type: "ui:composer" });
+  // First submit over a restored report: commit it to the trunk — its
+  // prefill is the ask's warmup; from here the warm-ask and extend paths
+  // need no special handling at all.
+  function* commitOpenedReport(): Operation<void> {
+    if (openedReport === null) return;
+    if (!committedReports.has(openedReport.path)) {
+      committedReports.add(openedReport.path);
+      const { title, body } = openedReport;
+      yield* call(() => session.commitTurn(title, body));
+    }
+    openedReport = null;
+  }
+
+  /** Run the planner and route its outcome — the ONE shape submit_query,
+   *  submit_clarification, and change_mode share. What differs per caller:
+   *  how a clarify message reaches the trunk, and what a returned plan
+   *  becomes as the pending plan. A finished run reindexes the corpus and
+   *  returns to the composer; an error clears the pending plan and toasts. */
+  function* runPlannedQuery(spec: {
+    query: string;
+    mode: "flat" | "deep";
+    wallStartMs: number;
+    abilityFilter: readonly string[];
+    onStart: () => void;
+    clarify: "commit" | "prefill" | "none";
+    pending: (plan: PlanResult) => PendingPlan;
+  }): Operation<void> {
+    try {
+      const result = yield* runQuery(spec.query, session, {
+        ...harnessOpts,
+        reasoningMode: spec.mode,
+        effort: currentEffort,
+        context: buildPlannerContext(registry.enabled()),
+        wallStartMs: spec.wallStartMs,
+        abilityFilter: spec.abilityFilter,
+        onStart: spec.onStart,
+      });
+      if (result.type === "research_plan") {
+        pendingPlan = spec.pending(result.plan);
+        yield* agentEvents.send({ type: "ui:plan_review" });
+      } else if (result.type === "clarify") {
+        const msg = formatClarifyAsAssistantMsg(result.plan.clarifyQuestions);
+        if (spec.clarify === "commit") {
+          yield* call(() => session.commitTurn(spec.query, msg));
+        } else if (spec.clarify === "prefill") {
+          yield* call(() => session.prefillAssistant(msg));
+        }
+        pendingPlan = spec.pending(result.plan);
+      } else {
+        pendingPlan = null;
+        yield* reindexCorpus();
+        yield* agentEvents.send({ type: "ui:composer" });
+      }
+    } catch (err) {
+      pendingPlan = null;
+      yield* agentEvents.send({ type: "ui:error", message: errorMessage(err) });
     }
   }
 
-  for (const cmd of yield* each(commands)) {
+  /** Run an already-vetted plan to a settled brief — shared by accept_plan
+   *  and the Ask path's synthetic single-task plan. */
+  function* runAcceptedPlan(args: {
+    query: string;
+    plan: PlanResult;
+    mode: "flat" | "deep";
+    wallStartMs: number;
+    abilityFilter: readonly string[];
+    isAsk?: boolean;
+    userSidePending?: boolean;
+  }): Operation<void> {
     try {
-      if (cmd.type === "quit") return;
+      yield* runResearchPlan(args.query, args.plan, session, {
+        ...harnessOpts,
+        reasoningMode: args.mode,
+        effort: currentEffort,
+        wallStartMs: args.wallStartMs,
+        abilityFilter: args.abilityFilter,
+        isAsk: args.isAsk,
+        userSidePending: args.userSidePending,
+      });
+      yield* reindexCorpus();
+      yield* agentEvents.send({ type: "ui:composer" });
+    } catch (err) {
+      yield* agentEvents.send({ type: "ui:error", message: errorMessage(err) });
+    }
+  }
 
-      if (cmd.type === "stop") {
-        if (runTask) {
-          yield* haltRun();
-          paused = false;
-          woundDown = false;
-          pendingPlan = null;
-          yield* agentEvents.send({ type: "ui:composer" });
-        }
-        continue;
-      }
+  // ── The command table ──────────────────────────────────────
+  // One handler per Command variant, exhaustively: adding a Command without
+  // deciding what the harness does with it is a type error, never a silent
+  // no-op. "continue" keeps the loop; "exit" ends the harness (the boot
+  // decides what a return means — quit, or a runtime reload).
+  type Flow = "continue" | "exit";
+  const handle: {
+    [K in Command["type"]]: (cmd: Extract<Command, { type: K }>) => Operation<Flow>;
+  } = {
+    *quit() {
+      return "exit";
+    },
 
-      if (cmd.type === "wrap_up") {
-        // Refused while paused — press play first (the pane disables the
-        // button; this guard covers raw wire clients).
-        if (runTask && !paused) {
-          woundDown = true;
-          runner.windDown.send();
-        }
-        continue;
-      }
-
-      if (cmd.type === "pause") {
-        if (runTask && !paused && !woundDown) {
-          paused = true;
-          runner.pauseRun.send(true);
-        }
-        continue;
-      }
-
-      if (cmd.type === "resume") {
-        if (paused) {
-          paused = false;
-          runner.pauseRun.send(false);
-        }
-        continue;
-      }
-
-      if (cmd.type === "cancel_agent") {
-        if (runTask) runner.cancelAgent.send({ agentId: cmd.agentId });
-        continue;
-      }
-
-      if (cmd.type === "set_model_path") {
-        runner.reloadRuntime({ model: { path: cmd.path } });
-        return;
-      }
-
-      if (cmd.type === "set_reranker_path") {
-        runner.reloadRuntime({ model: { reranker: cmd.path } });
-        return;
-      }
-
-      if (cmd.type === "set_gpu") {
-        runner.reloadRuntime({ model: { gpu: cmd.gpu } });
-        return;
-      }
-
-      if (cmd.type === "toggle_participation") {
-        const current = participation[cmd.name] ?? true;
-        participation[cmd.name] = !current;
-        yield* agentEvents.send({
-          type: "participation:toggled",
-          name: cmd.name,
-        });
-        continue;
-      }
-
-      if (cmd.type === "set_ability_config") {
-        const resolvedValues = resolveConfigPaths(cmd.values);
-        const isClear = Object.keys(resolvedValues).length === 0;
-
-        // Path-shaped values must EXIST before anything persists or enables:
-        // a factory handed a bad path can take the whole process down (rig's
-        // loadResources exits on a missing corpus), and a persisted bad path
-        // would re-kill every subsequent boot. Generic — same path-shape rule
-        // as resolveConfigPaths, no ability-name knowledge.
-        const missingPath = Object.entries(resolvedValues).find(
-          ([k, v]) =>
-            typeof v === "string" &&
-            v !== "" &&
-            (/path$/i.test(k) || /^[~/.]/.test(v)) &&
-            !fs.existsSync(v),
-        );
-        if (missingPath) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: `${missingPath[0]}: path does not exist — ${String(missingPath[1])}`,
-          });
-          continue;
-        }
-
-        // Persist FIRST: if the disk save refuses (unreadable/newer
-        // harness.json, fs error), the outer catch surfaces it and the live
-        // session is untouched — no half-applied ability state. `prior` is
-        // kept so an enable failure below can restore the disk too.
-        const prior = (yield* configStore.get(cmd.name)) ?? null;
-        const saved = runner.saveConfig({
-          abilities: { [cmd.name]: resolvedValues },
-        });
-
-        yield* configStore.set(cmd.name, resolvedValues);
-
-        const factory = factoryFor(cmd.name);
-        if (factory) {
-          if (registry.byName(cmd.name)) yield* registry.disable(cmd.name);
-          const needsConfig = abilityRequiresConfig(cmd.name);
-          if (!isClear || !needsConfig) {
-            try {
-              const ability = yield* registry.enable(factory);
-              const pd = (
-                ability.source as { promptData?: () => { toc?: string } }
-              ).promptData?.();
-              if (pd?.toc !== undefined) {
-                events.send({
-                  type: "corpus:indexed",
-                  corpusPath: String(resolvedValues.corpusPath ?? ""),
-                  fileCount: pd.toc
-                    ? pd.toc.split("\n").filter(Boolean).length
-                    : 0,
-                  chunkCount: 0,
-                });
-              }
-            } catch (err) {
-              // The new config failed to ENABLE — restore ALL the surfaces
-              // this command touched: the store, the LIVE registry (a
-              // previously working instance was disabled above — bring it
-              // back), and the disk. Best-effort throughout: the error toast
-              // below reports the original failure regardless.
-              if (prior && Object.keys(prior).length > 0) {
-                yield* configStore.set(cmd.name, prior);
-                try {
-                  yield* registry.enable(factory);
-                } catch {
-                  // The prior config no longer enables either — leave the
-                  // ability disabled rather than looping.
-                  yield* configStore.clear(cmd.name);
-                }
-              } else {
-                yield* configStore.clear(cmd.name);
-              }
-              try {
-                runner.saveConfig({ abilities: { [cmd.name]: prior ?? {} } });
-              } catch {
-                /* disk restore failed — the toast still reports the enable error */
-              }
-              yield* agentEvents.send({
-                type: "ui:error",
-                message: `Cannot configure ${cmd.name}: ${errorMessage(err)}`,
-              });
-              continue;
-            }
-          } else {
-            yield* configStore.clear(cmd.name);
-          }
-        }
-
-        participation[cmd.name] = true;
-
-        yield* agentEvents.send({
-          type: "config:updated",
-          config: redactAbilities(saved.config),
-          origin: saved.origin,
-          savedTo: saved.path,
-          gitignored: saved.gitignored,
-          skipped: saved.skipped,
-        });
-        yield* emitAbilities();
-      } else if (cmd.type === "set_output_dir") {
-        const resolved = cmd.path ? resolvePath(cmd.path) : "";
-        const saved = runner.saveConfig({
-          sources: { outputDir: resolved },
-        });
-        yield* agentEvents.send({
-          type: "config:updated",
-          config: redactAbilities(saved.config),
-          origin: saved.origin,
-          savedTo: saved.path,
-          gitignored: saved.gitignored,
-          skipped: saved.skipped,
-        });
-      } else if (cmd.type === "library_list") {
-        yield* agentEvents.send({
-          type: "library:list",
-          entries: listReports(libraryDir()),
-        });
-      } else if (cmd.type === "library_read") {
-        // Confined to the library (confinedReport — realpath both sides).
-        // RESTORES the report as the session's settled
-        // document — the standard query/answer/complete seed the fold, so
-        // everything downstream (canvas, chips, Ask, Extend) is the fresh-
-        // settle path. The trunk commit waits for the first submit over it.
-        const resolved = confinedReport(libraryDir(), cmd.path);
-        if (resolved === null) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "That report is no longer there.",
-          });
-        } else if (runTask) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "A brief is in flight — close it before opening another.",
-          });
-        } else {
-          const text = fs.readFileSync(resolved, "utf8");
-          const lines = text.split("\n");
-          openedReport = {
-            path: resolved,
-            title: (lines[0] ?? "").replace(/^#\s*/, "") || "Reopened report",
-            body: lines.slice(3).join("\n").trim(),
-          };
-          yield* agentEvents.send({ type: "query", query: openedReport.title, warm: false });
-          yield* agentEvents.send({ type: "answer", text: openedReport.body });
-          yield* agentEvents.send({ type: "complete", data: {} });
-        }
-      } else if (cmd.type === "library_delete") {
-        // Same confinement as the read; deleting a brief removes its WHOLE
-        // run dir (report + annexures) and re-indexes the corpus — the
-        // system unlearns it. A run in flight can't be targeted: its dir
-        // has no report.md until it settles, so the list never offers it.
-        const resolved = confinedReport(libraryDir(), cmd.path);
-        if (resolved !== null) {
-          fs.rmSync(path.dirname(resolved), { recursive: true, force: true });
-          yield* reindexCorpus();
-        }
-        yield* agentEvents.send({
-          type: "library:list",
-          entries: listReports(libraryDir()),
-        });
-      } else if (cmd.type === "set_effort") {
-        // Save ONLY the changed key — spreading the whole defaults object
-        // would pin the untouched ones into harness.json, shadowing later
-        // harness.yml edits.
-        const saved = runner.saveConfig({ defaults: { effort: cmd.effort } });
-        yield* agentEvents.send({
-          type: "config:updated",
-          config: redactAbilities(saved.config),
-          origin: saved.origin,
-          savedTo: saved.path,
-          gitignored: saved.gitignored,
-          skipped: saved.skipped,
-        });
-      } else if (cmd.type === "submit_query") {
-        if (registry.enabled().length === 0) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "No source configured. Add Tavily key or corpus path.",
-          });
-          continue;
-        }
-        if (currentAbilityFilter().length === 0) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "All sources excluded. Include at least one.",
-          });
-          continue;
-        }
-        const wallStartMs = performance.now();
-        currentEffort = runner.config().defaults.effort;
-        if (runTask) {
-          yield* haltRun();
-          pendingPlan = null;
-        }
-        // First submit over a restored report: commit it to the trunk —
-        // its prefill is the ask's warmup; from here the warm-ask and
-        // extend paths below need no special handling at all.
-        if (openedReport !== null) {
-          if (!committedReports.has(openedReport.path)) {
-            committedReports.add(openedReport.path);
-            const { title: rTitle, body: rBody } = openedReport;
-            yield* call(() => session.commitTurn(rTitle, rBody));
-          }
-          openedReport = null;
-        }
-        if (cmd.skipPlanner) {
-          const plan = singleTaskPlan(cmd.query);
-          // `query` first, matching runPlanner's order — the fold's warm-ask
-          // branch must see the ask before the synthetic plan:start arrives,
-          // or the plan:start retitles the settled document.
-          yield* agentEvents.send({
-            type: "query",
-            query: cmd.query,
-            warm: !!session.trunk,
-          });
-          yield* agentEvents.send({
-            type: "plan:start",
-            query: cmd.query,
-            mode: cmd.mode,
-          });
-          yield* agentEvents.send({
-            type: "plan",
-            intent: plan.intent,
-            tasks: plan.tasks,
-            clarifyQuestions: plan.clarifyQuestions,
-            tokenCount: plan.tokenCount,
-            timeMs: plan.timeMs,
-          });
-          const submissionFilter = currentAbilityFilter();
-          startRunDir(cmd.query, cmd.mode);
-          yield* startRun(function* (clearIfCurrent) {
-            try {
-              yield* runResearchPlan(cmd.query, plan, session, {
-                ...harnessOpts,
-                reasoningMode: cmd.mode,
-                effort: currentEffort,
-                wallStartMs,
-                abilityFilter: submissionFilter,
-                isAsk: cmd.skipPlanner,
-              });
-              yield* reindexCorpus();
-              yield* agentEvents.send({ type: "ui:composer" });
-            } catch (err) {
-              yield* agentEvents.send({
-                type: "ui:error",
-                message: errorMessage(err),
-              });
-            } finally {
-              clearIfCurrent();
-            }
-          });
-          continue;
-        }
-        const submissionFilter = currentAbilityFilter();
-        const queryText = cmd.query;
-        const queryMode = cmd.mode;
-        yield* startRun(function* (clearIfCurrent) {
-          try {
-            const result = yield* runQuery(queryText, session, {
-              ...harnessOpts,
-              reasoningMode: queryMode,
-              effort: currentEffort,
-              context: buildPlannerContext(registry.enabled()),
-              wallStartMs,
-              abilityFilter: submissionFilter,
-              onStart: () => startRunDir(queryText, queryMode),
-            });
-            if (result.type === "research_plan") {
-              pendingPlan = {
-                plan: result.plan,
-                query: queryText,
-                clarifyExchanged: false,
-                mode: queryMode,
-                wallStartMs,
-                abilityFilter: submissionFilter,
-              };
-              yield* agentEvents.send({ type: "ui:plan_review" });
-            } else if (result.type === "clarify") {
-              yield* call(() =>
-                session.commitTurn(
-                  queryText,
-                  formatClarifyAsAssistantMsg(result.plan.clarifyQuestions),
-                ),
-              );
-              pendingPlan = {
-                plan: result.plan,
-                query: queryText,
-                clarifyExchanged: false,
-                mode: queryMode,
-                wallStartMs,
-                abilityFilter: submissionFilter,
-              };
-            } else {
-              yield* reindexCorpus();
-              yield* agentEvents.send({ type: "ui:composer" });
-            }
-          } catch (err) {
-            pendingPlan = null;
-            yield* agentEvents.send({
-              type: "ui:error",
-              message: errorMessage(err),
-            });
-          } finally {
-            clearIfCurrent();
-          }
-        });
-      } else if (cmd.type === "submit_clarification" && pendingPlan) {
-        const { query: origQuery, mode, wallStartMs, abilityFilter } = pendingPlan;
-        const priorPlan = pendingPlan;
-        yield* call(() => session.prefillUser(cmd.answer));
-        yield* startRun(function* (clearIfCurrent) {
-          try {
-            const result = yield* runQuery(origQuery, session, {
-              ...harnessOpts,
-              reasoningMode: mode,
-              effort: currentEffort,
-              context: buildPlannerContext(registry.enabled()),
-              wallStartMs,
-              abilityFilter,
-              onStart: () => startRunDir(origQuery, mode),
-            });
-            if (result.type === "research_plan") {
-              pendingPlan = {
-                ...priorPlan,
-                plan: result.plan,
-                clarifyExchanged: true,
-              };
-              yield* agentEvents.send({ type: "ui:plan_review" });
-            } else if (result.type === "clarify") {
-              yield* call(() =>
-                session.prefillAssistant(
-                  formatClarifyAsAssistantMsg(result.plan.clarifyQuestions),
-                ),
-              );
-              pendingPlan = {
-                ...priorPlan,
-                plan: result.plan,
-                clarifyExchanged: true,
-              };
-            } else {
-              pendingPlan = null;
-              yield* reindexCorpus();
-              yield* agentEvents.send({ type: "ui:composer" });
-            }
-          } catch (err) {
-            pendingPlan = null;
-            yield* agentEvents.send({
-              type: "ui:error",
-              message: errorMessage(err),
-            });
-          } finally {
-            clearIfCurrent();
-          }
-        });
-      } else if (cmd.type === "change_mode" && pendingPlan) {
-        const priorPlan = pendingPlan;
-        const nextMode = cmd.mode;
-        yield* startRun(function* (clearIfCurrent) {
-          try {
-            const result = yield* runQuery(priorPlan.query, session, {
-              ...harnessOpts,
-              reasoningMode: nextMode,
-              effort: currentEffort,
-              context: buildPlannerContext(registry.enabled()),
-              wallStartMs: priorPlan.wallStartMs,
-              abilityFilter: priorPlan.abilityFilter,
-              onStart: () => startRunDir(priorPlan.query, nextMode),
-            });
-            if (result.type === "research_plan") {
-              pendingPlan = { ...priorPlan, plan: result.plan, mode: nextMode };
-              yield* agentEvents.send({ type: "ui:plan_review" });
-            } else if (result.type === "clarify") {
-              pendingPlan = { ...priorPlan, plan: result.plan, mode: nextMode };
-            } else {
-              pendingPlan = null;
-              yield* reindexCorpus();
-              yield* agentEvents.send({ type: "ui:composer" });
-            }
-          } catch (err) {
-            pendingPlan = null;
-            yield* agentEvents.send({
-              type: "ui:error",
-              message: errorMessage(err),
-            });
-          } finally {
-            clearIfCurrent();
-          }
-        });
-      } else if (cmd.type === "accept_plan" && pendingPlan) {
-        if (pendingPlan.plan.intent === "clarify") {
-          pendingPlan = null;
-          yield* agentEvents.send({ type: "ui:composer" });
-          continue;
-        }
-        if (registry.enabled().length === 0) {
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "No source configured. Add Tavily key or corpus path.",
-          });
-          pendingPlan = null;
-          continue;
-        }
-        startRunDir(pendingPlan.query, pendingPlan.mode);
-        const acceptedPlan = pendingPlan;
-        pendingPlan = null;
-        yield* startRun(function* (clearIfCurrent) {
-          try {
-            yield* runResearchPlan(
-              acceptedPlan.query,
-              acceptedPlan.plan,
-              session,
-              {
-                ...harnessOpts,
-                reasoningMode: acceptedPlan.mode,
-                effort: currentEffort,
-                wallStartMs: acceptedPlan.wallStartMs,
-                abilityFilter: acceptedPlan.abilityFilter,
-                userSidePending: acceptedPlan.clarifyExchanged,
-              },
-            );
-            yield* reindexCorpus();
-            yield* agentEvents.send({ type: "ui:composer" });
-          } catch (err) {
-            yield* agentEvents.send({
-              type: "ui:error",
-              message: errorMessage(err),
-            });
-          } finally {
-            clearIfCurrent();
-          }
-        });
-      } else if (cmd.type === "cancel_plan") {
+    *stop() {
+      if (run.task) {
+        yield* haltRun();
+        run.paused = false;
+        run.woundDown = false;
         pendingPlan = null;
         yield* agentEvents.send({ type: "ui:composer" });
-      } else if (cmd.type === "edit_plan") {
+      }
+      return "continue";
+    },
+
+    *wrap_up() {
+      // Refused while paused — press play first (the pane disables the
+      // button; this guard covers raw wire clients).
+      if (run.task && !run.paused) {
+        run.woundDown = true;
+        runner.windDown.send();
+      }
+      return "continue";
+    },
+
+    *pause() {
+      if (run.task && !run.paused && !run.woundDown) {
+        run.paused = true;
+        runner.pauseRun.send(true);
+      }
+      return "continue";
+    },
+
+    *resume() {
+      if (run.paused) {
+        run.paused = false;
+        runner.pauseRun.send(false);
+      }
+      return "continue";
+    },
+
+    *cancel_agent(cmd) {
+      if (run.task) runner.cancelAgent.send({ agentId: cmd.agentId });
+      return "continue";
+    },
+
+    *set_model_path(cmd) {
+      runner.reloadRuntime({ model: { path: cmd.path } });
+      return "exit";
+    },
+
+    *set_reranker_path(cmd) {
+      runner.reloadRuntime({ model: { reranker: cmd.path } });
+      return "exit";
+    },
+
+    *set_gpu(cmd) {
+      runner.reloadRuntime({ model: { gpu: cmd.gpu } });
+      return "exit";
+    },
+
+    // Boot-phase commands: answered by the target's boot BEFORE this loop
+    // runs (the download/decline dialog). Ignored here by decision, not
+    // omission — the table stays exhaustive.
+    *accept_backend_pack() {
+      return "continue";
+    },
+    *decline_backend_pack() {
+      return "continue";
+    },
+
+    *toggle_participation(cmd) {
+      const current = participation[cmd.name] ?? true;
+      participation[cmd.name] = !current;
+      yield* agentEvents.send({ type: "participation:toggled", name: cmd.name });
+      return "continue";
+    },
+
+    *set_ability_config(cmd) {
+      const resolvedValues = resolveConfigPaths(cmd.values);
+      const isClear = Object.keys(resolvedValues).length === 0;
+
+      // Path-shaped values must EXIST before anything persists or enables:
+      // a factory handed a bad path can take the whole process down (rig's
+      // loadResources exits on a missing corpus), and a persisted bad path
+      // would re-kill every subsequent boot. Generic — same path-shape rule
+      // as resolveConfigPaths, no ability-name knowledge.
+      const missingPath = Object.entries(resolvedValues).find(
+        ([k, v]) =>
+          typeof v === "string" &&
+          v !== "" &&
+          (/path$/i.test(k) || /^[~/.]/.test(v)) &&
+          !fs.existsSync(v),
+      );
+      if (missingPath) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: `${missingPath[0]}: path does not exist — ${String(missingPath[1])}`,
+        });
+        return "continue";
+      }
+
+      // Persist FIRST: if the disk save refuses (unreadable/newer
+      // harness.json, fs error), the outer catch surfaces it and the live
+      // session is untouched — no half-applied ability state. `prior` is
+      // kept so an enable failure below can restore the disk too.
+      const prior = (yield* configStore.get(cmd.name)) ?? null;
+      const saved = runner.saveConfig({
+        abilities: { [cmd.name]: resolvedValues },
+      });
+
+      yield* configStore.set(cmd.name, resolvedValues);
+
+      const factory = factoryFor(cmd.name);
+      if (factory) {
+        if (registry.byName(cmd.name)) yield* registry.disable(cmd.name);
+        const needsConfig = abilityRequiresConfig(cmd.name);
+        if (!isClear || !needsConfig) {
+          try {
+            const ability = yield* registry.enable(factory);
+            if (abilityToc(ability) !== null) {
+              events.send(corpusIndexedEvent(ability, resolvedValues.corpusPath));
+            }
+          } catch (err) {
+            // The new config failed to ENABLE — restore ALL the surfaces
+            // this command touched: the store, the LIVE registry (a
+            // previously working instance was disabled above — bring it
+            // back), and the disk. Best-effort throughout: the error toast
+            // below reports the original failure regardless.
+            if (prior && Object.keys(prior).length > 0) {
+              yield* configStore.set(cmd.name, prior);
+              try {
+                yield* registry.enable(factory);
+              } catch {
+                // The prior config no longer enables either — leave the
+                // ability disabled rather than looping.
+                yield* configStore.clear(cmd.name);
+              }
+            } else {
+              yield* configStore.clear(cmd.name);
+            }
+            try {
+              runner.saveConfig({ abilities: { [cmd.name]: prior ?? {} } });
+            } catch {
+              /* disk restore failed — the toast still reports the enable error */
+            }
+            yield* agentEvents.send({
+              type: "ui:error",
+              message: `Cannot configure ${cmd.name}: ${errorMessage(err)}`,
+            });
+            return "continue";
+          }
+        } else {
+          yield* configStore.clear(cmd.name);
+        }
+      }
+
+      participation[cmd.name] = true;
+
+      yield* agentEvents.send({
+        type: "config:updated",
+        config: redactAbilities(saved.config),
+        origin: saved.origin,
+        savedTo: saved.path,
+        gitignored: saved.gitignored,
+        skipped: saved.skipped,
+      });
+      yield* emitAbilities();
+      return "continue";
+    },
+
+    *set_output_dir(cmd) {
+      const resolved = cmd.path ? resolvePath(cmd.path) : "";
+      const saved = runner.saveConfig({
+        sources: { outputDir: resolved },
+      });
+      yield* agentEvents.send({
+        type: "config:updated",
+        config: redactAbilities(saved.config),
+        origin: saved.origin,
+        savedTo: saved.path,
+        gitignored: saved.gitignored,
+        skipped: saved.skipped,
+      });
+      return "continue";
+    },
+
+    *set_effort(cmd) {
+      // Save ONLY the changed key — spreading the whole defaults object
+      // would pin the untouched ones into harness.json, shadowing later
+      // harness.yml edits.
+      const saved = runner.saveConfig({ defaults: { effort: cmd.effort } });
+      yield* agentEvents.send({
+        type: "config:updated",
+        config: redactAbilities(saved.config),
+        origin: saved.origin,
+        savedTo: saved.path,
+        gitignored: saved.gitignored,
+        skipped: saved.skipped,
+      });
+      return "continue";
+    },
+
+    *library_list() {
+      yield* agentEvents.send({
+        type: "library:list",
+        entries: listReports(libraryDir()),
+      });
+      return "continue";
+    },
+
+    *library_read(cmd) {
+      // Confined to the library (confinedReport — realpath both sides).
+      // RESTORES the report as the session's settled document — the
+      // standard query/answer/complete events seed the fold, so everything
+      // downstream (canvas, chips, Ask, Extend) is the fresh-settle path.
+      // The trunk commit waits for the first submit over it.
+      const resolved = confinedReport(libraryDir(), cmd.path);
+      if (resolved === null) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: "That report is no longer there.",
+        });
+      } else if (run.task) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: "A brief is in flight — close it before opening another.",
+        });
+      } else {
+        openedReport = readReport(resolved);
+        yield* agentEvents.send({ type: "query", query: openedReport.title, warm: false });
+        yield* agentEvents.send({ type: "answer", text: openedReport.body });
+        yield* agentEvents.send({ type: "complete", data: {} });
+      }
+      return "continue";
+    },
+
+    *library_delete(cmd) {
+      // Same confinement as the read; deleting a brief removes its WHOLE
+      // run dir (report + annexures) and re-indexes the corpus — the
+      // system unlearns it. A run in flight can't be targeted: its dir
+      // has no report.md until it settles, so the list never offers it.
+      const resolved = confinedReport(libraryDir(), cmd.path);
+      if (resolved !== null) {
+        removeReport(resolved);
+        yield* reindexCorpus();
+      }
+      yield* agentEvents.send({
+        type: "library:list",
+        entries: listReports(libraryDir()),
+      });
+      return "continue";
+    },
+
+    *submit_query(cmd) {
+      if (registry.enabled().length === 0) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: "No source configured. Add Tavily key or corpus path.",
+        });
+        return "continue";
+      }
+      const abilityFilter = currentAbilityFilter();
+      if (abilityFilter.length === 0) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: "All sources excluded. Include at least one.",
+        });
+        return "continue";
+      }
+      const wallStartMs = performance.now();
+      currentEffort = runner.config().defaults.effort;
+      if (run.task) {
+        yield* haltRun();
         pendingPlan = null;
-        yield* agentEvents.send({ type: "ui:composer", prefill: cmd.query });
-      } else if (cmd.type === "update_task_description" && pendingPlan) {
+      }
+      yield* commitOpenedReport();
+      const { query, mode } = cmd;
+
+      // Ask (skipPlanner): the user's question IS the plan — one warm task,
+      // no planner. `query` first, matching runPlanner's order: the fold's
+      // warm-ask branch must see the ask before the synthetic plan:start
+      // arrives, or the plan:start retitles the settled document.
+      if (cmd.skipPlanner) {
+        const plan = singleTaskPlan(query);
+        yield* agentEvents.send({ type: "query", query, warm: !!session.trunk });
+        yield* agentEvents.send({ type: "plan:start", query, mode });
+        yield* agentEvents.send({
+          type: "plan",
+          intent: plan.intent,
+          tasks: plan.tasks,
+          clarifyQuestions: plan.clarifyQuestions,
+          tokenCount: plan.tokenCount,
+          timeMs: plan.timeMs,
+        });
+        startRunDir(query, mode);
+        yield* startRun(() =>
+          runAcceptedPlan({ query, plan, mode, wallStartMs, abilityFilter, isAsk: true }),
+        );
+        return "continue";
+      }
+
+      yield* startRun(() =>
+        runPlannedQuery({
+          query,
+          mode,
+          wallStartMs,
+          abilityFilter,
+          onStart: () => startRunDir(query, mode),
+          clarify: "commit",
+          pending: (plan) => ({
+            plan,
+            query,
+            clarifyExchanged: false,
+            mode,
+            wallStartMs,
+            abilityFilter,
+          }),
+        }),
+      );
+      return "continue";
+    },
+
+    *submit_clarification(cmd) {
+      if (!pendingPlan) return "continue";
+      const prior = pendingPlan;
+      yield* call(() => session.prefillUser(cmd.answer));
+      yield* startRun(() =>
+        runPlannedQuery({
+          query: prior.query,
+          mode: prior.mode,
+          wallStartMs: prior.wallStartMs,
+          abilityFilter: prior.abilityFilter,
+          onStart: () => startRunDir(prior.query, prior.mode),
+          clarify: "prefill",
+          pending: (plan) => ({ ...prior, plan, clarifyExchanged: true }),
+        }),
+      );
+      return "continue";
+    },
+
+    *change_mode(cmd) {
+      if (!pendingPlan) return "continue";
+      const prior = pendingPlan;
+      const mode = cmd.mode;
+      yield* startRun(() =>
+        runPlannedQuery({
+          query: prior.query,
+          mode,
+          wallStartMs: prior.wallStartMs,
+          abilityFilter: prior.abilityFilter,
+          onStart: () => startRunDir(prior.query, mode),
+          clarify: "none",
+          pending: (plan) => ({ ...prior, plan, mode }),
+        }),
+      );
+      return "continue";
+    },
+
+    *accept_plan() {
+      if (!pendingPlan) return "continue";
+      if (pendingPlan.plan.intent === "clarify") {
+        pendingPlan = null;
+        yield* agentEvents.send({ type: "ui:composer" });
+        return "continue";
+      }
+      if (registry.enabled().length === 0) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: "No source configured. Add Tavily key or corpus path.",
+        });
+        pendingPlan = null;
+        return "continue";
+      }
+      const accepted = pendingPlan;
+      pendingPlan = null;
+      startRunDir(accepted.query, accepted.mode);
+      yield* startRun(() =>
+        runAcceptedPlan({
+          query: accepted.query,
+          plan: accepted.plan,
+          mode: accepted.mode,
+          wallStartMs: accepted.wallStartMs,
+          abilityFilter: accepted.abilityFilter,
+          userSidePending: accepted.clarifyExchanged,
+        }),
+      );
+      return "continue";
+    },
+
+    *cancel_plan() {
+      pendingPlan = null;
+      yield* agentEvents.send({ type: "ui:composer" });
+      return "continue";
+    },
+
+    *edit_plan(cmd) {
+      pendingPlan = null;
+      yield* agentEvents.send({ type: "ui:composer", prefill: cmd.query });
+      return "continue";
+    },
+
+    *update_task_description(cmd) {
+      if (pendingPlan) {
         pendingPlan.plan.tasks = pendingPlan.plan.tasks.map((t, i) =>
           i === cmd.index ? { ...t, description: cmd.description } : t,
         );
@@ -1093,7 +988,12 @@ export function* harness(
           index: cmd.index,
           description: cmd.description,
         });
-      } else if (cmd.type === "add_task" && pendingPlan) {
+      }
+      return "continue";
+    },
+
+    *add_task(cmd) {
+      if (pendingPlan) {
         const insertAt = Math.max(
           0,
           Math.min(pendingPlan.plan.tasks.length, cmd.afterIndex + 1),
@@ -1107,17 +1007,27 @@ export function* harness(
           type: "plan:task_added",
           afterIndex: cmd.afterIndex,
         });
-      } else if (cmd.type === "delete_task" && pendingPlan) {
-        if (pendingPlan.plan.tasks.length > 1) {
-          pendingPlan.plan.tasks = pendingPlan.plan.tasks.filter(
-            (_, i) => i !== cmd.index,
-          );
-          yield* agentEvents.send({
-            type: "plan:task_deleted",
-            index: cmd.index,
-          });
-        }
-      } else if (cmd.type === "move_task" && pendingPlan) {
+      }
+      return "continue";
+    },
+
+    *delete_task(cmd) {
+      if (
+        pendingPlan &&
+        pendingPlan.plan.tasks.length > 1 &&
+        cmd.index >= 0 &&
+        cmd.index < pendingPlan.plan.tasks.length
+      ) {
+        pendingPlan.plan.tasks = pendingPlan.plan.tasks.filter(
+          (_, i) => i !== cmd.index,
+        );
+        yield* agentEvents.send({ type: "plan:task_deleted", index: cmd.index });
+      }
+      return "continue";
+    },
+
+    *move_task(cmd) {
+      if (pendingPlan) {
         const n = pendingPlan.plan.tasks.length;
         if (
           cmd.from !== cmd.to &&
@@ -1137,6 +1047,26 @@ export function* harness(
           });
         }
       }
+      return "continue";
+    },
+  };
+
+  // Auto-submit --query on the first iteration, through the same handler an
+  // interactive submit uses — one path, one behavior.
+  if (runner.isFirstIteration && runner.initialQuery) {
+    yield* handle.submit_query({
+      type: "submit_query",
+      query: runner.initialQuery,
+      mode: runner.config().defaults.reasoningMode,
+    });
+  }
+
+  for (const cmd of yield* each(commands)) {
+    try {
+      // `as never` is the one concession to TS's union-correlation limit —
+      // the mapped table above guarantees the handler matches the variant.
+      const flow = yield* handle[cmd.type](cmd as never);
+      if (flow === "exit") return;
     } catch (err) {
       pendingPlan = null;
       yield* agentEvents.send({ type: "ui:error", message: errorMessage(err) });
@@ -1144,5 +1074,4 @@ export function* harness(
       yield* each.next();
     }
   }
-  return;
 }
