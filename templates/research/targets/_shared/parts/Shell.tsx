@@ -2,7 +2,7 @@
  *  canvas, and the docked composer. Moments render inside the canvas. */
 import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
-import { send, useBrief } from "../store.js";
+import { send, useBrief, useConnection } from "../store.js";
 import {
   etaOf, selectControls, selectDepth, selectElapsed, selectLive,
   selectNotice, selectRunShape, selectStatus, selectTaskCount, selectTitle,
@@ -101,11 +101,32 @@ export function Shell({ children, dock, library }: {
         </div>
       </aside>
       <div style={S.main}>
+        <ConnectionBanner />
         <RunBar />
         <Notice />
         <div style={S.canvas}>{children}</div>
         <div style={S.dock}>{dock}</div>
       </div>
+    </div>
+  );
+}
+
+/** The link to the local host, made visible. When the socket drops the
+ *  whole UI would otherwise go silently quiet — commands vanish, nothing
+ *  streams — reading exactly like a frozen app. This says what actually
+ *  happened and offers the one recovery (a reload re-opens a fresh session;
+ *  the interrupted run does not survive, so we don't pretend it will). Only
+ *  the web target reports status; elsewhere useConnection stays 'connected'. */
+function ConnectionBanner(): ReactElement | null {
+  const status = useConnection();
+  if (status !== "lost") return null;
+  return (
+    <div role="alert" style={S.wire}>
+      <span className="fn-lamp" style={{ ...S.lamp, background: color.danger }} />
+      <span>Connection to the local host was lost — it may have stopped or restarted.</span>
+      <button type="button" style={S.wireBtn} onClick={() => window.location.reload()}>
+        Reconnect
+      </button>
     </div>
   );
 }
@@ -182,6 +203,16 @@ const S: Record<string, CSSProperties> = {
     position: "relative",
   },
   eta: { color: color.dim, whiteSpace: "nowrap" },
+  wire: {
+    display: "flex", alignItems: "center", gap: 10, flex: "none",
+    font: `13px ${font.ui}`, color: color.danger, background: "#F7E2DF",
+    borderBottom: `1px solid #E8C4BE`, padding: "9px 26px",
+  },
+  wireBtn: {
+    marginLeft: "auto", font: `600 12px ${font.ui}`, color: color.ground,
+    background: color.danger, border: 0, borderRadius: radius.control,
+    padding: "5px 12px", cursor: "pointer",
+  },
   notice: {
     font: `13px ${font.ui}`, color: color.dim, background: color.card2,
     borderBottom: `1px solid ${color.line}`, padding: "8px 26px", flex: "none",

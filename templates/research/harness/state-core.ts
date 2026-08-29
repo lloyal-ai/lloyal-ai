@@ -14,6 +14,13 @@
 
 import type { Config, ConfigOrigin } from './config-types.js';
 
+/** The view's transport link to the host — a fact of the wire, NOT the
+ *  harness fold (the harness never knows if a browser's socket dropped).
+ *  'connecting' at load, 'connected' once the host is ready, 'lost' when the
+ *  socket dies under a live view. The web bridge reports it; the in-process
+ *  cli/desktop bridges never leave 'connected'. */
+export type WireStatus = 'connecting' | 'connected' | 'lost';
+
 export type Phase = 'idle' | 'recon' | 'query' | 'plan' | 'research' | 'synth' | 'done';
 
 /** Drives which top-level view the App renders. Distinct from `phase` —
