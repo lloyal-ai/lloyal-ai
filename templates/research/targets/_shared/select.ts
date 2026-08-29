@@ -538,9 +538,9 @@ export interface Probe {
 }
 
 /** The pre-flight probes — one recon agent per included library, aligned by
- *  spawn order (the pool forks them in the byline's own order). Probes are
- *  parallel by nature, so the Frame renders them side by side; each carries
- *  the full disclosure stream research rows have. */
+ *  spawn order (the pool forks them in the byline's own order). The Frame
+ *  stacks them full-width like every other section; each carries the full
+ *  disclosure stream research rows have. */
 export const selectProbes = (app: AppState): Probe[] => {
   const included = selectLibraries(app).filter((l) => l.included);
   const out: Probe[] = [];

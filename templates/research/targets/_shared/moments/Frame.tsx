@@ -182,11 +182,11 @@ const lineTextBase: CSSProperties = {
   textAlign: "left", cursor: "text", flex: 1, lineHeight: 1.5,
 };
 
-/** The discovery beat: one card per probed library, side by side — probes
- *  run in parallel, so the layout says so. Each card is the library
- *  answering "what do you hold on this?": a live verb, the running tally,
- *  and the latest beat streaming through. Click a card to disclose the
- *  probe's whole work stream, token by token. */
+/** The discovery beat: one full-width card per probed library, stacked —
+ *  the same section grammar the rest of the document keeps. Each card is
+ *  the library answering "what do you hold on this?": a live verb, the
+ *  running tally, and the latest beat streaming through. Click (or Enter
+ *  on the glyph) to disclose the probe's whole work stream in place. */
 function Probes(): ReactElement | null {
   const probes = useBrief(selectProbes);
   if (probes.length === 0) return null;
@@ -223,6 +223,9 @@ function ProbeCard({ probe }: { probe: Probe }): ReactElement {
         <span style={{ flex: 1 }} />
         {tally && <span style={P.tally}>{tally}</span>}
         {inquiry.verb.kind === "settled" && <span style={P.done}>✓</span>}
+        <button type="button" style={P.disclose} aria-expanded={open} aria-label="show the work">
+          {open ? "▾" : "▸"}
+        </button>
       </div>
       <div style={P.beat}>
         {live ? <Thinking>{probe.peek ?? inquiry.verb.text}</Thinking> : (probe.peek ?? inquiry.verb.text)}
@@ -253,6 +256,10 @@ const P: Record<string, CSSProperties> = {
   beat: {
     marginTop: 7, font: `13px ${font.ui}`, color: color.dim, minHeight: 18,
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
+  disclose: {
+    font: `10px ${font.ui}`, color: color.dim, background: "none", border: 0,
+    cursor: "pointer", flex: "none", padding: 2,
   },
 };
 

@@ -9,14 +9,18 @@ import * as path from "node:path";
 import type { LibraryEntry } from "./state-core.js";
 
 /** A client-supplied library path is trusted only once its REAL location
- *  (symlinks resolved) is a report.md inside the library — realpath on both
- *  sides, so a planted link can't lead the read outside the output dir.
- *  Missing paths land in the catch: null means "not a library report". */
+ *  (symlinks resolved) is a report.md EXACTLY one run-dir below the library
+ *  root — realpath on both sides, so a planted link can't lead the read
+ *  outside the output dir, and the depth rule keeps `removeReport`'s
+ *  dirname-removal aimed at a run dir, never the root itself (a root-level
+ *  report.md would otherwise make delete take the whole library) nor some
+ *  deeper tree the corpus happens to hold. Missing paths land in the catch:
+ *  null means "not a library report". */
 export function confinedReport(outputDir: string, candidate: string): string | null {
   try {
     const root = fs.realpathSync(path.resolve(outputDir));
     const resolved = fs.realpathSync(path.resolve(candidate));
-    return resolved.startsWith(root + path.sep) &&
+    return path.dirname(path.dirname(resolved)) === root &&
       path.basename(resolved) === "report.md"
       ? resolved
       : null;
@@ -32,7 +36,10 @@ export function listReports(outputDir: string): LibraryEntry[] {
   if (!fs.existsSync(outputDir)) return [];
   const entries: LibraryEntry[] = [];
   for (const name of fs.readdirSync(outputDir)) {
-    const reportPath = path.join(outputDir, name, "report.md");
+    // The same confinement every command applies — a symlinked run dir
+    // must not surface an external file's title into the sidebar.
+    const reportPath = confinedReport(outputDir, path.join(outputDir, name, "report.md"));
+    if (reportPath === null) continue;
     let text: string;
     try {
       text = fs.readFileSync(reportPath, "utf8");
