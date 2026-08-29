@@ -8,8 +8,10 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactElement } fr
 import { color, font, inquiryColor } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
-  selectClarify, selectOutline, selectOutlineDraft, selectReviewing, selectTitle,
+  selectClarify, selectDev, selectOutline, selectOutlineDraft, selectProbes,
+  selectReviewing, selectTitle, type Probe,
 } from "../select.js";
+import { Work } from "../parts/InquiryRow.js";
 import { Thinking, doc } from "../parts/Shell.js";
 
 const START_HOLD_S = 5;
@@ -27,7 +29,10 @@ export function Frame(): ReactElement {
       <h1 style={S.title}>{title}</h1>
 
       {discovering && (
-        <p style={S.beat}><Thinking>checking your libraries…</Thinking></p>
+        <>
+          <p style={S.beat}><Thinking>browsing your sources…</Thinking></p>
+          <Probes />
+        </>
       )}
 
       {draft && (
@@ -175,6 +180,80 @@ function Review({ outline }: { outline: string[] }): ReactElement {
 const lineTextBase: CSSProperties = {
   font: "inherit", color: "inherit", background: "none", border: 0, padding: 0,
   textAlign: "left", cursor: "text", flex: 1, lineHeight: 1.5,
+};
+
+/** The discovery beat: one card per probed library, side by side — probes
+ *  run in parallel, so the layout says so. Each card is the library
+ *  answering "what do you hold on this?": a live verb, the running tally,
+ *  and the latest beat streaming through. Click a card to disclose the
+ *  probe's whole work stream, token by token. */
+function Probes(): ReactElement | null {
+  const probes = useBrief(selectProbes);
+  if (probes.length === 0) return null;
+  return (
+    <div style={P.stack}>
+      {probes.map((p) => (
+        <ProbeCard key={p.inquiry.id} probe={p} />
+      ))}
+    </div>
+  );
+}
+
+function ProbeCard({ probe }: { probe: Probe }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const dev = useBrief(selectDev);
+  const { inquiry } = probe;
+  const live = inquiry.endedAt === null && inquiry.verb.kind !== "failed";
+  const tally =
+    probe.found !== null
+      ? `${probe.searches} ${probe.searches === 1 ? "search" : "searches"} · ${probe.found} found`
+      : probe.searches > 0
+        ? `${probe.searches} ${probe.searches === 1 ? "search" : "searches"}`
+        : null;
+  return (
+    <div
+      style={{ ...P.card, ...(open ? P.cardOpen : null) }}
+      title={open ? undefined : "Show the work"}
+      onClick={() => setOpen((o) => !o)}
+    >
+      <div style={P.head}>
+        {live && <span className="fn-lamp" style={P.lamp} />}
+        <span style={P.name}>{probe.title}</span>
+        {dev && <span style={P.ref}>(#{inquiry.id})</span>}
+        <span style={{ flex: 1 }} />
+        {tally && <span style={P.tally}>{tally}</span>}
+        {inquiry.verb.kind === "settled" && <span style={P.done}>✓</span>}
+      </div>
+      <div style={P.beat}>
+        {live ? <Thinking>{probe.peek ?? inquiry.verb.text}</Thinking> : (probe.peek ?? inquiry.verb.text)}
+      </div>
+      {open && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Work id={inquiry.id} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const P: Record<string, CSSProperties> = {
+  stack: { marginTop: 20, display: "flex", flexDirection: "column", gap: 10 },
+  card: {
+    background: color.card,
+    border: `1px solid ${color.line}`, borderRadius: 12, padding: "13px 15px",
+    cursor: "pointer",
+  },
+  cardOpen: { borderColor: color.ink, boxShadow: `0 0 0 1px ${color.ink}` },
+  head: { display: "flex", alignItems: "center", gap: 8 },
+  lamp: { width: 7, height: 7, borderRadius: "50%", background: color.ember, flex: "none" },
+  name: { font: `600 13.5px ${font.ui}`, color: color.ink },
+  ref: { color: color.dim, fontSize: 11.5, fontVariantNumeric: "tabular-nums" },
+  tally: { font: `12px ${font.ui}`, color: color.dim, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
+  done: { font: `12px ${font.ui}`, color: color.ok },
+  beat: {
+    marginTop: 7, font: `13px ${font.ui}`, color: color.dim, minHeight: 18,
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
 };
 
 const S: Record<string, CSSProperties> = {

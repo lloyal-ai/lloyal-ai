@@ -7,9 +7,11 @@ import { color, font, inquiryColor, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import { selectDev, selectWorkFor, type Inquiry, type WorkStep } from "../select.js";
 
-export function InquiryRow({ inquiry, closing }: {
+export function InquiryRow({ inquiry, closing, label }: {
   inquiry: Inquiry;
   closing: boolean;
+  /** Overrides the "Inquiry N" identity — the probes name their source. */
+  label?: string;
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const dev = useBrief(selectDev);
@@ -30,7 +32,7 @@ export function InquiryRow({ inquiry, closing }: {
         onClick={() => setOpen((o) => !o)}
       >
         {live && verb.kind !== "waiting" && <span className="fn-lamp" style={{ ...S.dot, background: color.ember }} />}
-        <span style={{ ...S.who, color: identity }}>Inquiry {inquiry.index + 1}</span>
+        <span style={{ ...S.who, color: identity }}>{label ?? `Inquiry ${inquiry.index + 1}`}</span>
         {dev && <span style={S.ref}>(#{inquiry.id})</span>}
         <span style={S.verb}>
           {verb.kind === "waiting" ? <Park text={verb.text} retryAt={verb.retryAt ?? 0} closing={closing} /> : verb.text}
@@ -62,7 +64,7 @@ export function InquiryRow({ inquiry, closing }: {
 /** The disclosed stream — the model's own work, live: thoughts as they
  *  arrive, each call and result, the raw tokens of the move being written.
  *  Follows the tail. */
-function Work({ id }: { id: number }): ReactElement {
+export function Work({ id }: { id: number }): ReactElement {
   const steps = useBrief(selectWorkFor(id));
   const pane = useRef<HTMLDivElement>(null);
   useEffect(() => {

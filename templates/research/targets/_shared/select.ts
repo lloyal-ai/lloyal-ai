@@ -204,7 +204,7 @@ export const selectStatus = (app: AppState): string =>
     boot_error: "Stopped",
     backend_pack_offer: "Ready",
     composer: "Ready",
-    discovering: "Checking your libraries",
+    discovering: "Browsing your sources",
     planning: "Framing",
     plan_review: "Framing",
     clarifying: "Framing",
@@ -521,6 +521,56 @@ export const selectMarks = (app: AppState): string[] => {
   if (unsettled === 1) marks.push("One line of inquiry closed without settling.");
   else if (unsettled > 1) marks.push(`${unsettled} lines of inquiry closed without settling.`);
   return marks;
+};
+
+/** One pre-flight probe: a library answering "what do you hold on this?"
+ *  before anything is planned. */
+export interface Probe {
+  title: string;
+  inquiry: Inquiry;
+  /** Searches the probe has made so far. */
+  searches: number;
+  /** Results those searches surfaced (null until any land). */
+  found: number | null;
+  /** The latest visible beat — a thought's title or the last result line —
+   *  so the card always shows motion at edge token rates. */
+  peek: string | null;
+}
+
+/** The pre-flight probes — one recon agent per included library, aligned by
+ *  spawn order (the pool forks them in the byline's own order). Probes are
+ *  parallel by nature, so the Frame renders them side by side; each carries
+ *  the full disclosure stream research rows have. */
+export const selectProbes = (app: AppState): Probe[] => {
+  const included = selectLibraries(app).filter((l) => l.included);
+  const out: Probe[] = [];
+  app.reconAgentIds.forEach((id, i) => {
+    const a = app.agents.get(id);
+    if (!a) return;
+    let searches = 0;
+    let found: number | null = null;
+    for (const t of a.timeline) {
+      if (t.kind === "tool_call") searches += 1;
+      if (t.kind === "tool_result" && t.resultCount !== null) {
+        found = (found ?? 0) + t.resultCount;
+      }
+    }
+    const last = a.timeline[a.timeline.length - 1];
+    const peek =
+      last === undefined ? null
+      : last.kind === "think" ? (last.live && last.title === "Thinking…" ? null : last.title)
+      : last.kind === "tool_call" ? `${doing(last.tool)} ${last.argsSummary}`.trim()
+      : last.kind === "tool_result" ? resultMeta(last)
+      : null;
+    out.push({
+      title: included[i]?.title ?? "a source",
+      inquiry: { id: a.id, index: i, verb: verbOf(a), startedAt: a.startedAt, endedAt: a.endedAt },
+      searches,
+      found,
+      peek,
+    });
+  });
+  return out;
 };
 
 /** The document's warm-ask exchanges, settled beneath it. */
