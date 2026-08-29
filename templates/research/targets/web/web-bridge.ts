@@ -75,8 +75,12 @@ export function installWebBridge(): void {
           for (const c of drained) client?.send(c);
         },
         onClose: () => {
-          // The host went away. A deliberate teardown has no one to tell
-          // (the view is unmounting); an unexpected drop raises the banner.
+          // The socket is gone — `ready` must go with it, or send() would
+          // bypass the queue and post to a dead link. Commands now queue
+          // again (drained if a reconnect ever lands). A deliberate teardown
+          // has no one to tell (the view is unmounting); an unexpected drop
+          // raises the banner.
+          ready = false;
           if (!deliberate) setStatus("lost");
         },
       });
