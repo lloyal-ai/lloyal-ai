@@ -325,6 +325,10 @@ export interface AppState {
    *  harness). The "Forked N agents" label prefers this over the live agent set
    *  or plan.tasks, which can be empty/late on the renderer side. 0 until research starts. */
   researchAgentCount: number;
+  /** The wire's dev signal (`config:loaded.dev` — the boot's LLOYAL_DEV).
+   *  Lets the view align with the docked dev pane: inquiry rows suffix the
+   *  agent id the pane keys its rows by. Never rendered for consumers. */
+  dev: boolean;
   /** Merged config from CLI > env > file > default. Null until config:loaded. */
   config: Config | null;
   /** Per-field origin — used to flag secrets as `(env)` in the composer. */
@@ -421,6 +425,7 @@ export const initialState: AppState = {
   pendingTaskDescription: null,
   researchSpawnCount: 0,
   researchAgentCount: 0,
+  dev: false,
   config: null,
   configOrigin: null,
   toast: null,

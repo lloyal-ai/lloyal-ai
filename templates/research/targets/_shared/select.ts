@@ -79,6 +79,12 @@ export const selectLibraries = (app: AppState): Library[] =>
       included: app.participation[a.name] !== false,
     }));
 
+/** Whether the dev pane rides this wire. The ONE register exception hangs
+ *  off it: with the pane docked, inquiry rows suffix the agent id the pane
+ *  keys its rows by — correlation for the developer, invisible to everyone
+ *  else. */
+export const selectDev = (app: AppState): boolean => app.dev;
+
 /** The one transient notice — a save confirmation, an error the run
  *  surfaced. Nothing else in the register floats, so this renders as a
  *  docked strip, not a toast. */

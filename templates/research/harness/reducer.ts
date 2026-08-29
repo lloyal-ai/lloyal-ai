@@ -413,6 +413,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // PlanReview picker snap back to the default every time.
       return {
         ...initialState,
+        dev: state.dev,
         config: state.config,
         configOrigin: state.configOrigin,
         uiPhase: state.uiPhase,
@@ -611,6 +612,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // corpus is enabled iff a path is set. Both default to included.
       return {
         ...state,
+        dev: ev.dev ?? state.dev,
         config: ev.config,
         configOrigin: ev.origin,
         participation: seedParticipation(state.participation, ev.config),
@@ -677,6 +679,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         state.uiPhase === 'boot';
       return {
         ...initialState,
+        dev: state.dev,
         config: state.config,
         configOrigin: state.configOrigin,
         mode: state.mode,

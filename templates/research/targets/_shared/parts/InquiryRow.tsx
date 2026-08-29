@@ -5,13 +5,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, inquiryColor, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
-import { selectWorkFor, type Inquiry, type WorkStep } from "../select.js";
+import { selectDev, selectWorkFor, type Inquiry, type WorkStep } from "../select.js";
 
 export function InquiryRow({ inquiry, closing }: {
   inquiry: Inquiry;
   closing: boolean;
 }): ReactElement {
   const [open, setOpen] = useState(false);
+  const dev = useBrief(selectDev);
   const { verb } = inquiry;
   const live = inquiry.endedAt === null && verb.kind !== "failed";
   const identity = inquiryColor(inquiry.index);
@@ -30,6 +31,7 @@ export function InquiryRow({ inquiry, closing }: {
       >
         {live && verb.kind !== "waiting" && <span className="fn-lamp" style={{ ...S.dot, background: color.ember }} />}
         <span style={{ ...S.who, color: identity }}>Inquiry {inquiry.index + 1}</span>
+        {dev && <span style={S.ref}>(#{inquiry.id})</span>}
         <span style={S.verb}>
           {verb.kind === "waiting" ? <Park text={verb.text} retryAt={verb.retryAt ?? 0} closing={closing} /> : verb.text}
         </span>
@@ -114,6 +116,7 @@ const S: Record<string, CSSProperties> = {
   done: { opacity: 0.6, boxShadow: "none" },
   dot: { width: 7, height: 7, borderRadius: "50%", flex: "none" },
   who: { fontWeight: 700, flex: "none", letterSpacing: "-.01em" },
+  ref: { color: color.dim, fontSize: 11.5, fontVariantNumeric: "tabular-nums" },
   verb: { color: "inherit", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   pill: { font: `600 11px ${font.ui}`, borderRadius: radius.pill, padding: "3px 8px", flex: "none" },
   stop: {
