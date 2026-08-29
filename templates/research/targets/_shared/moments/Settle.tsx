@@ -67,11 +67,14 @@ export function Settle(): ReactElement {
 
   const download = (): void => {
     const blob = new Blob([answer?.body ?? ""], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "brief"}.md`;
     a.click();
-    URL.revokeObjectURL(a.href);
+    // Revoke only after the download has consumed the URL — a synchronous
+    // revoke can cancel the navigation in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
 
   return (

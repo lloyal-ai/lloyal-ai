@@ -19,7 +19,9 @@ export function OutlineRail({ entries }: { entries: OutlineEntry[] }): ReactElem
             ...(e.level === 0 ? { color: inquiryColor(e.index) } : null),
           }}
           onClick={() =>
-            document.getElementById(e.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" })
+            // Instant on purpose: smooth scrolling (JS or CSS) silently
+            // no-ops in Chromium's nested scroller here — landing beats motion.
+            document.getElementById(e.anchor)?.scrollIntoView({ behavior: "instant", block: "start" })
           }
         >
           {e.text}

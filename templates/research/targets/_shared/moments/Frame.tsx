@@ -80,11 +80,12 @@ function Review({ outline }: { outline: string[] }): ReactElement {
   const accepted = useRef(false);
 
   const hold = editing !== null;
+  const expired = left <= 0;
   useEffect(() => {
-    if (hold) return;
+    if (hold || expired) return;
     const t = setInterval(() => setLeft((n) => n - 1), 1000);
     return () => clearInterval(t);
-  }, [hold]);
+  }, [hold, expired]);
 
   useEffect(() => {
     if (left <= 0 && !accepted.current) {

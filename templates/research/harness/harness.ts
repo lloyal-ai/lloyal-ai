@@ -173,6 +173,23 @@ function redactAbilities(config: Config): Config {
 
 // ── The library: settled briefs on disk ──────────────────────────
 
+/** A client-supplied library path is trusted only once its REAL location
+ *  (symlinks resolved) is a report.md inside the library — realpath on both
+ *  sides, so a planted link can't lead the read outside the output dir.
+ *  Missing paths land in the catch: null means "not a library report". */
+function confinedReport(outputDir: string, candidate: string): string | null {
+  try {
+    const root = fs.realpathSync(path.resolve(outputDir));
+    const resolved = fs.realpathSync(path.resolve(candidate));
+    return resolved.startsWith(root + path.sep) &&
+      path.basename(resolved) === "report.md"
+      ? resolved
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** One sidebar entry per run dir that actually settled — error runs leave no
  *  report.md. Title and byline come from the report's own first lines
  *  (`# query` / `> ISO · mode · …`, RunDirSink's format), newest first. */
@@ -748,17 +765,13 @@ export function* harness(
           entries: listReports(libraryDir()),
         });
       } else if (cmd.type === "library_read") {
-        // Confined to the library: a report.md under the output dir,
-        // nothing else. RESTORES the report as the session's settled
+        // Confined to the library (confinedReport — realpath both sides).
+        // RESTORES the report as the session's settled
         // document — the standard query/answer/complete seed the fold, so
         // everything downstream (canvas, chips, Ask, Extend) is the fresh-
         // settle path. The trunk commit waits for the first submit over it.
-        const root = path.resolve(libraryDir());
-        const resolved = path.resolve(cmd.path);
-        const confined =
-          resolved.startsWith(root + path.sep) &&
-          path.basename(resolved) === "report.md";
-        if (!confined || !fs.existsSync(resolved)) {
+        const resolved = confinedReport(libraryDir(), cmd.path);
+        if (resolved === null) {
           yield* agentEvents.send({
             type: "ui:error",
             message: "That report is no longer there.",
@@ -785,12 +798,8 @@ export function* harness(
         // run dir (report + annexures) and re-indexes the corpus — the
         // system unlearns it. A run in flight can't be targeted: its dir
         // has no report.md until it settles, so the list never offers it.
-        const root = path.resolve(libraryDir());
-        const resolved = path.resolve(cmd.path);
-        const confined =
-          resolved.startsWith(root + path.sep) &&
-          path.basename(resolved) === "report.md";
-        if (confined && fs.existsSync(resolved)) {
+        const resolved = confinedReport(libraryDir(), cmd.path);
+        if (resolved !== null) {
           fs.rmSync(path.dirname(resolved), { recursive: true, force: true });
           yield* reindexCorpus();
         }

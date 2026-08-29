@@ -567,13 +567,15 @@ const slugify = (text: string): string =>
 
 /** Every markdown heading in document order, anchored under `prefix`.
  *  Pure and shared with `Prose`, which assigns these same ids in render
- *  order — the rail and the document cannot disagree. Fences are skipped;
- *  inline markup is stripped from the shown text. */
+ *  order — the rail and the document cannot disagree. Repeated headings
+ *  get numbered anchors so ids stay unique. Fences are skipped; inline
+ *  markup is stripped from the shown text. */
 export const anchorsOf = (
   markdown: string,
   prefix: string,
 ): { anchor: string; text: string; depth: number }[] => {
   const out: { anchor: string; text: string; depth: number }[] = [];
+  const seen = new Map<string, number>();
   let fenced = false;
   for (const line of markdown.split("\n")) {
     if (line.startsWith("```")) { fenced = !fenced; continue; }
@@ -581,7 +583,10 @@ export const anchorsOf = (
     const m = /^(#{1,4})\s+(.+?)\s*#*\s*$/.exec(line);
     if (!m) continue;
     const text = m[2].replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_`]/g, "");
-    out.push({ anchor: `${prefix}-${slugify(text)}`, text, depth: m[1].length });
+    const slug = slugify(text);
+    const n = (seen.get(slug) ?? 0) + 1;
+    seen.set(slug, n);
+    out.push({ anchor: `${prefix}-${slug}${n > 1 ? `-${n}` : ""}`, text, depth: m[1].length });
   }
   return out;
 };
@@ -607,7 +612,9 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
       anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: 0,
     }));
     if (selectCitations(app).length > 0) {
-      entries.push({ anchor: "a-sources", text: "Sources", level: 1, index: 0 });
+      // The grid's own anchor lives outside the markdown `a-` namespace so a
+      // report's "## Sources" heading can never collide with it.
+      entries.push({ anchor: "grid-sources", text: "Sources", level: 1, index: 0 });
     }
     app.exchanges.forEach((x, i) => {
       entries.push({ anchor: `e${i}`, text: x.question, level: 0, index: i + 1 });

@@ -12,7 +12,7 @@ export function Sources({ citations, notes }: {
   if (citations.length === 0) return null;
   return (
     <section style={S.wrap}>
-      <h2 id="a-sources" style={S.head}>
+      <h2 id="grid-sources" style={S.head}>
         Sources<span style={S.count}>{citations.length}</span>
       </h2>
       <div style={S.grid}>
