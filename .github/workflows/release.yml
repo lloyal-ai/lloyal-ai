@@ -43,8 +43,10 @@ jobs:
             const f=p.files.map(x=>x.path);
             const need=['bin/run.js','LICENSE','package.json'];
             for (const n of need) if(!f.includes(n)) throw new Error('missing '+n);
-            const t=f.filter(x=>x.startsWith('templates/')).length;
-            if (t !== 98) throw new Error('expected 98 template files, got '+t);
+            // Structure only — that the templates ship at all. The EXACT
+            // count is ci.yml's pin, asserted on every PR; duplicating the
+            // number here just drifts (it did: 98 vs the real 114).
+            if (!f.some(x=>x.startsWith('templates/'))) throw new Error('no templates shipped');
             if (!f.some(x=>x.startsWith('dist/'))) throw new Error('no dist output');
             console.log('tarball ok:', f.length, 'files');
           "
