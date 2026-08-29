@@ -80,7 +80,9 @@ function storeFor(bridge: Bridge): BriefStore {
  *  the state is immutable between events, so a named selector returns the
  *  SAME reference until the next fold (what `useSyncExternalStore` needs).
  *  The contract: selectors from `select.ts` (stable identity) may build
- *  objects; an inline selector must return a primitive. */
+ *  objects; an inline selector must return a primitive. A component that
+ *  re-renders on its OWN timer hoists its selectors — a fresh identity per
+ *  tick would grow the fold's memo map. */
 const derived = new WeakMap<AppState, Map<(app: AppState) => unknown, unknown>>();
 
 export function useBrief<T>(select: (app: AppState) => T): T {

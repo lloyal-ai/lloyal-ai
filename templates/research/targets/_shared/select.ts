@@ -113,6 +113,13 @@ export const estimateLabel = (depth: Depth, tasks: number | null, pace: Pace): s
 export const selectTaskCount = (app: AppState): number | null =>
   app.plan?.tasks.length ?? null;
 
+/** The clock's two stable inputs — the Clock re-renders on its own ticker,
+ *  so its selectors must hold ONE identity; a fresh inline closure per tick
+ *  would grow the fold's memo map (see the store's contract). */
+export const selectBanked = (app: AppState): number => app.pipelineElapsedMs;
+export const selectResumedAt = (app: AppState): number | null =>
+  app.pipelineResumedAt;
+
 /** Wall time the run has actually spent (paused spans excluded). */
 export const selectElapsed = (app: AppState): number =>
   app.pipelineElapsedMs +

@@ -8,8 +8,9 @@ import { useEffect, useState, type CSSProperties, type ReactElement } from "reac
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
-  DEPTHS, SHAPES, estimateLabel, fmtElapsed,
-  selectDepth, selectLive, selectMoment, selectTaskCount, type Shape,
+  DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectBanked,
+  selectDepth, selectLive, selectMoment, selectResumedAt, selectTaskCount,
+  type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
 
@@ -102,8 +103,8 @@ function Clock(): ReactElement {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const banked = useBrief((app) => app.pipelineElapsedMs);
-  const resumedAt = useBrief((app) => app.pipelineResumedAt);
+  const banked = useBrief(selectBanked);
+  const resumedAt = useBrief(selectResumedAt);
   const elapsed = banked + (resumedAt !== null ? Math.max(0, now - resumedAt) : 0);
   return (
     <span style={S.clock}>

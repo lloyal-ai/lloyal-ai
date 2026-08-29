@@ -1212,10 +1212,21 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         },
       };
 
-    case 'run:paused':
-      return { ...state, paused: true };
+    case 'run:paused': {
+      // Bank the timer so a held span never counts as time spent —
+      // selectElapsed, the ETA, and settle-time pace learning all read it.
+      const accrued = state.pipelineResumedAt
+        ? state.pipelineElapsedMs + (Date.now() - state.pipelineResumedAt)
+        : state.pipelineElapsedMs;
+      return {
+        ...state,
+        paused: true,
+        pipelineElapsedMs: accrued,
+        pipelineResumedAt: null,
+      };
+    }
     case 'run:resumed':
-      return { ...state, paused: false };
+      return { ...state, paused: false, pipelineResumedAt: Date.now() };
     case 'run:windingDown':
       return { ...state, closing: true, closedEarly: true };
 
