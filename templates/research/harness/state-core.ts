@@ -14,6 +14,13 @@
 
 import type { Config, ConfigOrigin } from './config-types.js';
 
+/** The view's transport link to the host — a fact of the wire, NOT the
+ *  harness fold (the harness never knows if a browser's socket dropped).
+ *  'connecting' at load, 'connected' once the host is ready, 'lost' when the
+ *  socket dies under a live view. The web bridge reports it; the in-process
+ *  cli/desktop bridges never leave 'connected'. */
+export type WireStatus = 'connecting' | 'connected' | 'lost';
+
 export type Phase = 'idle' | 'recon' | 'query' | 'plan' | 'research' | 'synth' | 'done';
 
 /** Drives which top-level view the App renders. Distinct from `phase` —
@@ -38,6 +45,14 @@ export type UiPhase =
  *  orchestration (orthogonal tasks running concurrently). One encoding
  *  everywhere — no 'chain' alias. */
 export type Mode = 'flat' | 'deep';
+
+/** One settled brief on disk — a sidebar library row (`library:list`). */
+export interface LibraryEntry {
+  path: string;
+  title: string;
+  savedAt: string;
+  mode: Mode | null;
+}
 
 /** One cited source, extracted CONSUMER-side from a tool result (the Ability
  *  Protocol prescribes no result schema). Web tools populate url/title/snippet
@@ -317,6 +332,10 @@ export interface AppState {
    *  harness). The "Forked N agents" label prefers this over the live agent set
    *  or plan.tasks, which can be empty/late on the renderer side. 0 until research starts. */
   researchAgentCount: number;
+  /** The wire's dev signal (`config:loaded.dev` — the boot's LLOYAL_DEV).
+   *  Lets the view align with the docked dev pane: inquiry rows suffix the
+   *  agent id the pane keys its rows by. Never rendered for consumers. */
+  dev: boolean;
   /** Merged config from CLI > env > file > default. Null until config:loaded. */
   config: Config | null;
   /** Per-field origin — used to flag secrets as `(env)` in the composer. */
@@ -366,9 +385,7 @@ export interface AppState {
   /** Settled briefs on disk (`library:list`). Opening one restores it as
    *  the session document via the standard query/answer/complete events —
    *  no report body is ever held here. */
-  library: {
-    entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
-  };
+  library: { entries: LibraryEntry[] };
   /** Warm-ask exchanges appended beneath the settled brief — the document
    *  grows, it is never replaced. A full (cold) query clears them. */
   exchanges: { question: string; body: string }[];
@@ -415,6 +432,7 @@ export const initialState: AppState = {
   pendingTaskDescription: null,
   researchSpawnCount: 0,
   researchAgentCount: 0,
+  dev: false,
   config: null,
   configOrigin: null,
   toast: null,

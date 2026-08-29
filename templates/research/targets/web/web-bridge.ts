@@ -5,7 +5,7 @@
  * reads `window.harness`, whether that's IPC (desktop) or wss (web).
  */
 import { connectWss, type WssClient } from "@lloyal-labs/binding/web";
-import { initialState, type AppState } from "../../harness/state.js";
+import { initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
 /** Where the served host lives: build-time `VITE_WSS_URL`, a `?server=` query
@@ -25,6 +25,18 @@ const MAX_HISTORY = 50_000;
 
 export function installWebBridge(): void {
   let client: WssClient<Command> | null = null;
+  // Transport status, reported to the view so a dropped host degrades
+  // VISIBLY (a banner) instead of the whole UI silently going quiet. A
+  // deliberate teardown (last listener unsubscribing on HMR / unmount) is
+  // NOT a loss — the flag distinguishes it from the socket dying under us.
+  let status: WireStatus = "connecting";
+  let deliberate = false;
+  const statusListeners = new Set<(s: WireStatus) => void>();
+  const setStatus = (next: WireStatus): void => {
+    if (next === status) return;
+    status = next;
+    for (const l of statusListeners) l(status);
+  };
   // Commands queue until the server says ready: a send while the socket is
   // still CONNECTING throws inside the client and latches it closed — one
   // eager send (the view lists the library on mount) would silence every
@@ -57,9 +69,19 @@ export function installWebBridge(): void {
         },
         onReady: () => {
           ready = true;
+          setStatus("connected");
           const drained = queued;
           queued = [];
           for (const c of drained) client?.send(c);
+        },
+        onClose: () => {
+          // The socket is gone — `ready` must go with it, or send() would
+          // bypass the queue and post to a dead link. Commands now queue
+          // again (drained if a reconnect ever lands). A deliberate teardown
+          // has no one to tell (the view is unmounting); an unexpected drop
+          // raises the banner.
+          ready = false;
+          if (!deliberate) setStatus("lost");
         },
       });
       // Replay the session so far to the new subscriber — synchronously,
@@ -71,18 +93,29 @@ export function installWebBridge(): void {
         // leaked, and reset — a later subscription reconnects a fresh session
         // (which re-seeds from initialState @ 0, matching requestSnapshot).
         if (listeners.size === 0) {
+          deliberate = true;
           client?.close();
           client = null;
           ready = false;
           queued = [];
           seq = 0;
           history = [];
+          // Reset for the next subscription's fresh session.
+          deliberate = false;
+          status = "connecting";
         }
       };
     },
     send(command: Command): void {
       if (client && ready) client.send(command);
       else queued.push(command);
+    },
+    // Transport status for the view's connection banner. Fires the current
+    // status immediately (like onEvent's replay), then on every change.
+    onStatus(cb: (s: WireStatus) => void): () => void {
+      statusListeners.add(cb);
+      cb(status);
+      return () => statusListeners.delete(cb);
     },
     // The wss stream carries no snapshot — start from initialState at seq 0.
     requestSnapshot(): Promise<{ state: AppState; seq: number }> {

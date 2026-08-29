@@ -51,10 +51,7 @@ import {
 import type { AgentEvent, Ability, AgentRenderCtx, Agent, DefaultAgentPolicyOpts } from "@lloyal-labs/lloyal-agents";
 import type { StepEvent } from "./protocol.js";
 import type { OpTiming } from "./state.js";
-// A deliberate, deferred-use-only cycle — harness.ts imports this file too.
-// Every RunnerCtx read here happens inside an operation body, after both
-// modules have initialized; never at module-eval time.
-import { RunnerCtx } from "./harness.js";
+import { RunnerCtx } from "./runner-ctx.js";
 import {
   reportTool,
   ReportTool,
@@ -438,14 +435,129 @@ function abilityPreamble(ability: Ability, ctx: AgentRenderCtx): string {
 function renderSpineWithReferenceData(abilities: readonly Ability[]): string {
   const blocks: string[] = [];
   for (const ability of abilities) {
-    const toc = ability.source.promptData()["toc"];
-    if (typeof toc === "string" && toc.trim()) {
+    const toc = abilityToc(ability);
+    if (toc && toc.trim()) {
       blocks.push(
         `\n\n# ${ability.manifest.protocol.name} — available files\n${toc}`,
       );
     }
   }
   return renderSpine({ abilities }) + blocks.join("");
+}
+
+
+/** Send one of this harness's StepEvents down the agent channel. The channel
+ *  is typed to the framework's AgentEvent; the forwarder relays the WHOLE
+ *  union to the UI bus, so StepEvents riding it is the design — this helper
+ *  owns the one cast that says so. */
+function* useStepSender(): Operation<(ev: StepEvent) => Operation<void>> {
+  const events = yield* Events.expect();
+  return (ev: StepEvent) => events.send(ev as unknown as AgentEvent);
+}
+
+/** An ability's `toc` prompt datum — the source's own content advert (one
+ *  line per file for the corpus; absent for sources that advertise nothing). */
+export function abilityToc(ability: Ability): string | null {
+  const toc = ability.source.promptData()["toc"];
+  return typeof toc === "string" ? toc : null;
+}
+
+/** Flat-mode fan-out: every task forks from the spine at once, each agent
+ *  carrying its ability's preamble and its siblings' descriptions. */
+function parallelResearch(args: {
+  tasks: ResearchTask[];
+  abilityForTask: (task: ResearchTask) => Ability;
+  maxTurns: number;
+  date: string;
+}) {
+  return parallel(
+    args.tasks.map((task, i) => {
+      const ability = args.abilityForTask(task);
+      return {
+        content: taskToContent(task),
+        systemPrompt: abilityPreamble(ability, {
+          maxTurns: args.maxTurns,
+          agentCount: args.tasks.length,
+          siblingTasks: args.tasks
+            .filter((_, j) => j !== i)
+            .map((t) => t.description),
+          date: args.date,
+          taskIndex: 0,
+        }),
+        assignedAbility: ability.manifest.name,
+        seed: 1000 + i,
+      };
+    }),
+  );
+}
+
+/** Deep-mode chain: each task inherits the spine the previous task's accepted
+ *  finding extended; spine:* events bracket each stage for the renderer. */
+function chainedResearch(args: {
+  tasks: ResearchTask[];
+  abilityForTask: (task: ResearchTask) => Ability;
+  maxTurns: number;
+  date: string;
+  send: (ev: StepEvent) => Operation<void>;
+}) {
+  return chain(args.tasks, (task: ResearchTask, i: number) => {
+    const ability = args.abilityForTask(task);
+    return {
+      task: {
+        content: taskToContent(task),
+        systemPrompt: abilityPreamble(ability, {
+          maxTurns: args.maxTurns,
+          agentCount: 1,
+          siblingTasks: [],
+          date: args.date,
+          taskIndex: i,
+        }),
+        assignedAbility: ability.manifest.name,
+      },
+      userContent: `Research task: ${task.description}`,
+      beforeSpawn: function* () {
+        yield* args.send({
+          type: "spine:task",
+          taskIndex: i,
+          taskCount: args.tasks.length,
+          description: task.description,
+        });
+        yield* args.send({
+          type: "spine:source",
+          taskIndex: i,
+          source: ability.source.name,
+        });
+      },
+      afterExtend: function* (delta: number, position: number) {
+        yield* args.send({
+          type: "spine:task:done",
+          taskIndex: i,
+          stageFindings: delta,
+          accumulated: position,
+        });
+      },
+    };
+  });
+}
+
+/** Assemble the flat-mode synthesis input: one `### Agent N` block per task.
+ *  Consumer-side guard: a dangling <tool_call> fragment in a finding is an
+ *  in-context demonstration that primes the (tool-less) synth agent to emit
+ *  tool calls — strip it here even though the framework sanitizes at capture. */
+function assembleFindings(
+  agents: readonly { result?: string | null }[],
+  tasks: ResearchTask[],
+): string {
+  return agents
+    .map((a, i) => {
+      const desc = tasks[i]?.description ?? `task ${i + 1}`;
+      const body =
+        a.result
+          ?.replace(/<tool_call>(?:(?!<\/tool_call>)[\s\S])*$/, "")
+          .trim() || "(no findings)";
+      return `### Agent ${i + 1}: ${desc}\n\n${body}`;
+    })
+    .join("\n\n");
 }
 
 function today(): string {
@@ -552,9 +664,7 @@ export function* runPreflight(
   session: Session,
   filter?: readonly string[],
 ): Operation<PreflightResult> {
-  const events = yield* Events.expect();
-  const send = (ev: StepEvent): Operation<void> =>
-    events.send(ev as unknown as AgentEvent);
+  const send = yield* useStepSender();
 
   const abilities = yield* effectiveAbilities(filter);
 
@@ -599,15 +709,9 @@ export function* runPreflight(
                 tools: ability.manifest.protocol.tools,
                 // Surface the source's content advert so the recon agent
                 // can recognize what each source actually contains BEFORE
-                // probing — fixes TICK-005 (corpus probe agent reading
-                // HDK chunks as "Lloyal platform stuff" because it didn't
-                // know the corpus IS the HDK docs). Duck-typed because
-                // not every source implements promptData (web doesn't).
-                // Graduates to Source.describe() framework affordance in
-                // TICK-018; for now reasoning.run pulls it directly.
-                contents:
-                  (ability.source as { promptData?: () => { toc?: string } })
-                    .promptData?.()?.toc ?? null,
+                // probing — fixes TICK-005 (a corpus probe misreading its
+                // chunks because it didn't know what the corpus IS).
+                contents: abilityToc(ability),
               },
             }),
             systemPrompt: preflight.system,
@@ -724,9 +828,7 @@ export function* runPlanner(
   session: Session,
   opts: { reasoningMode: "flat" | "deep"; effort: Effort; context?: string; abilityFilter?: readonly string[] },
 ): Operation<PlanResult> {
-  const events = yield* Events.expect();
-  const send = (ev: StepEvent): Operation<void> =>
-    events.send(ev as unknown as AgentEvent);
+  const send = yield* useStepSender();
 
   yield* send({ type: "query", query, warm: !!session.trunk });
 
@@ -794,9 +896,7 @@ export function* runQuery(
   session: Session,
   opts: RunQueryOpts,
 ): Operation<QueryResult> {
-  const events = yield* Events.expect();
-  const send = (ev: StepEvent): Operation<void> =>
-    events.send(ev as unknown as AgentEvent);
+  const send = yield* useStepSender();
 
   // Defensive guard: empty `abilityFilter` is a programming error — the
   // Composer's submit handler blocks zero-source submission with a
@@ -891,9 +991,7 @@ export function* runResearchPlan(
     );
   }
 
-  const events = yield* Events.expect();
-  const send = (ev: StepEvent): Operation<void> =>
-    events.send(ev as unknown as AgentEvent);
+  const send = yield* useStepSender();
 
   const runner = yield* RunnerCtx.expect();
   const tasks = plan.tasks;
@@ -970,63 +1068,8 @@ export function* runResearchPlan(
         enableThinking: true,
         orchestrate:
           opts.reasoningMode === "flat"
-            ? parallel(
-                tasks.map((task: ResearchTask, i: number) => {
-                  const ability = abilityForTask(task);
-                  return {
-                    content: taskToContent(task),
-                    systemPrompt: abilityPreamble(ability, {
-                      maxTurns: opts.maxTurns,
-                      agentCount: tasks.length,
-                      siblingTasks: tasks
-                        .filter((_, j) => j !== i)
-                        .map((t) => t.description),
-                      date: currentDate,
-                      taskIndex: 0,
-                    }),
-                    assignedAbility: ability.manifest.name,
-                    seed: 1000 + i,
-                  };
-                }),
-              )
-            : chain(tasks, (task: ResearchTask, i: number) => {
-                const ability = abilityForTask(task);
-                return {
-                  task: {
-                    content: taskToContent(task),
-                    systemPrompt: abilityPreamble(ability, {
-                      maxTurns: opts.maxTurns,
-                      agentCount: 1,
-                      siblingTasks: [],
-                      date: currentDate,
-                      taskIndex: i,
-                    }),
-                    assignedAbility: ability.manifest.name,
-                  },
-                  userContent: `Research task: ${task.description}`,
-                  beforeSpawn: function* () {
-                    yield* send({
-                      type: "spine:task",
-                      taskIndex: i,
-                      taskCount: tasks.length,
-                      description: task.description,
-                    });
-                    yield* send({
-                      type: "spine:source",
-                      taskIndex: i,
-                      source: ability.source.name,
-                    });
-                  },
-                  afterExtend: function* (delta: number, position: number) {
-                    yield* send({
-                      type: "spine:task:done",
-                      taskIndex: i,
-                      stageFindings: delta,
-                      accumulated: position,
-                    });
-                  },
-                };
-              }),
+            ? parallelResearch({ tasks, abilityForTask, maxTurns: opts.maxTurns, date: currentDate })
+            : chainedResearch({ tasks, abilityForTask, maxTurns: opts.maxTurns, date: currentDate, send }),
       });
 
       // Emit research:done HERE — before synth starts — so the flat-mode
@@ -1076,21 +1119,7 @@ export function* runResearchPlan(
       );
       const findings =
         opts.reasoningMode === "flat"
-          ? research.agents
-              .map((a, i) => {
-                const desc = tasks[i]?.description ?? `task ${i + 1}`;
-                // Consumer-side guard: a dangling <tool_call> fragment in a
-                // finding is an in-context demonstration that primes the
-                // (tool-less) synth agent to emit tool calls. The framework
-                // sanitizes at result capture; this catches anything that
-                // slips through a future capture path.
-                const body =
-                  a.result
-                    ?.replace(/<tool_call>(?:(?!<\/tool_call>)[\s\S])*$/, "")
-                    .trim() || "(no findings)";
-                return `### Agent ${i + 1}: ${desc}\n\n${body}`;
-              })
-              .join("\n\n")
+          ? assembleFindings(research.agents, tasks)
           : undefined;
       const synthCtx = {
         query,
@@ -1158,9 +1187,7 @@ function* finalizePassthrough(
   pt: { tokenCount: number; timeMs: number },
   wallStartMs: number,
 ): Operation<void> {
-  const events = yield* Events.expect();
-  const send = (ev: StepEvent): Operation<void> =>
-    events.send(ev as unknown as AgentEvent);
+  const send = yield* useStepSender();
 
   const ctx: SessionContext = yield* Ctx.expect();
   const p = ctx._storeKvPressure();

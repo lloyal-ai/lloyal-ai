@@ -8,15 +8,20 @@
  *  unreachable snapshot seeds from `initialState` so the stream never stalls.
  *  The store is a per-bridge singleton — a remount reattaches, it never
  *  re-subscribes or resets. */
+import { useSyncExternalStore } from "react";
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
-import { reduce, initialState, type AppState } from "../../harness/state.js";
+import { reduce, initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
 export interface Bridge {
   onEvent(cb: (frame: { seq: number; ev: WorkflowEvent }) => void): () => void;
   send(command: Command): void;
   requestSnapshot(): Promise<{ state: AppState; seq: number }>;
+  /** Transport status, when the bridge has a droppable link (web/wss). The
+   *  in-process bridges (cli, desktop-ipc) omit it — the view then treats
+   *  the link as permanently 'connected' and never shows the banner. */
+  onStatus?(cb: (status: WireStatus) => void): () => void;
 }
 
 declare global {
@@ -99,3 +104,18 @@ export function useBrief<T>(select: (app: AppState) => T): T {
 
 /** Dispatch a command to the harness. */
 export const send = (command: Command): void => window.harness.send(command);
+
+/** The transport link's status, for the connection banner. A bridge without
+ *  `onStatus` (cli, desktop-ipc — no droppable socket) reads 'connected'
+ *  forever, so the banner is web-only without a line of per-target code.
+ *  The one subscription updates the snapshot AND notifies, so getSnapshot
+ *  never reads a stale value. */
+let lastStatus: WireStatus = "connected";
+export function useConnection(): WireStatus {
+  return useSyncExternalStore(
+    (notify) =>
+      window.harness.onStatus?.((s) => { lastStatus = s; notify(); }) ?? (() => {}),
+    () => lastStatus,
+    () => "connected",
+  );
+}

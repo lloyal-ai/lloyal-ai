@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
-import type { DevControl } from "@lloyal-labs/dev-tools";
+import type { DevControl, RunFraming } from "@lloyal-labs/dev-tools";
 import { send, useBrief } from "./store.js";
 import {
   selectDepth, selectLive, selectMoment, selectRunShape, selectShape,
@@ -25,6 +25,21 @@ import { Ask } from "./moments/Ask.js";
 import { Frame } from "./moments/Frame.js";
 import { Write } from "./moments/Write.js";
 import { Settle } from "./moments/Settle.js";
+
+/** The pipeline's run framing, as data the dev pane reads — which of OUR
+ *  events open and close a run, and which mark the phases whose labels the
+ *  agent lanes wear. Add or rename a stage in the pipeline? Extend this
+ *  beside it and the pane follows; it knows no event names of its own. */
+const FRAMING: RunFraming = {
+  phases: {
+    "preflight:start": "recon",
+    "plan:start": "planner",
+    "research:start": "research",
+    "synthesize:start": "synth",
+  },
+  open: ["preflight:start", "plan:start", "query"],
+  close: ["complete", "ui:error", "ui:composer"],
+};
 
 /** The dev pane's Settings contribution — pure data, dev-gated by the wire. */
 const DEV_CONTROLS: readonly DevControl[] = [
@@ -90,6 +105,7 @@ export function HarnessApp(): ReactElement {
   return (
     <DevPane
       bridge={window.harness}
+      framing={FRAMING}
       controls={DEV_CONTROLS}
       title="__NAME__"
       runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }}
