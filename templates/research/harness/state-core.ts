@@ -1,12 +1,15 @@
 /**
- * Ink TUI — AppState shape.
+ * AppState — the ONE fold every target shares.
  *
- * Populated by reducer.ts from StepEvent + AgentEvent. Components render
- * from this state and nothing else; no ambient ANSI, no side-effect logging.
+ * Populated by reducer.ts from the WorkflowEvent stream; node-free, so the
+ * cli's Ink view, the desktop main process (the authoritative fold behind
+ * `harness:snapshot`), and the browser page all fold the same state.
+ * Renderers derive from this state and nothing else — the React view
+ * through `select.ts` (the domain seam), the Ink view directly.
  *
- * Layout model: each research agent owns a vertical `timeline` of items
- * (think blocks, tool calls, tool results, reports). Flat mode renders those
- * timelines as side-by-side columns; chain mode stacks them vertically.
+ * Each research agent owns a vertical `timeline` of items (think blocks,
+ * tool calls, tool results, reports); how a renderer lays those out —
+ * columns, sections, panes — is the renderer's business, not this file's.
  */
 
 import type { Config, ConfigOrigin } from './config-types.js';
@@ -350,12 +353,34 @@ export interface AppState {
    *  determines which CTA is highlighted. Null once boot has progressed
    *  past the failure or the recovery succeeded. */
   bootError: { kind: 'llm' | 'reranker' | 'backend-pack'; message: string } | null;
+  /** The run is HELD at a tick boundary (`run:paused` → `run:resumed`).
+   *  Branches stay resident; nothing decodes until resume. */
+  paused: boolean;
+  /** Wind-down began (`run:windingDown`): agents drain to reports. The
+   *  view's cue to read "closing" and refuse pause / a second close. */
+  closing: boolean;
+  /** The run wound down before finishing on its own (user close or time) —
+   *  sticky through `complete` so the settled brief can say so; reset only
+   *  by the next query. */
+  closedEarly: boolean;
+  /** Settled briefs on disk (`library:list`). Opening one restores it as
+   *  the session document via the standard query/answer/complete events —
+   *  no report body is ever held here. */
+  library: {
+    entries: { path: string; title: string; savedAt: string; mode: 'flat' | 'deep' | null }[];
+  };
+  /** Warm-ask exchanges appended beneath the settled brief — the document
+   *  grows, it is never replaced. A full (cold) query clears them. */
+  exchanges: { question: string; body: string }[];
+  /** The warm ask in flight (its question); null otherwise. While set, the
+   *  root `query`/`answer` stay untouched — the ask streams beneath them. */
+  ask: string | null;
   /** Per-ability participation in the next query, keyed by `manifest.name`.
    *  `true` = included; `false` = configured-but-excluded (user opted out
    *  for this session); missing key = treat as included by default. The
    *  filter is applied at submit time in main.ts; `runQuery`'s
    *  `abilityFilter` opt carries the included-names array. Reset to `true`
-   *  on reconfigure (`set_app_config`) — a config
+   *  on reconfigure (`set_ability_config`) — a config
    *  change is a strong signal of intent to use the ability. */
   participation: Record<string, boolean>;
   /** Installed Abilities surfaced into the renderer — one descriptor per
@@ -401,6 +426,12 @@ export const initialState: AppState = {
   scrollback: [],
   corpusStatus: null,
   bootError: null,
+  paused: false,
+  closing: false,
+  closedEarly: false,
+  library: { entries: [] },
+  exchanges: [],
+  ask: null,
   participation: {},
   abilities: [],
 };

@@ -20,8 +20,24 @@ export type Command =
   | { type: 'add_task'; afterIndex: number }
   | { type: 'delete_task'; index: number }
   | { type: 'move_task'; from: number; to: number }
-  | { type: 'set_app_config'; name: string; values: Record<string, unknown> }
+  | { type: 'set_ability_config'; name: string; values: Record<string, unknown> }
   | { type: 'set_output_dir'; path: string }
+  // The library — settled briefs on disk (the sidebar's Completed reports).
+  // Replies ride the event bus one-way, like `corpus:indexed`. All paths
+  // are confined to report.md files under the output dir. On a SERVED host
+  // the library is deliberately shared: every session on the appliance
+  // reads, restores, and curates the same reports/ — a team's collective
+  // research memory, not a per-tenant store.
+  // `library_read` RESTORES the report as the session's settled document —
+  // the standard `query`/`answer`/`complete` events seed the fold, so the
+  // canvas, Ask, and Extend behave exactly as over a fresh settle (the
+  // report is committed to the trunk on the first submit over it).
+  // `library_delete` removes the brief's WHOLE run dir (report + annexures)
+  // and re-indexes the corpus — the system unlearns it; replies with the
+  // refreshed `library:list`.
+  | { type: 'library_list' }
+  | { type: 'library_read'; path: string }
+  | { type: 'library_delete'; path: string }
   // Global run-effort setting (pure policy preset). Set in Settings → Effort;
   // persisted to harness.json and applied to every subsequent query.
   | { type: 'set_effort'; effort: 'low' | 'medium' | 'high' | 'ultra' }

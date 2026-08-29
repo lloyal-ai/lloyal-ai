@@ -21,7 +21,7 @@ import { shortPath } from './short-path.js';
  *  nothing to seed here on a plain config load. The included-by-default set
  *  is the registry-enabled abilities surfaced via `abilities:state`; per-ability intent is
  *  driven explicitly through `participation:toggled` (chip toggle) and
- *  `set_app_config` (configuring → main.ts sets the bit + re-emits state).
+ *  `set_ability_config` (configuring → main.ts sets the bit + re-emits state).
  *  Returns `prev` unchanged — kept as a function so config events have a
  *  single, named place to hook future participation policy. */
 function seedParticipation(
@@ -327,6 +327,24 @@ function closeThink(state: AppState, agentId: number, finalBody: string): AppSta
 export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query':
+      // A WARM query is an ask over the settled brief: the document stays —
+      // root query/answer/exchanges untouched, prior agents kept (sources
+      // and marks still read them) — and only the little run's own state
+      // resets. The ask question is stashed beside the document.
+      if (ev.warm && state.answer) {
+        return {
+          ...state,
+          ask: ev.query,
+          warm: true,
+          phase: 'plan',
+          paused: false,
+          closing: false,
+          synth: initialState.synth,
+          startedAt: Date.now(),
+          pipelineElapsedMs: 0,
+          pipelineResumedAt: Date.now(),
+        };
+      }
       // Preserve session-level fields across queries. Notably `mode` — a
       // `query` event fires at the start of every `runPlanner` call
       // (including re-plans on T toggle), and wiping mode would make the
@@ -342,6 +360,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         scrollback: state.scrollback,
         participation: state.participation,
         abilities: state.abilities,
+        library: state.library,
         query: ev.query,
         warm: ev.warm,
         phase: 'plan',
@@ -478,6 +497,15 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     }
 
     case 'answer':
+      // A warm ask's answer lands as a new exchange beneath the document —
+      // the root answer is never overwritten.
+      if (state.ask !== null) {
+        return {
+          ...state,
+          exchanges: [...state.exchanges, { question: state.ask, body: ev.text }],
+          ask: null,
+        };
+      }
       return { ...state, answer: ev.text };
 
     case 'stats':
@@ -502,6 +530,8 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         ...state,
         phase: 'done',
         uiPhase: 'done',
+        paused: false,
+        closing: false,
         pipelineElapsedMs: accrued,
         pipelineResumedAt: null,
       };
@@ -567,7 +597,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     }
 
     case 'abilities:state':
-      // Whole-replace the installed-AgentApps snapshot. Display-only — drives
+      // Whole-replace the installed-Abilities snapshot. Display-only — drives
       // the Settings drawer. Emitted on boot completion + every registry
       // enable/disable/config change.
       return { ...state, abilities: ev.abilities };
@@ -592,6 +622,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         toast: state.toast,
         scrollback: state.scrollback,
         corpusStatus: state.corpusStatus,
+        library: state.library,
         participation: state.participation,
         abilities: state.abilities,
         query: ev.query,
@@ -609,6 +640,11 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       return state;
 
     case 'plan:start': {
+      // A warm ask's synthetic plan must not retitle the document, change
+      // its mode, or leave the settled canvas — the ask streams beneath it.
+      if (state.ask !== null) {
+        return { ...state, phase: 'plan', plan: null, pipelineResumedAt: Date.now() };
+      }
       // Fresh submission (from composer / done) → reset the pipeline timer
       // to zero. Re-plan from plan_review → keep the accumulator so the
       // displayed elapsed continues past the dwell.
@@ -828,6 +864,18 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // Synth phase: accumulate into synth buffer.
       if (state.phase === 'synth' && state.synth.open) {
         return { ...state, synth: { ...state.synth, buffer: state.synth.buffer + ev.text } };
+      }
+      // Planner stream: the outline drafts itself in the view — accumulate
+      // the planner's grammar JSON so a renderer can lift task descriptions
+      // as they complete (the plan grammar opens no think block).
+      if (state.phase === 'plan') {
+        const planner = state.agents.get(ev.agentId);
+        if (!planner) return state;
+        return replaceAgent(state, planner.id, (a) => ({
+          ...a,
+          tokenCount: ev.tokenCount,
+          contentBuffer: a.contentBuffer + ev.text,
+        }));
       }
       // Muted phases. 'recon' streams through the same path as 'research'
       // (its agent has taskIndex 0), so it's allowed past the gate.
@@ -1163,6 +1211,27 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
           nCtx: ev.nCtx,
         },
       };
+
+    case 'run:paused': {
+      // Bank the timer so a held span never counts as time spent —
+      // selectElapsed, the ETA, and settle-time pace learning all read it.
+      const accrued = state.pipelineResumedAt
+        ? state.pipelineElapsedMs + (Date.now() - state.pipelineResumedAt)
+        : state.pipelineElapsedMs;
+      return {
+        ...state,
+        paused: true,
+        pipelineElapsedMs: accrued,
+        pipelineResumedAt: null,
+      };
+    }
+    case 'run:resumed':
+      return { ...state, paused: false, pipelineResumedAt: Date.now() };
+    case 'run:windingDown':
+      return { ...state, closing: true, closedEarly: true };
+
+    case 'library:list':
+      return { ...state, library: { entries: ev.entries } };
 
     default:
       return state;

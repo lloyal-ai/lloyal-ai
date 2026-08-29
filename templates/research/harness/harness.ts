@@ -80,24 +80,24 @@ export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
 export const abilities: AbilityFactory[] = [createCorpusAbility, createWebAbility];
 const abilitiesInstalled: readonly AbilityFactory[] = abilities;
 
-const WEB_APP = "web";
-const CORPUS_APP = "corpus";
+const WEB_ABILITY = "web";
+const CORPUS_ABILITY = "corpus";
 
 /** Name → factory for the two first-party abilities this build ships. Drives the
- *  `set_app_config` re-enable path (NOT config-write routing, which is
+ *  `set_ability_config` re-enable path (NOT config-write routing, which is
  *  name-driven by the command payload). Returns undefined for unknown names. */
-const APP_FACTORIES: Record<string, AbilityFactory> = {
-  [WEB_APP]: createWebAbility,
-  [CORPUS_APP]: createCorpusAbility,
+const ABILITY_FACTORIES: Record<string, AbilityFactory> = {
+  [WEB_ABILITY]: createWebAbility,
+  [CORPUS_ABILITY]: createCorpusAbility,
 };
 function factoryFor(name: string): AbilityFactory | undefined {
-  return APP_FACTORIES[name];
+  return ABILITY_FACTORIES[name];
 }
 
 /** Whether the named ability's factory needs stored config to enable. The web ability
  *  runs config-less (keyless search fallback); the corpus ability needs a path. */
-function appRequiresConfig(name: string): boolean {
-  return name !== WEB_APP;
+function abilityRequiresConfig(name: string): boolean {
+  return name !== WEB_ABILITY;
 }
 
 /** Resolve path-shaped string values in an ability-config object at the UI→harness
@@ -169,6 +169,58 @@ function redactAbilities(config: Config): Config {
       ]),
     ),
   };
+}
+
+// ── The library: settled briefs on disk ──────────────────────────
+
+/** A client-supplied library path is trusted only once its REAL location
+ *  (symlinks resolved) is a report.md inside the library — realpath on both
+ *  sides, so a planted link can't lead the read outside the output dir.
+ *  Missing paths land in the catch: null means "not a library report". */
+function confinedReport(outputDir: string, candidate: string): string | null {
+  try {
+    const root = fs.realpathSync(path.resolve(outputDir));
+    const resolved = fs.realpathSync(path.resolve(candidate));
+    return resolved.startsWith(root + path.sep) &&
+      path.basename(resolved) === "report.md"
+      ? resolved
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One sidebar entry per run dir that actually settled — error runs leave no
+ *  report.md. Title and byline come from the report's own first lines
+ *  (`# query` / `> ISO · mode · …`, RunDirSink's format), newest first. */
+function listReports(
+  outputDir: string,
+): { path: string; title: string; savedAt: string; mode: "flat" | "deep" | null }[] {
+  if (!fs.existsSync(outputDir)) return [];
+  const entries: {
+    path: string;
+    title: string;
+    savedAt: string;
+    mode: "flat" | "deep" | null;
+  }[] = [];
+  for (const name of fs.readdirSync(outputDir)) {
+    const reportPath = path.join(outputDir, name, "report.md");
+    let text: string;
+    try {
+      text = fs.readFileSync(reportPath, "utf8");
+    } catch {
+      continue;
+    }
+    const [titleLine = "", , metaLine = ""] = text.split("\n");
+    const meta = /^> (\S+) · (flat|deep)/.exec(metaLine);
+    entries.push({
+      path: reportPath,
+      title: titleLine.replace(/^#\s*/, "") || name,
+      savedAt: meta?.[1] ?? name,
+      mode: meta?.[2] === "flat" || meta?.[2] === "deep" ? meta[2] : null,
+    });
+  }
+  return entries.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
 }
 
 // ── Clarify helpers ──────────────────────────────────────────────
@@ -284,7 +336,7 @@ export function* harness(
   // Enable the corpus ability first so installed()[0] is corpus when present. It only
   // enables when the user has stored config for it (the factory needs a
   // corpusPath). A bad path surfaces a toast and leaves the ability disabled.
-  const corpusBootCfg = runner.config().abilities[CORPUS_APP];
+  const corpusBootCfg = runner.config().abilities[CORPUS_ABILITY];
   if (corpusBootCfg && Object.keys(corpusBootCfg).length > 0) {
     events.send({ type: "weights:label", label: "Indexing corpus…" });
     try {
@@ -340,6 +392,40 @@ export function* harness(
     runDirSink.start({ outputDir, query, mode });
   }
 
+  const libraryDir = (): string =>
+    runner.config().sources.outputDir ?? process.cwd();
+
+  // Every settled brief becomes retrievable ground for the next one: when
+  // the corpus ability is enabled, re-enable it after a run completes so the
+  // fresh report and annexures join the index — riding the reconfigure
+  // lifecycle (the factory re-reads its config on enable), no config write.
+  // The sink writes report.md on the same `complete` the pipeline just sent;
+  // a lost race merely defers that report to the next settle's re-index.
+  function* reindexCorpus(): Operation<void> {
+    if (!registry.byName(CORPUS_ABILITY)) return;
+    const cfg = (yield* configStore.get(CORPUS_ABILITY)) ?? {};
+    try {
+      yield* registry.disable(CORPUS_ABILITY);
+      const ability = yield* registry.enable(createCorpusAbility);
+      const pdToc = ability.source.promptData()["toc"];
+      events.send({
+        type: "corpus:indexed",
+        corpusPath: String(cfg.corpusPath ?? ""),
+        fileCount:
+          typeof pdToc === "string" && pdToc
+            ? pdToc.split("\n").filter(Boolean).length
+            : 0,
+        chunkCount: 0,
+      });
+      yield* emitAbilities();
+    } catch (err) {
+      yield* agentEvents.send({
+        type: "ui:error",
+        message: `Corpus re-index failed: ${errorMessage(err)}`,
+      });
+    }
+  }
+
   // ── JSONL / --query scripted path ──────────────────────────
   if (oneShot) {
     if (!runner.initialQuery) {
@@ -378,6 +464,12 @@ export function* harness(
 
   // Per-query run effort, set at submit_query and read by every research path.
   let currentEffort: Effort = runner.config().defaults.effort;
+  // The library report currently restored as the session document (set by
+  // library_read, consumed by the first submit over it), and the reports
+  // already committed to the trunk — a report prefills once; later asks
+  // over it are simply warm.
+  let openedReport: { path: string; title: string; body: string } | null = null;
+  const committedReports = new Set<string>();
   let pendingPlan: {
     plan: PlanResult;
     query: string;
@@ -434,7 +526,7 @@ export function* harness(
       }
     }
   };
-  const currentAppFilter = (): readonly string[] =>
+  const currentAbilityFilter = (): readonly string[] =>
     registry
       .enabled()
       .filter((a) => participation[a.manifest.name] !== false)
@@ -445,7 +537,7 @@ export function* harness(
   if (runner.isFirstIteration && runner.initialQuery) {
     const mode = runner.config().defaults.reasoningMode;
     const wallStartMs = performance.now();
-    const submissionFilter = currentAppFilter();
+    const submissionFilter = currentAbilityFilter();
     const result = yield* runQuery(runner.initialQuery, session, {
       ...harnessOpts,
       reasoningMode: mode,
@@ -554,7 +646,7 @@ export function* harness(
         continue;
       }
 
-      if (cmd.type === "set_app_config") {
+      if (cmd.type === "set_ability_config") {
         const resolvedValues = resolveConfigPaths(cmd.values);
         const isClear = Object.keys(resolvedValues).length === 0;
 
@@ -592,7 +684,7 @@ export function* harness(
         const factory = factoryFor(cmd.name);
         if (factory) {
           if (registry.byName(cmd.name)) yield* registry.disable(cmd.name);
-          const needsConfig = appRequiresConfig(cmd.name);
+          const needsConfig = abilityRequiresConfig(cmd.name);
           if (!isClear || !needsConfig) {
             try {
               const ability = yield* registry.enable(factory);
@@ -667,6 +759,54 @@ export function* harness(
           gitignored: saved.gitignored,
           skipped: saved.skipped,
         });
+      } else if (cmd.type === "library_list") {
+        yield* agentEvents.send({
+          type: "library:list",
+          entries: listReports(libraryDir()),
+        });
+      } else if (cmd.type === "library_read") {
+        // Confined to the library (confinedReport — realpath both sides).
+        // RESTORES the report as the session's settled
+        // document — the standard query/answer/complete seed the fold, so
+        // everything downstream (canvas, chips, Ask, Extend) is the fresh-
+        // settle path. The trunk commit waits for the first submit over it.
+        const resolved = confinedReport(libraryDir(), cmd.path);
+        if (resolved === null) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: "That report is no longer there.",
+          });
+        } else if (runTask) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: "A brief is in flight — close it before opening another.",
+          });
+        } else {
+          const text = fs.readFileSync(resolved, "utf8");
+          const lines = text.split("\n");
+          openedReport = {
+            path: resolved,
+            title: (lines[0] ?? "").replace(/^#\s*/, "") || "Reopened report",
+            body: lines.slice(3).join("\n").trim(),
+          };
+          yield* agentEvents.send({ type: "query", query: openedReport.title, warm: false });
+          yield* agentEvents.send({ type: "answer", text: openedReport.body });
+          yield* agentEvents.send({ type: "complete", data: {} });
+        }
+      } else if (cmd.type === "library_delete") {
+        // Same confinement as the read; deleting a brief removes its WHOLE
+        // run dir (report + annexures) and re-indexes the corpus — the
+        // system unlearns it. A run in flight can't be targeted: its dir
+        // has no report.md until it settles, so the list never offers it.
+        const resolved = confinedReport(libraryDir(), cmd.path);
+        if (resolved !== null) {
+          fs.rmSync(path.dirname(resolved), { recursive: true, force: true });
+          yield* reindexCorpus();
+        }
+        yield* agentEvents.send({
+          type: "library:list",
+          entries: listReports(libraryDir()),
+        });
       } else if (cmd.type === "set_effort") {
         // Save ONLY the changed key — spreading the whole defaults object
         // would pin the untouched ones into harness.json, shadowing later
@@ -688,11 +828,10 @@ export function* harness(
           });
           continue;
         }
-        if (currentAppFilter().length === 0) {
+        if (currentAbilityFilter().length === 0) {
           yield* agentEvents.send({
             type: "ui:error",
-            message:
-              "All sources excluded. Tab to a chip and press Space to include at least one.",
+            message: "All sources excluded. Include at least one.",
           });
           continue;
         }
@@ -702,17 +841,31 @@ export function* harness(
           yield* haltRun();
           pendingPlan = null;
         }
+        // First submit over a restored report: commit it to the trunk —
+        // its prefill is the ask's warmup; from here the warm-ask and
+        // extend paths below need no special handling at all.
+        if (openedReport !== null) {
+          if (!committedReports.has(openedReport.path)) {
+            committedReports.add(openedReport.path);
+            const { title: rTitle, body: rBody } = openedReport;
+            yield* call(() => session.commitTurn(rTitle, rBody));
+          }
+          openedReport = null;
+        }
         if (cmd.skipPlanner) {
           const plan = singleTaskPlan(cmd.query);
-          yield* agentEvents.send({
-            type: "plan:start",
-            query: cmd.query,
-            mode: cmd.mode,
-          });
+          // `query` first, matching runPlanner's order — the fold's warm-ask
+          // branch must see the ask before the synthetic plan:start arrives,
+          // or the plan:start retitles the settled document.
           yield* agentEvents.send({
             type: "query",
             query: cmd.query,
             warm: !!session.trunk,
+          });
+          yield* agentEvents.send({
+            type: "plan:start",
+            query: cmd.query,
+            mode: cmd.mode,
           });
           yield* agentEvents.send({
             type: "plan",
@@ -722,7 +875,7 @@ export function* harness(
             tokenCount: plan.tokenCount,
             timeMs: plan.timeMs,
           });
-          const submissionFilter = currentAppFilter();
+          const submissionFilter = currentAbilityFilter();
           startRunDir(cmd.query, cmd.mode);
           yield* startRun(function* (clearIfCurrent) {
             try {
@@ -734,6 +887,7 @@ export function* harness(
                 abilityFilter: submissionFilter,
                 isAsk: cmd.skipPlanner,
               });
+              yield* reindexCorpus();
               yield* agentEvents.send({ type: "ui:composer" });
             } catch (err) {
               yield* agentEvents.send({
@@ -746,7 +900,7 @@ export function* harness(
           });
           continue;
         }
-        const submissionFilter = currentAppFilter();
+        const submissionFilter = currentAbilityFilter();
         const queryText = cmd.query;
         const queryMode = cmd.mode;
         yield* startRun(function* (clearIfCurrent) {
@@ -786,6 +940,7 @@ export function* harness(
                 abilityFilter: submissionFilter,
               };
             } else {
+              yield* reindexCorpus();
               yield* agentEvents.send({ type: "ui:composer" });
             }
           } catch (err) {
@@ -833,6 +988,7 @@ export function* harness(
               };
             } else {
               pendingPlan = null;
+              yield* reindexCorpus();
               yield* agentEvents.send({ type: "ui:composer" });
             }
           } catch (err) {
@@ -866,6 +1022,7 @@ export function* harness(
               pendingPlan = { ...priorPlan, plan: result.plan, mode: nextMode };
             } else {
               pendingPlan = null;
+              yield* reindexCorpus();
               yield* agentEvents.send({ type: "ui:composer" });
             }
           } catch (err) {
@@ -910,6 +1067,7 @@ export function* harness(
                 userSidePending: acceptedPlan.clarifyExchanged,
               },
             );
+            yield* reindexCorpus();
             yield* agentEvents.send({ type: "ui:composer" });
           } catch (err) {
             yield* agentEvents.send({

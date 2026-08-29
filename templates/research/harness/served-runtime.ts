@@ -67,6 +67,36 @@ export function createServedContext(cfg: Config): Promise<SessionContext> {
   );
 }
 
+/** A command signal that BUFFERS until its first consumer subscribes. The
+ *  socket dispatches inbound commands from the moment a connection binds,
+ *  but the harness's `each(commands)` loop only arms once the Session has
+ *  warmed — and an Effection Signal is hot, so anything sent in that window
+ *  would vanish. Same replay-to-first-consumer contract the event bus keeps
+ *  (`createBus`), pointed the other way. First-consumer-only by design: the
+ *  harness is the one reader. */
+export function bufferedCommandSignal<T>(): Signal<T, void> {
+  const inner = createSignal<T, void>();
+  let buffer: T[] | null = [];
+  return {
+    send(value: T): void {
+      if (buffer !== null) buffer.push(value);
+      else inner.send(value);
+    },
+    close: inner.close,
+    *[Symbol.iterator]() {
+      const subscription = yield* inner;
+      if (buffer !== null) {
+        // Subscribed — drain into the live subscription (it queues between
+        // next() calls), then flip to passthrough forever.
+        const drained = buffer;
+        buffer = null;
+        for (const value of drained) inner.send(value);
+      }
+      return subscription;
+    },
+  };
+}
+
 /** Build a fresh per-session event bus + command signal. A web driver pairs this
  *  with {@link createServedContext} to satisfy the host's `materialise`. */
 export function createServedChannels(): {
@@ -75,6 +105,6 @@ export function createServedChannels(): {
 } {
   return {
     uiChannel: createBus<WorkflowEvent>(),
-    commands: createSignal<Command, void>(),
+    commands: bufferedCommandSignal<Command>(),
   };
 }

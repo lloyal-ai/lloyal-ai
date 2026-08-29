@@ -25,6 +25,13 @@ const MAX_HISTORY = 50_000;
 
 export function installWebBridge(): void {
   let client: WssClient<Command> | null = null;
+  // Commands queue until the server says ready: a send while the socket is
+  // still CONNECTING throws inside the client and latches it closed — one
+  // eager send (the view lists the library on mount) would silence every
+  // send after it. Same replay-until-consumer contract the event bus keeps,
+  // pointed the other way.
+  let ready = false;
+  let queued: Command[] = [];
   let seq = 0;
   // The session's frame log. A view remount mid-run — fast refresh of
   // App.tsx, the one file a dev edits while a run streams — subscribes LATE;
@@ -48,6 +55,12 @@ export function installWebBridge(): void {
           if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY / 2);
           for (const l of listeners) l(frame);
         },
+        onReady: () => {
+          ready = true;
+          const drained = queued;
+          queued = [];
+          for (const c of drained) client?.send(c);
+        },
       });
       // Replay the session so far to the new subscriber — synchronously,
       // before any live frame, so seq order holds.
@@ -60,13 +73,16 @@ export function installWebBridge(): void {
         if (listeners.size === 0) {
           client?.close();
           client = null;
+          ready = false;
+          queued = [];
           seq = 0;
           history = [];
         }
       };
     },
     send(command: Command): void {
-      client?.send(command);
+      if (client && ready) client.send(command);
+      else queued.push(command);
     },
     // The wss stream carries no snapshot — start from initialState at seq 0.
     requestSnapshot(): Promise<{ state: AppState; seq: number }> {

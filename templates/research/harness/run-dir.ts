@@ -16,6 +16,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { WorkflowEvent } from './events.js';
 
+/** The answer event carries the raw stream — a leaked reasoning block ends
+ *  at its close marker. The exported report keeps only the brief. */
+const stripThink = (text: string): string => {
+  const close = text.lastIndexOf('</think>');
+  return close === -1 ? text : text.slice(close + '</think>'.length);
+};
+
 export class RunDirSink {
   private currentDir: string | null = null;
   private inResearch = false;
@@ -122,7 +129,7 @@ export class RunDirSink {
       const annexureSection = refs
         ? `\n---\n\n## Annexures\n\n${refs}\n`
         : '';
-      const body = `# ${this.query}\n\n${meta}\n\n${this.lastAnswer.trim()}\n${annexureSection}`;
+      const body = `# ${this.query}\n\n${meta}\n\n${stripThink(this.lastAnswer).trim()}\n${annexureSection}`;
       fs.writeFileSync(path.join(this.currentDir, 'report.md'), body, 'utf8');
     }
     this.reset();
