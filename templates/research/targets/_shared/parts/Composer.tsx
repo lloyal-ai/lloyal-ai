@@ -13,6 +13,12 @@ import {
   type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
+import type { AppState } from "../../../harness/state.js";
+
+// Stable identities — the composer re-renders per keystroke, and a fresh
+// inline closure per render would grow the fold's memo map (store contract).
+const selectUiPhase = (app: AppState) => app.uiPhase;
+const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
 
 const INTENTS = [
   { intent: "ask", label: "Ask", hint: "answers from the warm context — instant" },
@@ -29,8 +35,8 @@ export function Composer({ shape, placeholder }: {
   const depth = useBrief(selectDepth);
   const live = useBrief(selectLive);
   const tasks = useBrief(selectTaskCount);
-  const uiPhase = useBrief((app) => app.uiPhase);
-  const settled = useBrief((app) => selectMoment(app) === "settle");
+  const uiPhase = useBrief(selectUiPhase);
+  const settled = useBrief(selectSettled);
 
   const submit = (): void => {
     const text = draft.trim();
