@@ -250,6 +250,7 @@ export function Composer({ shape, placeholder }: {
         style={{ display: "none" }}
         onChange={(e) => attach(e.target.files)}
       />
+      <div style={S.stack}>
       {/* Row 1 — the question, and only what acts on it. */}
       <div style={S.entryRow}>
         <button
@@ -273,12 +274,6 @@ export function Composer({ shape, placeholder }: {
           disabled={uploading}
         />
         {live && <Clock />}
-        <button type="button" style={S.send} onClick={submit} aria-label="Send">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 19V5" />
-            <path d="M5 12l7-7 7 7" />
-          </svg>
-        </button>
       </div>
       {/* Row 2 — what the next brief will DRAW ON, then how it will be worked.
           Both were elsewhere before: participation only on the landing, where it
@@ -386,6 +381,13 @@ export function Composer({ shape, placeholder }: {
         )}
       </div>
       </div>
+      <button type="button" style={S.send} onClick={submit} aria-label="Send">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 19V5" />
+          <path d="M5 12l7-7 7 7" />
+        </svg>
+      </button>
+      </div>
     </div>
   );
 }
@@ -447,15 +449,20 @@ const S: Record<string, CSSProperties> = {
   composer: {
     background: color.card, border: `1px solid ${color.line}`, borderRadius: radius.panel,
     boxShadow: shadow.card, padding: "12px 13px 10px",
-    display: "flex", flexDirection: "column", gap: 9,
+    // Send sits beside the two rows rather than inside the first, so it centres
+    // against the whole card instead of hanging off the question line.
+    display: "flex", alignItems: "center", gap: 12,
   },
+  stack: { display: "flex", flexDirection: "column", gap: 9, flex: 1, minWidth: 0 },
   /** The question and the two controls that act on it. The row carries its own
    *  height so the field has room to breathe — the card used to be one tight
    *  line of everything. */
   entryRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 38 },
   /** What the brief draws on, then how it is worked — sources left, shape of
    *  the work right, reading in the order the decisions are actually made. */
-  controlRow: { display: "flex", alignItems: "center", gap: 10, minWidth: 0 },
+  /** Holds the depth picker's own height whether or not the picker is there, so
+   *  the card is one size in every mode and the send button never moves. */
+  controlRow: { display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 32 },
   libs: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 },
   lib: {
     font: `500 11.5px ${font.ui}`, color: color.ink, background: color.card2,
