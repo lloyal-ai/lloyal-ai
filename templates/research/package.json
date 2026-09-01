@@ -56,7 +56,7 @@
     "ws": "^8.21.3",
     "yaml": "^2.9.0",
     "zustand": "^5.0.15",
-    "@lloyal-labs/media": "0.3.0-alpha.1"
+    "@lloyal-labs/media": "0.2.0-alpha.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

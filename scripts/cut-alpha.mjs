@@ -38,6 +38,11 @@ const bump = (v, level) => {
   const [maj, min] = v.split('.').map(Number);
   return level === 'major' ? `${maj + 1}.0.0` : `${maj}.${min + 1}.0`;
 };
+/** A prerelease `latest` (a manual first alpha publish stamps latest — npm
+ *  behavior) is not a base to bump FROM: the stable it prefigures hasn't
+ *  shipped, so its release triple IS the pending base. A stable latest
+ *  bumps by the arc's level. */
+const nextBase = (reg, level) => (reg.includes('-') ? reg.split('-')[0] : bump(reg, level));
 const latest = (name, fallback) => {
   try {
     return execSync(`npm view ${name}@latest version`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -48,9 +53,9 @@ const latest = (name, fallback) => {
 };
 
 const alphas = Object.fromEntries(
-  Object.entries(DEPS).map(([n, [level, fb]]) => [n, `${bump(latest(n, fb), level)}-alpha.${CUT}`]),
+  Object.entries(DEPS).map(([n, [level, fb]]) => [n, `${nextBase(latest(n, fb), level)}-alpha.${CUT}`]),
 );
-const own = `${bump(latest('lloyal-ai', '1.10.0'), 'minor')}-alpha.${CUT}`;
+const own = `${nextBase(latest('lloyal-ai', '1.10.0'), 'minor')}-alpha.${CUT}`;
 
 console.log(`cut ${CUT}${DRY ? ' (dry run)' : ''}:`);
 console.log(`  lloyal-ai -> ${own}`);
