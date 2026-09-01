@@ -10,9 +10,9 @@ import {
 import { paceFor } from "../pace.js";
 import { Lightbox } from "./Figures.js";
 
-/** The mark, the name, and the control that puts the panel away. Collapsed, the
- *  name and the library go and the rail keeps only the mark and the control —
- *  so the way back is always the thing you just used. */
+/** The mark, the name, and the control that puts the panel away. Collapsed,
+ *  the name and the library go and the rail keeps only the mark and the
+ *  control — so the way back is always the thing you just used. */
 export function Wordmark({ collapsed = false, onToggle }: {
   collapsed?: boolean;
   onToggle?: () => void;
@@ -21,7 +21,7 @@ export function Wordmark({ collapsed = false, onToggle }: {
     <div style={{ ...S.brand, ...(collapsed ? S.brandRail : null) }}>
       <button
         type="button"
-        style={S.markBtn}
+        className="shl-icon" style={S.markBtn}
         title="Start a new run"
         aria-label="Start a new run"
         onClick={() => send({ type: "new_run" })}
@@ -40,7 +40,7 @@ export function Wordmark({ collapsed = false, onToggle }: {
       {onToggle && (
         <button
           type="button"
-          style={S.panelToggle}
+          className="shl-icon" style={S.panelToggle}
           onClick={onToggle}
           title={collapsed ? "Show the library" : "Hide the library"}
           aria-label={collapsed ? "Show the library" : "Hide the library"}
@@ -57,8 +57,8 @@ export function Wordmark({ collapsed = false, onToggle }: {
 }
 
 const PANEL_KEY = "fieldnote.panel";
-/** A per-viewer convenience, remembered but never load-bearing: a browser that
- *  refuses storage just opens expanded. */
+/** A per-viewer convenience, so it is remembered but never load-bearing:
+ *  a browser that refuses storage just opens expanded. */
 const readCollapsed = (): boolean => {
   try {
     return (globalThis as { localStorage?: { getItem(k: string): string | null } })
@@ -85,6 +85,9 @@ export function TrustStrip({ detail }: { detail?: string }): ReactElement {
   );
 }
 
+/** The images the model was shown — the admitted copy, not the upload: only
+ *  one of the two entered the cache, and they are different pixels. A bridge
+ *  with no byte path names them instead, so nothing silently vanishes. */
 /** The run bar's marker: the figures live in the document under the question,
  *  but they scroll away, so this stays — and it opens the SAME enlarged view
  *  rather than a second one. */
@@ -92,21 +95,25 @@ function Seen(): ReactElement | null {
   const seen = useBrief(selectSeen);
   const src = window.harness.representationUrl;
   const [open, setOpen] = useState<string | null>(null);
-  if (seen.length === 0 || !src) return null;
+  if (seen.length === 0) return null;
   return (
     <span style={S.seen}>
-      {seen.map((id) => (
-        <button
-          key={id}
-          type="button"
-          style={S.seenBtn}
-          title="What the model saw — enlarge"
-          aria-label="Enlarge the attached image"
-          onClick={() => setOpen(id)}
-        >
-          <img src={src(id)} alt="" style={S.seenImg} />
-        </button>
-      ))}
+      {seen.map((id) =>
+        src
+          ? (
+            <button
+              key={id}
+              type="button"
+              style={S.seenBtn}
+              title="What the model saw — enlarge"
+              aria-label="Enlarge the attached image"
+              onClick={() => setOpen(id)}
+            >
+              <img src={src(id)} alt="" style={S.seenImg} />
+            </button>
+          )
+          : <span key={id} style={S.seenChip}>image</span>,
+      )}
       {open !== null && <Lightbox digest={open} onClose={() => setOpen(null)} />}
     </span>
   );
@@ -271,6 +278,8 @@ const KEYFRAMES = `
      is somewhere for the eye to land, which reads as "tab does nothing".
      :focus-visible keeps the ring to keyboard use, so a click never draws it. */
   :focus-visible { outline:2px solid ${color.ember}; outline-offset:2px; border-radius:7px; }
+  .shl-icon { transition: background .12s ease, color .12s ease; }
+  .shl-icon:hover { background:${color.card2}; color:${color.ink}; }
 `;
 
 const S: Record<string, CSSProperties> = {
@@ -285,8 +294,8 @@ const S: Record<string, CSSProperties> = {
     padding: "18px 14px 14px", display: "flex", flexDirection: "column",
     transition: "width .16s ease",
   },
-  /** The rail keeps the panel's ground and border — the same panel narrowed,
-   *  not different chrome — and holds only what reopens it. */
+  /** The rail keeps the panel's ground and its border — it is the same panel
+   *  narrowed, not a different chrome — and holds only what reopens it. */
   sideRail: { width: 56, padding: "18px 8px 14px", alignItems: "center" },
   brand: { display: "flex", alignItems: "center", gap: 9, padding: "2px 6px", font: `600 14.5px ${font.ui}` },
   /** Collapsed: the mark over the control, both centred in the rail. */
@@ -299,20 +308,12 @@ const S: Record<string, CSSProperties> = {
     background: "none", border: 0, padding: 4, borderRadius: 7, cursor: "pointer",
     color: color.dim, display: "inline-flex", flex: "none",
   },
-  seen: { display: "inline-flex", gap: 4, alignItems: "center", flex: "none", marginLeft: 8 },
-  seenBtn: {
-    padding: 0, border: 0, background: "none", cursor: "zoom-in",
-    display: "inline-flex", lineHeight: 0, flex: "none",
-  },
-  seenImg: {
-    height: 18, width: 18, objectFit: "cover", borderRadius: radius.control,
-    border: `1px solid ${color.line}`, display: "block",
-  },
-  /** Math notation, not a logo. Georgia ships only 400 and 700, so `700 20px`
-   *  had nowhere to go but heavy — and it outsized the 14.5px sans beside it by
-   *  a third. The regular italic at 19px carries the same presence at the weight
-   *  the notation wants; the half-pixel lift settles its optical baseline
-   *  against the upright label. */
+  /** Math notation, not a logo. Georgia ships only 400 and 700, so the old
+   *  `700 20px` had nowhere to go but heavy — and it outsized the 14.5px sans
+   *  beside it by a third, which is what read as chunky. The regular italic at
+   *  19px carries the same presence at the weight the notation actually wants;
+   *  the half-pixel lift settles the italic's optical baseline against the
+   *  upright label. */
   mark: {
     font: `italic 400 19px/1 ${font.math}`, color: color.ink,
     letterSpacing: "0.005em", position: "relative", top: -0.5,
@@ -357,6 +358,19 @@ const S: Record<string, CSSProperties> = {
   },
   status: { display: "flex", alignItems: "center", gap: 8, fontWeight: 600, color: color.ink },
   runTitle: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  seen: { display: "inline-flex", gap: 4, alignItems: "center", flex: "none", marginLeft: 8 },
+  seenBtn: {
+    padding: 0, border: 0, background: "none", cursor: "zoom-in",
+    display: "inline-flex", lineHeight: 0, flex: "none",
+  },
+  seenImg: {
+    height: 18, width: 18, objectFit: "cover", borderRadius: radius.control,
+    border: `1px solid ${color.line}`, display: "block",
+  },
+  seenChip: {
+    font: `12px ${font.ui}`, color: color.dim, border: `1px solid ${color.line}`,
+    borderRadius: radius.control, padding: "0 5px",
+  },
   canvas: { flex: 1, overflowY: "auto", padding: "40px 0 34px", position: "relative" },
   dock: { padding: "12px 26px 18px", borderTop: `1px solid ${color.line}`, flex: "none" },
 };

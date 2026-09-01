@@ -37,14 +37,24 @@ export function Library(): ReactElement | null {
   const live = useBrief(selectLive);
   const [arming, setArming] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  /** A scoring call is in flight — set when the debounce fires, cleared when
+   *  the ranking lands. The list dims and the field carries a working lamp,
+   *  so a pause-then-nothing never reads as a dead search. */
+  const [awaiting, setAwaiting] = useState(false);
 
   // A pause, not a keystroke, is the query: the reranker reads the whole
   // library per call, so the wire carries settled intent only. An emptied
   // field settles too, and clears the search host-side.
   useEffect(() => {
-    const t = setTimeout(() => send({ type: "library_search", query: q }), 250);
+    const t = setTimeout(() => {
+      send({ type: "library_search", query: q });
+      setAwaiting(q.trim() !== "" && !live);
+    }, 250);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, live]);
+  useEffect(() => {
+    setAwaiting(false);
+  }, [search]);
 
   useEffect(() => {
     if (arming === null) return;
@@ -71,6 +81,7 @@ export function Library(): ReactElement | null {
     <nav style={S.wrap} aria-label="library of settled briefs">
       <style>{HOVER}</style>
       <p style={S.kicker}>Library · {entries.length}</p>
+      <span style={S.searchWrap}>
       <input
         className="lib-search"
         style={S.search}
@@ -80,7 +91,9 @@ export function Library(): ReactElement | null {
         aria-label="Search the library"
         onChange={(ev) => setQ(ev.target.value)}
       />
-      <div className="lib-list" style={S.list}>
+      {awaiting && <span className="fn-lamp" style={S.searchDot} />}
+      </span>
+      <div className="lib-list" style={{ ...S.list, ...(awaiting ? S.listWaiting : null) }}>
         {rows.map((e) => {
           const d = day(e.savedAt);
           const divider = search === null && d !== lastDay ? d : null;
@@ -168,8 +181,14 @@ const S: Record<string, CSSProperties> = {
     // The list fades at its edges instead of clipping — paper, not a viewport.
     maskImage: "linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 14px), transparent 100%)",
     WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 14px), transparent 100%)",
-    padding: "8px 0 12px", scrollbarWidth: "none",
+    padding: "8px 0 12px", scrollbarWidth: "none", transition: "opacity .15s ease",
   },
+  searchWrap: { position: "relative", display: "flex", flexDirection: "column", flex: "none" },
+  searchDot: {
+    position: "absolute", right: 12, top: 10, width: 7, height: 7,
+    borderRadius: "50%", background: color.ember,
+  },
+  listWaiting: { opacity: 0.65 },
   search: {
     font: `12px ${font.ui}`, color: color.ink, background: color.card2,
     border: `1px solid ${color.line}`, borderRadius: radius.control,

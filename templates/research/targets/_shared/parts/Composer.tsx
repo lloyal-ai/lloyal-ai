@@ -19,19 +19,39 @@ import type { AppState } from "../../../harness/state.js";
 // inline closure per render would grow the fold's memo map (store contract).
 const selectUiPhase = (app: AppState) => app.uiPhase;
 const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
+const selectQueryRaw = (app: AppState): string => app.query;
+const selectAskRaw = (app: AppState): string | null => app.ask;
 
 /** A HINT for the file picker, not a gate — drag-and-drop and paste bypass it,
  *  and the host's ingress is the only thing that decides what is admitted.
- *  Naming formats here would be a second opinion on a question the bytes
- *  answer, and it would refuse what the ingress converts happily. */
+ *
+ *  It used to enumerate four types, which was a fifth copy of a question the
+ *  bytes answer, and wrong in both directions: it refused webp, heic and tiff,
+ *  which the ingress converts and admits happily. */
 const IMAGE_TYPES = "image/*";
 
-/** A picked image, before submit. `url` is a LOCAL object URL — the file that
- *  was chosen, not what the model will see: normalization may re-encode, and
- *  the two cannot be joined by digest (the browser holds the source's hash, the
- *  fold holds the MANIFEST's). After submit the view resolves through the
- *  content plane, which shows the pixels the projector encoded. */
+/** A picked image, before submit.
+ *
+ *  `url` is a LOCAL object URL — an optimistic preview of the file the user
+ *  chose, not of what the model will see. The two differ: normalization may
+ *  re-encode, and the preview cannot be joined to the admitted representation
+ *  by digest because the browser holds the source's hash while the fold holds
+ *  the MANIFEST's. After submit the view resolves through the content plane
+ *  instead, which shows the exact pixels the projector encoded. */
 type Attached = { id: number; name: string; url: string; file: File };
+
+/** Hover and pressed states inline styles cannot express. A selected pill's
+ *  inline background always beats the hover class, so selection never dims. */
+const CSS = `
+  .cmp-send { transition: background .12s ease, transform .06s ease; }
+  .cmp-send:hover:not(:disabled) { background: ${color.emberDeep}; }
+  .cmp-send:active:not(:disabled) { transform: scale(.94); }
+  .cmp-send:disabled { opacity: .55; cursor: default; }
+  .cmp-icon { transition: background .12s ease, color .12s ease; }
+  .cmp-icon:hover { color: ${color.ink}; background: ${color.card2}; }
+  .cmp-pill { transition: background .12s ease, color .12s ease; }
+  .cmp-pill:hover { background: ${color.card}; color: ${color.ink}; }
+`;
 
 const INTENTS = [
   { intent: "ask", label: "Ask", hint: "answers from the warm context — instant" },
@@ -50,6 +70,14 @@ export function Composer({ shape, placeholder }: {
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
   const [intent, setIntent] = useState<Intent>("ask");
+  /** The question, held after send until the fold acknowledges it. Some paths
+   *  do real work before their first event — a restored report prefills whole,
+   *  a clarify answer prefills before the planner resumes — so the dock keeps
+   *  your words visibly in hand instead of swallowing them into silence. */
+  const [pending, setPending] = useState<{ text: string; phase: AppState["uiPhase"] } | null>(null);
+  /** An ability just saved toward its first enable — its pill pulses until
+   *  `abilities:state` confirms (a corpus enable INDEXES, which takes time). */
+  const [enabling, setEnabling] = useState<string | null>(null);
   const depth = useBrief(selectDepth);
   const live = useBrief(selectLive);
   const tasks = useBrief(selectTaskCount);
@@ -60,6 +88,28 @@ export function Composer({ shape, placeholder }: {
   const [configFor, setConfigFor] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const configPanel = libraries.find((l) => l.name === configFor) ?? null;
+  const queryNow = useBrief(selectQueryRaw);
+  const askNow = useBrief(selectAskRaw);
+
+  // Acknowledgment: the fold echoed the question (cold or warm) or the phase
+  // moved on (clarify resumes under the original query, not the answer).
+  useEffect(() => {
+    if (pending === null) return;
+    if (queryNow === pending.text || askNow === pending.text || uiPhase !== pending.phase) {
+      setPending(null);
+    }
+  }, [pending, queryNow, askNow, uiPhase]);
+  // The echo must not outlive plausibility — a dead wire has its own banner.
+  useEffect(() => {
+    if (pending === null) return;
+    const t = setTimeout(() => setPending(null), 12_000);
+    return () => clearTimeout(t);
+  }, [pending]);
+  useEffect(() => {
+    if (enabling !== null && libraries.find((l) => l.name === enabling)?.enabled) {
+      setEnabling(null);
+    }
+  }, [enabling, libraries]);
 
   const closeConfig = (): void => {
     setConfigFor(null);
@@ -81,13 +131,16 @@ export function Composer({ shape, placeholder }: {
         name: configPanel.name,
         values: Object.fromEntries(entries),
       });
+      if (!configPanel.enabled) setEnabling(configPanel.name);
     }
     closeConfig();
   };
 
-  // Size is bounded by the HOST, not here: the bytes go over HTTP, where it
-  // bounds them in size AND in time. A check here would be a second, weaker
-  // opinion that drifts from the one that counts.
+  // No size cap here any more. It existed because base64 inflated the wire by
+  // 4/3 and the socket carried the bytes; the bytes now go over HTTP, where
+  // the HOST bounds them — in size AND in time, which a client-side check
+  // never did. Refusing here would only be a second, weaker opinion that
+  // drifts from the one that counts.
   /** Takes anything File-shaped so the picker and the clipboard feed ONE path
    *  — a second attach path is how the two drift. */
   const attach = (files: ArrayLike<File> | null): void => {
@@ -131,9 +184,10 @@ export function Composer({ shape, placeholder }: {
     // Enter is the only way to submit, so re-entry is one keypress away while
     // an upload is in flight — and a second submit would upload the same files
     // again and send a second query.
-    if (!text || uploading) return;
+    if (!text || uploading || pending !== null) return;
     if (uiPhase === "clarifying") {
       send({ type: "submit_clarification", answer: text });
+      setPending({ text, phase: uiPhase });
       clear(images);
       return;
     }
@@ -172,12 +226,14 @@ export function Composer({ shape, placeholder }: {
         skipPlanner: settled ? intent === "ask" : shape === "ask",
         ...(attachments ? { attachments } : {}),
       });
+      setPending({ text, phase: uiPhase });
       clear(picked);
     })();
   };
 
   return (
     <div style={S.shell}>
+      <style>{CSS}</style>
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
           {images.map((img) => (
@@ -232,7 +288,7 @@ export function Composer({ shape, placeholder }: {
             </p>
           )}
           <div style={S.configActions}>
-            <button type="button" style={S.configCancel} onClick={closeConfig}>
+            <button type="button" className="cmp-pill" style={S.configCancel} onClick={closeConfig}>
               Cancel
             </button>
             <button type="button" style={S.configSave} onClick={saveConfig}>
@@ -255,7 +311,7 @@ export function Composer({ shape, placeholder }: {
       <div style={S.entryRow}>
         <button
           type="button"
-          style={S.attach}
+          className="cmp-icon" style={S.attach}
           title="Attach an image"
           aria-label="Attach an image"
           onClick={() => picker.current?.click()}
@@ -265,14 +321,15 @@ export function Composer({ shape, placeholder }: {
           </svg>
         </button>
         <input
-          style={S.input}
-          value={draft}
+          style={{ ...S.input, ...(pending ? S.inputSent : null) }}
+          value={pending ? pending.text : draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           onPaste={onPaste}
           placeholder={uploading ? "Sending your image…" : placeholder}
-          disabled={uploading}
+          disabled={uploading || pending !== null}
         />
+        {pending && <span className="fn-lamp" style={S.sentDot} />}
         {live && <Clock />}
       </div>
       {/* Row 2 — what the next brief will DRAW ON, then how it will be worked.
@@ -311,7 +368,10 @@ export function Composer({ shape, placeholder }: {
                   {l.iconUrl ? (
                     <img src={l.iconUrl} alt="" width={12} height={12} style={S.libIcon} />
                   ) : (
-                    <span style={{ ...S.libDot, ...(on ? null : S.libDotOff) }} />
+                    <span
+                    className={enabling === l.name ? "fn-lamp" : undefined}
+                    style={{ ...S.libDot, ...(on || enabling === l.name ? null : S.libDotOff) }}
+                  />
                   )}
                   {l.title}
                   {l.detail ? ` · ${l.detail}` : ""}
@@ -324,7 +384,7 @@ export function Composer({ shape, placeholder }: {
                 {l.fields.length > 0 && (
                   <button
                     type="button"
-                    style={S.libGear}
+                    className="cmp-icon" style={S.libGear}
                     title={`${l.title} settings`}
                     aria-label={`${l.title} settings`}
                     aria-expanded={configFor === l.name}
@@ -347,7 +407,7 @@ export function Composer({ shape, placeholder }: {
               <button
                 key={i.intent}
                 type="button"
-                style={i.intent === intent ? S.depthOn : S.depth}
+                className="cmp-pill" style={i.intent === intent ? S.depthOn : S.depth}
                 title={i.hint}
                 onClick={() => setIntent(i.intent)}
               >
@@ -369,7 +429,7 @@ export function Composer({ shape, placeholder }: {
                 <button
                   key={d.depth}
                   type="button"
-                  style={d.depth === depth ? S.depthOn : S.depth}
+                  className="cmp-pill" style={d.depth === depth ? S.depthOn : S.depth}
                   title={pace.observed ? undefined : "estimated — runs on this machine refine it"}
                   onClick={() => send({ type: "set_effort", effort: d.depth })}
                 >
@@ -381,7 +441,7 @@ export function Composer({ shape, placeholder }: {
         )}
       </div>
       </div>
-      <button type="button" style={S.send} onClick={submit} aria-label="Send">
+      <button type="button" className="cmp-send" style={S.send} onClick={submit} aria-label="Send" disabled={uploading || pending !== null}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 19V5" />
           <path d="M5 12l7-7 7 7" />
@@ -462,7 +522,7 @@ const S: Record<string, CSSProperties> = {
   /** What the brief draws on, then how it is worked — sources left, shape of
    *  the work right, reading in the order the decisions are actually made. */
   /** Holds the depth picker's own height whether or not the picker is there, so
-   *  the card is one size in every mode and the send button never moves. */
+   *  the card is the same size in every mode and the send button never moves. */
   controlRow: { display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 32 },
   libs: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 },
   lib: {
@@ -526,6 +586,9 @@ const S: Record<string, CSSProperties> = {
     flex: 1, border: 0, outline: 0, font: `14.5px ${font.ui}`, color: color.ink,
     background: "none", minWidth: 0,
   },
+  /** Words in hand, not yet taken — dimmed, beside a working lamp. */
+  inputSent: { color: color.dim },
+  sentDot: { width: 7, height: 7, borderRadius: "50%", background: color.ember, flex: "none" },
   clock: {
     display: "inline-flex", alignItems: "center", gap: 5, flex: "none",
     font: `500 12px ${font.mono}`, color: color.dim, fontVariantNumeric: "tabular-nums",

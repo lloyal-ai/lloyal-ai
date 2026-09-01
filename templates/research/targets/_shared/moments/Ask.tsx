@@ -1,7 +1,8 @@
 /** Moment 01 — Ask. One question on quiet paper and the shape choice. What the
- *  brief draws on lives in the dock beside the question, reachable at every
- *  moment instead of only this one. Boot renders here too, in the shell's
- *  voice: fetching the model, loading, the CUDA-pack offer, a failure. */
+ *  brief draws on now lives in the dock beside the question, where it is
+ *  reachable at every moment instead of only this one. Boot renders here too,
+ *  in the shell's voice: fetching the model, loading, the CUDA-pack offer, a
+ *  failure. */
 import type { CSSProperties, ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
@@ -9,6 +10,12 @@ import {
   SHAPES, fmtBytes, selectBoot, type Shape,
 } from "../select.js";
 import { Thinking } from "../parts/Shell.js";
+
+/** The selected card's inline border always beats the hover class. */
+const SHAPE_CSS = `
+  .ask-shape { transition: border-color .12s ease, box-shadow .12s ease; }
+  .ask-shape:hover { border-color: ${color.dim}; }
+`;
 
 export function Ask({ shape, onShape }: {
   shape: Shape;
@@ -18,6 +25,7 @@ export function Ask({ shape, onShape }: {
 
   return (
     <div style={S.center}>
+      <style>{SHAPE_CSS}</style>
       <div style={S.aurora} />
       <div style={S.stack}>
         {boot.state === "quiet" && (
@@ -28,7 +36,7 @@ export function Ask({ shape, onShape }: {
                 <button
                   key={s.shape}
                   type="button"
-                  style={s.shape === shape ? S.shapeOn : S.shape}
+                  className="ask-shape" style={s.shape === shape ? S.shapeOn : S.shape}
                   onClick={() => onShape(s.shape)}
                 >
                   <b style={S.shapeTitle}>{s.title}</b>
