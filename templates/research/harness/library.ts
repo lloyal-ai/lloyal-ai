@@ -53,6 +53,9 @@ export function listReports(outputDir: string): LibraryEntry[] {
       title: titleLine.replace(/^#\s*/, "") || name,
       savedAt: meta?.[1] ?? name,
       mode: meta?.[2] === "flat" || meta?.[2] === "deep" ? meta[2] : null,
+      // The meta line records the roots a brief carried; the row only needs
+      // the fact, so a glyph can mark media-bearing briefs without a read.
+      hasMedia: /·\s*media\s+sha256:/.test(metaLine),
     });
   }
   return entries.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));

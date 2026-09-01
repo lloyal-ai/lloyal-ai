@@ -513,6 +513,7 @@ export interface ReportEntry {
   title: string;
   savedAt: string;
   mode: "flat" | "deep" | null;
+  hasMedia: boolean;
 }
 
 /** Every settled brief on disk, newest first. Opening one restores it as

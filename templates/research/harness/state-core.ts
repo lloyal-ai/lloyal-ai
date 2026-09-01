@@ -53,6 +53,8 @@ export interface LibraryEntry {
   title: string;
   savedAt: string;
   mode: Mode | null;
+  /** The brief carried images — its meta line names their roots. */
+  hasMedia: boolean;
 }
 
 /** One cited source, extracted CONSUMER-side from a tool result (the Ability
