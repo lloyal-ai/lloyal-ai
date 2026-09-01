@@ -1,0 +1,101 @@
+# ═══ Alpha Cut — one coherent prerelease SET across the stack ═══
+#
+# Publishes the arc branches to npm under the `alpha` dist-tag, in dependency
+# order: lloyal.node → hdk packages → lloyal-ai (this repo). `latest` never
+# moves — each repo's release workflow maps an -alpha.N version to
+# `npm publish --tag alpha` mechanically.
+#
+# BEFORE dispatching a cut:
+#   1. Run `node scripts/cut-alpha.mjs --cut N` in hdk and in this repo (and
+#      set lloyal.node's version to its alpha + `node scripts/sync-versions.js`),
+#      commit on each arc branch, push. The versions and exact template pins
+#      COMMITTED on the branches are the set — this workflow only builds and
+#      publishes what git already records.
+#   2. A brand-new package name (media, on the mtmd arc) must have ONE manual
+#      first `npm publish` — npm's 2FA rule stops CI from creating names.
+#
+# Secrets: ALPHA_DISPATCH_TOKEN — a fine-grained PAT with Actions read+write
+# on lloyal-ai/lloyal.node, lloyal-ai/hdk and this repo.
+#
+# Manual alternative: press each repo's Release workflow yourself, same order,
+# skip_publish=false (and skip_gpu=true on lloyal.node).
+name: Alpha Cut
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_publish:
+        description: 'Dry-run the whole cut (build everything, publish nothing)'
+        type: boolean
+        default: true
+      node_ref:
+        description: 'lloyal.node arc branch'
+        type: string
+        default: 'feat/mtmd'
+      hdk_ref:
+        description: 'hdk arc branch'
+        type: string
+        default: 'feat/mtmd'
+
+permissions:
+  contents: read
+
+jobs:
+  conduct:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.ALPHA_DISPATCH_TOKEN }}
+    steps:
+      - name: Guard — token present
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::ALPHA_DISPATCH_TOKEN is not configured. Add a fine-grained PAT" \
+                 "(Actions read+write on lloyal-ai/lloyal.node, lloyal-ai/hdk, and this repo)" \
+                 "under Settings > Secrets and variables > Actions — or run each repo's" \
+                 "Release workflow by hand in dependency order."
+            exit 1
+          fi
+
+      - name: lloyal.node (full platform matrix, GPU tests skipped)
+        run: |
+          gh workflow run release.yml -R lloyal-ai/lloyal.node --ref "${{ inputs.node_ref }}" \
+            -f skip_publish=${{ inputs.skip_publish }} -f skip_gpu=true
+          sleep 15
+          RUN=$(gh run list -R lloyal-ai/lloyal.node --workflow=release.yml \
+            --branch "${{ inputs.node_ref }}" --limit 1 --json databaseId -q '.[0].databaseId')
+          echo "watching lloyal.node run $RUN"
+          gh run watch "$RUN" -R lloyal-ai/lloyal.node --exit-status --interval 60
+
+      - name: hdk packages
+        run: |
+          gh workflow run release.yml -R lloyal-ai/hdk --ref "${{ inputs.hdk_ref }}" \
+            -f skip_publish=${{ inputs.skip_publish }}
+          sleep 15
+          RUN=$(gh run list -R lloyal-ai/hdk --workflow=release.yml \
+            --branch "${{ inputs.hdk_ref }}" --limit 1 --json databaseId -q '.[0].databaseId')
+          echo "watching hdk run $RUN"
+          gh run watch "$RUN" -R lloyal-ai/hdk --exit-status --interval 60
+
+      - name: lloyal-ai (this repo — pinned templates ride the tarball)
+        run: |
+          gh workflow run release.yml -R ${{ github.repository }} --ref "${{ github.ref_name }}" \
+            -f skip_publish=${{ inputs.skip_publish }}
+          sleep 15
+          RUN=$(gh run list -R ${{ github.repository }} --workflow=release.yml \
+            --branch "${{ github.ref_name }}" --limit 1 --json databaseId -q '.[0].databaseId')
+          echo "watching lloyal-ai run $RUN"
+          gh run watch "$RUN" -R ${{ github.repository }} --exit-status --interval 60
+
+      - name: The set, as npm now serves it
+        if: ${{ !inputs.skip_publish }}
+        run: |
+          {
+            echo "## alpha set"
+            echo '```'
+            for p in lloyal-ai @lloyal-labs/lloyal.node @lloyal-labs/media @lloyal-labs/sdk \
+                     @lloyal-labs/lloyal-agents @lloyal-labs/rig @lloyal-labs/dev-tools; do
+              printf '%-32s %s\n' "$p" "$(npm view "$p@alpha" version 2>/dev/null || echo '—')"
+            done
+            echo '```'
+            echo "Try it: \`npx lloyal-ai@alpha new my-app\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -31,6 +31,8 @@ import {
   CancelAgent,
   reconstructBranch,
   Pause,
+  Attachments,
+  RerankerCtx,
 } from "@lloyal-labs/lloyal-agents";
 import type {
   Ability,
@@ -38,6 +40,8 @@ import type {
   AbilityRegistry,
   AbilityConfigStore,
 } from "@lloyal-labs/lloyal-agents";
+import { asAttachment, materialize } from "@lloyal-labs/media";
+import type { Attachment, Descriptor } from "@lloyal-labs/media";
 import type { EventBus } from "@lloyal-labs/binding";
 import {
   createInMemoryConfigStore,
@@ -64,7 +68,7 @@ import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
 import { resolvePath } from "@lloyal-labs/rig/node";
 import { RunnerCtx } from "./runner-ctx.js";
-import { confinedReport, listReports, readReport, removeReport } from "./library.js";
+import { confinedReport, listReports, readReport, readThread, removeReport } from "./library.js";
 import type { ConfigOrigin } from "./config-types.js";
 
 // The two first-party ability factories this harness enables. Before enabling, the
@@ -219,10 +223,21 @@ class HarnessExit extends Error {
 interface PendingPlan {
   plan: PlanResult;
   query: string;
-  clarifyExchanged: boolean;
+  /** The user side of the next trunk turn is ALREADY prefilled, so the run
+   *  must close with `prefillAssistant` rather than `commitTurn` (which would
+   *  re-emit it). Two things set it: a clarify round (`prefillUser`), and a
+   *  query that arrived with images (`prefillUserMultimodal`). Named for the
+   *  state, not for either cause — it was `clarifyExchanged` when a clarify
+   *  round was the only way to reach it. */
+  userSidePending: boolean;
   mode: "flat" | "deep";
   wallStartMs: number;
   abilityFilter: readonly string[];
+  /** Roots for images that rode the query — carried through the plan-review
+   *  park so `accept_plan`'s `startRunDir` records them; without this the
+   *  deep report's meta line loses its `media` entry and a reopened report
+   *  shows no figure. */
+  attachments?: readonly Descriptor[];
 }
 
 // ── harness — the Layer-3 entrypoint (platform contract) ─────────
@@ -256,6 +271,7 @@ export function* harness(
 
   const { session, events: agentEvents } = yield* initAgents<WorkflowEvent>(ctx, {
     traceWriter: runner.traceWriter,
+    attachmentStore: runner.attachmentStore,
   });
 
   // Replay mode: rebuild the spine from the captured checkpoint and install it as
@@ -347,9 +363,22 @@ export function* harness(
     effort: runner.config().defaults.effort,
   };
 
-  function startRunDir(query: string, mode: "flat" | "deep"): void {
+  function startRunDir(
+    query: string,
+    mode: "flat" | "deep",
+    attached: readonly Descriptor[] = [],
+  ): void {
+    const attachments = attached.map((a) => a.digest);
+    // A document is born at the shape selector; everything asked UNDER it
+    // belongs to it. While a settled report stands anchored, every dock
+    // submit — Ask or Extend — appends to that report's thread. Only
+    // `new_run` (the way back to the picker) starts a new library item.
+    if (runDirSink.inThread) {
+      runDirSink.startThread({ query, mode, attachments });
+      return;
+    }
     const outputDir = runner.config().sources.outputDir ?? process.cwd();
-    runDirSink.start({ outputDir, query, mode });
+    runDirSink.start({ outputDir, query, mode, attachments });
   }
 
   const libraryDir = (): string =>
@@ -382,12 +411,6 @@ export function* harness(
     if (!runner.initialQuery) {
       throw new HarnessExit("Non-TTY mode requires --query.", 2);
     }
-    if (registry.enabled().length === 0) {
-      throw new HarnessExit(
-        "No source configured. Enable an ability in harness/harness.ts — the web ability runs keyless.",
-        2,
-      );
-    }
     const wallStartMs = performance.now();
     const result = yield* runQuery(runner.initialQuery, session, {
       ...harnessOpts,
@@ -419,7 +442,7 @@ export function* harness(
   // library_read, consumed by the first submit over it), and the reports
   // already committed to the trunk — a report prefills once; later asks
   // over it are simply warm.
-  let openedReport: { path: string; title: string; body: string } | null = null;
+  let openedReport: ReturnType<typeof readThread> | null = null;
   const committedReports = new Set<string>();
   let pendingPlan: PendingPlan | null = null;
 
@@ -503,6 +526,7 @@ export function* harness(
     mode: "flat" | "deep";
     wallStartMs: number;
     abilityFilter: readonly string[];
+    attachments?: readonly Descriptor[];
     onStart: () => void;
     clarify: "commit" | "prefill" | "none";
     pending: (plan: PlanResult) => PendingPlan;
@@ -515,6 +539,7 @@ export function* harness(
         context: buildPlannerContext(registry.enabled()),
         wallStartMs: spec.wallStartMs,
         abilityFilter: spec.abilityFilter,
+        attachments: spec.attachments,
         onStart: spec.onStart,
       });
       if (result.type === "research_plan") {
@@ -634,6 +659,18 @@ export function* harness(
 
     *set_gpu(cmd) {
       runner.reloadRuntime({ model: { gpu: cmd.gpu } });
+      return "exit";
+    },
+
+    // Both reload the runtime, like set_gpu: the projector reads these at
+    // createContext, so a live context cannot adopt a new value. 'auto' ⇒ 0,
+    // the binding's unset sentinel.
+    *set_image_min_tokens(cmd) {
+      runner.reloadRuntime({ model: { imageMinTokens: Number(cmd.value) || 0 } });
+      return "exit";
+    },
+    *set_image_max_tokens(cmd) {
+      runner.reloadRuntime({ model: { imageMaxTokens: Number(cmd.value) || 0 } });
       return "exit";
     },
 
@@ -779,6 +816,68 @@ export function* harness(
       return "continue";
     },
 
+    *new_run() {
+      // A run in flight is abandoned the same way a fresh submit abandons it.
+      if (run.task) {
+        yield* haltRun();
+        pendingPlan = null;
+      }
+      // Drop the restored-report binding: the next submit must not commit a
+      // document the user has just cleared. And drop the thread anchor — the
+      // picker is where new documents are born.
+      openedReport = null;
+      runDirSink.clearAnchor();
+      yield* agentEvents.send({ type: "ui:new_run" });
+      return "continue";
+    },
+
+    *library_search(cmd) {
+      // The reranker is the run's scoring instrument; a live run owns it. The
+      // sidebar disables its input while a brief writes — this is the same
+      // fact host-side, so a stale keystroke cannot queue behind ability
+      // scoring.
+      if (run.task) return "continue";
+      const query = cmd.query.trim();
+      if (!query) {
+        yield* agentEvents.send({ type: "library:search", query: "", ranked: [] });
+        return "continue";
+      }
+      const entries = listReports(libraryDir());
+      if (entries.length === 0) {
+        yield* agentEvents.send({ type: "library:search", query, ranked: [] });
+        return "continue";
+      }
+      // Title plus the answer's lead: enough for the cross-encoder to be
+      // query-aware, small enough that a library stays a couple of waves of
+      // scoring leaves. No index anywhere — at library scale the reranker
+      // reads everything fresh, so there is nothing to build or invalidate.
+      const texts = entries.map((e) => {
+        try {
+          const r = readReport(e.path);
+          return `${r.title}\n\n${r.body.slice(0, 400)}`;
+        } catch {
+          return e.title;
+        }
+      });
+      const reranker = yield* RerankerCtx.expect();
+      let scores: number[];
+      try {
+        scores = yield* call(() => reranker.scoreBatch(query, texts));
+      } catch (err) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: `Search failed: ${errorMessage(err)}`,
+        });
+        return "continue";
+      }
+      const ranked = entries
+        .map((e, i) => ({ path: e.path, score: scores[i] ?? -Infinity }))
+        .sort((a, b) => b.score - a.score)
+        .map((r) => r.path);
+      yield* agentEvents.send({ type: "library:search", query, ranked });
+      return "continue";
+    },
+
     *library_list() {
       yield* agentEvents.send({
         type: "library:list",
@@ -805,8 +904,31 @@ export function* harness(
           message: "A brief is in flight — close it before opening another.",
         });
       } else {
-        openedReport = readReport(resolved);
-        yield* agentEvents.send({ type: "query", query: openedReport.title, warm: false });
+        openedReport = readThread(resolved);
+        // The reopened document is the live thread — follow-ups land in it.
+        runDirSink.resume(resolved);
+        // The report kept the ADDRESSES; the store kept the content. Rebuild
+        // each descriptor from what is actually on disk rather than trusting
+        // the file — a digest whose manifest is gone is dropped, so the brief
+        // reopens without a figure instead of with a broken one.
+        const contentStore = yield* Attachments.expect();
+        const restored: Descriptor[] = [];
+        for (const digest of openedReport.attachments) {
+          const bytes = contentStore.get(digest);
+          if (bytes) {
+            restored.push({
+              mediaType: "application/vnd.oci.image.manifest.v1+json",
+              digest,
+              size: bytes.length,
+            });
+          }
+        }
+        yield* agentEvents.send({
+          type: "query",
+          query: openedReport.title,
+          warm: false,
+          ...(restored.length > 0 ? { attachments: restored } : {}),
+        });
         yield* agentEvents.send({ type: "answer", text: openedReport.body });
         yield* agentEvents.send({ type: "complete", data: {} });
       }
@@ -821,6 +943,8 @@ export function* harness(
       const resolved = confinedReport(libraryDir(), cmd.path);
       if (resolved !== null) {
         removeReport(resolved);
+        // A deleted report must stop collecting its thread.
+        runDirSink.clearAnchor(resolved);
         yield* reindexCorpus();
       }
       yield* agentEvents.send({
@@ -831,21 +955,11 @@ export function* harness(
     },
 
     *submit_query(cmd) {
-      if (registry.enabled().length === 0) {
-        yield* agentEvents.send({
-          type: "ui:error",
-          message: "No source configured. Add Tavily key or corpus path.",
-        });
-        return "continue";
-      }
+      // No sources is a legitimate ask — nothing configured, or everything
+      // excluded. The run answers from the model and whatever is already in
+      // context; the pool registers whichever abilities ARE included, and none
+      // is simply the empty union.
       const abilityFilter = currentAbilityFilter();
-      if (abilityFilter.length === 0) {
-        yield* agentEvents.send({
-          type: "ui:error",
-          message: "All sources excluded. Include at least one.",
-        });
-        return "continue";
-      }
       const wallStartMs = performance.now();
       currentEffort = runner.config().defaults.effort;
       if (run.task) {
@@ -855,13 +969,76 @@ export function* harness(
       yield* commitOpenedReport();
       const { query, mode } = cmd;
 
+      // Attached images land on the TRUNK before either path below runs. That
+      // ordering is the point: agents fork from the trunk, so one encode is
+      // shared by every one of them instead of copied per agent. It also means
+      // the user side of this turn is already committed — hence
+      // `userSidePending`, which makes the run close with `prefillAssistant`
+      // instead of re-emitting the query via `commitTurn`.
+      let userSidePending = false;
+      // Hoisted: the `query` event both seeds and RESETS the fold, and it is
+      // emitted from two paths below, so the roots must outlive this block.
+      let attachments: readonly Descriptor[] = [];
+      if (cmd.attachments && cmd.attachments.length > 0) {
+        if (!ctx.supportsVision()) {
+          // Say it plainly rather than dropping them: the user is looking at
+          // an attachment they believe was sent.
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: "This model can't see images — it has no vision projector. "
+              + "Pick a vision-capable model, or ask without the attachment.",
+          });
+          return "continue";
+        }
+        // The bytes were admitted at the content plane on the way in, so there
+        // is nothing to ingest here — only to resolve. Two checks, two
+        // questions: `asAttachment` refuses a descriptor that is not the KIND
+        // of thing that can be a root, and `materialize` refuses one the store
+        // has never seen. Neither is a formality — a descriptor on this wire is
+        // a claim, not proof.
+        const contentStore = yield* Attachments.expect();
+        const roots = cmd.attachments.map(asAttachment);
+        if (roots.some((r) => r === null)) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: "That attachment reference isn't an image the host admitted.",
+          });
+          return "continue";
+        }
+        let prepared;
+        try {
+          prepared = materialize(contentStore, roots as Attachment[]);
+        } catch (err) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: `Couldn't read that image back: ${errorMessage(err)}`,
+          });
+          return "continue";
+        }
+        // Prefilled onto the TRUNK once; every agent forked from it attends the
+        // same cells. N agents cost one projection, not N.
+        yield* call(() => session.prefillUserMultimodal(
+          query,
+          prepared.bitmaps as Uint8Array[],
+          { attachments: prepared.attachments },
+        ));
+        attachments = prepared.attachments;
+        userSidePending = true;
+      }
+
       // Ask (skipPlanner): the user's question IS the plan — one warm task,
       // no planner. `query` first, matching runPlanner's order: the fold's
       // warm-ask branch must see the ask before the synthetic plan:start
       // arrives, or the plan:start retitles the settled document.
       if (cmd.skipPlanner) {
         const plan = singleTaskPlan(query);
-        yield* agentEvents.send({ type: "query", query, warm: !!session.trunk });
+        yield* agentEvents.send({
+          type: "query",
+          query,
+          warm: !!session.trunk,
+          direct: true,
+          ...(attachments.length ? { attachments: [...attachments] } : {}),
+        });
         yield* agentEvents.send({ type: "plan:start", query, mode });
         yield* agentEvents.send({
           type: "plan",
@@ -871,9 +1048,9 @@ export function* harness(
           tokenCount: plan.tokenCount,
           timeMs: plan.timeMs,
         });
-        startRunDir(query, mode);
+        startRunDir(query, mode, attachments);
         yield* startRun(() =>
-          runAcceptedPlan({ query, plan, mode, wallStartMs, abilityFilter, isAsk: true }),
+          runAcceptedPlan({ query, plan, mode, wallStartMs, abilityFilter, isAsk: true, userSidePending }),
         );
         return "continue";
       }
@@ -884,15 +1061,17 @@ export function* harness(
           mode,
           wallStartMs,
           abilityFilter,
-          onStart: () => startRunDir(query, mode),
+          attachments,
+          onStart: () => startRunDir(query, mode, attachments),
           clarify: "commit",
           pending: (plan) => ({
             plan,
             query,
-            clarifyExchanged: false,
+            userSidePending,
             mode,
             wallStartMs,
             abilityFilter,
+            ...(attachments.length ? { attachments } : {}),
           }),
         }),
       );
@@ -909,9 +1088,9 @@ export function* harness(
           mode: prior.mode,
           wallStartMs: prior.wallStartMs,
           abilityFilter: prior.abilityFilter,
-          onStart: () => startRunDir(prior.query, prior.mode),
+          onStart: () => startRunDir(prior.query, prior.mode, prior.attachments),
           clarify: "prefill",
-          pending: (plan) => ({ ...prior, plan, clarifyExchanged: true }),
+          pending: (plan) => ({ ...prior, plan, userSidePending: true }),
         }),
       );
       return "continue";
@@ -927,7 +1106,7 @@ export function* harness(
           mode,
           wallStartMs: prior.wallStartMs,
           abilityFilter: prior.abilityFilter,
-          onStart: () => startRunDir(prior.query, mode),
+          onStart: () => startRunDir(prior.query, mode, prior.attachments),
           clarify: "none",
           pending: (plan) => ({ ...prior, plan, mode }),
         }),
@@ -942,17 +1121,9 @@ export function* harness(
         yield* agentEvents.send({ type: "ui:composer" });
         return "continue";
       }
-      if (registry.enabled().length === 0) {
-        yield* agentEvents.send({
-          type: "ui:error",
-          message: "No source configured. Add Tavily key or corpus path.",
-        });
-        pendingPlan = null;
-        return "continue";
-      }
       const accepted = pendingPlan;
       pendingPlan = null;
-      startRunDir(accepted.query, accepted.mode);
+      startRunDir(accepted.query, accepted.mode, accepted.attachments);
       yield* startRun(() =>
         runAcceptedPlan({
           query: accepted.query,
@@ -960,7 +1131,7 @@ export function* harness(
           mode: accepted.mode,
           wallStartMs: accepted.wallStartMs,
           abilityFilter: accepted.abilityFilter,
-          userSidePending: accepted.clarifyExchanged,
+          userSidePending: accepted.userSidePending,
         }),
       );
       return "continue";

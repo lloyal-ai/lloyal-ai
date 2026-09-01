@@ -81,11 +81,19 @@ jobs:
           for pkg in ./tombstone .; do
             NAME=$(node -p "require('$pkg/package.json').name")
             VERSION=$(node -p "require('$pkg/package.json').version")
+            # The dist-tag follows the version: -alpha.N publishes under the
+            # alpha channel; `latest` only ever moves for a plain version.
+            case "$VERSION" in
+              *-alpha*) TAG=alpha ;;
+              *-beta*)  TAG=beta ;;
+              *-rc*)    TAG=rc ;;
+              *)        TAG=latest ;;
+            esac
             if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
               echo "skip $NAME@$VERSION - already published"
             else
-              echo "publishing $NAME@$VERSION from $pkg ..."
-              npm publish "$pkg" --access public --provenance
+              echo "publishing $NAME@$VERSION from $pkg (tag: $TAG) ..."
+              npm publish "$pkg" --access public --provenance --tag "$TAG"
             fi
           done
         env:

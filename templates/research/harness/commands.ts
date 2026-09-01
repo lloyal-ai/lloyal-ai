@@ -9,8 +9,23 @@
  * escape hatch — that's what makes the UI <-> harness boundary auditable.
  */
 
+import type { Descriptor } from '@lloyal-labs/media';
+
 export type Command =
-  | { type: 'submit_query'; query: string; mode: 'flat' | 'deep'; skipPlanner?: boolean }
+  | {
+      type: 'submit_query';
+      query: string;
+      mode: 'flat' | 'deep';
+      skipPlanner?: boolean;
+      /** ROOT descriptors for images already admitted over the content plane —
+       *  never bytes. The bridge keeps every frame for replay and that history
+       *  is sized for small ones, so bytes belong on HTTP and references here.
+       *
+       *  Untrusted: a descriptor is a CLAIM about content. The handler narrows
+       *  it with `asAttachment` and resolves it through the store, where a
+       *  forged one fails. */
+      attachments?: Descriptor[];
+    }
   | { type: 'submit_clarification'; answer: string }
   | { type: 'accept_plan' }
   | { type: 'cancel_plan' }
@@ -35,7 +50,15 @@ export type Command =
   // `library_delete` removes the brief's WHOLE run dir (report + annexures)
   // and re-indexes the corpus — the system unlearns it; replies with the
   // refreshed `library:list`.
+  /** Clear the settled document and return to the shape picker. The session
+   *  itself is untouched — the trunk keeps its history, exactly as it does
+   *  between two consecutive queries. */
+  | { type: 'new_run' }
   | { type: 'library_list' }
+  /** Rank the library against a query with the session reranker. Empty query
+   *  clears the search. Ignored while a run is active — the reranker is the
+   *  run's scoring instrument, and search must not queue behind it. */
+  | { type: 'library_search'; query: string }
   | { type: 'library_read'; path: string }
   | { type: 'library_delete'; path: string }
   // Global run-effort setting (pure policy preset). Set in Settings → Effort;
@@ -47,6 +70,13 @@ export type Command =
   // ctx + reranker reload on the new backend). Values mirror lloyal.node's
   // GpuVariant; 'default' = the platform binary's built-in backend.
   | { type: 'set_gpu'; gpu: 'default' | 'cuda' | 'vulkan' }
+  // Per-image token budget for a vision model. Carried as the STRING the
+  // slider offers ('auto' | '256' | …) rather than a number, so the UI's
+  // option list is the only place the steps are written down. 'auto' persists
+  // 0, which is the binding's own "unset" sentinel (it applies the value only
+  // when > 0), so auto and never-configured are the same state.
+  | { type: 'set_image_min_tokens'; value: string }
+  | { type: 'set_image_max_tokens'; value: string }
   // Boot-time BACKEND_DL pack offer (uiPhase 'backend_pack_offer'). Accept
   // downloads + installs the pack for this and every future boot; decline
   // persists model.backendPack=false so the offer never re-fires.

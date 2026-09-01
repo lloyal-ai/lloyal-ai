@@ -49,35 +49,80 @@ export const selectLive = (app: AppState): boolean =>
 
 // ── ask ──────────────────────────────────────────────────────────
 
-/** One knowledge source the brief can draw on. `included` mirrors the
- *  per-query participation bit — the Ask byline's names toggle it. */
+/** One knowledge source the brief can draw on. Two axes ride these rows and
+ *  they are not the same: `enabled` is whether the ability CAN be used,
+ *  `included` is whether the next brief will use it. Only the second is the
+ *  user's toggle. */
 export interface Library {
   name: string;
   title: string;
   detail: string | null;
   included: boolean;
+  /** The ability's own mark, when its manifest names one. */
+  iconUrl?: string;
+  /** In the registry — its factory ran, so it can actually be drawn on. */
+  enabled: boolean;
+  /** Required config keys with no stored value. Non-empty ⇒ installed but not
+   *  yet usable, which is a different thing from the user excluding it. */
+  needs: string[];
+  /** Its config surface, derived from the ability's OWN schema — nothing here
+   *  knows what a corpus or an API key is, which is what lets a harness render
+   *  config for an ability it has never seen. */
+  fields: AbilityField[];
 }
 
-/** Library names in the product's voice; anything unlisted keeps its
- *  catalog title. */
-const LIBRARY_NAMES: Record<string, string> = {
-  web: "the web",
-  corpus: "your corpus",
-  wikipedia: "Wikipedia",
+export interface AbilityField {
+  key: string;
+  /** JSON Schema type; decides the input. */
+  type: string;
+  required: boolean;
+  /** `x-secret` — write-only. Never rendered, only replaced. */
+  secret: boolean;
+  /** A value is stored. Key-presence only: the value never leaves the host, so
+   *  a form can say "stored" but can never show it. */
+  set: boolean;
+}
+
+type ConfigSchema = {
+  properties?: Record<string, { type?: string; "x-secret"?: boolean } | undefined>;
+  required?: string[];
 };
 
+const fieldsOf = (
+  schema: unknown,
+  config: Record<string, unknown>,
+): AbilityField[] => {
+  const s = schema as ConfigSchema | undefined;
+  const required = new Set(s?.required ?? []);
+  return Object.entries(s?.properties ?? {}).map(([key, prop]) => ({
+    key,
+    type: typeof prop?.type === "string" ? prop.type : "string",
+    required: required.has(key),
+    secret: prop?.["x-secret"] === true,
+    set: key in config,
+  }));
+};
+
+/** EVERY installed ability, not only the enabled ones: `abilities:state`
+ *  deliberately carries the disabled ones so a surface can offer configuration
+ *  before first enable, and filtering them here hid that they exist at all. */
 export const selectLibraries = (app: AppState): Library[] =>
-  app.abilities
-    .filter((a) => a.enabled)
-    .map((a) => ({
-      name: a.name,
-      title: LIBRARY_NAMES[a.name] ?? a.title,
-      detail:
-        a.name === "corpus" && app.corpusStatus
-          ? `${app.corpusStatus.fileCount} files`
-          : null,
-      included: app.participation[a.name] !== false,
-    }));
+  app.abilities.map((a) => ({
+    name: a.name,
+    // The ability's own name — it identifies the chip beside its siblings, and
+    // stays true for an ability this harness has never heard of.
+    title: a.name,
+    detail:
+      a.name === "corpus" && app.corpusStatus
+        ? `${app.corpusStatus.fileCount} files`
+        : null,
+    included: app.participation[a.name] !== false,
+    iconUrl: a.iconUrl,
+    enabled: a.enabled,
+    needs: ((a.configSchema as { required?: string[] } | undefined)?.required ?? [])
+      .filter((k) => !(k in a.config)),
+    fields: fieldsOf(a.configSchema, a.config),
+  }));
 
 /** Whether the dev pane rides this wire. The ONE register exception hangs
  *  off it: with the pane docked, inquiry rows suffix the agent id the pane
@@ -135,25 +180,33 @@ export const selectDepth = (app: AppState): Depth =>
   (app.config?.defaults.effort ?? "high") as Depth;
 
 /** The two plan shapes, as document characters (flat/deep stay wire-only). */
-export type Shape = "survey" | "investigation";
+export type Shape = "survey" | "investigate" | "ask";
 
 export const SHAPES: readonly {
   shape: Shape;
   mode: "flat" | "deep";
+  /** Skips the planner: the question IS the plan. */
+  direct?: boolean;
   title: string;
   detail: string;
 }[] = [
-  { shape: "investigation", mode: "deep", title: "Investigation", detail: "each step builds on the last" },
+  // Ordered by what each costs the reader: one answer, then several lenses at
+  // once, then a chain that builds. Nothing indexes this table.
+  { shape: "ask", mode: "flat", direct: true, title: "Ask", detail: "one agent, every ability — straight answer" },
   { shape: "survey", mode: "flat", title: "Survey", detail: "independent lenses, side by side" },
+  { shape: "investigate", mode: "deep", title: "Investigate", detail: "each step builds on the last" },
 ];
 
+/** The configured default. Only a plan shape can be one: `reasoningMode` has no
+ *  value for `ask`, which is chosen per run and never persisted. */
 export const selectShape = (app: AppState): Shape =>
-  (app.config?.defaults.reasoningMode ?? "flat") === "deep" ? "investigation" : "survey";
+  (app.config?.defaults.reasoningMode ?? "flat") === "deep" ? "investigate" : "survey";
 
 /** The shape of the run in flight (the submitted mode), not the config
- *  default — the pace record and the eta both speak about THIS run. */
+ *  default — the pace record and the eta both speak about THIS run. A direct
+ *  run rides `flat`, so the mode alone would call an ask a Survey. */
 export const selectRunShape = (app: AppState): Shape =>
-  app.mode === "deep" ? "investigation" : "survey";
+  app.direct ? "ask" : app.mode === "deep" ? "investigate" : "survey";
 
 // ── boot, rendered in the shell's voice ──────────────────────────
 
@@ -194,6 +247,10 @@ export const selectBoot = (app: AppState): Boot => ({
 
 export const selectTitle = (app: AppState): string =>
   app.query.replace(/\?\s*$/, "");
+
+/** Digests of the images the model was shown with this question. */
+export const selectSeen = (app: AppState): string[] =>
+  app.attachments.map((a) => a.digest);
 
 /** The run bar's one status word. */
 export const selectStatus = (app: AppState): string =>
@@ -314,6 +371,10 @@ export interface Section {
   /** Deep mode: this section opens from its predecessors' findings. */
   inherits: boolean;
   inquiry: Inquiry | null;
+  /** Named by the plan, but no branch free yet — `nSeqMax` is a hard
+   *  reservation, so a wide plan forks in waves. True only while queued; the
+   *  head wears a clock until its inquiry starts. */
+  waiting: boolean;
   /** The section's prose: the inquiry's report (draft) — streaming while
    *  it writes, settled when it lands. Already inline-cited by the weave. */
   prose: string | null;
@@ -432,6 +493,7 @@ export const selectSections = (app: AppState): Section[] =>
       title: sectionTitle(task.description),
       task: task.description,
       inherits: app.mode === "deep" && index > 0,
+      waiting: !a && app.waitingTaskIndices.includes(index),
       inquiry: a && {
         id: a.id,
         index,
@@ -451,11 +513,17 @@ export interface ReportEntry {
   title: string;
   savedAt: string;
   mode: "flat" | "deep" | null;
+  hasMedia: boolean;
 }
 
 /** Every settled brief on disk, newest first. Opening one restores it as
  *  the session document — no body is ever held view-side. */
 export const selectLibrary = (app: AppState): ReportEntry[] => app.library.entries;
+
+/** The live library search, when one is running: its query and the report
+ *  paths ranked best-first by the session reranker. */
+export const selectLibrarySearch = (app: AppState): { query: string; ranked: string[] } | null =>
+  app.librarySearch;
 
 // ── the settled document ─────────────────────────────────────────
 
@@ -574,8 +642,13 @@ export const selectProbes = (app: AppState): Probe[] => {
 };
 
 /** The document's warm-ask exchanges, settled beneath it. */
-export const selectExchanges = (app: AppState): { question: string; body: string }[] =>
-  app.exchanges;
+/** Exchanges parsed the way the root answer is: deliberation split out behind
+ *  its own disclosure, prose alone in the document. The fold keeps the RAW
+ *  stream (the host is the author); the split is a view concern. */
+export const selectExchanges = (
+  app: AppState,
+): { question: string; body: string; thinking: string | null }[] =>
+  app.exchanges.map((x) => ({ question: x.question, ...splitThink(x.body, false) }));
 
 /** The warm ask in flight: its question, whatever of its answer has
  *  streamed, and its worker as a full inquiry — verbs, park honesty, and
@@ -589,7 +662,9 @@ export const selectAsk = (
     if (a.endedAt === null) {
       return {
         question: app.ask,
-        body: liveProse(a) ?? "",
+        // While the think block is open the text is deliberation, never answer
+        // prose — the row's verb already says "thinking it through".
+        body: splitThink(liveProse(a) ?? "", true).body,
         inquiry: { id: a.id, index, verb: verbOf(a), startedAt: a.startedAt, endedAt: a.endedAt },
       };
     }
@@ -680,7 +755,16 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
       entries.push({ anchor: "grid-sources", text: "Sources", level: 1, index: 0 });
     }
     app.exchanges.forEach((x, i) => {
+      // Each thread entry is its own document in the rail: the question heads
+      // the group, and the answer's headings nest beneath it — an Extend's
+      // full outline stands under its question, an Ask's short answer adds
+      // nothing.
       entries.push({ anchor: `e${i}`, text: x.question, level: 0, index: i + 1 });
+      anchorsOf(x.body, `e${i}`).forEach((h) => {
+        entries.push({
+          anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: i + 1,
+        });
+      });
     });
     return entries;
   }

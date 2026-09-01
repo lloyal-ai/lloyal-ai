@@ -2,7 +2,9 @@
  *  margin marks (facts of the run, never judgments of the content), the
  *  brief's prose with its citation chips, the sources grid the chips
  *  resolve into, and the deliberation behind it on request. Copy and
- *  Download hand over the same markdown the run dir keeps. */
+ *  Download hand over the same markdown the run dir keeps — per document:
+ *  the brief and each exchange each carry their own pair, mirroring the
+ *  one-file-per-document layout on disk. */
 import { useMemo, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { useBrief } from "../store.js";
@@ -12,6 +14,7 @@ import {
   selectSourceNotes, selectTitle,
 } from "../select.js";
 import { Thinking, doc } from "../parts/Shell.js";
+import { Figures } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose } from "../parts/Prose.js";
@@ -30,7 +33,8 @@ export function Settle(): ReactElement {
   const exchanges = useBrief(selectExchanges);
   const ask = useBrief(selectAsk);
   const [showThinking, setShowThinking] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [thinkOpen, setThinkOpen] = useState<string | null>(null);
 
   const ordinals = useMemo(
     () => new Map(citations.map((c) => [c.url, c.ordinal])),
@@ -41,11 +45,10 @@ export function Settle(): ReactElement {
 
   // A served page on plain http has no `navigator.clipboard` — the hidden
   // textarea is the fallback that works everywhere the brief renders.
-  const copy = (): void => {
-    const text = answer?.body ?? "";
+  const copy = (text: string, key: string): void => {
     const flash = (): void => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
     };
     const legacy = (): boolean => {
       const ta = document.createElement("textarea");
@@ -65,12 +68,12 @@ export function Settle(): ReactElement {
     }
   };
 
-  const download = (): void => {
-    const blob = new Blob([answer?.body ?? ""], { type: "text/markdown" });
+  const download = (text: string, name: string): void => {
+    const blob = new Blob([text], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "brief"}.md`;
+    a.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "brief"}.md`;
     a.click();
     // Revoke only after the download has consumed the URL — a synchronous
     // revoke can cancel the navigation in some browsers.
@@ -81,14 +84,15 @@ export function Settle(): ReactElement {
     <div style={S.spread}>
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
+      <Figures />
       <p style={S.byline}>
         <span>{new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
         {shapeTitle && <span>{shapeTitle}</span>}
         {depthTitle && <span>{depthTitle}</span>}
         {citations.length > 0 && <span>{citations.length} sources</span>}
         <span style={{ flex: 1 }} />
-        <button type="button" style={S.action} onClick={copy}>{copied ? "Copied" : "Copy"}</button>
-        <button type="button" style={S.action} onClick={download}>Download</button>
+        <button type="button" style={S.action} onClick={() => copy(answer?.body ?? "", "a")}>{copied === "a" ? "Copied" : "Copy"}</button>
+        <button type="button" style={S.action} onClick={() => download(answer?.body ?? "", title)}>Download</button>
       </p>
       {marks.length > 0 && (
         <div style={S.marks}>
@@ -106,7 +110,21 @@ export function Settle(): ReactElement {
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
           <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
-          <Prose markdown={x.body} />
+          <p style={S.exchangeActions}>
+            <button type="button" style={S.action} onClick={() => copy(x.body, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
+            <button type="button" style={S.action} onClick={() => download(x.body, x.question)}>Download</button>
+            {x.thinking && (
+              <button
+                type="button"
+                style={S.action}
+                onClick={() => setThinkOpen(thinkOpen === `e${i}` ? null : `e${i}`)}
+              >
+                {thinkOpen === `e${i}` ? "Hide the deliberation" : "How it got here"}
+              </button>
+            )}
+          </p>
+          {thinkOpen === `e${i}` && x.thinking && <p style={S.thinking}>{x.thinking}</p>}
+          <Prose markdown={x.body} anchorPrefix={`e${i}`} />
         </section>
       ))}
       {ask && (
@@ -158,6 +176,7 @@ const S: Record<string, CSSProperties> = {
     borderLeft: `2px solid ${color.line}`, padding: "2px 0 2px 12px", margin: "0 0 18px",
   },
   exchange: { borderTop: `1px solid ${color.line}`, margin: "26px 0 0", paddingTop: 18 },
+  exchangeActions: { display: "flex", gap: 8, margin: "-6px 0 12px" },
   exchangeHead: {
     font: `italic 600 16px/1.4 ${font.ui}`, letterSpacing: "-.008em", margin: "0 0 10px",
   },

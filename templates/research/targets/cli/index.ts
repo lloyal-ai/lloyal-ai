@@ -17,17 +17,13 @@
  *
  * SNAPSHOT: reasoning.run @ main
  */
-import { closeSync, mkdirSync, openSync } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { main, call, ensure } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
-import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
 import { startHostResources } from "@lloyal-labs/dev-tools/node";
-import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createContext } from "@lloyal-labs/lloyal.node";
-import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";
+import { resolveModel, provisionAbilityModels, catalogEntry, useTraceWriter, createProjectMediaStore } from "@lloyal-labs/rig/node";
 import { makeEdgeRunner } from "@lloyal-labs/rig";
 import { harness, abilities } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
@@ -37,40 +33,16 @@ import { loadConfig, loadYml, saveLocalConfig, SESSION_ORIGIN_MAP } from "../../
 import type { HarnessYml } from "../../harness/config.js";
 import type { Config, ConfigOrigin, ConfigPatch, LoadedConfig } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
-
-/** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
- *  in `sources.outputDir` (default: the project root) — the record the dev
- *  tools tail (the directory is created if missing). Otherwise Null:
- *  production writes nothing. The random id keeps
- *  concurrent writers apart and `"wx"` refuses to truncate an existing file; a
- *  failed open degrades to Null (tracing is observability, never a
- *  dependency). The caller owns the fd — `ensure(close)` it on its scope. */
-function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; close: () => void } {
-  if (!dev) return { writer: new NullTraceWriter(), close: () => {} };
-  try {
-    const dir = cfg.sources.outputDir ?? process.cwd();
-    mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const fd = openSync(join(dir, `trace-${ts}-${randomUUID().slice(0, 8)}.jsonl`), "wx");
-    return {
-      writer: new JsonlTraceWriter(fd),
-      close: () => {
-        try {
-          closeSync(fd);
-        } catch {
-          /* already closed */
-        }
-      },
-    };
-  } catch {
-    return { writer: new NullTraceWriter(), close: () => {} };
-  }
-}
-
 // The layered config: cli > env > harness.json > harness.yml > default. A bad
 // manifest or defaults value fails HERE — before any model fetch. `bootEnv` is
 // snapshotted before `applyServedGpuEnv` writes LLOYAL_GPU, so re-layering
 // after a save reads the user's env, never our own write.
+// Where `harness.yml` was found — `loadYml` reads it from the cwd, so the two
+// coincide today. Named separately because `media/` belongs to the PROJECT,
+// not to wherever the operator happened to start the process; if `loadYml`
+// ever searches upward, this is the one line that changes.
+const projectRoot = process.cwd();
+
 const bootEnv = { ...process.env };
 function loadOrExit(): { yml: HarnessYml; loaded: LoadedConfig } {
   try {
@@ -121,6 +93,27 @@ main(function* () {
   };
   applyServedGpuEnv(cfg);
 
+  // The vision projector. Optional and usually implicit: the catalog pairs an
+  // mmproj with each vision-capable llm, so the user picks a model and gets
+  // vision with it. A text-only model has no pairing and `mmprojPath` stays
+  // undefined — `createContext` then reports `supportsVision() === false`
+  // rather than failing, so a text-only boot is unaffected.
+  let mmprojPath: string | undefined;
+  {
+    const mmprojId =
+      loaded.config.model.mmproj ??
+      (yml.model?.llm?.id ? catalogEntry("llm", yml.model.llm.id)?.mmproj : undefined);
+    if (mmprojId) {
+      mmprojPath = yield* call(() =>
+        resolveModel({
+          projectRoot: process.cwd(),
+          role: "mmproj",
+          spec: { id: mmprojId },
+        }),
+      );
+    }
+  }
+
   // The resident model context — one shared `llama_context`; the pipeline forks
   // recon / research / synth branches over it as seq_ids.
   const ctx = yield* call(() =>
@@ -131,6 +124,9 @@ main(function* () {
         nSeqMax: cfg.model.branches ?? 32,
         typeK: cfg.model.kvCache ?? "q4_0",
         typeV: cfg.model.kvCache ?? "q4_0",
+        ...(mmprojPath ? { mmprojPath } : {}),
+        ...(cfg.model.imageMinTokens ? { imageMinTokens: cfg.model.imageMinTokens } : {}),
+        ...(cfg.model.imageMaxTokens ? { imageMaxTokens: cfg.model.imageMaxTokens } : {}),
       },
       cfg.model.gpu ? { gpuVariant: cfg.model.gpu } : undefined,
     ),
@@ -170,8 +166,13 @@ main(function* () {
   // just receives the sink. A boot over another binding (an RN shell over
   // nitro-llama) passes its own — see RunnerDevOpts.
   const dev = process.env.LLOYAL_DEV === "1";
-  const trace = makeTraceWriter(cfg, dev);
-  yield* ensure(trace.close);
+  // Two sinks, two lifetimes. The trace is per-session and dev-gated; the
+  // content store is durable, project-scoped and NEVER gated — addressability
+  // is a replay requirement, not telemetry.
+  // A resource: the descriptor closes when this scope exits, so there is no
+  // `close()` for a caller to remember.
+  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev);
+  const media = createProjectMediaStore(projectRoot);
   // Saves write harness.json, then re-layer for honest values + provenance
   // (a cleared key falls back to the rung beneath; env still outranks).
   const persist = (patch: ConfigPatch) => {
@@ -181,7 +182,8 @@ main(function* () {
   };
   yield* RunnerCtx.set(
     makeEdgeRunner<Config, ConfigOrigin>(cfg, {
-      traceWriter: trace.writer,
+      traceWriter,
+      attachmentStore: media,
       dev,
       origin: loaded.origin,
       persist,

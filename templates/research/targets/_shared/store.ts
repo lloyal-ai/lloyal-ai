@@ -13,6 +13,7 @@ import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { reduce, initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
+import type { Descriptor } from "@lloyal-labs/media";
 
 export interface Bridge {
   onEvent(cb: (frame: { seq: number; ev: WorkflowEvent }) => void): () => void;
@@ -22,6 +23,17 @@ export interface Bridge {
    *  in-process bridges (cli, desktop-ipc) omit it — the view then treats
    *  the link as permanently 'connected' and never shows the banner. */
   onStatus?(cb: (status: WireStatus) => void): () => void;
+  /** A displayable URL for an image the model was shown. On the bridge because
+   *  serving bytes is a transport question: web fetches over the content plane,
+   *  desktop reads from disk. A bridge that cannot omits it, and the view names
+   *  the image instead of rendering it. */
+  representationUrl?(digest: string, index?: number): string;
+  /** Admit an image and return its ROOT descriptor — the write half of
+   *  `representationUrl`. Bytes go over HTTP; only the descriptor goes over the
+   *  socket, whose replay history is sized for small frames. A bridge with no
+   *  content plane omits it, and the composer offers no attach affordance at
+   *  all rather than one that fails on submit. */
+  ingestMedia?(bytes: Uint8Array): Promise<Descriptor>;
 }
 
 declare global {

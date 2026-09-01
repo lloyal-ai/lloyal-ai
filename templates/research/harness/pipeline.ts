@@ -29,7 +29,7 @@
  *      awkward output.
  */
 
-import { call, resource, createContext } from "effection";
+import { call, resource, createContext, spawn, createChannel } from "effection";
 import type { Operation } from "effection";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -48,8 +48,12 @@ import {
   DefaultAgentPolicy,
   ContextPressure,
 } from "@lloyal-labs/lloyal-agents";
-import type { AgentEvent, Ability, AgentRenderCtx, Agent, DefaultAgentPolicyOpts } from "@lloyal-labs/lloyal-agents";
+import type {
+  AgentEvent, Ability, AgentRenderCtx, Agent, DefaultAgentPolicyOpts,
+  Orchestrator, SpawnSpec,
+} from "@lloyal-labs/lloyal-agents";
 import type { StepEvent } from "./protocol.js";
+import type { Descriptor } from "@lloyal-labs/media";
 import type { OpTiming } from "./state.js";
 import { RunnerCtx } from "./runner-ctx.js";
 import {
@@ -361,6 +365,10 @@ export interface RunQueryOpts extends HarnessOpts {
    *  (preserves prior behavior). The Composer derives this from
    *  `state.participation` at submit time. */
   abilityFilter?: readonly string[];
+  /** Root descriptors for images already prefilled onto the TRUNK this turn.
+   *  Threaded only so the `query` event can carry them: that event resets the
+   *  fold, and a re-plan re-emits it while the images are still in KV. */
+  attachments?: readonly Descriptor[];
 }
 
 export interface RunResearchPlanOpts extends HarnessOpts {
@@ -464,38 +472,100 @@ export function abilityToc(ability: Ability): string | null {
 
 /** Flat-mode fan-out: every task forks from the spine at once, each agent
  *  carrying its ability's preamble and its siblings' descriptions. */
-function parallelResearch(args: {
+/** Branches that stand for the whole research phase before any agent forks: the
+ *  session trunk, this harness's query spine, and the one `agentPool` opens
+ *  inside it. `nSeqMax` is a hard reservation; the fan-out gets what is left. */
+const RESERVED_BRANCHES = 3;
+
+/** Flat-mode fan-out, bounded by the branch budget. Every task forks from the
+ *  spine carrying its ability's preamble and its siblings' descriptions, but
+ *  only `capacity` of them can hold a branch at once — a wider plan queues and
+ *  forks as siblings report and `pruneOnReturn` frees their slots. Unbounded,
+ *  the surplus was simply never spawned and nothing said so.
+ *
+ *  Each agent gets exactly ONE `waitFor`, taken in its own spawned task.
+ *  `ctx.waitFor` waits for a status TRANSITION and short-circuits only on
+ *  'disposed', so a waiter halted and re-taken — what racing the running set
+ *  would do — can miss a terminal 'idle' and hang. The completion channel keeps
+ *  every waiter alive for the life of its agent. */
+function boundedParallelResearch(args: {
   tasks: ResearchTask[];
-  abilityForTask: (task: ResearchTask) => Ability;
+  abilityForTask: (task: ResearchTask) => Ability | undefined;
   maxTurns: number;
   date: string;
-}) {
-  return parallel(
-    args.tasks.map((task, i) => {
-      const ability = args.abilityForTask(task);
-      return {
-        content: taskToContent(task),
-        systemPrompt: abilityPreamble(ability, {
-          maxTurns: args.maxTurns,
-          agentCount: args.tasks.length,
-          siblingTasks: args.tasks
-            .filter((_, j) => j !== i)
-            .map((t) => t.description),
-          date: args.date,
-          taskIndex: 0,
-        }),
-        assignedAbility: ability.manifest.name,
-        seed: 1000 + i,
-      };
-    }),
-  );
+  /** Agents that may hold a branch at once. */
+  capacity: number;
+  send: (ev: StepEvent) => Operation<void>;
+}): Orchestrator {
+  const specs: SpawnSpec[] = args.tasks.map((task, i) => {
+    const ability = args.abilityForTask(task);
+    return {
+      content: taskToContent(task),
+      // No ability ⇒ no preamble. Every enabled ability's tools are registered
+      // on the pool regardless; what an ability adds here is a PROTOCOL, and a
+      // direct answer has none to apply.
+      systemPrompt: ability
+        ? abilityPreamble(ability, {
+            maxTurns: args.maxTurns,
+            agentCount: args.tasks.length,
+            siblingTasks: args.tasks
+              .filter((_, j) => j !== i)
+              .map((t) => t.description),
+            date: args.date,
+            taskIndex: 0,
+          })
+        : "",
+      ...(ability ? { assignedAbility: ability.manifest.name } : {}),
+      seed: 1000 + i,
+    };
+  });
+  const capacity = Math.max(1, args.capacity);
+
+  return function* (ctx) {
+    const settled = createChannel<void, void>();
+    // Subscribe before the first spawn — a completion landing before the
+    // subscription exists would never be counted and the loop would stall.
+    const completions = yield* settled;
+    let running = 0;
+    let next = 0;
+
+    /** Tasks from `from` on are named but unforked — the view marks them. */
+    const announce = function* (from: number): Operation<void> {
+      yield* args.send({
+        type: "fanout:waiting",
+        taskIndices: specs.slice(from).map((_, k) => from + k),
+      });
+    };
+
+    while (next < specs.length) {
+      if (running >= capacity) {
+        yield* announce(next);
+        yield* completions.next();
+        running--;
+        continue;
+      }
+      const agent = yield* ctx.spawn(specs[next]);
+      next++;
+      running++;
+      yield* spawn(function* () {
+        yield* ctx.waitFor(agent);
+        yield* settled.send();
+      });
+    }
+    yield* announce(specs.length);
+
+    while (running > 0) {
+      yield* completions.next();
+      running--;
+    }
+  };
 }
 
 /** Deep-mode chain: each task inherits the spine the previous task's accepted
  *  finding extended; spine:* events bracket each stage for the renderer. */
 function chainedResearch(args: {
   tasks: ResearchTask[];
-  abilityForTask: (task: ResearchTask) => Ability;
+  abilityForTask: (task: ResearchTask) => Ability | undefined;
   maxTurns: number;
   date: string;
   send: (ev: StepEvent) => Operation<void>;
@@ -505,14 +575,16 @@ function chainedResearch(args: {
     return {
       task: {
         content: taskToContent(task),
-        systemPrompt: abilityPreamble(ability, {
-          maxTurns: args.maxTurns,
-          agentCount: 1,
-          siblingTasks: [],
-          date: args.date,
-          taskIndex: i,
-        }),
-        assignedAbility: ability.manifest.name,
+        systemPrompt: ability
+          ? abilityPreamble(ability, {
+              maxTurns: args.maxTurns,
+              agentCount: 1,
+              siblingTasks: [],
+              date: args.date,
+              taskIndex: i,
+            })
+          : "",
+        ...(ability ? { assignedAbility: ability.manifest.name } : {}),
       },
       userContent: `Research task: ${task.description}`,
       beforeSpawn: function* () {
@@ -522,11 +594,15 @@ function chainedResearch(args: {
           taskCount: args.tasks.length,
           description: task.description,
         });
-        yield* args.send({
-          type: "spine:source",
-          taskIndex: i,
-          source: ability.source.name,
-        });
+        // Names the source this stage drew on. With no ability there is none
+        // to name, so the row simply carries no source.
+        if (ability) {
+          yield* args.send({
+            type: "spine:source",
+            taskIndex: i,
+            source: ability.source.name,
+          });
+        }
       },
       afterExtend: function* (delta: number, position: number) {
         yield* args.send({
@@ -826,11 +902,22 @@ export function* useCoverage(
 export function* runPlanner(
   query: string,
   session: Session,
-  opts: { reasoningMode: "flat" | "deep"; effort: Effort; context?: string; abilityFilter?: readonly string[] },
+  opts: {
+    reasoningMode: "flat" | "deep";
+    effort: Effort;
+    context?: string;
+    abilityFilter?: readonly string[];
+    attachments?: readonly Descriptor[];
+  },
 ): Operation<PlanResult> {
   const send = yield* useStepSender();
 
-  yield* send({ type: "query", query, warm: !!session.trunk });
+  yield* send({
+    type: "query",
+    query,
+    warm: !!session.trunk,
+    ...(opts.attachments?.length ? { attachments: [...opts.attachments] } : {}),
+  });
 
   const currentDate = today();
   const planPrompt = yield* resolvePrompt(opts.reasoningMode === "flat" ? "plan-flat" : "plan");
@@ -898,15 +985,10 @@ export function* runQuery(
 ): Operation<QueryResult> {
   const send = yield* useStepSender();
 
-  // Defensive guard: empty `abilityFilter` is a programming error — the
-  // Composer's submit handler blocks zero-source submission with a
-  // toast, so reaching here with [] means the auto-submit `--query`
-  // path or a future caller forgot the same check. Fail loudly.
-  if (opts.abilityFilter && opts.abilityFilter.length === 0) {
-    throw new Error(
-      "runQuery: abilityFilter is an empty array — at least one source must be included.",
-    );
-  }
+  // An empty `abilityFilter` is a legitimate run, not a programming error:
+  // the user excluded every source, or none is configured. Recon has nothing
+  // to probe and the pool registers no read tools; the answer comes from the
+  // model and whatever is already in context.
 
   // Pre-flight recon (RFC: multi-ability composition). Probe each source for the
   // query's entities BEFORE planning and fold the coverage summary into the
@@ -939,6 +1021,7 @@ export function* runQuery(
     effort: opts.effort,
     context: plannerContext,
     abilityFilter: opts.abilityFilter,
+    attachments: opts.attachments,
   });
 
   if (plan.intent === "clarify") {
@@ -997,6 +1080,14 @@ export function* runResearchPlan(
   const tasks = plan.tasks;
   const currentDate = today();
 
+  // With no `branches` pinned the runtime picks its own nSeqMax and this
+  // harness has no honest budget to divide — let every task fork, as before.
+  const branchBudget = runner.config().model.branches;
+  const fanoutCapacity =
+    branchBudget === undefined
+      ? tasks.length
+      : Math.max(1, branchBudget - RESERVED_BRANCHES);
+
   yield* send({
     type: "research:start",
     agentCount: tasks.length,
@@ -1017,12 +1108,18 @@ export function* runResearchPlan(
   const abilities = yield* effectiveAbilities(opts.abilityFilter);
   const primaryAbility = abilities[0];
   const byProtocol = new Map(abilities.map((a) => [a.manifest.protocol.name, a]));
-  const abilityForTask = (task: ResearchTask): Ability =>
-    (task.ability ? byProtocol.get(task.ability) : undefined) ?? primaryAbility;
+  // A DIRECT answer is not scoped to one ability: the pool registers every
+  // enabled ability's tools below, and a preamble would narrow the one agent to
+  // a single protocol. It gets none instead — the union of what is enabled, and
+  // no persona. With nothing enabled that degenerates honestly.
+  const abilityForTask = (task: ResearchTask): Ability | undefined =>
+    opts.isAsk
+      ? undefined
+      : (task.ability ? byProtocol.get(task.ability) : undefined) ?? primaryAbility;
   // The scorer is reranker-backed and the reranker is shared across all abilities
   // (RerankerCtx), so one pool-level scorer is equivalent regardless of which
   // ability a given agent is assigned.
-  const primaryScorer = primaryAbility.source.createScorer(query);
+  const primaryScorer = primaryAbility?.source.createScorer(query);
   // citedReportTool replaces rig's reportTool for the research pool: same 'report'
   // terminal name + no-op semantics, but its schema adds the required `sources`
   // field (grammar-forced). Recon keeps rig's reportTool (its coverage output isn't
@@ -1068,7 +1165,10 @@ export function* runResearchPlan(
         enableThinking: true,
         orchestrate:
           opts.reasoningMode === "flat"
-            ? parallelResearch({ tasks, abilityForTask, maxTurns: opts.maxTurns, date: currentDate })
+            ? boundedParallelResearch({
+                tasks, abilityForTask, maxTurns: opts.maxTurns,
+                date: currentDate, capacity: fanoutCapacity, send,
+              })
             : chainedResearch({ tasks, abilityForTask, maxTurns: opts.maxTurns, date: currentDate, send }),
       });
 
