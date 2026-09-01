@@ -32,6 +32,7 @@ import {
   reconstructBranch,
   Pause,
   Attachments,
+  RerankerCtx,
 } from "@lloyal-labs/lloyal-agents";
 import type {
   Ability,
@@ -816,6 +817,53 @@ export function* harness(
       // document the user has just cleared.
       openedReport = null;
       yield* agentEvents.send({ type: "ui:new_run" });
+      return "continue";
+    },
+
+    *library_search(cmd) {
+      // The reranker is the run's scoring instrument; a live run owns it. The
+      // sidebar disables its input while a brief writes — this is the same
+      // fact host-side, so a stale keystroke cannot queue behind ability
+      // scoring.
+      if (run.task) return "continue";
+      const query = cmd.query.trim();
+      if (!query) {
+        yield* agentEvents.send({ type: "library:search", query: "", ranked: [] });
+        return "continue";
+      }
+      const entries = listReports(libraryDir());
+      if (entries.length === 0) {
+        yield* agentEvents.send({ type: "library:search", query, ranked: [] });
+        return "continue";
+      }
+      // Title plus the answer's lead: enough for the cross-encoder to be
+      // query-aware, small enough that a library stays a couple of waves of
+      // scoring leaves. No index anywhere — at library scale the reranker
+      // reads everything fresh, so there is nothing to build or invalidate.
+      const texts = entries.map((e) => {
+        try {
+          const r = readReport(e.path);
+          return `${r.title}\n\n${r.body.slice(0, 400)}`;
+        } catch {
+          return e.title;
+        }
+      });
+      const reranker = yield* RerankerCtx.expect();
+      let scores: number[];
+      try {
+        scores = yield* call(() => reranker.scoreBatch(query, texts));
+      } catch (err) {
+        yield* agentEvents.send({
+          type: "ui:error",
+          message: `Search failed: ${errorMessage(err)}`,
+        });
+        return "continue";
+      }
+      const ranked = entries
+        .map((e, i) => ({ path: e.path, score: scores[i] ?? -Infinity }))
+        .sort((a, b) => b.score - a.score)
+        .map((r) => r.path);
+      yield* agentEvents.send({ type: "library:search", query, ranked });
       return "continue";
     },
 

@@ -400,6 +400,10 @@ export interface AppState {
    *  the session document via the standard query/answer/complete events —
    *  no report body is ever held here. */
   library: { entries: LibraryEntry[] };
+  /** Live semantic search over the library — the query and its ranking, best
+   *  first. Null when not searching; the sidebar then shows the day-grouped
+   *  chronological list. */
+  librarySearch: { query: string; ranked: string[] } | null;
   /** Warm-ask exchanges appended beneath the settled brief — the document
    *  grows, it is never replaced. A full (cold) query clears them. */
   exchanges: { question: string; body: string }[];
@@ -465,6 +469,7 @@ export const initialState: AppState = {
   closing: false,
   closedEarly: false,
   library: { entries: [] },
+  librarySearch: null,
   exchanges: [],
   ask: null,
   participation: {},

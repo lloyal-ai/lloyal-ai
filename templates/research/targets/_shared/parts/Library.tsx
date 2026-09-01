@@ -9,7 +9,19 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { send, useBrief } from "../store.js";
-import { selectLibrary, selectTitle } from "../select.js";
+import {
+  selectLibrary, selectLibrarySearch, selectLive, selectTitle, type ReportEntry,
+} from "../select.js";
+
+/** Order entries by a best-first path ranking; anything the ranking does not
+ *  name keeps its place at the tail. The HOST ranks — the view only follows,
+ *  so relevance has exactly one author. */
+const rankBy = (entries: ReportEntry[], ranked: string[]): ReportEntry[] => {
+  const rank = new Map(ranked.map((p, i) => [p, i]));
+  return [...entries].sort(
+    (a, b) => (rank.get(a.path) ?? Infinity) - (rank.get(b.path) ?? Infinity),
+  );
+};
 
 const day = (iso: string): string => {
   const d = new Date(iso);
@@ -21,7 +33,18 @@ const day = (iso: string): string => {
 export function Library(): ReactElement | null {
   const entries = useBrief(selectLibrary);
   const title = useBrief(selectTitle);
+  const search = useBrief(selectLibrarySearch);
+  const live = useBrief(selectLive);
   const [arming, setArming] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  // A pause, not a keystroke, is the query: the reranker reads the whole
+  // library per call, so the wire carries settled intent only. An emptied
+  // field settles too, and clears the search host-side.
+  useEffect(() => {
+    const t = setTimeout(() => send({ type: "library_search", query: q }), 250);
+    return () => clearTimeout(t);
+  }, [q]);
 
   useEffect(() => {
     if (arming === null) return;
@@ -36,6 +59,10 @@ export function Library(): ReactElement | null {
     setArming(null);
   };
 
+  // While a search is live the order is relevance, not time — the day
+  // grouping rests until the field clears.
+  const rows = search ? rankBy(entries, search.ranked) : entries;
+
   // One divider per day instead of a date under every row — the list is
   // newest-first, so a label marks each change of day on the way down.
   let lastDay = "";
@@ -44,10 +71,19 @@ export function Library(): ReactElement | null {
     <nav style={S.wrap} aria-label="library of settled briefs">
       <style>{HOVER}</style>
       <p style={S.kicker}>Library · {entries.length}</p>
+      <input
+        className="lib-search"
+        style={S.search}
+        value={q}
+        disabled={live}
+        placeholder={live ? "Search rests while a brief writes" : "Search the library…"}
+        aria-label="Search the library"
+        onChange={(ev) => setQ(ev.target.value)}
+      />
       <div className="lib-list" style={S.list}>
-        {entries.map((e) => {
+        {rows.map((e) => {
           const d = day(e.savedAt);
-          const divider = d !== lastDay ? d : null;
+          const divider = search === null && d !== lastDay ? d : null;
           lastDay = d;
           return (
           <div key={e.path} style={S.group}>
@@ -115,6 +151,8 @@ const HOVER = `
   .lib-row:hover .lib-trash, .lib-row:focus-within .lib-trash,
   .lib-trash[data-armed="true"] { opacity: 1; }
   .lib-list::-webkit-scrollbar { display: none; }
+  .lib-search:disabled { opacity: .55; }
+  .lib-search::placeholder { color: ${color.dim}; }
 `;
 
 const S: Record<string, CSSProperties> = {
@@ -131,6 +169,11 @@ const S: Record<string, CSSProperties> = {
     maskImage: "linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 14px), transparent 100%)",
     WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 14px), transparent 100%)",
     padding: "8px 0 12px", scrollbarWidth: "none",
+  },
+  search: {
+    font: `12px ${font.ui}`, color: color.ink, background: color.card2,
+    border: `1px solid ${color.line}`, borderRadius: radius.control,
+    padding: "5px 8px", margin: "0 4px 4px", outline: 0,
   },
   group: { display: "flex", flexDirection: "column", flex: "none" },
   /** The one date per day, standing where fourteen row-dates used to sit. */

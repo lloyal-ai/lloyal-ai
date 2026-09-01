@@ -1232,6 +1232,12 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     case 'run:windingDown':
       return { ...state, closing: true, closedEarly: true };
 
+    case 'library:search':
+      return {
+        ...state,
+        librarySearch: ev.query ? { query: ev.query, ranked: ev.ranked } : null,
+      };
+
     case 'library:list':
       return { ...state, library: { entries: ev.entries } };
 

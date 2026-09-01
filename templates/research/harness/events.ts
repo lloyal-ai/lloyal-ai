@@ -148,6 +148,10 @@ export type StepEvent =
   // ── reports). Opening one restores it through the STANDARD
   // ── query/answer/complete events — no dedicated body event exists.
   | { type: 'library:list'; entries: LibraryEntry[] }
+  /** Report paths ranked against `query`, best first. An empty query means
+   *  the search is cleared. Scores stay host-side: they are logit-diffs whose
+   *  gaps are not meaningful to render — only the ORDER travels. */
+  | { type: 'library:search'; query: string; ranked: string[] }
   | { type: 'boot:error'; kind: 'llm' | 'reranker' | 'backend-pack'; message: string }
   /** Boot-time BACKEND_DL pack offer: a CUDA GPU was probed and a signed
    *  full-arch pack is available for it. Rendered as a Download / Not now

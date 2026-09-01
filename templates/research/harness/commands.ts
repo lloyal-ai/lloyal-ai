@@ -55,6 +55,10 @@ export type Command =
    *  between two consecutive queries. */
   | { type: 'new_run' }
   | { type: 'library_list' }
+  /** Rank the library against a query with the session reranker. Empty query
+   *  clears the search. Ignored while a run is active — the reranker is the
+   *  run's scoring instrument, and search must not queue behind it. */
+  | { type: 'library_search'; query: string }
   | { type: 'library_read'; path: string }
   | { type: 'library_delete'; path: string }
   // Global run-effort setting (pure policy preset). Set in Settings → Effort;

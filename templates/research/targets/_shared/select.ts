@@ -520,6 +520,11 @@ export interface ReportEntry {
  *  the session document — no body is ever held view-side. */
 export const selectLibrary = (app: AppState): ReportEntry[] => app.library.entries;
 
+/** The live library search, when one is running: its query and the report
+ *  paths ranked best-first by the session reranker. */
+export const selectLibrarySearch = (app: AppState): { query: string; ranked: string[] } | null =>
+  app.librarySearch;
+
 // ── the settled document ─────────────────────────────────────────
 
 export interface Citation {
