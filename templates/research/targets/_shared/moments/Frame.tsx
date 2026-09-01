@@ -12,6 +12,7 @@ import {
   selectReviewing, selectTitle, type Probe,
 } from "../select.js";
 import { Work } from "../parts/InquiryRow.js";
+import { Figures } from "../parts/Figures.js";
 import { Thinking, doc } from "../parts/Shell.js";
 
 const START_HOLD_S = 5;
@@ -27,6 +28,7 @@ export function Frame(): ReactElement {
   return (
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
+      <Figures />
 
       {discovering && (
         <>

@@ -31,13 +31,16 @@ export class RunDirSink {
   private taskByOrdinal = new Map<number, string>();
   private lastAnswer: string | null = null;
   private query: string | null = null;
+  /** Root manifest digests the query carried. The report keeps the ADDRESS;
+   *  the content-addressed store keeps the bytes. */
+  private attachments: readonly string[] = [];
   private mode: 'flat' | 'deep' | null = null;
   private startedAt: number | null = null;
   private synthStats: { tokens: number; ppl: number; timeMs: number } | null = null;
 
   /** Begin a new query's run-dir. Returns the absolute path so callers can
    *  emit a `ui:run_dir` event for the composer to display. */
-  start(opts: { outputDir: string; query: string; mode: 'flat' | 'deep' }): string {
+  start(opts: { outputDir: string; query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): string {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
     this.currentDir = path.resolve(opts.outputDir, ts);
     fs.mkdirSync(this.currentDir, { recursive: true });
@@ -48,6 +51,7 @@ export class RunDirSink {
     this.lastAnswer = null;
     this.query = opts.query;
     this.mode = opts.mode;
+    this.attachments = opts.attachments ?? [];
     this.startedAt = Date.now();
     this.synthStats = null;
     return this.currentDir;
@@ -125,7 +129,13 @@ export class RunDirSink {
       const stats = this.synthStats
         ? ` · ${this.synthStats.tokens} synth tokens · ppl ${this.synthStats.ppl.toFixed(2)}`
         : '';
-      const meta = `> ${new Date().toISOString()} · ${this.mode}${stats} · ${(totalMs / 1000).toFixed(1)}s`;
+      // Rides the EXISTING metadata line rather than adding one: `readReport`
+      // slices a fixed three-line header and `listReports` matches only its
+      // head, so an older report simply carries no media segment.
+      const media = this.attachments.length > 0
+        ? ` · media ${this.attachments.join(' ')}`
+        : '';
+      const meta = `> ${new Date().toISOString()} · ${this.mode}${stats} · ${(totalMs / 1000).toFixed(1)}s${media}`;
       const annexureSection = refs
         ? `\n---\n\n## Annexures\n\n${refs}\n`
         : '';

@@ -7,15 +7,78 @@
 import { connectWss, type WssClient } from "@lloyal-labs/binding/web";
 import { initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
+import type { Descriptor } from "@lloyal-labs/media";
 
-/** Where the served host lives: build-time `VITE_WSS_URL`, a `?server=` query
- *  param, then the local `npm run serve` default. */
-function resolveWssUrl(): string {
+const DEFAULT_WSS = "ws://127.0.0.1:8787";
+
+/** An explicitly-configured host, or null for "wherever this page came from":
+ *  build-time `VITE_WSS_URL` first, then a `?server=` query param. */
+function configuredWssUrl(): string | null {
   const env = (import.meta as unknown as { env?: { VITE_WSS_URL?: string } }).env?.VITE_WSS_URL;
   if (env) return env;
-  const q = new URLSearchParams(window.location.search).get("server");
-  if (q) return q;
-  return "ws://127.0.0.1:8787";
+  return new URLSearchParams(window.location.search).get("server");
+}
+
+/** Where the served host lives. */
+function resolveWssUrl(): string {
+  return configuredWssUrl() ?? DEFAULT_WSS;
+}
+
+/**
+ * Base URL for the content plane — HTTP carries bytes, the socket carries
+ * references to them.
+ *
+ * Never derived from `window.location`: the page is on :5173 in dev while the
+ * host is on :8787, and the host is remote-capable. The default is RELATIVE so
+ * Vite's proxy keeps dev same-origin; an explicitly-pointed host derives its
+ * origin from the socket URL, so `?server=` moves both planes together and they
+ * cannot drift apart.
+ */
+function resolveContentBaseUrl(): string {
+  const env = (import.meta as unknown as { env?: { VITE_CONTENT_URL?: string } }).env?.VITE_CONTENT_URL;
+  const explicit = env ?? new URLSearchParams(window.location.search).get("content");
+  if (explicit) return explicit.replace(/\/$/, "");
+  const wss = configuredWssUrl();
+  if (!wss) return "";
+  try {
+    const u = new URL(wss);
+    u.protocol = u.protocol === "wss:" ? "https:" : "http:";
+    return u.origin;
+  } catch {
+    // An unparsable override is a config error, not a reason to fetch bytes
+    // from a different host than the one commands go to.
+    return "";
+  }
+}
+
+/** Resolves THROUGH the manifest, so a retained source layer can never be
+ *  served in place of the copy the projector actually encoded. */
+export function representationUrl(digest: string, index = 0): string {
+  return `${resolveContentBaseUrl()}/v1/media/${encodeURIComponent(digest)}/representations/${index}`;
+}
+
+/**
+ * Admit an image and get back its ROOT descriptor.
+ *
+ * The host decides what "admitted" means — normalize, address, commit — and
+ * hands back a reference. The browser never learns the digest of what it
+ * uploaded: normalization changes the bytes, and the root is the manifest's
+ * hash, not the file's.
+ */
+export async function ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
+  const res = await fetch(`${resolveContentBaseUrl()}/v1/media/ingress`, {
+    method: "POST",
+    // No `Content-Type`: the bytes answer that question, and the route stopped
+    // reading the header precisely because a client cannot be the authority on
+    // content it did not produce.
+    body: bytes as BodyInit,
+  });
+  if (!res.ok) {
+    // The route answers 413 too large, 408 too slow, 400 not admitted, 501 no
+    // ingress installed. Its message beats anything invented here.
+    throw new Error((await res.text().catch(() => "")) || `upload failed (${res.status})`);
+  }
+  return (await res.json()) as Descriptor;
 }
 
 /** Frames kept for replay. A session is one conversation; produce frames are
@@ -120,6 +183,13 @@ export function installWebBridge(): void {
     // The wss stream carries no snapshot — start from initialState at seq 0.
     requestSnapshot(): Promise<{ state: AppState; seq: number }> {
       return Promise.resolve({ state: initialState, seq: 0 });
+    },
+    // Here, not in the view: which plane serves bytes is a transport fact.
+    representationUrl(digest: string, index = 0): string {
+      return representationUrl(digest, index);
+    },
+    ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
+      return ingestMedia(bytes);
     },
   };
 

@@ -7,17 +7,14 @@
  *
  * SNAPSHOT: reasoning.run @ main (src/served-session.ts).
  */
-import { closeSync, mkdirSync, openSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import { ensure } from "effection";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { provisionAbilityModels } from "@lloyal-labs/rig/node";
+import { provisionAbilityModels, useTraceWriter } from "@lloyal-labs/rig/node";
+import type { AttachmentStore, ContentIngress } from "@lloyal-labs/media";
+import { Ingress } from "@lloyal-labs/lloyal-agents";
 import { startHostResources } from "@lloyal-labs/dev-tools/node";
-import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
-import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { makeServedRunner } from "@lloyal-labs/rig";
 import { harness, abilities } from "./harness.js";
 import { RunnerCtx } from "./runner-ctx.js";
@@ -49,6 +46,13 @@ import type { Config, ConfigOrigin } from "./config-types.js";
 export function* runServedSession(
   cfg: Config,
   origin: ConfigOrigin,
+  /** The host's ONE project content store, shared by every Session. Injected
+   *  rather than built here: a per-Session instance over the same directory
+   *  would be N objects racing one index for no reason. */
+  media: AttachmentStore,
+  /** The host's ONE ingress service — shared for the same reason the store is,
+   *  and so every entry point admits media identically. */
+  ingress: ContentIngress,
   ctx: SessionContext,
   events: EventBus<WorkflowEvent>,
   commands: Signal<Command, void>,
@@ -70,47 +74,19 @@ export function* runServedSession(
   // on the kv strip. Dev-gated like the trace sink; the timer dies with
   // this session's scope.
   if (dev) yield* ensure(startHostResources((ev) => events.send(ev)));
-  const trace = makeTraceWriter(cfg, dev);
-  // Per-session fd: closed when THIS session's scope unwinds (the writer
-  // flushes every event synchronously, so nothing is pending at close) —
-  // sequential sessions must not leak descriptors.
-  yield* ensure(trace.close);
+  // Trace only: per-session and dev-gated. The content store is created ONCE
+  // by the host (`serve.ts`) and injected — one object shared by every Session,
+  // not one per Session pointing at the same directory.
+  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev);
   yield* RunnerCtx.set(
     makeServedRunner<Config, ConfigOrigin>(cfg, {
-      traceWriter: trace.writer,
+      traceWriter,
+      attachmentStore: media,
       dev,
       origin,
       sessionOriginMap: SESSION_ORIGIN_MAP,
     }),
   );
+  yield* Ingress.set(ingress);
   yield* harness(ctx, events, commands);
-}
-
-/** The dev-gated trace sink: under `LLOYAL_DEV=1`, a `trace-<ts>-<id>.jsonl`
- *  in `sources.outputDir` (default: the project root) — the record the dev
- *  tools tail (the directory is created if missing). Otherwise Null:
- *  production writes nothing. The random id keeps
- *  concurrent writers apart and `"wx"` refuses to truncate an existing file; a
- *  failed open degrades to Null (tracing is observability, never a
- *  dependency). The caller owns the fd — `ensure(close)` it on its scope. */
-function makeTraceWriter(cfg: Config, dev: boolean): { writer: TraceWriter; close: () => void } {
-  if (!dev) return { writer: new NullTraceWriter(), close: () => {} };
-  try {
-    const dir = cfg.sources.outputDir ?? process.cwd();
-    mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const fd = openSync(join(dir, `trace-${ts}-${randomUUID().slice(0, 8)}.jsonl`), "wx");
-    return {
-      writer: new JsonlTraceWriter(fd),
-      close: () => {
-        try {
-          closeSync(fd);
-        } catch {
-          /* already closed */
-        }
-      },
-    };
-  } catch {
-    return { writer: new NullTraceWriter(), close: () => {} };
-  }
 }

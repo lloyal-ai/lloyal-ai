@@ -13,6 +13,7 @@
  */
 
 import type { Config, ConfigOrigin } from './config-types.js';
+import type { Descriptor } from '@lloyal-labs/media';
 
 /** The view's transport link to the host — a fact of the wire, NOT the
  *  harness fold (the harness never knows if a browser's socket dropped).
@@ -275,6 +276,13 @@ export type { AbilityDescriptor };
 export interface AppState {
   query: string;
   warm: boolean;
+  /** Root manifest descriptors for images attached to the current query. Empty
+   *  for a text-only run. References only — the view fetches the admitted
+   *  representation through the content plane. */
+  attachments: Descriptor[];
+  /** This run skipped the planner: one agent over every enabled ability. The
+   *  wire mode alone would call it a Survey. */
+  direct: boolean;
   /** Top-level view state — drives App.tsx branching. */
   uiPhase: UiPhase;
   /** Payload for uiPhase 'backend_pack_offer'; null outside that phase. */
@@ -296,6 +304,10 @@ export interface AppState {
     timeMs: number;
   } | null;
   agents: Map<number, AgentRuntime>;
+  /** Plan tasks still queued for a branch — `nSeqMax` is a hard reservation, so
+   *  a plan wider than the budget forks in waves. Drives the waiting mark on a
+   *  section whose inquiry has not started. Empty once all have forked. */
+  waitingTaskIndices: number[];
   /** Research agents in spawn order — drives the column layout. */
   researchAgentIds: number[];
   /** Pre-flight recon agents in spawn order — drives the Discovering view.
@@ -410,12 +422,15 @@ export interface AppState {
 export const initialState: AppState = {
   query: '',
   warm: false,
+  attachments: [],
+  direct: false,
   uiPhase: 'boot',
   backendPackOffer: null,
   phase: 'idle',
   mode: null,
   plan: null,
   agents: new Map(),
+  waitingTaskIndices: [],
   researchAgentIds: [],
   reconAgentIds: [],
   sourceCount: 0,

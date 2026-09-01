@@ -12,6 +12,7 @@ import type { HostResourcesEvent } from '@lloyal-labs/dev-tools';
 import type { PlanIntent, ResearchTask } from '@lloyal-labs/rig';
 import type { AbilityDescriptor, LibraryEntry, OpTiming } from './state-core.js';
 import type { Config, ConfigOrigin } from './config-types.js';
+import type { Descriptor } from '@lloyal-labs/media';
 
 /** The terminal event's stats payload. Everything optional: the research
  *  path fills the research fields, passthrough its own, and a library
@@ -32,7 +33,20 @@ export interface CompleteData {
 }
 
 export type StepEvent =
-  | { type: 'query'; query: string; warm: boolean }
+  | {
+      type: 'query';
+      query: string;
+      warm: boolean;
+      /** Skip-planner run: the question IS the plan, so one agent answers with
+       *  every ability's tools registered. Distinct from `warm`, which says a
+       *  trunk existed — a COLD ask is direct and not warm. */
+      direct?: boolean;
+      /** Root manifest descriptors for images attached to THIS turn — never
+       *  bytes. The view resolves each to the ADMITTED representation over the
+       *  content plane, which is what the model saw; a local object URL is an
+       *  optimistic pre-submit preview and cannot be joined by digest. */
+      attachments?: Descriptor[];
+    }
   | {
       type: 'plan';
       intent: PlanIntent;
@@ -44,6 +58,10 @@ export type StepEvent =
   | { type: 'research:start'; agentCount: number; mode: 'flat' | 'deep' }
   | { type: 'research:done'; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: 'fanout:tasks'; tasks: ResearchTask[] }
+  /** Tasks the plan named that cannot hold a branch yet. `nSeqMax` is a hard
+   *  reservation, so a plan wider than the budget forks in waves; these are the
+   *  ones still queued. Empty once every task has forked. */
+  | { type: 'fanout:waiting'; taskIndices: number[] }
   | { type: 'spine:task'; taskIndex: number; taskCount: number; description: string }
   | { type: 'spine:source'; taskIndex: number; source: string }
   | { type: 'spine:task:done'; taskIndex: number; stageFindings: number; accumulated: number }
@@ -109,6 +127,9 @@ export type StepEvent =
   | { type: 'plan:task_deleted'; index: number }
   | { type: 'plan:task_moved'; from: number; to: number }
   | { type: 'ui:composer'; prefill?: string }
+  /** The document is cleared and the picker is back. Distinct from
+   *  `ui:composer`, which moves the phase but keeps the settled answer. */
+  | { type: 'ui:new_run' }
   | { type: 'ui:plan_review' }
   | { type: 'ui:error'; message: string }
   // ── Boot-phase events: download progress + weight-loading spinner ──

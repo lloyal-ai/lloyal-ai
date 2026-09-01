@@ -68,6 +68,34 @@ export interface ConfigModel {
    *  the caller's concern — config just stores whatever the user typed. */
   path?: string;
   reranker?: string;
+  /** Vision projector (mmproj) — a catalog id, like `llm.id` and unlike
+   *  `path` above. Usually left unset: the boot resolves the projector the
+   *  catalog pairs with the chosen llm, so picking a vision-capable model is
+   *  all it takes. Set it only to override that pairing.
+   *
+   *  To use a local file, drop it at `models/mmproj/<id>.gguf` — the resolver
+   *  returns an existing slot before it fetches anything, which is the same
+   *  escape hatch every other role has. Absent projector = no vision;
+   *  `ctx.supportsVision()` reports which you got. */
+  mmproj?: string;
+  /** The RESOLVED projector path, set by the boot — the mmproj counterpart of
+   *  `path` above, exactly as `path` is the resolved counterpart of `llm.id`.
+   *  Config carries ids; a boot turns them into paths and puts them here, so
+   *  the runtime factories never do catalog work. */
+  mmprojPath?: string;
+  /** Per-image token budget for a dynamic-resolution vision model — the lever
+   *  on what ONE image costs in KV. Measured on Qwen3.5 with a 176 KB photo:
+   *  564 cells unset, still 564 at 1024 (the image already fit), 251 at 256.
+   *  Lower `imageMaxTokens` to fit more images into a context; raise
+   *  `imageMinTokens` for grounding tasks, which need the detail (llama.cpp
+   *  warns Qwen-VL wants at least 1024). Unset ⇒ the model's own metadata
+   *  decides, which is the right default.
+   *
+   *  It does NOT shrink the projector's warmup allocation: that stayed at
+   *  1472x1472 across every value tried, so this is not a fix for a boot that
+   *  runs out of GPU memory before any image arrives. */
+  imageMinTokens?: number;
+  imageMaxTokens?: number;
   /** LLM context window size. Null/undefined falls through to CLI/env/default. */
   nCtx?: number;
   /** GPU backend variant. Null/undefined falls through to CLI/env/default

@@ -12,6 +12,7 @@ import {
   selectSourceNotes, selectTitle,
 } from "../select.js";
 import { Thinking, doc } from "../parts/Shell.js";
+import { Figures } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose } from "../parts/Prose.js";
@@ -81,6 +82,7 @@ export function Settle(): ReactElement {
     <div style={S.spread}>
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
+      <Figures />
       <p style={S.byline}>
         <span>{new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
         {shapeTitle && <span>{shapeTitle}</span>}

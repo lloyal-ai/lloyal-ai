@@ -402,6 +402,8 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
           paused: false,
           closing: false,
           synth: initialState.synth,
+          waitingTaskIndices: [],
+          direct: !!ev.direct,
           startedAt: Date.now(),
           pipelineElapsedMs: 0,
           pipelineResumedAt: Date.now(),
@@ -425,7 +427,12 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         abilities: state.abilities,
         library: state.library,
         query: ev.query,
+        // From the EVENT, never preserved: a cold query is a new turn, so last
+        // turn's images must not linger. A re-plan re-emits `query` with the
+        // same descriptors, so the trunk's images survive it — still in KV.
+        attachments: ev.attachments ?? [],
         warm: ev.warm,
+        direct: !!ev.direct,
         phase: 'plan',
         startedAt: Date.now(),
       };
@@ -511,6 +518,9 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
 
     case 'fanout:tasks':
       return state;
+
+    case 'fanout:waiting':
+      return { ...state, waitingTaskIndices: ev.taskIndices };
 
     case 'spine:task':
       return {
@@ -649,10 +659,8 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     case 'participation:toggled': {
       const current = state.participation[ev.name] ?? true;
       const next = !current;
-      // Clear the "All sources excluded" error toast on any include — toggling
-      // a source back on is the natural resolution. Drop on exclude too: the
-      // toast was a submit-time complaint about the previous filter, so any
-      // change to the filter invalidates it.
+      // Any change to the filter drops a standing toast: whatever it was
+      // complaining about, the user has just answered it.
       return {
         ...state,
         participation: { ...state.participation, [ev.name]: next },
@@ -731,6 +739,23 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
         pipelineResumedAt: Date.now(),
       };
     }
+
+    case 'ui:new_run':
+      // Session-level things survive; the document does not. Mirrors the cold
+      // `query` reset, the only other place the document is dropped.
+      return {
+        ...initialState,
+        dev: state.dev,
+        config: state.config,
+        configOrigin: state.configOrigin,
+        mode: state.mode,
+        nextToastId: state.nextToastId,
+        scrollback: state.scrollback,
+        participation: state.participation,
+        abilities: state.abilities,
+        library: state.library,
+        uiPhase: 'composer',
+      };
 
     case 'ui:composer': {
       // Cancelled / finished — pause the timer if it was running. Preserve

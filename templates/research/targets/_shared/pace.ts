@@ -18,8 +18,11 @@ export interface Pace {
 /** Anchored at Standard; `depthFactor` scales them — a Thorough inquiry
  *  works its task longer than a Quick one, in proportion to its budget. */
 const PRIOR: Record<Shape, { perTaskMs: number; synthMs: number }> = {
-  investigation: { perTaskMs: 240_000, synthMs: 240_000 },
+  investigate: { perTaskMs: 240_000, synthMs: 240_000 },
   survey: { perTaskMs: 120_000, synthMs: 360_000 },
+  // One agent answering straight, and no settling pass at all: synth is gated
+  // on more than one task, which an ask never has.
+  ask: { perTaskMs: 90_000, synthMs: 0 },
 };
 
 const depthFactor = (depth: Depth): number =>

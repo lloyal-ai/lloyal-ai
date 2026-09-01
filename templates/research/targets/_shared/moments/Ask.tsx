@@ -1,11 +1,12 @@
-/** Moment 01 — Ask. One question on quiet paper, the libraries the brief can
- *  draw on, and the shape choice. Boot renders here too, in the shell's
+/** Moment 01 — Ask. One question on quiet paper and the shape choice. What the
+ *  brief draws on lives in the dock beside the question, reachable at every
+ *  moment instead of only this one. Boot renders here too, in the shell's
  *  voice: fetching the model, loading, the CUDA-pack offer, a failure. */
 import type { CSSProperties, ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
-  SHAPES, fmtBytes, selectBoot, selectLibraries, type Shape,
+  SHAPES, fmtBytes, selectBoot, type Shape,
 } from "../select.js";
 import { Thinking } from "../parts/Shell.js";
 
@@ -14,7 +15,6 @@ export function Ask({ shape, onShape }: {
   onShape: (shape: Shape) => void;
 }): ReactElement {
   const boot = useBrief(selectBoot);
-  const libraries = useBrief(selectLibraries);
 
   return (
     <div style={S.center}>
@@ -23,30 +23,6 @@ export function Ask({ shape, onShape }: {
         {boot.state === "quiet" && (
           <>
             <h1 style={S.h1}>What should we look into?</h1>
-            {libraries.length > 0 && (
-              <p style={S.byline}>
-                Drawing on{" "}
-                {libraries.map((l, i) => (
-                  <span key={l.name}>
-                    {i > 0 && (i === libraries.length - 1 ? " and " : ", ")}
-                    <button
-                      type="button"
-                      style={{ ...S.lib, ...(l.included ? null : S.libOff) }}
-                      title={
-                        l.included
-                          ? "Leave this library out of the next brief"
-                          : "Include it again"
-                      }
-                      onClick={() => send({ type: "toggle_participation", name: l.name })}
-                    >
-                      {l.title}
-                      {l.detail ? ` (${l.detail})` : ""}
-                    </button>
-                  </span>
-                ))}
-                .
-              </p>
-            )}
             <div style={S.shapes}>
               {SHAPES.map((s) => (
                 <button

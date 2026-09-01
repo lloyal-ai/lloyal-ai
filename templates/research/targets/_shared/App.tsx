@@ -41,6 +41,20 @@ const FRAMING: RunFraming = {
   close: ["complete", "ui:error", "ui:composer"],
 };
 
+/** Per-image token budget steps. `auto` first, because handing the choice
+ *  back to the model's metadata is the default and has to stay reachable. */
+const IMAGE_TOKEN_STEPS = ["auto", "256", "512", "1024", "2048", "4096"] as const;
+
+type ImageTokenModel = { imageMinTokens?: number; imageMaxTokens?: number };
+
+/** Config value → the step that represents it. 0 and undefined are the same
+ *  state (the binding applies the value only when > 0), and both read `auto`.
+ *  A value set in harness.yml that is not one of the steps shows as itself
+ *  rather than snapping to a neighbour — the slider then sits at `auto`,
+ *  which is honest: the UI cannot represent it. */
+const imageTokenStep = (v: number | undefined): string =>
+  !v ? "auto" : String(v);
+
 /** The dev pane's Settings contribution — pure data, dev-gated by the wire. */
 const DEV_CONTROLS: readonly DevControl[] = [
   {
@@ -59,6 +73,27 @@ const DEV_CONTROLS: readonly DevControl[] = [
     field: "mode",
     note: "applies next run",
     read: (c) => (c.defaults as { reasoningMode?: string } | undefined)?.reasoningMode,
+  },
+  // Sliders, not button rows: these are scales, so the ordering carries the
+  // meaning. 'auto' is a real step — it hands the choice back to the model's
+  // own metadata, which is the right default and must stay reachable.
+  {
+    key: "model.imageMaxTokens",
+    values: IMAGE_TOKEN_STEPS,
+    render: "slider",
+    command: "set_image_max_tokens",
+    field: "value",
+    note: "reloads the runtime",
+    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMaxTokens),
+  },
+  {
+    key: "model.imageMinTokens",
+    values: IMAGE_TOKEN_STEPS,
+    render: "slider",
+    command: "set_image_min_tokens",
+    field: "value",
+    note: "reloads the runtime",
+    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMinTokens),
   },
 ];
 

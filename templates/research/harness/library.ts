@@ -59,13 +59,23 @@ export function listReports(outputDir: string): LibraryEntry[] {
 }
 
 /** Parse a CONFINED report file into its restore payload: the title from the
- *  `# query` line, the body past the 3-line metadata header. */
-export function readReport(resolvedPath: string): { path: string; title: string; body: string } {
+ *  `# query` line, the root manifest digests off the metadata line, and the
+ *  body past the 3-line metadata header.
+ *
+ *  The report records ADDRESSES, never bytes — the content-addressed store
+ *  still holds those, which is what lets a settled brief show the images it was
+ *  given. A report written before this carries no media segment and reads back
+ *  as none. */
+export function readReport(
+  resolvedPath: string,
+): { path: string; title: string; body: string; attachments: string[] } {
   const lines = fs.readFileSync(resolvedPath, "utf8").split("\n");
+  const media = /·\s*media\s+((?:sha256:[0-9a-f]{64}\s*)+)/.exec(lines[2] ?? "");
   return {
     path: resolvedPath,
     title: (lines[0] ?? "").replace(/^#\s*/, "") || "Reopened report",
     body: lines.slice(3).join("\n").trim(),
+    attachments: media ? (media[1] ?? "").trim().split(/\s+/) : [],
   };
 }
 

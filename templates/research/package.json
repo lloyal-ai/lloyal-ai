@@ -52,7 +52,8 @@
     "remark-gfm": "^4.0.1",
     "ws": "^8.21.3",
     "yaml": "^2.9.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.15",
+    "@lloyal-labs/media": "^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

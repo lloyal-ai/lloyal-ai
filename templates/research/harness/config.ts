@@ -69,6 +69,19 @@ export interface ModelEntry {
   /** KV cache type for the attention layers. Bounds the smallest meaningful
    *  score difference; raise it for precision, lower it for memory. */
   kvCache?: ConfigKvCache;
+  /** Per-image token budget for a dynamic-resolution vision model — the lever
+   *  on what ONE image costs in KV. Measured on Qwen3.5 with a 176 KB photo:
+   *  564 cells unset, still 564 at 1024 (the image already fit), 251 at 256.
+   *  Lower `imageMaxTokens` to fit more images into a context; raise
+   *  `imageMinTokens` for grounding tasks, which need the detail (llama.cpp
+   *  warns Qwen-VL wants at least 1024). Unset ⇒ the model's own metadata
+   *  decides, which is the right default.
+   *
+   *  It does NOT shrink the projector's warmup allocation: that stayed at
+   *  1472x1472 across every value tried, so this is not a fix for a boot that
+   *  runs out of GPU memory before any image arrives. */
+  imageMinTokens?: number;
+  imageMaxTokens?: number;
   /** GPU backend variant. A configured value is a deliberate deploy choice —
    *  the boot fails loud if the variant is unavailable, never silently CPU. */
   gpu?: ConfigGpu;
@@ -244,6 +257,8 @@ export function loadConfig(
       gpu,
       branches: local?.model?.branches ?? llm.branches,
       kvCache: local?.model?.kvCache ?? llm.kvCache,
+      imageMinTokens: local?.model?.imageMinTokens ?? llm.imageMinTokens,
+      imageMaxTokens: local?.model?.imageMaxTokens ?? llm.imageMaxTokens,
       backendPack: local?.model?.backendPack === false ? false : undefined,
     },
   };
