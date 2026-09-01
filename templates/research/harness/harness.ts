@@ -233,6 +233,11 @@ interface PendingPlan {
   mode: "flat" | "deep";
   wallStartMs: number;
   abilityFilter: readonly string[];
+  /** Roots for images that rode the query — carried through the plan-review
+   *  park so `accept_plan`'s `startRunDir` records them; without this the
+   *  deep report's meta line loses its `media` entry and a reopened report
+   *  shows no figure. */
+  attachments?: readonly Descriptor[];
 }
 
 // ── harness — the Layer-3 entrypoint (platform contract) ─────────
@@ -1066,6 +1071,7 @@ export function* harness(
             mode,
             wallStartMs,
             abilityFilter,
+            ...(attachments.length ? { attachments } : {}),
           }),
         }),
       );
@@ -1082,7 +1088,7 @@ export function* harness(
           mode: prior.mode,
           wallStartMs: prior.wallStartMs,
           abilityFilter: prior.abilityFilter,
-          onStart: () => startRunDir(prior.query, prior.mode),
+          onStart: () => startRunDir(prior.query, prior.mode, prior.attachments),
           clarify: "prefill",
           pending: (plan) => ({ ...prior, plan, userSidePending: true }),
         }),
@@ -1100,7 +1106,7 @@ export function* harness(
           mode,
           wallStartMs: prior.wallStartMs,
           abilityFilter: prior.abilityFilter,
-          onStart: () => startRunDir(prior.query, mode),
+          onStart: () => startRunDir(prior.query, mode, prior.attachments),
           clarify: "none",
           pending: (plan) => ({ ...prior, plan, mode }),
         }),
@@ -1117,7 +1123,7 @@ export function* harness(
       }
       const accepted = pendingPlan;
       pendingPlan = null;
-      startRunDir(accepted.query, accepted.mode);
+      startRunDir(accepted.query, accepted.mode, accepted.attachments);
       yield* startRun(() =>
         runAcceptedPlan({
           query: accepted.query,
