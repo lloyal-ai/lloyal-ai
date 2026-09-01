@@ -449,9 +449,10 @@ const S: Record<string, CSSProperties> = {
   composer: {
     background: color.card, border: `1px solid ${color.line}`, borderRadius: radius.panel,
     boxShadow: shadow.card, padding: "12px 13px 10px",
-    // Send sits beside the two rows rather than inside the first, so it centres
-    // against the whole card instead of hanging off the question line.
-    display: "flex", alignItems: "center", gap: 12,
+    // Send sits beside the two rows and bottom-aligns with them, so it rides
+    // the control row's line — the same baseline as the ability pills — rather
+    // than floating in the card's vertical middle.
+    display: "flex", alignItems: "flex-end", gap: 12,
   },
   stack: { display: "flex", flexDirection: "column", gap: 9, flex: 1, minWidth: 0 },
   /** The question and the two controls that act on it. The row carries its own
