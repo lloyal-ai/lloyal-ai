@@ -34,6 +34,7 @@ export function Settle(): ReactElement {
   const ask = useBrief(selectAsk);
   const [showThinking, setShowThinking] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [thinkOpen, setThinkOpen] = useState<string | null>(null);
 
   const ordinals = useMemo(
     () => new Map(citations.map((c) => [c.url, c.ordinal])),
@@ -112,7 +113,17 @@ export function Settle(): ReactElement {
           <p style={S.exchangeActions}>
             <button type="button" style={S.action} onClick={() => copy(x.body, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
             <button type="button" style={S.action} onClick={() => download(x.body, x.question)}>Download</button>
+            {x.thinking && (
+              <button
+                type="button"
+                style={S.action}
+                onClick={() => setThinkOpen(thinkOpen === `e${i}` ? null : `e${i}`)}
+              >
+                {thinkOpen === `e${i}` ? "Hide the deliberation" : "How it got here"}
+              </button>
+            )}
           </p>
+          {thinkOpen === `e${i}` && x.thinking && <p style={S.thinking}>{x.thinking}</p>}
           <Prose markdown={x.body} anchorPrefix={`e${i}`} />
         </section>
       ))}

@@ -642,8 +642,13 @@ export const selectProbes = (app: AppState): Probe[] => {
 };
 
 /** The document's warm-ask exchanges, settled beneath it. */
-export const selectExchanges = (app: AppState): { question: string; body: string }[] =>
-  app.exchanges;
+/** Exchanges parsed the way the root answer is: deliberation split out behind
+ *  its own disclosure, prose alone in the document. The fold keeps the RAW
+ *  stream (the host is the author); the split is a view concern. */
+export const selectExchanges = (
+  app: AppState,
+): { question: string; body: string; thinking: string | null }[] =>
+  app.exchanges.map((x) => ({ question: x.question, ...splitThink(x.body, false) }));
 
 /** The warm ask in flight: its question, whatever of its answer has
  *  streamed, and its worker as a full inquiry — verbs, park honesty, and
@@ -657,7 +662,9 @@ export const selectAsk = (
     if (a.endedAt === null) {
       return {
         question: app.ask,
-        body: liveProse(a) ?? "",
+        // While the think block is open the text is deliberation, never answer
+        // prose — the row's verb already says "thinking it through".
+        body: splitThink(liveProse(a) ?? "", true).body,
         inquiry: { id: a.id, index, verb: verbOf(a), startedAt: a.startedAt, endedAt: a.endedAt },
       };
     }
