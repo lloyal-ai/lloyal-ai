@@ -7,6 +7,13 @@
  *     report.md          — synth/passthrough answer with metadata + annexure index
  *     annexure-N.md      — one per research agent's `report` tool result
  *
+ * A document is born at the shape selector; everything asked UNDER it belongs
+ * to it. The run dir IS the topic's folder: the sink anchors the report it
+ * last wrote (or the one the library reopened), and while an anchor stands,
+ * follow-ups land beside it as `exchange-N.md` — one document per file, one
+ * library row per folder, the whole thread in one place with no special list
+ * logic anywhere. `new_run` clears the anchor; so does deleting the report.
+ *
  * Trace.jsonl is NOT this sink's concern. Trace is session-scoped: opened
  * once at boot in main.ts, captures every query (including warm follow-
  * ups), closed at process exit.
@@ -31,12 +38,60 @@ export class RunDirSink {
   private taskByOrdinal = new Map<number, string>();
   private lastAnswer: string | null = null;
   private query: string | null = null;
-  /** Root manifest digests the query carried. The report keeps the ADDRESS;
-   *  the content-addressed store keeps the bytes. */
+  /** Root manifest digests the query carried. The report keeps the
+   *  ADDRESS; the content-addressed store keeps the bytes. */
   private attachments: readonly string[] = [];
   private mode: 'flat' | 'deep' | null = null;
   private startedAt: number | null = null;
   private synthStats: { tokens: number; ppl: number; timeMs: number } | null = null;
+  /** The thread's report.md — where follow-ups land. Survives reset(): the
+   *  anchor's lifecycle is finish/resume/clearAnchor, not the run's. */
+  private anchor: string | null = null;
+  /** This run appends to the anchor instead of writing a fresh report. */
+  private appending = false;
+  /** Annexure numbers already taken by the anchored dir — this run's ordinals
+   *  continue above them, so a follow-up's evidence can never collide. */
+  private ordinalBase = 0;
+
+  /** A settled document stands — the next dock submit threads under it. */
+  get inThread(): boolean {
+    return this.anchor !== null;
+  }
+
+  /** Anchor a reopened report as the live thread. */
+  resume(reportPath: string): void {
+    this.anchor = reportPath;
+  }
+
+  /** Drop the anchor — unconditionally, or only if it names `onlyIf`
+   *  (a deleted report must stop collecting the thread). */
+  clearAnchor(onlyIf?: string): void {
+    if (!onlyIf || this.anchor === onlyIf) this.anchor = null;
+  }
+
+  /** Continue the anchored thread: same event flow, but `finish()` appends to
+   *  the anchored report. No new dir, no new library item. */
+  startThread(opts: { query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): void {
+    if (!this.anchor) return;
+    this.currentDir = path.dirname(this.anchor);
+    this.appending = true;
+    this.inResearch = false;
+    let taken = 0;
+    for (const name of fs.readdirSync(this.currentDir)) {
+      const m = /^annexure-(\d+)\.md$/.exec(name);
+      if (m) taken = Math.max(taken, Number(m[1]));
+    }
+    this.ordinalBase = taken;
+    this.spawnOrdinal = taken;
+    this.agentToOrdinal.clear();
+    this.taskByOrdinal.clear();
+    this.lastAnswer = null;
+    this.query = opts.query;
+    this.mode = opts.mode;
+    this.attachments = opts.attachments ?? [];
+    this.startedAt = Date.now();
+    this.synthStats = null;
+  }
 
   /** Begin a new query's run-dir. Returns the absolute path so callers can
    *  emit a `ui:run_dir` event for the composer to display. */
@@ -107,7 +162,7 @@ export class RunDirSink {
 
   private writeAnnexure(n: number, body: string): void {
     if (!this.currentDir) return;
-    const desc = this.taskByOrdinal.get(n) ?? '';
+    const desc = this.taskByOrdinal.get(n - this.ordinalBase) ?? '';
     const header = `# Annexure ${n}\n\n${desc ? `**Task:** ${desc}\n\n` : ''}---\n\n`;
     fs.writeFileSync(
       path.join(this.currentDir, `annexure-${n}.md`),
@@ -118,29 +173,48 @@ export class RunDirSink {
 
   private finish(): void {
     if (this.currentDir && this.lastAnswer && this.query) {
-      const totalMs = this.startedAt ? Date.now() - this.startedAt : 0;
       const ords = [...this.agentToOrdinal.values()].sort((a, b) => a - b);
       const refs = ords
         .map((n) => {
-          const desc = this.taskByOrdinal.get(n);
+          const desc = this.taskByOrdinal.get(n - this.ordinalBase);
           return `- [Annexure ${n}](./annexure-${n}.md)${desc ? ` — ${desc}` : ''}`;
         })
         .join('\n');
+      const annexureSection = refs
+        ? `\n---\n\n## Annexures\n\n${refs}\n`
+        : '';
+      const answer = stripThink(this.lastAnswer).trim();
+
+      const totalMs = this.startedAt ? Date.now() - this.startedAt : 0;
       const stats = this.synthStats
         ? ` · ${this.synthStats.tokens} synth tokens · ppl ${this.synthStats.ppl.toFixed(2)}`
         : '';
       // Rides the EXISTING metadata line rather than adding one: `readReport`
-      // slices a fixed three-line header and `listReports` matches only its
-      // head, so an older report simply carries no media segment.
+      // slices a fixed 3-line header, and `listReports` matches only its head.
+      // An older report simply carries no media segment.
       const media = this.attachments.length > 0
         ? ` · media ${this.attachments.join(' ')}`
         : '';
       const meta = `> ${new Date().toISOString()} · ${this.mode}${stats} · ${(totalMs / 1000).toFixed(1)}s${media}`;
-      const annexureSection = refs
-        ? `\n---\n\n## Annexures\n\n${refs}\n`
-        : '';
-      const body = `# ${this.query}\n\n${meta}\n\n${stripThink(this.lastAnswer).trim()}\n${annexureSection}`;
-      fs.writeFileSync(path.join(this.currentDir, 'report.md'), body, 'utf8');
+      const doc = `# ${this.query}\n\n${meta}\n\n${answer}\n${annexureSection}`;
+
+      if (this.appending) {
+        // A follow-up is its own document beside the report — same format,
+        // its own meta line (its own timestamp and media digests), parsed by
+        // the same reader. The folder is the thread.
+        let taken = 0;
+        for (const name of fs.readdirSync(this.currentDir)) {
+          const m = /^exchange-(\d+)\.md$/.exec(name);
+          if (m) taken = Math.max(taken, Number(m[1]));
+        }
+        fs.writeFileSync(
+          path.join(this.currentDir, `exchange-${taken + 1}.md`), doc, 'utf8');
+      } else {
+        const report = path.join(this.currentDir, 'report.md');
+        fs.writeFileSync(report, doc, 'utf8');
+        // The document just born is what the next dock submit threads under.
+        this.anchor = report;
+      }
     }
     this.reset();
   }
@@ -156,5 +230,7 @@ export class RunDirSink {
     this.mode = null;
     this.startedAt = null;
     this.synthStats = null;
+    this.appending = false;
+    this.ordinalBase = 0;
   }
 }

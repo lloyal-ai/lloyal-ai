@@ -66,9 +66,9 @@ export function listReports(outputDir: string): LibraryEntry[] {
  *  body past the 3-line metadata header.
  *
  *  The report records ADDRESSES, never bytes — the content-addressed store
- *  still holds those, which is what lets a settled brief show the images it was
- *  given. A report written before this carries no media segment and reads back
- *  as none. */
+ *  still holds those, which is what makes a settled brief show the images it
+ *  was given rather than only describe them. A report written before this
+ *  carries no media segment and reads back as none. */
 export function readReport(
   resolvedPath: string,
 ): { path: string; title: string; body: string; attachments: string[] } {
@@ -82,7 +82,29 @@ export function readReport(
   };
 }
 
-/** Remove a CONFINED report's WHOLE run dir — report + annexures. */
+/** A topic's whole thread: the report plus every exchange beside it, in
+ *  order. `readReport` parses each file — same format, same reader — and this
+ *  only composes: the reopened document is the report with its exchanges
+ *  appended, and its figures are the union of every entry's. */
+export function readThread(
+  reportPath: string,
+): { path: string; title: string; body: string; attachments: string[] } {
+  const root = readReport(reportPath);
+  const dir = path.dirname(reportPath);
+  const exchanges = fs.readdirSync(dir)
+    .map((name) => /^exchange-(\d+)\.md$/.exec(name))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .sort((a, b) => Number(a[1]) - Number(b[1]))
+    .map((m) => readReport(path.join(dir, m[0])));
+  return {
+    path: reportPath,
+    title: root.title,
+    body: [root.body, ...exchanges.map((e) => `---\n\n# ${e.title}\n\n${e.body}`)].join('\n\n'),
+    attachments: [...new Set([root, ...exchanges].flatMap((e) => e.attachments))],
+  };
+}
+
+/** Remove a CONFINED report's WHOLE run dir — report + annexures + thread. */
 export function removeReport(resolvedPath: string): void {
   fs.rmSync(path.dirname(resolvedPath), { recursive: true, force: true });
 }

@@ -748,7 +748,16 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
       entries.push({ anchor: "grid-sources", text: "Sources", level: 1, index: 0 });
     }
     app.exchanges.forEach((x, i) => {
+      // Each thread entry is its own document in the rail: the question heads
+      // the group, and the answer's headings nest beneath it — an Extend's
+      // full outline stands under its question, an Ask's short answer adds
+      // nothing.
       entries.push({ anchor: `e${i}`, text: x.question, level: 0, index: i + 1 });
+      anchorsOf(x.body, `e${i}`).forEach((h) => {
+        entries.push({
+          anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: i + 1,
+        });
+      });
     });
     return entries;
   }

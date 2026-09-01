@@ -68,7 +68,7 @@ import type { AbilityDescriptor } from "./state.js";
 import { RunDirSink } from "./run-dir.js";
 import { resolvePath } from "@lloyal-labs/rig/node";
 import { RunnerCtx } from "./runner-ctx.js";
-import { confinedReport, listReports, readReport, removeReport } from "./library.js";
+import { confinedReport, listReports, readReport, readThread, removeReport } from "./library.js";
 import type { ConfigOrigin } from "./config-types.js";
 
 // The two first-party ability factories this harness enables. Before enabling, the
@@ -363,13 +363,17 @@ export function* harness(
     mode: "flat" | "deep",
     attached: readonly Descriptor[] = [],
   ): void {
+    const attachments = attached.map((a) => a.digest);
+    // A document is born at the shape selector; everything asked UNDER it
+    // belongs to it. While a settled report stands anchored, every dock
+    // submit — Ask or Extend — appends to that report's thread. Only
+    // `new_run` (the way back to the picker) starts a new library item.
+    if (runDirSink.inThread) {
+      runDirSink.startThread({ query, mode, attachments });
+      return;
+    }
     const outputDir = runner.config().sources.outputDir ?? process.cwd();
-    runDirSink.start({
-      outputDir,
-      query,
-      mode,
-      attachments: attached.map((a) => a.digest),
-    });
+    runDirSink.start({ outputDir, query, mode, attachments });
   }
 
   const libraryDir = (): string =>
@@ -433,7 +437,7 @@ export function* harness(
   // library_read, consumed by the first submit over it), and the reports
   // already committed to the trunk — a report prefills once; later asks
   // over it are simply warm.
-  let openedReport: ReturnType<typeof readReport> | null = null;
+  let openedReport: ReturnType<typeof readThread> | null = null;
   const committedReports = new Set<string>();
   let pendingPlan: PendingPlan | null = null;
 
@@ -814,8 +818,10 @@ export function* harness(
         pendingPlan = null;
       }
       // Drop the restored-report binding: the next submit must not commit a
-      // document the user has just cleared.
+      // document the user has just cleared. And drop the thread anchor — the
+      // picker is where new documents are born.
       openedReport = null;
+      runDirSink.clearAnchor();
       yield* agentEvents.send({ type: "ui:new_run" });
       return "continue";
     },
@@ -893,7 +899,9 @@ export function* harness(
           message: "A brief is in flight — close it before opening another.",
         });
       } else {
-        openedReport = readReport(resolved);
+        openedReport = readThread(resolved);
+        // The reopened document is the live thread — follow-ups land in it.
+        runDirSink.resume(resolved);
         // The report kept the ADDRESSES; the store kept the content. Rebuild
         // each descriptor from what is actually on disk rather than trusting
         // the file — a digest whose manifest is gone is dropped, so the brief
@@ -930,6 +938,8 @@ export function* harness(
       const resolved = confinedReport(libraryDir(), cmd.path);
       if (resolved !== null) {
         removeReport(resolved);
+        // A deleted report must stop collecting its thread.
+        runDirSink.clearAnchor(resolved);
         yield* reindexCorpus();
       }
       yield* agentEvents.send({
