@@ -29,17 +29,27 @@ child.on("message", (m) => {
   const ev = m?.payload;
   if (ev?.type === "weights:done" && !sent) {
     sent = true;
-    child.send({ t: "command", payload: { type: "set_app_config", name: "corpus", values: { corpusPath: emptyDir } } });
+    child.send({ t: "command", payload: { type: "set_ability_config", name: "corpus", values: { corpusPath: emptyDir } } });
   } else if (sent && ev?.type === "ui:error") {
     console.log(`ui:error: ${ev.message}`);
     // Must be the ENABLE failure (rollback path), not the existence guard.
     if (!/no \.md\(x\) files matched/.test(ev.message)) { console.log("wrong error: path guard, not enable-fail"); finish(1); return; }
     setTimeout(() => {
+      // Value-based, not byte-based: the rollback restores the PRIOR VALUE
+      // (an absent prior becomes `corpus: {}` — its shipped semantics), and
+      // a scaffold may already carry other drivers' saves. The contract is
+      // that the failed corpusPath never reaches disk and nothing else moved.
       const nowJson = fs.existsSync("harness.json") ? fs.readFileSync("harness.json", "utf8") : null;
-      const restored = priorJson === null
-        ? nowJson === null || !/corpusPath/.test(nowJson)
-        : nowJson === priorJson;
-      console.log(restored ? "disk rolled back ✓" : `DISK NOT ROLLED BACK: ${nowJson}`);
+      const strip = (json) => {
+        if (json === null) return null;
+        const c = JSON.parse(json);
+        if (c.abilities && c.abilities.corpus && Object.keys(c.abilities.corpus).length === 0) delete c.abilities.corpus;
+        return JSON.stringify(c);
+      };
+      const leaked = nowJson !== null && /corpusPath/.test(nowJson);
+      const othersMoved = priorJson !== null && strip(nowJson) !== strip(priorJson);
+      const restored = !leaked && !othersMoved;
+      console.log(restored ? "disk rolled back ✓" : `DISK NOT ROLLED BACK (${leaked ? "corpusPath leaked" : "other keys moved"}): ${nowJson}`);
       finish(restored ? 0 : 1);
     }, 1000);
   }

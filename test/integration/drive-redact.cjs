@@ -1,4 +1,4 @@
-// Save a secret via set_app_config(web); assert no event ever carries it.
+// Save a secret via set_ability_config(web); assert no event ever carries it.
 const { fork } = require("node:child_process");
 const child = fork("dist/targets/cli/index.mjs", [], {
   cwd: process.cwd(), env: { ...process.env, RR_BRIDGE: "1" },
@@ -13,7 +13,7 @@ child.on("message", (m) => {
   if (JSON.stringify(ev).includes(SECRET)) { leaked = true; console.log(`LEAK in ${ev.type}`); finish(1); }
   if (ev.type === "weights:done" && !sent) {
     sent = true;
-    child.send({ t: "command", payload: { type: "set_app_config", name: "web", values: { tavilyKey: SECRET } } });
+    child.send({ t: "command", payload: { type: "set_ability_config", name: "web", values: { tavilyKey: SECRET } } });
   } else if (ev.type === "config:updated") {
     console.log(`config:updated abilities=${JSON.stringify(ev.config.abilities)}`);
   } else if (sent && ev.type === "abilities:state") {

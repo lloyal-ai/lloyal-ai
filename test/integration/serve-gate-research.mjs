@@ -56,7 +56,7 @@ const until = async (label, pred, ms = 120_000) => {
 const A = open("A"), B = open("B");
 await until("A+B admitted", () => A.ready && B.ready);
 
-A.client.send({ type: "set_app_config", name: "web", values: { tavilyKey: SECRET } });
+A.client.send({ type: "set_ability_config", name: "web", values: { tavilyKey: SECRET } });
 await until("A got config:updated", () => A.updated.length === 1);
 const aWeb = JSON.stringify(A.updated[0].config.abilities?.web);
 if (aWeb !== '{"tavilyKey":true}') die(`A's update not redacted-to-presence: ${aWeb}`);
@@ -73,10 +73,10 @@ const cWeb = JSON.stringify(C.loaded.config.abilities?.web ?? {});
 if (cWeb.includes("tavilyKey")) die(`fresh C inherited A's session config: ${cWeb}`);
 log(`ok: fresh C pristine (web=${cWeb}) — A's save was per-session`);
 
-B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: "/nonexistent-corpus-xyz" } });
+B.client.send({ type: "set_ability_config", name: "corpus", values: { corpusPath: "/nonexistent-corpus-xyz" } });
 await until("B got the path-guard error", () => B.errors.length === 1);
 if (A.errors.length) die("A received B's error");
-B.client.send({ type: "set_app_config", name: "corpus", values: { corpusPath: emptyDir } });
+B.client.send({ type: "set_ability_config", name: "corpus", values: { corpusPath: emptyDir } });
 await until("B got the enable-fail error (#110 path)", () => B.errors.length === 2, 180_000);
 if (!/no \.md\(x\) files matched/.test(B.errors[1])) die(`second error was not the ENABLE failure: ${B.errors[1]}`);
 if (A.errors.length || C.errors.length) die("B's errors leaked to a sibling");

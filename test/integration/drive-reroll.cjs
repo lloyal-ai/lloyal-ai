@@ -27,11 +27,11 @@ child.on("message", (m) => {
   const ev = m?.payload;
   if (ev?.type === "weights:done" && step === 0) {
     step = 1;
-    child.send({ t: "command", payload: { type: "set_app_config", name: "corpus", values: { corpusPath: emptyDir } } });
+    child.send({ t: "command", payload: { type: "set_ability_config", name: "corpus", values: { corpusPath: emptyDir } } });
   } else if (ev?.type === "ui:error" && step === 1) {
     console.log(`step1 rolled back: ${ev.message}`);
     step = 2;
-    child.send({ t: "command", payload: { type: "set_app_config", name: "corpus", values: { corpusPath: goodDir } } });
+    child.send({ t: "command", payload: { type: "set_ability_config", name: "corpus", values: { corpusPath: goodDir } } });
   } else if (step === 2) {
     // config:updated and corpus:indexed arrive in either order — need BOTH.
     if (ev?.type === "config:updated") {
