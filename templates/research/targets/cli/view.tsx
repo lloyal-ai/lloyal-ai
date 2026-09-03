@@ -212,6 +212,13 @@ export function renderCli(
   dispatch: (c: Command) => void,
   bootstrap: WorkflowEvent[],
 ): () => void {
-  const instance = render(<View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />);
+  // Ink swallows ctrl-c itself unless told not to (its useInput skips the
+  // handler when exitOnCtrlC is on) — and a bare unmount leaves the harness
+  // parked at its command loop with the model resident. Ctrl-c must reach
+  // the view so it dispatches `quit`: the harness returns, the scope
+  // unwinds, and the process exits through the front door.
+  const instance = render(<View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />, {
+    exitOnCtrlC: false,
+  });
   return () => instance.unmount();
 }
