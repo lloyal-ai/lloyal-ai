@@ -12,8 +12,8 @@ const reset = Object.assign(new Error('npm ERR! code ECONNRESET'), { stderr: 'np
 describe('parseCut', () => {
   it('accepts a non-negative integer and nothing else', () => {
     expect(parseCut('2')).toBe(2);
-    for (const bad of [undefined, '', 'x', '-1', '1.5']) {
-      expect(() => parseCut(bad as string), String(bad)).toThrow(/--cut/);
+    for (const bad of [undefined, '', 'x', '-1', '1.5', '9'.repeat(400)]) {
+      expect(() => parseCut(bad as string), String(bad).slice(0, 12)).toThrow(/--cut/);
     }
   });
 });

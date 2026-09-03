@@ -8,10 +8,11 @@
 /** `--cut <N>`: a non-negative integer, nothing else. `Number()` would take
  *  a missing or garbled value as NaN and stamp `-alpha.NaN` everywhere. */
 export function parseCut(arg) {
-  if (arg === undefined || !/^\d+$/.test(String(arg))) {
+  const n = arg === undefined || !/^\d+$/.test(String(arg)) ? NaN : Number(arg);
+  if (!Number.isSafeInteger(n)) {
     throw new Error(`--cut <N> must be a non-negative integer (got ${JSON.stringify(arg ?? null)})`);
   }
-  return Number(arg);
+  return n;
 }
 
 /** A prerelease `latest` is the pending base, never bumped again; a stable
@@ -36,8 +37,15 @@ export function latestVersion(name, fallback, view) {
   }
 }
 
-/** `{ name → x.y.z-alpha.<cut> }` for every `{ name, level, fallback }`. */
+/**
+ * `{ name → x.y.z-alpha.<cut> }` for every `{ name, level, fallback }`.
+ * @param {{ cut: number,
+ *           packages: Array<{ name: string, level: 'major' | 'minor', fallback: string }>,
+ *           view: (name: string) => string }} plan
+ * @returns {Record<string, string>}
+ */
 export function planAlphas({ cut, packages, view }) {
+  /** @type {Record<string, string>} */
   const alphas = {};
   for (const { name, level, fallback } of packages) {
     alphas[name] = `${nextBase(latestVersion(name, fallback, view), level)}-alpha.${cut}`;
