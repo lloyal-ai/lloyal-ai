@@ -14,3 +14,13 @@ templates/*/dist-web/
 templates/*/traces/
 templates/*/*.log
 templates/*/models/**/*.gguf
+
+# In-place template development (lloyal link-local inside templates/<t>):
+# runtime residue only — the link mutates nothing tracked.
+templates/*/node_modules/
+templates/*/package-lock.json
+templates/*/models/**/*.gguf
+templates/*/reports/
+templates/*/media/
+templates/*/vendor/
+templates/*/harness.json
