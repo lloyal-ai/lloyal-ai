@@ -32,7 +32,7 @@ function open(name) {
       onEvent: (ev) => {
         s.events++;
         if (JSON.stringify(ev).includes(SECRET)) { secretOnWire++; log(`SECRET ON ${name}'s WIRE: ${ev.type}`); }
-        if (ev?.type === "ui:composer") s.ready = true;
+        if (ev?.type === "weights:done") s.ready = true;
         if (ev?.type === "config:loaded") s.loaded = ev;
         if (ev?.type === "config:updated") s.updated.push(ev);
         if (ev?.type === "ui:error") s.errors.push(ev.message);

@@ -66,8 +66,24 @@ export const TARGET_FILES: Record<PrunableTarget, string[]> = {
  * EITHER desktop or web survives; removed only for a cli-only project. `vite` is
  * here because `electron-vite` lists it as a peerDependency.
  */
-export const SHARED_RENDERER_DEPS = ['react-dom', 'react-markdown', 'remark-gfm'];
+export const SHARED_RENDERER_DEPS = [
+  'react-dom',
+  'react-markdown',
+  'remark-gfm',
+  'remark-math',
+  'rehype-katex',
+  'katex',
+  'zustand',
+  '@fontsource-variable/geist',
+  '@fontsource-variable/geist-mono',
+];
 export const SHARED_RENDERER_DEV_DEPS = ['@vitejs/plugin-react', '@types/react-dom', 'vite'];
+/**
+ * Test files that read the shared view's selectors — on the SAME lifecycle as
+ * {@link SHARED_RENDERER_DIR}: pruned with it (a cli-only project has no
+ * `targets/_shared` to import), restored with the first DOM target.
+ */
+export const RENDERER_TEST_FILES = ['test/invariants/reducer.test.ts'];
 /**
  * The React view itself (`App.tsx` + whatever it pulls in), on exactly the same
  * lifecycle as the deps above — kept while EITHER DOM target survives.
@@ -132,7 +148,10 @@ export function pruneTargets(projectDir: string, keep: readonly Target[]): void 
   }
   // The shared view outlives either target alone; only a cli-only project has
   // nothing left to mount it. Same guard `prunePackageJson` uses for the deps.
-  if (pruneDesktop && pruneWeb) rm(SHARED_RENDERER_DIR);
+  if (pruneDesktop && pruneWeb) {
+    rm(SHARED_RENDERER_DIR);
+    for (const f of RENDERER_TEST_FILES) rm(f);
+  }
 
   // 2. package.json — scripts + deps.
   if (pruneDesktop || pruneWeb) {

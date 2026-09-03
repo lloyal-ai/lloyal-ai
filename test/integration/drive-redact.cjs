@@ -11,7 +11,7 @@ child.on("message", (m) => {
   const ev = m?.payload;
   if (!ev?.type) return;
   if (JSON.stringify(ev).includes(SECRET)) { leaked = true; console.log(`LEAK in ${ev.type}`); finish(1); }
-  if (ev.type === "ui:composer" && !sent) {
+  if (ev.type === "weights:done" && !sent) {
     sent = true;
     child.send({ t: "command", payload: { type: "set_app_config", name: "web", values: { tavilyKey: SECRET } } });
   } else if (ev.type === "config:updated") {

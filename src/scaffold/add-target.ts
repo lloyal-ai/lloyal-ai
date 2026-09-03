@@ -23,6 +23,7 @@ import {
   SHARED_RENDERER_DEPS,
   SHARED_RENDERER_DIR,
   SHARED_RENDERER_DEV_DEPS,
+  RENDERER_TEST_FILES,
   rewriteTargetsLine,
 } from './prune-targets.js';
 import {
@@ -86,6 +87,11 @@ export function addTarget(projectDir: string, target: PrunableTarget, template: 
       join(projectDir, SHARED_RENDERER_DIR),
       subs,
     );
+    // …and the tests that read its selectors, pruned on the same lifecycle.
+    for (const rel of RENDERER_TEST_FILES) {
+      const src = join(templateDir, rel);
+      if (existsSync(src)) copyFileWithSubstitutions(src, join(projectDir, rel), subs);
+    }
   }
 
   // 3. package.json — restore scripts + deps (add-if-absent, versions from template).

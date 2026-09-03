@@ -267,6 +267,39 @@ describe('the shared React view outlives either DOM target alone', () => {
   );
 });
 
+describe('pruneTargets — research: the renderer test + its deps ride the _shared lifecycle', () => {
+  const RESEARCH_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'research');
+
+  function freshResearchProject(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-scaffold-r-'));
+    cpSync(RESEARCH_TEMPLATE, dir, { recursive: true });
+    created.push(dir);
+    return dir;
+  }
+
+  it('cli-only drops the selector-reading test and every shared renderer dep', () => {
+    const dir = freshResearchProject();
+    pruneTargets(dir, ['cli']);
+    // The one test file that imports targets/_shared goes with the dir…
+    expect(existsSync(join(dir, 'test/invariants/reducer.test.ts'))).toBe(false);
+    // …while the renderer-free law-book stays runnable.
+    expect(existsSync(join(dir, 'test/invariants/harness.ts'))).toBe(true);
+    expect(existsSync(join(dir, 'test/invariants/kv-law.scenario.test.ts'))).toBe(true);
+    const p = pkg(dir);
+    for (const dep of ['katex', 'remark-math', 'rehype-katex', 'zustand', '@fontsource-variable/geist', '@fontsource-variable/geist-mono']) {
+      expect(p.dependencies?.[dep], `${dep} should prune with _shared`).toBeUndefined();
+    }
+  });
+
+  it('a surviving DOM target keeps the test and the deps', () => {
+    const dir = freshResearchProject();
+    pruneTargets(dir, ['cli', 'web']);
+    expect(existsSync(join(dir, 'test/invariants/reducer.test.ts'))).toBe(true);
+    expect(pkg(dir).dependencies?.zustand).toBeDefined();
+    expect(pkg(dir).dependencies?.katex).toBeDefined();
+  });
+});
+
 describe('pruneTargets — cli + web (desktop pruned)', () => {
   it('keeps web deps/scripts, drops only desktop, trims tsconfig.web include', () => {
     const dir = freshBlankProject();

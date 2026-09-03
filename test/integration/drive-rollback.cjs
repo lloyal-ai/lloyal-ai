@@ -27,7 +27,7 @@ let sent = false, done = false;
 const finish = (c) => { if (done) return; done = true; child.kill(); cleanup(); process.exit(c); };
 child.on("message", (m) => {
   const ev = m?.payload;
-  if (ev?.type === "ui:composer" && !sent) {
+  if (ev?.type === "weights:done" && !sent) {
     sent = true;
     child.send({ t: "command", payload: { type: "set_app_config", name: "corpus", values: { corpusPath: emptyDir } } });
   } else if (sent && ev?.type === "ui:error") {
