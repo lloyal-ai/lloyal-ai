@@ -401,6 +401,23 @@ export function* harness(
     findingsMaxChars: runner.findingsMaxChars,
   };
 
+  // The live run's fields — shared by every placement (the oneShot path
+  // stamps docId through startRunDir too); the lifecycle operations that
+  // own their transitions live with the command loop below.
+  const run: {
+    task: Task<void> | null;
+    paused: boolean;
+    woundDown: boolean;
+    /** The doc the live run writes for — set by startRunDir, cleared with
+     *  the run. Lets abortRun remove a stillborn's orphan dir. */
+    docId: DocId | null;
+  } = {
+    task: null,
+    paused: false,
+    woundDown: false,
+    docId: null,
+  };
+
   /** The folder IS the docId. An ask over a settled document threads
    *  beside its report; anything else writes the document's own dir.
    *  Same-id reuse is unreachable by construction: every planner submit
@@ -509,23 +526,11 @@ export function* harness(
   // ── The run lifecycle — ONE place ──────────────────────────
   // The heavy operations run in a CHILD fiber so the command loop keeps
   // polling `each(commands)` while a run is in flight. startRun/haltRun own
-  // every transition of these three fields; nothing else writes them. A NEW
-  // run never inherits the old run's flags — startRun resets them, and the
-  // fiber's own finally clears them only while it is still the current run.
-  const run: {
-    task: Task<void> | null;
-    paused: boolean;
-    woundDown: boolean;
-    /** The doc the live run writes for — set by startRunDir, cleared with
-     *  the run. Lets abortRun remove a stillborn's orphan dir. */
-    docId: DocId | null;
-  } = {
-    task: null,
-    paused: false,
-    woundDown: false,
-    docId: null,
-  };
-
+  // every transition of the `run` fields (declared beside startRunDir,
+  // which stamps `run.docId` on every path — oneShot included); nothing
+  // else writes them. A NEW run never inherits the old run's flags —
+  // startRun resets them, and the fiber's own finally clears them only
+  // while it is still the current run.
   function* startRun(body: () => Operation<void>): Operation<void> {
     if (run.task) yield* haltRun();
     run.paused = false;
