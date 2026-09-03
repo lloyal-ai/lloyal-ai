@@ -5,8 +5,7 @@
  *
  * Every abandonment path announces: `stop`, `submit_query` over a live
  * run, and `new_run` all compose the same `abortRun()` — halt, clear the
- * park, remove a stillborn's orphan run dir, announce. (Two of these
- * assertions once PINNED the silent-halt defect; abortRun flipped them.)
+ * park, remove a stillborn's orphan run dir, announce.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
