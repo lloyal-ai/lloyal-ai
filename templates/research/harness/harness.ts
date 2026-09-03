@@ -228,7 +228,7 @@ const errorMessage = (err: unknown): string =>
  * process is the runner's job. The boot catches it, writes `message`, and exits
  * `exitCode`; the Effection scope unwinds cleanly (teardowns run).
  */
-class HarnessExit extends Error {
+export class HarnessExit extends Error {
   constructor(
     message: string,
     readonly exitCode: number,

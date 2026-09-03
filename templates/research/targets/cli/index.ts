@@ -22,10 +22,11 @@ import { main, call, ensure } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
 import { startHostResources } from "@lloyal-labs/dev-tools/node";
+import { parseArgs } from "node:util";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels, catalogEntry, useTraceWriter, createProjectMediaStore } from "@lloyal-labs/rig/node";
 import { makeEdgeRunner } from "@lloyal-labs/rig";
-import { harness, abilities } from "../../harness/harness.js";
+import { harness, abilities, HarnessExit } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
 import { applyServedGpuEnv, bufferedCommandSignal } from "../../harness/served-runtime.js";
 import type { Command, WorkflowEvent } from "../../harness/protocol.js";
@@ -44,6 +45,18 @@ import { renderCli } from "./view.js";
 const projectRoot = process.cwd();
 
 const bootEnv = { ...process.env };
+
+// The one flag the boot owns: `--query` runs scripted. Config overrides stay
+// in the layered rungs (harness.yml / harness.json / env), not flags. The
+// surface matrix below decides what a query means: a TTY auto-submits it into
+// the command loop; a bare pipe runs it ONE-SHOT to a settled report and
+// exits (the `runner.mode` harness.ts keys on); the desktop bridge ignores it.
+const { values: cliFlags } = parseArgs({
+  options: { query: { type: "string" } },
+  strict: false,
+});
+const initialQuery = typeof cliFlags.query === "string" ? cliFlags.query : undefined;
+const oneShot = !process.env.RR_BRIDGE && !process.stdout.isTTY;
 function loadOrExit(): { yml: HarnessYml; loaded: LoadedConfig } {
   try {
     const yml = loadYml();
@@ -182,8 +195,8 @@ main(function* () {
     const relayered = loadConfig(yml, {}, bootEnv);
     return { ...saved, config: relayered.config, origin: relayered.origin };
   };
-  yield* RunnerCtx.set(
-    makeEdgeRunner<Config, ConfigOrigin>(cfg, {
+  yield* RunnerCtx.set({
+    ...makeEdgeRunner<Config, ConfigOrigin>(cfg, {
       traceWriter,
       attachmentStore: media,
       dev,
@@ -191,7 +204,9 @@ main(function* () {
       persist,
       sessionOriginMap: SESSION_ORIGIN_MAP,
     }),
-  );
+    mode: oneShot ? "oneshot" : "interactive",
+    initialQuery,
+  });
 
   // Buffered: the bindings dispatch from the moment they mount, but the
   // harness's command loop only arms after boot — a desktop renderer's (or a
@@ -220,5 +235,16 @@ main(function* () {
   // Run the harness. Returns when it sees `quit` (or the scope unwinds).
   // Machine pressure beside model pressure — dev-gated, dies with this scope.
   if (dev) yield* ensure(startHostResources((ev) => events.send(ev)));
-  yield* harness(ctx, events, commands);
+  try {
+    yield* harness(ctx, events, commands);
+  } catch (err) {
+    // A oneShot precondition the harness can't proceed past — its message is
+    // the diagnosis and its exitCode the verdict; the scope still unwinds.
+    if (err instanceof HarnessExit) {
+      process.stderr.write(`${err.message}\n`);
+      process.exitCode = err.exitCode;
+      return;
+    }
+    throw err;
+  }
 });
