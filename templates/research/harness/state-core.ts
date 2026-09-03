@@ -83,8 +83,8 @@ export interface SourceMeta {
   host?: string;
 }
 
-/** Per-agent chronological stream item. Column.tsx renders one component
- *  per kind. `live: true` on a think item means its body is currently
+/** Per-agent chronological stream item — a renderer lays one component per
+ *  kind. `live: true` on a think item means its body is currently
  *  streaming tokens and should render with a `▎` cursor. */
 export type TimelineItem =
   | {
@@ -162,9 +162,8 @@ export interface AgentRuntime {
    *  (the model is writing tool-call JSON — the terminal `report` tool's body
    *  lives inside that JSON, between `<parameter=result>` and `</parameter>`,
    *  raw and unescaped). Renderers extract the live report body straight from
-   *  this buffer via `extractStreamingReport` below (consumed by Column.tsx's
-   *  ContentStream and the desktop renderer's Work.tsx) — same
-   *  marker-delimited technique the think block uses with `</think>`. Cleared
+   *  this buffer via `extractStreamingReport` below — same marker-delimited
+   *  technique the think block uses with `</think>`. Cleared
    *  on tool_call / report (those fire structured items instead). */
   contentBuffer: string;
   /** True while the agent is being force-recovered: `agent:done` fired (the
@@ -173,7 +172,7 @@ export interface AgentRuntime {
    *  Routes those `agent:produce` tokens into `contentBuffer` (→ "Writing
    *  report") instead of a think block, so a recovered report isn't mislabeled
    *  as the agent "Thinking". Set on `agent:done`, cleared on
-   *  `agent:return`/`agent:recovered`. See docs/upstream-issues.md. */
+   *  `agent:return`/`agent:recovered`. */
   recovering: boolean;
   /** Set when the agent's forced recovery FAILED (e.g. KV exhausted mid-report
    *  decode → `llama_decode failed`): no result was produced. Drives the terminal
@@ -229,15 +228,7 @@ export interface Toast {
   id: number;
 }
 
-/** A signed entitlement disclosed by an ability's catalog metadata. The `key`
- *  maps to a privacy-label-style pill (network → Internet, etc.); `label`
- *  is the human-readable name carried alongside it. */
-export interface AppEntitlement {
-  key: string;
-  label: string;
-}
-
-/** The ability descriptor is rig substrate now — one builder, one shape. */
+/** The ability descriptor is rig substrate — one builder, one shape. */
 import type { AbilityDescriptor } from "@lloyal-labs/rig";
 export type { AbilityDescriptor };
 

@@ -102,9 +102,8 @@ function abilityRequiresConfig(name: string): boolean {
 
 /** The ONE definition of "this config value is a path": the key says so
  *  (`…Path`) or the value starts path-shaped (~ / .). resolveConfigPaths
- *  resolves by it and set_ability_config validates existence by it — two
- *  hand-rolled copies of this predicate once drifted (the validator ran
- *  post-resolution, where its tilde arm was dead code). */
+ *  resolves by it and set_ability_config validates existence by it — one
+ *  predicate, so the resolver and the validator can never drift. */
 function isPathShaped(key: string, value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -163,12 +162,11 @@ function buildPlannerContext(abilities: readonly Ability[]): string {
 
 // ── Installed-Abilities surfacing (Settings drawer) ──────────────
 //
-// Manifest-only (the ability-catalog fetch was stripped from this template — no
-// hardcoded apps.lloyal.ai URL in a scaffold, and the austere views have no
-// Settings drawer). One descriptor per registry-ENABLED ability, built from the
-// ability's OWN manifest. Display-only; forwarded to the renderer via `abilities:state`.
-// The catalog-metadata join (title/iconUrl/entitlements) reasoning.run does is
-// intentionally absent here.
+// Manifest-only by design: a scaffold ships no hardcoded catalog URL, and
+// the austere views have no Settings drawer, so there is no catalog-metadata
+// join (title/iconUrl/entitlements) — one descriptor per registry-ENABLED
+// ability, built from the ability's OWN manifest. Display-only; forwarded to
+// the renderer via `abilities:state`.
 
 /** Ability config can carry credentials (a `tavilyKey`). VALUES never ride
  *  the event bus — on a served placement the bus terminates in every connected
@@ -189,9 +187,9 @@ function redactAbilities(config: Config): Config {
 
 /** The config:updated payload — REDACTION LIVES INSIDE THE BUILDER. On a
  *  served placement the bus ends in every tenant's renderer, and ability
- *  config carries credentials; three hand-rolled copies of this emission
- *  each independently remembered redactAbilities — the fourth would have
- *  been the leak. */
+ *  config carries credentials; an emission that had to REMEMBER to redact
+ *  would eventually forget. Building the payload here makes forgetting
+ *  unrepresentable. */
 function configUpdatedEvent(
   saved: SaveResult & { config: Config; origin: ConfigOrigin },
 ) {
@@ -240,16 +238,16 @@ class HarnessExit extends Error {
   }
 }
 
-/** A planner result held for review. Carried whole between the plan-review
- *  commands (edit, change-mode, clarify, accept) so a re-plan keeps the
- *  submission's own clock, filter, and clarify history. */
-/** The one identity mint: ISO-timestamp shaped (the run-dir's historical
- *  format), sortable, URL-safe. Same string keys the fold's DocState,
- *  /brief/:docId, and outputDir/<docId>/ on disk. */
+/** The one identity mint: ISO-timestamp shaped, sortable, URL-safe. Same
+ *  string keys the fold's DocState, /brief/:docId, and outputDir/<docId>/
+ *  on disk. */
 function mintDocId(): DocId {
   return new Date().toISOString().replace(/[:.]/g, "-").replace("Z", "");
 }
 
+/** A planner result held for review. Carried whole between the plan-review
+ *  commands (edit, change-mode, clarify, accept) so a re-plan keeps the
+ *  submission's own clock, filter, and clarify history. */
 interface PendingPlan {
   plan: PlanResult;
   /** The document this plan belongs to — one identity from echo to run-dir. */
@@ -259,8 +257,7 @@ interface PendingPlan {
    *  must close with `prefillAssistant` rather than `commitTurn` (which would
    *  re-emit it). Two things set it: a clarify round (`prefillUser`), and a
    *  query that arrived with images (`prefillUserMultimodal`). Named for the
-   *  state, not for either cause — it was `clarifyExchanged` when a clarify
-   *  round was the only way to reach it. */
+   *  state, not for either cause. */
   userSidePending: boolean;
   mode: "flat" | "deep";
   wallStartMs: number;
@@ -395,10 +392,10 @@ export function* harness(
 
   events.send({ type: "weights:done" });
 
-  // Boot-immutable facts ONLY. reasoningMode/effort used to ride this
-  // snapshot too — stale the moment the user changed a default, with every
-  // serious call site overriding them; a spread that forgot the override
-  // silently ran at boot values. Live values are passed explicitly per call.
+  // Boot-immutable facts ONLY. Live values (reasoningMode, effort) are
+  // passed explicitly per call — a default snapshotted here would go stale
+  // the moment the user changed it, and a spread that forgot to override
+  // would silently run at boot values.
   const harnessOpts = {
     maxTurns: MAX_TOOL_TURNS,
     findingsMaxChars: runner.findingsMaxChars,
@@ -663,9 +660,9 @@ export function* harness(
         yield* agentEvents.send({ type: "ui:plan_review" });
       } else if (result.type === "clarify") {
         // Arm the park FIRST: pendingPlan is what submit_clarification
-        // checks, and the KV commit below is slow — arming after it left a
-        // window where a prompt answer found nothing armed and was silently
-        // dropped. The error path (catch below) still disarms.
+        // checks, and the KV commit below is slow — arming after it would
+        // leave a window where a prompt answer finds nothing armed and is
+        // silently dropped. The error path (catch below) still disarms.
         pendingPlan = spec.pending(result.plan);
         const msg = formatClarifyAsAssistantMsg(result.plan.clarifyQuestions);
         if (spec.clarify === "commit") {
@@ -1044,8 +1041,8 @@ export function* harness(
       // No sources is a legitimate ask — nothing configured, or everything
       // excluded. The run answers from the model and whatever is already in
       // context, with no research; the pool registers whichever abilities ARE
-      // included, and none is simply the empty union. Refusing to start was
-      // the harness deciding a question wasn't worth asking.
+      // included, and none is simply the empty union. Refusing to start
+      // would be the harness deciding a question wasn't worth asking.
       const abilityFilter = currentAbilityFilter();
       const wallStartMs = performance.now();
       currentEffort = runner.config().defaults.effort;

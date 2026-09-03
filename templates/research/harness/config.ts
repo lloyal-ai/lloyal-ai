@@ -1,8 +1,7 @@
 /**
  * The config layer — `harness.yml` (committed) + `harness.json` (local).
  *
- * Ported from reasoning.run's `src/tui-ink/config.ts` with one added rung:
- * this template's committed deployment manifest. Precedence at read time:
+ * Precedence at read time:
  *
  *   CLI flag > env var > harness.json (local, gitignored) > harness.yml > default
  *
@@ -13,6 +12,9 @@
  * writes, the version guard, `.gitignore` upkeep, `~` expansion — come from
  * `@lloyal-labs/rig/node`. Per-field provenance (`ConfigOrigin`) is computed
  * AS the layering runs — nothing here reports a source it didn't use.
+ *
+ * LINEAGE: evolved from reasoning.run's config module — this template adds
+ * the committed `harness.yml` rung.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";

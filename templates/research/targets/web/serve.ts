@@ -12,13 +12,12 @@
  * ESBUILT (it injects `runServedSession` → the harness → its `.eta` prompts, so it
  * must bundle with `--loader:.eta=text`, never tsx).
  *
- * ONE adaptation over reasoning.run's env-sourced `serve/main.ts`: the **config
- * source**. Instead of `LLOYAL_MODEL`/`LLOYAL_RERANKER` env vars, `resolveConfig`
- * reads `harness.yml` and resolves the llm + reranker specs to concrete
- * digest-verified `.gguf` paths via rig's `resolveModel` (batteries included, no env
- * needed). Everything else — `createServedHostDriver`, `createModelRuntimeHost`, the
+ * The config source is `harness.yml`: `resolveConfig` reads it and resolves
+ * the llm + reranker specs to concrete digest-verified `.gguf` paths via
+ * rig's `resolveModel` — batteries included, no env vars needed. The serving
+ * machinery itself — `createServedHostDriver`, `createModelRuntimeHost`, the
  * `ws` WebSocketServer, the wss per-connection binding, admit/release — is
- * reasoning.run's serving code verbatim.
+ * platform substrate this file only composes.
  *
  * LINEAGE: evolved from reasoning.run 0.8.0 (src/serve/main.ts).
  */

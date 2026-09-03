@@ -1,7 +1,7 @@
-/** Moment 01 — Ask. One question on quiet paper and the shape choice. What the
- *  brief draws on now lives in the dock beside the question, where it is
- *  reachable at every moment instead of only this one. Boot renders here too,
- *  in the shell's voice: the loading spinner while weights come up. */
+/** Moment 01 — Ask. One question on quiet paper and the shape choice. What
+ *  the brief draws on lives in the dock beside the question, reachable at
+ *  every moment. Boot renders here too, in the shell's voice: the loading
+ *  spinner while weights come up. */
 import type { CSSProperties, ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { useBrief } from "../store.js";

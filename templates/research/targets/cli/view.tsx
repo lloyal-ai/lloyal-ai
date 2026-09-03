@@ -4,12 +4,13 @@
  * `reduce` (harness/state.ts), and renders an austere slice of the rich
  * `AppState`: the phase, the live agents, a KV gauge, and the streaming answer.
  *
- * Austere on purpose. reasoning.run's own UI is a 19-component Ink suite with a
- * plan-review editor, a sources ledger, and a settings drawer; this view folds
- * the SAME state through a handful of lines. It auto-accepts the planner's plan
- * (no interactive plan-review here) so a query runs recon → plan → agents →
- * synth end-to-end. Swap it, or grow it, or bring a whole app — the harness
- * never changes; the framework holds the binding seam, never the UI.
+ * Austere on purpose. The same state carries a full product UI — a
+ * plan-review editor, a sources ledger, a settings drawer are all derivable
+ * from it; this view folds it through a handful of lines. It auto-accepts
+ * the planner's plan (no interactive plan-review here) so a query runs
+ * recon → plan → agents → synth end-to-end. Swap it, or grow it, or bring a
+ * whole app — the harness never changes; the framework holds the binding
+ * seam, never the UI.
  */
 import React, { useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput } from "ink";

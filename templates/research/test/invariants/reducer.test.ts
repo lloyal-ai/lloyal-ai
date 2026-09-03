@@ -198,7 +198,7 @@ test('stragglers: run events with no live run are dropped, never crash', () => {
   assert.equal(s.documents.get(A)!.agents.size, settled().documents.get(A)!.agents.size);
 });
 
-test('regression: a cold planned query reaches plan_review (the CLI contract)', () => {
+test('a cold planned query reaches plan_review (the CLI contract)', () => {
   const s = fold([
     { type: 'query', docId: A, query: 'Q', warm: false } as WorkflowEvent,
     { type: 'plan:start', query: 'Q', mode: 'flat' } as WorkflowEvent,
@@ -209,7 +209,7 @@ test('regression: a cold planned query reaches plan_review (the CLI contract)', 
   assert.equal(selectReviewing(s), true);
 });
 
-test('regression: a library restore settles with its exchanges via doc + doc:active', () => {
+test('a library restore settles with its exchanges via doc + doc:active', () => {
   const s = fold([
     { type: 'doc', docId: A, title: 'Reopened', mode: 'flat', answer: 'restored body', exchanges: [{ question: 'old q', body: 'old a', attachments: [] }] } as WorkflowEvent,
     { type: 'doc:active', docId: A } as WorkflowEvent,

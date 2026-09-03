@@ -5,8 +5,8 @@
  * Settings UI (which displays them). Plain data — no engine deps — so both the
  * engine bundle and the renderer can import it without dragging in `agents`.
  *
- * `high` reproduces the historical values byte-for-byte. The `medium`/`low`
- * numbers are starting estimates; calibration against live runs is expected.
+ * `high` is the tuned baseline. The `medium`/`low` numbers are starting
+ * estimates; calibration against live runs is expected.
  * The effort levers are: KV reserve (`context`), time budget, planner breadth
  * (`maxTasks`), and the reranker explore→exploit threshold (`shouldExplore`).
  */
@@ -25,9 +25,9 @@ export interface EffortPreset {
    * Reranker explore→exploit KV threshold (`DefaultAgentPolicy.shouldExplore`).
    * `context` = the fraction of KV that must still be AVAILABLE to keep EXPLORING
    * (relaxed retrieval that can surface novel facts); below it, switch to EXPLOIT
-   * (strict dual-entailment scoring vs the task AND the original query). LOWER
-   * `context` = explores LONGER. Omitted = framework default (0.4). See
-   * reference_exploit_mode (strict `min(taskScore, queryScore)` vs relaxed).
+   * (strict dual-entailment scoring — `min(taskScore, queryScore)` — vs the
+   * task AND the original query). LOWER `context` = explores LONGER.
+   * Omitted = framework default (0.4).
    */
   shouldExplore?: { context: number }
 }
@@ -63,7 +63,7 @@ export const EFFORT_PRESETS: Record<Effort, EffortPreset> = {
   medium: {
     // Reserve ~20-25% of a 32k context so the parallel (low/medium) in-loop
     // recovery reports bin-pack whole. Interim ABSOLUTE values — nCtx-relative
-    // scaling is the follow-up. reportBudget dropped: the in-loop headroom share
+    // scaling is the follow-up. reportBudget omitted: the in-loop headroom share
     // (clamped to MAX_REPORT_BUDGET=2048) governs, so the reserve makes reports
     // whole without a hard per-report cap.
     budget: {

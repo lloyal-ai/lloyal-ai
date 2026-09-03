@@ -21,7 +21,7 @@ const PLAN_JSON = JSON.stringify({
   clarifyQuestions: [],
 });
 
-test("stop mid-run: the wire hears run:aborted (the one complete implementation)", async () => {
+test("stop mid-run: the wire hears run:aborted", async () => {
   const run = await runHarness({
     utterances: [
       { text: PLAN_JSON, kind: "text" },

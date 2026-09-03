@@ -23,7 +23,7 @@ import { shortPath } from './short-path.js';
  *  nothing to seed here on a plain config load. The included-by-default set
  *  is the registry-enabled abilities surfaced via `abilities:state`; per-ability intent is
  *  driven explicitly through `participation:toggled` (chip toggle) and
- *  `set_ability_config` (configuring → main.ts sets the bit + re-emits state).
+ *  `set_ability_config` (configuring → the harness sets the bit + re-emits state).
  *  Returns `prev` unchanged — kept as a function so config events have a
  *  single, named place to hook future participation policy. */
 function seedParticipation(
@@ -567,8 +567,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       // A toast, nothing more. One event, one meaning: abort semantics
       // belong to run:aborted alone — a run that DIES emits both, while a
       // benign failure (a bad config path, a failed search) toasts without
-      // touching any document. The old conflation let an inline error nuke
-      // a live or parked doc.
+      // touching any document.
       const toastId = state.session.nextToastId + 1;
       return {
         ...state,
@@ -989,7 +988,7 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       // report under an EAGER report grammar with no `<think>`/`</think>`.
       // Route it into contentBuffer (→ "Writing report") instead of opening a
       // think block, so a forced report isn't mislabeled as the agent
-      // "Thinking". Cleared on agent:return/recovered. See docs/upstream-issues.md.
+      // "Thinking". Cleared on agent:return/recovered.
       if (acting.recovering) {
         return replaceAgent(working, acting.id, (a) => ({
           ...a,
@@ -1028,15 +1027,16 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
 
       // Terminal `report` tool: this fires at the stop token, but the report
       // already streamed live as a "Writing report" row (the model's report
-      // body flowed into `contentBuffer` during the content phase — see the
-      // marker extractor in Work.tsx). Pushing a generic tool_call row here
-      // would render a misleading "Reading" timeline entry; instead just
-      // advance phase/counts and clear the streamed buffer. `agent:return`
-      // finalizes the report into a structured `report` item next.
-      // Detection: the agent was mid-report stream iff its `contentBuffer`
-      // (raw post-</think> tokens, not yet cleared) already holds the report
-      // open marker. Belt-and-suspenders on the terminal tool name, which in
-      // reasoning.run's own UI is always `report`.
+      // body flowed into `contentBuffer` during the content phase — see
+      // `extractStreamingReport` in state-core.ts). Pushing a generic
+      // tool_call row here would render a misleading "Reading" timeline
+      // entry; instead just advance phase/counts and clear the streamed
+      // buffer. `agent:return` finalizes the report into a structured
+      // `report` item next. Detection: the agent was mid-report stream iff
+      // its `contentBuffer` (raw post-</think> tokens, not yet cleared)
+      // already holds the report open marker. Belt-and-suspenders on the
+      // terminal tool name — this harness's terminal tool is always
+      // `report`.
       const acting = working.agents.get(ev.agentId);
       const wasReporting =
         ev.tool === 'report' ||

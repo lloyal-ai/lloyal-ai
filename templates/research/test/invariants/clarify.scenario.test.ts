@@ -3,8 +3,7 @@
  * feature that makes ambiguous queries work: every round is a REAL turn in
  * the trunk, so the next planner fork attends the whole dialogue.
  *
- * The law walked here (reasoning.run's Q1.5 split-half, curated into this
- * harness):
+ * The law walked here:
  *   round 1  — planner says clarify → commitTurn(query, questions): the
  *              atomic COLD-path commit that bootstraps the trunk (first-run
  *              clarify works because of this).
@@ -43,7 +42,6 @@ test("clarify round-trip: cold bootstrap → split-half answer → pair closed o
       // The answer fires the instant the plan event lands — the harshest
       // client timing. The park arms a hop later and the round-1 commit is
       // still in flight; the handler absorbs both (early-arm + settle-await).
-      // This exact trigger used to deadlock: the answer was silently dropped.
       { on: (ev) => ev.type === "plan" && (ev as { intent: string }).intent === "clarify",
         send: { type: "submit_clarification", answer: "Since 2024, EU only." } },
       { on: (ev) => ev.type === "ui:plan_review", send: { type: "accept_plan" } },

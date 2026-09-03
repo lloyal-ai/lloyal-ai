@@ -195,7 +195,7 @@ const S: Record<string, CSSProperties> = {
     padding: "5px 8px", margin: "0 4px 4px", outline: 0,
   },
   group: { display: "flex", flexDirection: "column", flex: "none" },
-  /** The one date per day, standing where fourteen row-dates used to sit. */
+  /** One date heads each day's group; rows carry no dates of their own. */
   day: { font: `600 10px ${font.ui}`, color: color.dim, margin: "6px 6px 3px" },
   entry: {
     display: "flex", alignItems: "center", gap: 6,

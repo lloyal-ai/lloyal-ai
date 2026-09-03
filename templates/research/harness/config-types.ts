@@ -1,12 +1,11 @@
 /**
  * The harness config *schema* — the node-free type block.
  *
- * Carved from reasoning.run's `src/tui-ink/config.ts` (the `Config` family +
- * `ConfigOrigin`). NO runtime code — a browser/renderer surface and the
- * `reduce` graph import these types, so the file stays erasable
- * (`import type` only). The base plumbing types (`ConfigOriginValue`,
- * `ConfigPatch`, `SaveResult`, `LoadedConfig`) come from `@lloyal-labs/rig`;
- * this file specializes them to THIS harness's shapes.
+ * NO runtime code — a browser/renderer surface and the `reduce` graph
+ * import these types, so the file stays erasable (`import type` only). The
+ * base plumbing types (`ConfigOriginValue`, `ConfigPatch`, `SaveResult`,
+ * `LoadedConfig`) come from `@lloyal-labs/rig`; this file specializes them
+ * to THIS harness's shapes.
  */
 import type {
   ConfigOriginValue,

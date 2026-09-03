@@ -11,15 +11,15 @@
  *   runResearchPlan(query, plan,..) — runs research → maybe-synth → finalize
  *                                    for an already-vetted plan. Used by the
  *                                    accept_plan path (after plan-review) and
- *                                    by the START path (synthetic 1-task plan
- *                                    bypassing the planner).
+ *                                    by the Ask path (synthetic single-task
+ *                                    plan bypassing the planner).
  *
  * Two structural gates encode invariants, not user-mode flags:
  *
  *   1. session.trunk gates the passthrough fast-path. Without a warm trunk
- *      there's nothing to fork from; the pipeline falls through to research
- *      transparently. This is what makes first-query START work without any
- *      special-case — START produces a research plan, falls into Stage 4.
+ *      there's nothing to fork from; a passthrough intent on a cold session
+ *      degrades to a single-task research plan, which answers transparently
+ *      either way.
  *
  *   2. plan.tasks.length > 1 gates synth. Synth aggregates findings across
  *      multiple agents into one argument. With a single agent there's
@@ -100,7 +100,7 @@ function parsePrompt(raw: string): { system: string; user: string } {
  * The 7 baked prompts, keyed by override name. A project overrides any one by
  * dropping `prompts/<name>.eta` into its tree (see {@link PromptsCtx} +
  * {@link resolvePrompt}); an absent override dir uses these RACE/DRB-tuned
- * defaults with ZERO disk I/O — trace-parity: an empty `prompts/` ≡ today.
+ * defaults with ZERO disk I/O.
  */
 const BAKED = {
   preflight: PREFLIGHT_RAW,
@@ -181,8 +181,8 @@ const citedReportTool = new ReportTool({
 });
 
 /**
- * Research policy for a run effort + reasoning mode. `high` reproduces the
- * historical budget exactly. Parallel recovery is a flat-mode + low-effort
+ * Research policy for a run effort + reasoning mode. `high` is the tuned
+ * baseline. Parallel recovery is a flat-mode + low-effort
  * concern (a small cohort folded fast); everything else staggers — and the
  * WindDown drain forces the fold regardless of this default.
  */
@@ -218,7 +218,7 @@ function createResearchPolicy(
 }
 
 /**
- * Structured-sources citation weave (DRB FACT fix). The `report()` terminal tool
+ * Structured-sources citation weave. The `report()` terminal tool
  * carries a grammar-forced `sources: [{title, url}]` field (see
  * {@link citedReportTool}); on a voluntary terminal return this override weaves
  * those sources into the result string — bare source URLs become `[title](url)`
@@ -291,7 +291,7 @@ class DirectAnswerPolicy extends SourceWeavingPolicy {
  * Recon turn budget. A pre-flight probe is shallow — ~2 searches per source
  * then a report. Enforced HARD via {@link ReconPolicy.shouldExit}: the base
  * policy only soft-nudges on turns ("report now"), which an over-eager recon
- * agent ignores, looping to the time hard limit (the recon nudge-loop trace).
+ * agent ignores, looping to the time hard limit.
  * Sized at 4 so a time-nudged agent gets one more turn to comply with the
  * report nudge voluntarily before being force-recovered.
  */
@@ -316,17 +316,15 @@ function createReconPolicy(recoverPrompt: Prompt): ReconPolicy {
   return new ReconPolicy({
     budget: {
       context: { softLimit: 2048, hardLimit: 1024 },
-      // Sized for the slowest probe path observed in traces: one corpus
-      // `search` reranks the full chunk index and takes ~30-40s, so 60s
-      // soft / 90s hard was too tight and time-nudged after the first
-      // search. 120s soft / 180s hard gives room for ~2 searches before
-      // nudges + the report turn.
+      // Sized for the slowest probe path: one corpus `search` reranks the
+      // full chunk index (~30-40s), so 120s soft / 180s hard gives room
+      // for ~2 searches before nudges + the report turn.
       time: { softLimit: 120_000, hardLimit: 180_000 },
     },
-    // Recovery extracts coverage from a force-killed probe. Default
-    // `minToolCalls: 2` skips recovery on agents that only got ONE search
-    // dispatched (the rest got nudged away) — which produced empty coverage
-    // for the slow corpus probe. One probe is enough signal for recon.
+    // Recovery extracts coverage from a force-killed probe. The default
+    // `minToolCalls: 2` would skip recovery on an agent that only got ONE
+    // search dispatched (the rest nudged away) — empty coverage for the
+    // slow corpus probe. One probe is enough signal for recon.
     recovery: { prompt: recoverPrompt, minToolCalls: 1 },
     terminalToolName: "report",
   });
@@ -356,7 +354,7 @@ export interface RunQueryOpts extends HarnessOpts {
    *  baseline in the `complete` event. */
   wallStartMs: number;
   /** Fires after the clarify gate but before passthrough/research starts.
-   *  Used by main.ts to start the run-dir for artifact writes. */
+   *  Used by the harness to start the run-dir for artifact writes. */
   onStart?: () => void;
   /** Per-query ability subset, by `manifest.name`. When set, the recon,
    *  planner, and research stages all operate on `registry.enabled()`
@@ -373,7 +371,7 @@ export interface RunResearchPlanOpts extends HarnessOpts {
    *  and the research pool needs the same subset). When omitted, the full
    *  enabled set is used. */
   abilityFilter?: readonly string[];
-  /** Q1.5: signals whether the caller already prefilled the user-side of the
+  /** Signals whether the caller already prefilled the user-side of the
    *  next trunk turn via `session.prefillUser` (true) or left it to
    *  `runResearchPlan` to commit the full pair (false, default). True after a
    *  clarify round in which `submit_clarification` exposed the user's answer
@@ -414,8 +412,7 @@ const REPORT_CITATION_NUDGE =
  * Per-spawn preamble for an agent assigned to an ability. `renderAgentPreamble`
  * prepends the boundary marker and renders the ability's `skill.eta`; we merge the
  * ability's own `source.promptData()` (corpus supplies `it.toc`; web supplies
- * nothing) into the render context, exactly as the old `renderWorkerPrompt`
- * spread `source.promptData()` into ctx. The structured-sources citation nudge is
+ * nothing) into the render context. The structured-sources citation nudge is
  * appended last so research agents fill report()'s sources field with real URLs.
  */
 function abilityPreamble(ability: Ability, ctx: AgentRenderCtx): string {
@@ -430,10 +427,10 @@ function abilityPreamble(ability: Ability, ctx: AgentRenderCtx): string {
  *
  * `renderSpine` stays prose-free by design (cross-ability injection defense:
  * the shared prefix is read by every agent in the pool). Appending ability
- * `promptData` is the HARNESS's trust call — reasoning.run ships
- * first-party abilities only. Rendered once and prefix-shared by every fork,
- * instead of duplicated into each spawn's suffix (six 4.8k-token
- * TOC-bearing suffixes overran a 32k context: trace-2026-06-11T06-21).
+ * `promptData` is the HARNESS's trust call — this harness ships first-party
+ * abilities only. Rendered once and prefix-shared by every fork, instead of
+ * duplicated into each spawn's suffix (six 4.8k-token TOC-bearing suffixes
+ * overran a 32k context when measured).
  */
 function renderSpineWithReferenceData(abilities: readonly Ability[]): string {
   const blocks: string[] = [];
@@ -479,11 +476,11 @@ const RESERVED_BRANCHES = 3;
  *
  *  `nSeqMax` is a HARD reservation, and three branches stand for the whole
  *  research phase before any agent forks (see `fanoutCapacity`). A plan wider
- *  than what is left used to lose its tail in silence: the spawn simply never
- *  happened, no event recorded it, and synthesis was still told the plan's task
- *  count — so a brief could rest on three investigations while claiming four.
- *  The surplus now queues here and forks the moment a sibling reports and
- *  `pruneOnReturn` frees its slot.
+ *  than what is left must not lose its tail in silence — an unforked spawn
+ *  records no event, and synthesis told the plan's task count would let a
+ *  brief rest on three investigations while claiming four. The surplus
+ *  queues here and forks the moment a sibling reports and `pruneOnReturn`
+ *  frees its slot.
  *
  *  Each agent gets exactly ONE `waitFor`, taken in its own spawned task right
  *  after the spawn. `ctx.waitFor` waits for a status TRANSITION and
@@ -669,11 +666,12 @@ function* effectiveAbilities(filter?: readonly string[]): Operation<readonly Abi
 }
 
 /**
- * Synthetic single-task research plan. Used by the START path to
- * bypass the planner — the user's literal query becomes the only
- * research task. Combined with the synth gate inside runResearchPlan
- * (skips synth when tasks.length === 1), this collapses START into
- * "research the literal query, return the agent's report."
+ * Synthetic single-task research plan. Used by the Ask path (and the
+ * cold-passthrough fallback) to bypass the planner — the user's literal
+ * query becomes the only research task. Combined with the synth gate
+ * inside runResearchPlan (skips synth when tasks.length === 1), this
+ * collapses an Ask into "research the literal query, return the agent's
+ * report."
  */
 export function singleTaskPlan(query: string): PlanResult {
   return {
@@ -727,9 +725,8 @@ function* runPassthrough(
  * Pre-flight recon. One probe agent PER enabled ability runs in parallel — the
  * same `agentPool` + `parallel` machinery the research pool uses — each
  * searching its OWN source for the query's entities and reporting which parts
- * that source covers. The joined coverage grounds the planner's per-task routing
- * routing (RFC: multi-ability composition — route by *trying* the abilities, not blind
- * `useWhen`).
+ * that source covers. The joined coverage grounds the planner's per-task
+ * routing — route by *trying* the abilities, not by blind `useWhen`.
  *
  * Runs only when ≥2 abilities are installed (nothing to route between otherwise).
  * Each agent is hard-capped at {@link RECON_MAX_TURNS} via {@link ReconPolicy}:
@@ -788,8 +785,8 @@ export function* runPreflight(
                 tools: ability.manifest.protocol.tools,
                 // Surface the source's content advert so the recon agent
                 // can recognize what each source actually contains BEFORE
-                // probing — fixes TICK-005 (a corpus probe misreading its
-                // chunks because it didn't know what the corpus IS).
+                // probing — a corpus probe that doesn't know what the
+                // corpus IS misreads its chunks.
                 contents: abilityToc(ability),
               },
             }),
@@ -837,7 +834,7 @@ export function* runPreflight(
  * unwinds that scope and rebuilds the cache), so `query` alone is a sufficient
  * key. This is what lets a clarify-answer or change_mode re-invoke
  * `runQuery(sameQuery)` without re-running the ~170 s recon probe — the second
- * call hits the memo. See TICK-004 (and TICK-014, subsumed).
+ * call hits the memo.
  */
 export interface CoverageCache {
   getOrCompute(
@@ -917,7 +914,7 @@ export function* runPlanner(
 
   const currentDate = today();
   const planPrompt = yield* resolvePrompt(opts.reasoningMode === "flat" ? "plan-flat" : "plan");
-  // Grounded planner routing (RFC: multi-ability composition). With ≥2 abilities the
+  // Grounded planner routing. With ≥2 abilities the
   // pre-flight recon agent has already probed each source and folded a coverage
   // summary into `opts.context`; passing `availableAbilities` re-adds the per-task
   // routing enum to the plan grammar so the planner assigns each task to the
@@ -931,9 +928,8 @@ export function* runPlanner(
     session,
     // Caps the tasks-array `maxItems` (grammar-enforced) and the `it.count`
     // rendered into the planner prompt. 6 is the upper bound that survives
-    // the 8-agent shared-spine overflow seen in
-    // trace-2026-06-01T07-46-17-924 (8 corpus-heavy tasks → all agents
-    // softcut/settle-reject, no recovery, empty synth).
+    // shared-spine pressure: 8 corpus-heavy tasks were observed to softcut
+    // every agent — no recovery, empty synth.
     maxTasks: EFFORT_PRESETS[opts.effort].maxTasks,
     availableAbilities: abilities.length >= 2 ? abilities : undefined,
   });
@@ -971,8 +967,8 @@ export function* runPlanner(
  *   - intent='research'     → return the plan; caller decides whether to
  *                             show plan-review or run it directly.
  *
- * For START (skip planner): main.ts builds a singleTaskPlan(query) and
- * calls runResearchPlan directly — never enters this function.
+ * For an Ask (skipPlanner): the harness builds a singleTaskPlan(query) and
+ * calls runResearchPlan directly — an Ask never enters this function.
  */
 export function* runQuery(
   query: string,
@@ -986,8 +982,8 @@ export function* runQuery(
   // to probe and the pool registers no read tools; the answer comes from the
   // model and whatever is already in context.
 
-  // Pre-flight recon (RFC: multi-ability composition). Probe each source for the
-  // query's entities BEFORE planning and fold the coverage summary into the
+  // Pre-flight recon: probe each source for the query's entities BEFORE
+  // planning and fold the coverage summary into the
   // planner context — that's what makes the planner's per-task routing
   // grounded rather than blind. `useCoverage` memoizes per `(query, abilityFilter)`
   // for the boot session, so a clarify-answer / change_mode re-invocation of
@@ -1008,8 +1004,7 @@ export function* runQuery(
 
   // The `query` echo is the HARNESS's, on every path (submit, clarify
   // round, change_mode, oneShot) — one producer, one `warm` derivation.
-  // This function used to re-emit it with warm=!!session.trunk, a second
-  // definition of the same field.
+  // A second emission here would be a second definition of the same field.
   yield* send({
     type: "plan:start",
     query,
@@ -1055,7 +1050,7 @@ export function* runQuery(
  * Used for both:
  *   - accept_plan path: planner-built plan, possibly edited via the
  *     plan-review dialog
- *   - START path: synthetic singleTaskPlan(query) bypassing the planner
+ *   - the Ask path: synthetic singleTaskPlan(query) bypassing the planner
  *
  * Synth gate (single conditional, encodes invariant): synth aggregates
  * findings across multiple agents into one argument. tasks.length === 1
@@ -1099,9 +1094,9 @@ export function* runResearchPlan(
   // boot) is the source of truth. Abilities are born already-bound to the reranker
   // (no source.bind step). The spine carries every ability's catalog metadata AND
   // every ability's tools (`researchTools` below), so each agent can read across
-  // ALL abilities — routing dissolves at execution time (RFC §3.2 M2 authGuard:
-  // read tools are open; only `protected` tools are grant-gated, and these
-  // abilities have none). `task.ability` is now a soft routing hint, not a tool lock:
+  // ALL abilities — routing dissolves at execution time: read tools are open,
+  // only `protected` tools are grant-gated, and these abilities have none.
+  // `task.ability` is a soft routing hint, not a tool lock:
   // it selects which ability's preamble (skill.eta) the agent gets and drives the
   // per-task UI chip; the model is free to pivot to another ability's read tools
   // mid-task. Ability-agnostic tasks fall back to the primary.
@@ -1188,7 +1183,7 @@ export function* runResearchPlan(
       // single-task runs have nothing to aggregate — the agent's
       // report IS the answer. The synth prompts also assume multi-agent
       // framing, so running them on a single source produces awkward
-      // output. Skipping saves ~120s of LLM time on START runs.
+      // output. Skipping saves ~120s of LLM time on single-task runs.
       if (tasks.length === 1) {
         return {
           answer: research.agents[0]?.result?.trim() ?? "",
@@ -1200,8 +1195,8 @@ export function* runResearchPlan(
 
       // All-empty gate: every agent was cut before producing findings
       // (capacity failure, mass tool outage). Synthesizing from nothing
-      // yields a confident hallucination sourced from model priors —
-      // 16k chars of it in trace-2026-06-11T06-21. Say so honestly instead.
+      // yields a confident hallucination sourced from model priors — 16k
+      // chars of it, when measured. Say so honestly instead.
       if (research.agents.every((a) => !a.result?.trim())) {
         return {
           answer:
@@ -1263,7 +1258,7 @@ export function* runResearchPlan(
       // dangling pair by appending the assistant side only.
       yield* call(() => session.prefillAssistant(answer));
     } else {
-      // No-clarify path (START or first-shot accept_plan): bootstrap or
+      // No-clarify path (an Ask, or a first-shot accept_plan): bootstrap or
       // append the full (query, answer) pair atomically.
       yield* call(() => session.commitTurn(query, answer));
     }

@@ -4,7 +4,8 @@ dist/
 .DS_Store
 
 # Internal design notes are not published from this repo, which is public.
-docs/
+# Anchored: templates/*/docs/ ships (the scaffold's design record).
+/docs/
 
 # Scaffold output produced by running a template in place. These live at the
 # repo root because it IS the package root — npm's `files` allowlist is what

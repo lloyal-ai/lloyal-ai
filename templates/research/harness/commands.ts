@@ -1,9 +1,9 @@
 /**
- * UI → main.ts command boundary.
+ * UI → harness command boundary.
  *
- * The Ink component tree dispatches commands through the `useCommand`
- * hook; main.ts drains them from an Effection Signal and runs the
- * corresponding Operation (runPlanner, runResearch, saveConfig, ...).
+ * A surface dispatches commands through its bridge; the harness drains
+ * them from an Effection Signal and runs the corresponding Operation
+ * (runPlanner, runResearch, saveConfig, ...).
  *
  * Keep the union small and explicit. No generic "send arbitrary event"
  * escape hatch — that's what makes the UI <-> harness boundary auditable.
@@ -18,15 +18,10 @@ export type Command =
       mode: 'flat' | 'deep';
       skipPlanner?: boolean;
       /** ROOT descriptors for images ALREADY admitted over the content plane —
-       *  never bytes.
-       *
-       *  This field used to be `images: string[]`, base64, because the wss
-       *  transport is JSON-only and a `Uint8Array` does not survive it
-       *  (`JSON.stringify` yields `{"0":…}`; a binary frame gets coerced with
-       *  `String(data)` — both corrupt silently). The answer was not a better
-       *  encoding: it was to stop putting bytes on this wire at all. The
-       *  bridge keeps every frame for replay, so an image here would sit in
-       *  the history forever, and the history is sized for tiny frames.
+       *  never bytes. Bytes cannot ride this wire: the wss transport is
+       *  JSON-only (a `Uint8Array` corrupts silently), and the bridge keeps
+       *  every frame for replay, sized on the assumption that frames are
+       *  tiny — an image here would sit in the history forever.
        *
        *  Untrusted — a descriptor here is a CLAIM about content, not proof of
        *  it. The handler narrows with `asAttachment` and resolves through the
@@ -73,7 +68,7 @@ export type Command =
   | { type: 'set_effort'; effort: 'low' | 'medium' | 'high' | 'ultra' }
   | { type: 'set_model_path'; path: string }
   | { type: 'set_reranker_path'; path: string }
-  // GPU backend variant (persisted as model.gpu; main.ts restarts the boot so
+  // GPU backend variant (persisted as model.gpu; the harness restarts the boot so
   // ctx + reranker reload on the new backend). Values mirror lloyal.node's
   // GpuVariant; 'default' = the platform binary's built-in backend.
   | { type: 'set_gpu'; gpu: 'default' | 'cuda' | 'vulkan' }
@@ -86,13 +81,13 @@ export type Command =
   | { type: 'set_image_max_tokens'; value: string }
   | { type: 'toggle_participation'; name: string }
   // Escape hatch: interrupt the in-flight run (planner / research / synth) and
-  // return to the composer. Handled in main.ts's command loop by halting the
+  // return to the composer. Handled in the harness's command loop by halting the
   // spawned run Task (Effection halt tears down the run scope + cancels any
   // parked tool fetch via cancellable-fetch's scope-signal) and sending
   // `run:aborted`. No-op when no run is active. Never kills the loop/process.
   | { type: 'stop' }
   // Graceful "Wrap up": drain the in-flight run to a fast best-effort answer
-  // instead of aborting it. Handled in main.ts by sending the WindDown signal
+  // instead of aborting it. Handled in the harness by sending the WindDown signal
   // (NOT halting) — the pool stops spawning, reaps active agents, lets in-flight
   // tools settle, and folds the cohort into a recovered answer + synth. No-op
   // when no run is active. Distinct from `stop` (abort → composer).

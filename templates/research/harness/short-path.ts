@@ -2,12 +2,12 @@
  * Collapse a home-prefixed absolute path to `~/...` for display.
  *
  * Browser-safe by design — NO `node:os`/`node:path`, so it can sit in the
- * `reduce` graph that `reasoning.run/state` re-exports (a renderer imports
- * that surface). Reads $HOME/$USERPROFILE from a guarded `process.env` where a
- * `process` global exists (Node), and returns the path unchanged in a browser
- * or for any path outside home. Its inverse — `resolvePath` (`~` expansion for
- * config
- * input, genuinely `node:`) — lives in `@lloyal-labs/rig/node` (`resolvePath`).
+ * `reduce` graph that `./state` re-exports (a renderer imports that
+ * surface). Reads $HOME/$USERPROFILE from a guarded `process.env` where a
+ * `process` global exists (Node), and returns the path unchanged in a
+ * browser or for any path outside home. Its inverse — `~` expansion for
+ * config input, genuinely `node:` — is `resolvePath` in
+ * `@lloyal-labs/rig/node`.
  */
 export function shortPath(p: string): string {
   if (!p) return p;

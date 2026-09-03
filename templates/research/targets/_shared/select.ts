@@ -148,10 +148,9 @@ export const selectLibraries = (app: AppState): Library[] =>
   app.session.abilities
     .map((a) => ({
       name: a.name,
-      // The ability's own name. The prose voice ("the web", "your corpus")
-      // belonged to a sentence that no longer exists — as a chip beside its
-      // siblings the bare name is what identifies it, and it stays true for
-      // an ability this harness has never heard of.
+      // The ability's own name — as a chip beside its siblings the bare
+      // name is what identifies it, and it stays true for an ability this
+      // harness has never heard of.
       title: a.name,
       detail:
         a.name === "corpus" && app.session.corpusStatus
@@ -382,9 +381,9 @@ export interface Answer {
 }
 
 /** The answer as it exists right now: the live synth stream, else the
- *  finalized text. Deliberately NOT scrollback — a stale synth body in the
- *  session scrollback outlives every reset, and reading it here is what let
- *  an old brief render under a new title. */
+ *  finalized text. Deliberately NOT scrollback — the session scrollback
+ *  outlives the document, and reading it here would let one brief's prose
+ *  render under another's title. */
 export const selectAnswer = (app: AppState): Answer | null => {
   const d = activeDoc(app);
   if (d.synth.open && d.synth.buffer) {

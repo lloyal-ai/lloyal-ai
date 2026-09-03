@@ -26,10 +26,9 @@ const selectClarifying = (app: AppState): boolean =>
 
 /** A HINT for the file picker, not a gate — drag-and-drop and paste bypass it,
  *  and the host's ingress is the only thing that decides what is admitted.
- *
- *  It used to enumerate four types, which was a fifth copy of a question the
- *  bytes answer, and wrong in both directions: it refused webp, heic and tiff,
- *  which the ingress converts and admits happily. */
+ *  Enumerating types here would be a second copy of a question the bytes
+ *  answer — and wrong in both directions (the ingress converts and admits
+ *  webp, heic and tiff happily). */
 const IMAGE_TYPES = "image/*";
 
 /** A picked image, before submit.
@@ -506,9 +505,8 @@ const S: Record<string, CSSProperties> = {
     display: "flex", alignItems: "flex-end", gap: 12,
   },
   stack: { display: "flex", flexDirection: "column", gap: 9, flex: 1, minWidth: 0 },
-  /** The question and the two controls that act on it. The row carries its own
-   *  height so the field has room to breathe — the card used to be one tight
-   *  line of everything. */
+  /** The question and the two controls that act on it. The row carries its
+   *  own height so the field has room to breathe. */
   entryRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 38 },
   /** What the brief draws on, then how it is worked — sources left, shape of
    *  the work right, reading in the order the decisions are actually made. */

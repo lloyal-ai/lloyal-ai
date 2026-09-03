@@ -1,7 +1,7 @@
 /**
  * Per-query artifact sink.
  *
- * Subscribes to the WorkflowEvent stream forwarded by main.ts's drain
+ * Subscribes to the WorkflowEvent stream forwarded by the harness's drain
  * and writes:
  *   <output-dir>/<ISO-timestamp>/
  *     report.md          — synth/passthrough answer with metadata + annexure index
@@ -15,8 +15,8 @@
  * logic anywhere. `new_run` clears the anchor; so does deleting the report.
  *
  * Trace.jsonl is NOT this sink's concern. Trace is session-scoped: opened
- * once at boot in main.ts, captures every query (including warm follow-
- * ups), closed at process exit.
+ * once at boot, captures every query (including warm follow-ups), closed
+ * at process exit.
  */
 
 import * as fs from 'node:fs';
