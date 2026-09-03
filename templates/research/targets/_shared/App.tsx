@@ -12,10 +12,10 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl, RunFraming } from "@lloyal-labs/dev-tools";
-import { send, useBrief } from "./store.js";
+import { appStore, send, useBrief } from "./store.js";
 import {
-  selectActiveDocId, selectAskInFlight, selectBankedActive, selectLive,
-  selectMoment, selectRunDepth, selectRunShape, selectShape, selectTaskCount,
+  depthOf, selectActiveDocId, selectAskInFlight, selectLive,
+  selectMoment, selectRunDocId, selectShape, shapeOf,
   type Shape,
 } from "./select.js";
 import { recordPace } from "./pace.js";
@@ -130,21 +130,23 @@ export function HarnessApp(): ReactElement {
   }, []);
 
   // Each settled brief teaches the pickers this machine's pace — recorded
-  // once, on the edge into settle. Warm follow-ups (one synthetic task,
-  // no research) would poison the figure, so single-task runs don't count.
-  // The same edge refreshes the library: a settle means a new report.
-  const depth = useBrief(selectRunDepth);
-  const runShape = useBrief(selectRunShape);
-  const tasks = useBrief(selectTaskCount);
-  const banked = useBrief(selectBankedActive);
-  const prevMoment = useRef(moment);
+  // once, when THE RUN ends, from the document it ran in: a run that settles
+  // while the canvas is viewing another brief still counts. Warm follow-ups
+  // (one synthetic task, no research) would poison the figure, so
+  // single-task runs don't count; an abort teaches nothing. (The library
+  // refresh is not the view's to infer: the harness announces it on settle.)
+  const runDocId = useBrief(selectRunDocId);
+  const lastRun = useRef(runDocId);
   useEffect(() => {
-    if (moment === "settle" && prevMoment.current !== "settle") {
-      if (tasks !== null && tasks >= 2) recordPace(depth, runShape, tasks, banked);
-      send({ type: "library_list" });
-    }
-    prevMoment.current = moment;
-  }, [moment, depth, runShape, tasks, banked]);
+    const ended = lastRun.current;
+    lastRun.current = runDocId;
+    if (ended === null || runDocId !== null) return;
+    const { app } = appStore().getState();
+    const doc = app.documents.get(ended);
+    if (!doc || doc.phase !== "done") return;
+    const tasks = doc.plan?.tasks.length ?? 0;
+    if (tasks >= 2) recordPace(depthOf(app, doc), shapeOf(doc), tasks, doc.pipelineElapsedMs ?? 0);
+  }, [runDocId]);
 
   return (
     <DevPane

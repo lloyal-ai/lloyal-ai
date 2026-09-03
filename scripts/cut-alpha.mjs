@@ -12,53 +12,42 @@
  * project that cannot install. The pinned template inside the published
  * tarball is the durable record of the set.
  *
+ * The pure core lives in cut-alpha.lib.mjs and is tested in test/cut-alpha.test.ts.
+ *
  * Run locally: node scripts/cut-alpha.mjs --cut 0 [--dry-run]
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { parseCut, planAlphas, rewritePins } from './cut-alpha.lib.mjs';
 
 const cutIdx = process.argv.indexOf('--cut');
-if (cutIdx === -1) throw new Error('required: --cut <N>');
-const CUT = Number(process.argv[cutIdx + 1]);
+const CUT = parseCut(cutIdx === -1 ? undefined : process.argv[cutIdx + 1]);
 const DRY = process.argv.includes('--dry-run');
 
 /** [bump level, fallback base for a package npm has never seen]. A brand-new
  *  package (media, this arc) needs ONE manual first `npm publish` — CI cannot
- *  create a name (interactive 2FA). */
+ *  create a name (interactive 2FA). sdk and agents are MAJORs this arc. */
 const DEPS = {
   '@lloyal-labs/lloyal.node': ['minor', '3.1.1'],
   '@lloyal-labs/media': ['minor', '0.1.0'],
-  '@lloyal-labs/sdk': ['minor', '3.1.0'],
+  '@lloyal-labs/sdk': ['major', '3.1.0'],
   '@lloyal-labs/lloyal-agents': ['major', '5.5.1'],
   '@lloyal-labs/rig': ['minor', '5.5.0'],
   '@lloyal-labs/dev-tools': ['minor', '0.4.3'],
+  'lloyal-ai': ['minor', '1.10.0'],
 };
 
-const bump = (v, level) => {
-  const [maj, min] = v.split('.').map(Number);
-  return level === 'major' ? `${maj + 1}.0.0` : `${maj}.${min + 1}.0`;
-};
-/** A prerelease `latest` (a manual first alpha publish stamps latest — npm
- *  behavior) is not a base to bump FROM: the stable it prefigures hasn't
- *  shipped, so its release triple IS the pending base. A stable latest
- *  bumps by the arc's level. */
-const nextBase = (reg, level) => (reg.includes('-') ? reg.split('-')[0] : bump(reg, level));
-const latest = (name, fallback) => {
-  try {
-    return execSync(`npm view ${name}@latest version`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch {
-    console.log(`  (${name} not on the registry yet — base ${fallback})`);
-    return fallback;
-  }
-};
+const view = (name) =>
+  execSync(`npm view ${name}@latest version`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
 
-const alphas = Object.fromEntries(
-  Object.entries(DEPS).map(([n, [level, fb]]) => [n, `${nextBase(latest(n, fb), level)}-alpha.${CUT}`]),
-);
-const own = `${nextBase(latest('lloyal-ai', '1.10.0'), 'minor')}-alpha.${CUT}`;
+const alphas = planAlphas({
+  cut: CUT,
+  packages: Object.entries(DEPS).map(([name, [level, fallback]]) => ({ name, level, fallback })),
+  view,
+});
+const own = alphas['lloyal-ai'];
 
 console.log(`cut ${CUT}${DRY ? ' (dry run)' : ''}:`);
-console.log(`  lloyal-ai -> ${own}`);
 for (const [n, v] of Object.entries(alphas)) console.log(`  ${n} -> ${v}`);
 
 const rewrite = (path, fn) => {
@@ -75,14 +64,8 @@ for (const tpl of ['templates/research', 'templates/basic']) {
   const path = `${tpl}/package.json`;
   if (!existsSync(path)) continue;
   rewrite(path, (pkg) => {
-    let changed = false;
-    for (const dep of Object.keys(pkg.dependencies ?? {})) {
-      if (alphas[dep] && pkg.dependencies[dep] !== alphas[dep]) {
-        console.log(`  ${path}: ${dep} ${pkg.dependencies[dep]} -> ${alphas[dep]} (exact)`);
-        pkg.dependencies[dep] = alphas[dep];
-        changed = true;
-      }
-    }
+    const changed = rewritePins(pkg, alphas);
+    if (changed) console.log(`  ${path}: pins exact`);
     return changed;
   });
 }

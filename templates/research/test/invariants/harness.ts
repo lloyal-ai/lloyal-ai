@@ -141,6 +141,7 @@ const DEFAULT_ORIGIN: ConfigOrigin = {
   nCtx: "default",
   gpu: "default",
   outputDir: "default",
+  mmproj: "default",
 };
 
 function baseConfig(outputDir: string, over?: Partial<Config>): Config {

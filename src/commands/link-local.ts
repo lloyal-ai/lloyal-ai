@@ -9,9 +9,10 @@
  * tries to resolve them (an unpublished alpha pin would fail), restores the
  * original bytes, then symlinks each platform package straight into
  * `node_modules` — its dependencies resolve up its REAL path into the
- * workspace's own install. `unlink-local` deletes `node_modules` and the
- * lockfile; nothing tracked was ever touched, so the tree is pristine by
- * construction.
+ * workspace's own install. The install runs with `--package-lock=false`, so a
+ * project that commits its lockfile gets it back untouched too. `unlink-local`
+ * deletes `node_modules`; nothing tracked was ever touched, so the tree is
+ * pristine by construction.
  *
  * This is what lets `templates/<t>` itself be developed in place: edits land
  * directly on the shipped surface, and nothing the link does can leak into it.
@@ -57,8 +58,8 @@ const LINK_USAGE = [
   '',
   'Symlinks every @lloyal-labs package this project uses into node_modules,',
   'pointing at the workspace, and installs everything else normally.',
-  'package.json is byte-identical before and after — nothing the link does',
-  'can leak into a committed template or scaffold.',
+  'package.json and package-lock.json are byte-identical before and after —',
+  'nothing the link does can leak into a committed template or scaffold.',
   '',
   'Works in a scaffolded project or directly inside templates/<name>.',
   'Undo with `lloyal unlink-local`.',
@@ -70,9 +71,9 @@ const UNLINK_USAGE = [
   'Usage:',
   '  lloyal unlink-local',
   '',
-  'Deletes node_modules and package-lock.json. Nothing tracked was touched',
-  'by link-local, so this restores the pristine tree; the next `npm install`',
-  'resolves the published pins again.',
+  'Deletes node_modules. Nothing tracked was touched by link-local, so this',
+  'restores the pristine tree; the next `npm install` resolves the published',
+  'pins again.',
 ].join('\n');
 
 interface PkgManifest {
@@ -157,7 +158,9 @@ export const linkLocalCommand: Command = {
     let installCode: number;
     try {
       writeFileSync(pkgPath, `${JSON.stringify(trimmed, null, 2)}\n`);
-      installCode = await npmExit(['install', '--no-audit', '--no-fund'], projectDir);
+      // `--package-lock=false`: npm rewrites a lockfile on every install, and
+      // the lockfile is a tracked file in any project that commits one.
+      installCode = await npmExit(['install', '--no-audit', '--no-fund', '--package-lock=false'], projectDir);
     } finally {
       writeFileSync(pkgPath, originalBytes);
     }
@@ -196,8 +199,7 @@ export const unlinkLocalCommand: Command = {
       return 1;
     }
     rmSync(join(projectDir, 'node_modules'), { recursive: true, force: true });
-    rmSync(join(projectDir, 'package-lock.json'), { force: true });
-    process.stdout.write('unlinked — node_modules and package-lock.json removed; `npm install` resolves the published pins again.\n');
+    process.stdout.write('unlinked — node_modules removed; `npm install` resolves the published pins again.\n');
     return 0;
   },
 };

@@ -99,11 +99,25 @@ export function readThread(
 } {
   const root = readReport(reportPath);
   const dir = path.dirname(reportPath);
+  // Each exchange passes the same test the report did: its REAL location is a
+  // regular file directly inside the real run dir. A symlink named like an
+  // exchange must not pull a file from elsewhere onto the wire.
+  const realDir = fs.realpathSync(dir);
+  const confined = (name: string): string | null => {
+    try {
+      const real = fs.realpathSync(path.join(dir, name));
+      return path.dirname(real) === realDir && fs.statSync(real).isFile() ? real : null;
+    } catch {
+      return null;
+    }
+  };
   const exchanges = fs.readdirSync(dir)
     .map((name) => /^exchange-(\d+)\.md$/.exec(name))
     .filter((m): m is RegExpExecArray => m !== null)
     .sort((a, b) => Number(a[1]) - Number(b[1]))
-    .map((m) => readReport(path.join(dir, m[0])));
+    .map((m) => confined(m[0]))
+    .filter((p): p is string => p !== null)
+    .map((p) => readReport(p));
   return {
     path: reportPath,
     title: root.title,

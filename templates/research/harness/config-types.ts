@@ -136,6 +136,7 @@ export type ConfigOrigin = {
   nCtx: ConfigOriginValue;
   gpu: ConfigOriginValue;
   outputDir: ConfigOriginValue;
+  mmproj: ConfigOriginValue;
 };
 
 /** This harness's config write — rig's one-level-deep patch over `Config`:

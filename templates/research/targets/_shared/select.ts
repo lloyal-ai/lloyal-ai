@@ -219,8 +219,9 @@ export const selectDepth = (app: AppState): Depth =>
 /** The RUNNING run's depth. The config default can be retoggled mid-run
  *  (that is what the depth chips edit); time math keys off the effort the
  *  run was actually submitted at. */
-export const selectRunDepth = (app: AppState): Depth =>
-  (activeDoc(app).runEffort ?? app.session.config?.defaults.effort ?? "high") as Depth;
+export const depthOf = (app: AppState, d: DocState): Depth =>
+  (d.runEffort ?? app.session.config?.defaults.effort ?? "high") as Depth;
+export const selectRunDepth = (app: AppState): Depth => depthOf(app, runDoc(app) ?? activeDoc(app));
 
 /** The honest task count for time math. During research, the fork count is
  *  authoritative; while a plan is being framed or reviewed, its task list;
@@ -269,8 +270,12 @@ export const selectShape = (app: AppState): Shape =>
 /** The shape of the run in flight (the submitted mode), not the config
  *  default — the pace record and the eta both speak about THIS run. A direct
  *  run rides `flat`, so the mode alone would call an ask a Survey. */
-export const selectRunShape = (app: AppState): Shape =>
-  activeDoc(app).direct ? "ask" : activeDoc(app).mode === "deep" ? "investigate" : "survey";
+export const shapeOf = (d: DocState): Shape =>
+  d.direct ? "ask" : d.mode === "deep" ? "investigate" : "survey";
+export const selectRunShape = (app: AppState): Shape => shapeOf(runDoc(app) ?? activeDoc(app));
+
+/** The document the live run writes into; null when no run. */
+export const selectRunDocId = (app: AppState): AppState["runDocId"] => app.runDocId;
 
 // ── boot, rendered in the shell's voice ──────────────────────────
 

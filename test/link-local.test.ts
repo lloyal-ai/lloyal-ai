@@ -127,7 +127,28 @@ describe('link-local', () => {
     expect(existsSync(join(dir, 'node_modules', '@lloyal-labs'))).toBe(false);
   });
 
-  it('unlink-local removes node_modules + lockfile — pristine by construction', async () => {
+  it('installs without touching the lockfile — zero tracked-file mutation includes package-lock.json', async () => {
+    const ws = fakeWorkspace();
+    const { dir } = fakeProject();
+    const lock = '{"lockfileVersion":3,"name":"proj"}\n';
+    writeFileSync(join(dir, 'package-lock.json'), lock);
+    process.chdir(dir);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    expect(await linkLocalCommand.run([ws])).toBe(0);
+    // npm rewrites a lockfile on every install unless told not to; a project
+    // that commits its lockfile must get it back byte-identical.
+    expect(npmMock.calls[0]).toContain('--package-lock=false');
+    expect(readFileSync(join(dir, 'package-lock.json'), 'utf8')).toBe(lock);
+
+    // Undo leaves it in place as well: only node_modules was ever ours.
+    expect(await unlinkLocalCommand.run([])).toBe(0);
+    expect(existsSync(join(dir, 'node_modules'))).toBe(false);
+    expect(readFileSync(join(dir, 'package-lock.json'), 'utf8')).toBe(lock);
+  });
+
+  it('unlink-local removes node_modules and nothing else — pristine by construction', async () => {
     const { dir } = fakeProject();
     process.chdir(dir);
     mkdirSync(join(dir, 'node_modules', '@lloyal-labs'), { recursive: true });
@@ -136,6 +157,7 @@ describe('link-local', () => {
 
     expect(await unlinkLocalCommand.run([])).toBe(0);
     expect(existsSync(join(dir, 'node_modules'))).toBe(false);
-    expect(existsSync(join(dir, 'package-lock.json'))).toBe(false);
+    // The lockfile is the project's, not the link's.
+    expect(existsSync(join(dir, 'package-lock.json'))).toBe(true);
   });
 });

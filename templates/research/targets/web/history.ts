@@ -11,7 +11,14 @@ const DOC_ROUTE = /^\/brief\/([^/]+)$/;
 
 export const docIdFromPath = (path: string): DocId | null => {
   const m = DOC_ROUTE.exec(path);
-  return m ? decodeURIComponent(m[1]) : null;
+  if (!m) return null;
+  // A malformed percent escape is an unknown route, not a crash: this runs at
+  // startup and on every popstate, from whatever URL the browser holds.
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
 };
 
 export const pathFor = (docId: DocId | null): string =>

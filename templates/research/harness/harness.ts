@@ -323,6 +323,20 @@ export function* harness(
     for (const ev of yield* each(agentEvents)) {
       runDirSink.handle(ev as WorkflowEvent);
       events.send(ev as WorkflowEvent);
+      if (ev.type === "complete") {
+        // The run announced its own end: from here nothing is in flight to
+        // abandon, even while the task's tail is still unwinding its last
+        // send. A submit arriving now starts a NEW run — it does not abort
+        // this one, and `run:aborted` must not be announced for it.
+        run.task = null;
+        run.docId = null;
+        run.paused = false;
+        run.woundDown = false;
+        // A settle is a library change. The harness that just wrote the
+        // report says so — whichever document the canvas is viewing — so no
+        // client has to infer it from its own view. Chrome, not record.
+        events.send({ type: "library:list", entries: listReports(libraryDir()) });
+      }
       yield* each.next();
     }
   });

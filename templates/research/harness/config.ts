@@ -84,6 +84,8 @@ export interface ModelEntry {
    *  runs out of GPU memory before any image arrives. */
   imageMinTokens?: number;
   imageMaxTokens?: number;
+  /** Vision projector override — a catalog id; see `ConfigModel.mmproj`. */
+  mmproj?: string;
   /** GPU backend variant. A configured value is a deliberate deploy choice —
    *  the boot fails loud if the variant is unavailable, never silently CPU. */
   gpu?: ConfigGpu;
@@ -261,6 +263,7 @@ export function loadConfig(
       kvCache: local?.model?.kvCache ?? llm.kvCache,
       imageMinTokens: local?.model?.imageMinTokens ?? llm.imageMinTokens,
       imageMaxTokens: local?.model?.imageMaxTokens ?? llm.imageMaxTokens,
+      mmproj: local?.model?.mmproj ?? llm.mmproj,
       backendPack: local?.model?.backendPack === false ? false : undefined,
     },
   };
@@ -274,6 +277,7 @@ export function loadConfig(
     nCtx: rung(cli.nCtx, envNCtx, localNCtx, llm.context),
     gpu: rung(cli.gpu, envGpu, localGpu, llm.gpu),
     outputDir: rung(cliOutputDir, undefined, localOutputDir, ymlOutputDir),
+    mmproj: rung(undefined, undefined, str(local?.model?.mmproj), str(llm.mmproj)),
   };
 
   return { config, origin, path: resolvedPath, loadedFromFile: !!local };
