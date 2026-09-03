@@ -21,7 +21,7 @@ const PRIOR: Record<Shape, { perTaskMs: number; synthMs: number }> = {
   investigate: { perTaskMs: 240_000, synthMs: 240_000 },
   survey: { perTaskMs: 120_000, synthMs: 360_000 },
   // One agent answering straight, and no settling pass at all: synth is gated
-  // on more than one task, which an ask never has.
+  // on plan.tasks.length > 1, which an ask never satisfies.
   ask: { perTaskMs: 90_000, synthMs: 0 },
 };
 

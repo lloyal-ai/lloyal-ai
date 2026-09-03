@@ -53,7 +53,6 @@ import type {
   Orchestrator, SpawnSpec,
 } from "@lloyal-labs/lloyal-agents";
 import type { StepEvent } from "./protocol.js";
-import type { Descriptor } from "@lloyal-labs/media";
 import type { OpTiming } from "./state.js";
 import { RunnerCtx } from "./runner-ctx.js";
 import {
@@ -365,10 +364,6 @@ export interface RunQueryOpts extends HarnessOpts {
    *  (preserves prior behavior). The Composer derives this from
    *  `state.participation` at submit time. */
   abilityFilter?: readonly string[];
-  /** Root descriptors for images already prefilled onto the TRUNK this turn.
-   *  Threaded only so the `query` event can carry them: that event resets the
-   *  fold, and a re-plan re-emits it while the images are still in KV. */
-  attachments?: readonly Descriptor[];
 }
 
 export interface RunResearchPlanOpts extends HarnessOpts {
@@ -470,24 +465,32 @@ export function abilityToc(ability: Ability): string | null {
   return typeof toc === "string" ? toc : null;
 }
 
-/** Flat-mode fan-out: every task forks from the spine at once, each agent
- *  carrying its ability's preamble and its siblings' descriptions. */
-/** Branches that stand for the whole research phase before any agent forks: the
- *  session trunk, this harness's query spine, and the one `agentPool` opens
- *  inside it. `nSeqMax` is a hard reservation; the fan-out gets what is left. */
+/** Branches that stand for the whole research phase before any agent forks:
+ *  the session trunk, this harness's query spine, and the one `agentPool`
+ *  opens inside it (it composes `withSpine` internally, and in non-shared mode
+ *  hands the pool the caller's parent instead — so its own spine is a live
+ *  branch nothing forks from). `nSeqMax` is a hard reservation; the fan-out
+ *  gets whatever is left. */
 const RESERVED_BRANCHES = 3;
 
-/** Flat-mode fan-out, bounded by the branch budget. Every task forks from the
- *  spine carrying its ability's preamble and its siblings' descriptions, but
- *  only `capacity` of them can hold a branch at once — a wider plan queues and
- *  forks as siblings report and `pruneOnReturn` frees their slots. Unbounded,
- *  the surplus was simply never spawned and nothing said so.
+/** Flat-mode fan-out, bounded by the branch budget: every task forks from the
+ *  spine, each agent carrying its ability's preamble and its siblings'
+ *  descriptions — but only `capacity` of them can hold a branch at once.
  *
- *  Each agent gets exactly ONE `waitFor`, taken in its own spawned task.
- *  `ctx.waitFor` waits for a status TRANSITION and short-circuits only on
- *  'disposed', so a waiter halted and re-taken — what racing the running set
- *  would do — can miss a terminal 'idle' and hang. The completion channel keeps
- *  every waiter alive for the life of its agent. */
+ *  `nSeqMax` is a HARD reservation, and three branches stand for the whole
+ *  research phase before any agent forks (see `fanoutCapacity`). A plan wider
+ *  than what is left used to lose its tail in silence: the spawn simply never
+ *  happened, no event recorded it, and synthesis was still told the plan's task
+ *  count — so a brief could rest on three investigations while claiming four.
+ *  The surplus now queues here and forks the moment a sibling reports and
+ *  `pruneOnReturn` frees its slot.
+ *
+ *  Each agent gets exactly ONE `waitFor`, taken in its own spawned task right
+ *  after the spawn. `ctx.waitFor` waits for a status TRANSITION and
+ *  short-circuits only on 'disposed', so a waiter that is halted and re-taken —
+ *  what racing the running set would do — can miss a terminal 'idle' and hang
+ *  forever. The completion channel keeps every waiter alive for the life of its
+ *  agent, which is what makes refill-on-completion safe. */
 function boundedParallelResearch(args: {
   tasks: ResearchTask[];
   abilityForTask: (task: ResearchTask) => Ability | undefined;
@@ -523,8 +526,8 @@ function boundedParallelResearch(args: {
 
   return function* (ctx) {
     const settled = createChannel<void, void>();
-    // Subscribe before the first spawn — a completion landing before the
-    // subscription exists would never be counted and the loop would stall.
+    // Subscribe before the first spawn — a completion that lands before the
+    // subscription exists would never be counted, and the loop would stall.
     const completions = yield* settled;
     let running = 0;
     let next = 0;
@@ -594,8 +597,8 @@ function chainedResearch(args: {
           taskCount: args.tasks.length,
           description: task.description,
         });
-        // Names the source this stage drew on. With no ability there is none
-        // to name, so the row simply carries no source.
+        // Names which source this stage drew on. With no ability there is no
+        // source to name, so the row simply carries none.
         if (ability) {
           yield* args.send({
             type: "spine:source",
@@ -896,8 +899,9 @@ export function* useCoverage(
 }
 
 /**
- * Run the planner LLM. Emits a `query` event and a `plan` event.
- * Returns the raw PlanResult so callers can route based on intent.
+ * Run the planner LLM. Emits a `plan` event; the `query` boundary is
+ * emitted by `runQuery` before `plan:start`, keeping the planner path on
+ * the same query-first wire order as the ask path.
  */
 export function* runPlanner(
   query: string,
@@ -907,17 +911,9 @@ export function* runPlanner(
     effort: Effort;
     context?: string;
     abilityFilter?: readonly string[];
-    attachments?: readonly Descriptor[];
   },
 ): Operation<PlanResult> {
   const send = yield* useStepSender();
-
-  yield* send({
-    type: "query",
-    query,
-    warm: !!session.trunk,
-    ...(opts.attachments?.length ? { attachments: [...opts.attachments] } : {}),
-  });
 
   const currentDate = today();
   const planPrompt = yield* resolvePrompt(opts.reasoningMode === "flat" ? "plan-flat" : "plan");
@@ -1010,6 +1006,10 @@ export function* runQuery(
       .join("\n\n");
   }
 
+  // The `query` echo is the HARNESS's, on every path (submit, clarify
+  // round, change_mode, oneShot) — one producer, one `warm` derivation.
+  // This function used to re-emit it with warm=!!session.trunk, a second
+  // definition of the same field.
   yield* send({
     type: "plan:start",
     query,
@@ -1021,7 +1021,6 @@ export function* runQuery(
     effort: opts.effort,
     context: plannerContext,
     abilityFilter: opts.abilityFilter,
-    attachments: opts.attachments,
   });
 
   if (plan.intent === "clarify") {
@@ -1080,8 +1079,9 @@ export function* runResearchPlan(
   const tasks = plan.tasks;
   const currentDate = today();
 
-  // With no `branches` pinned the runtime picks its own nSeqMax and this
-  // harness has no honest budget to divide — let every task fork, as before.
+  // With no `branches` pinned, the runtime picks its own nSeqMax and this
+  // harness has no honest budget to divide — don't invent one; let every task
+  // fork, as it always did.
   const branchBudget = runner.config().model.branches;
   const fanoutCapacity =
     branchBudget === undefined
@@ -1109,9 +1109,10 @@ export function* runResearchPlan(
   const primaryAbility = abilities[0];
   const byProtocol = new Map(abilities.map((a) => [a.manifest.protocol.name, a]));
   // A DIRECT answer is not scoped to one ability: the pool registers every
-  // enabled ability's tools below, and a preamble would narrow the one agent to
-  // a single protocol. It gets none instead — the union of what is enabled, and
-  // no persona. With nothing enabled that degenerates honestly.
+  // enabled ability's tools below, and an ability preamble would narrow the one
+  // agent to a single protocol. It gets no preamble instead — the union of what
+  // is enabled, and no persona. With nothing enabled that degenerates honestly
+  // to a model answering from what it already has.
   const abilityForTask = (task: ResearchTask): Ability | undefined =>
     opts.isAsk
       ? undefined

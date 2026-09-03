@@ -15,7 +15,7 @@
  * with no API key. Drop your own `.gguf` into `models/llm/` (or point a `path:`
  * at one) to skip the fetch entirely.
  *
- * SNAPSHOT: reasoning.run @ main
+ * LINEAGE: evolved from reasoning.run
  */
 import { join } from "node:path";
 import { main, call, ensure } from "effection";
@@ -171,7 +171,9 @@ main(function* () {
   // is a replay requirement, not telemetry.
   // A resource: the descriptor closes when this scope exits, so there is no
   // `close()` for a caller to remember.
-  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev);
+  // The UI bus exists before the trace writer so the writer can mirror onto it.
+  const events = createBus<WorkflowEvent>();
+  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev, (ev) => events.send(ev));
   const media = createProjectMediaStore(projectRoot);
   // Saves write harness.json, then re-layer for honest values + provenance
   // (a cleared key falls back to the rung beneath; env still outranks).
@@ -191,7 +193,6 @@ main(function* () {
     }),
   );
 
-  const events = createBus<WorkflowEvent>();
   // Buffered: the bindings dispatch from the moment they mount, but the
   // harness's command loop only arms after boot — a desktop renderer's (or a
   // pipe's) early command must wait, not vanish.

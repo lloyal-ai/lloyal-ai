@@ -2,7 +2,7 @@
  *  verb, the honest park countdown, and — while live — the stop square that
  *  culls it. The row opens on click to disclose the whole stream, so slow
  *  hardware still shows its work. Settled rows fade; nothing floats. */
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, inquiryColor, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import { selectDev, selectWorkFor, type Inquiry, type WorkStep } from "../select.js";
@@ -65,7 +65,8 @@ export function InquiryRow({ inquiry, closing, label }: {
  *  arrive, each call and result, the raw tokens of the move being written.
  *  Follows the tail. */
 export function Work({ id }: { id: number }): ReactElement {
-  const steps = useBrief(selectWorkFor(id));
+  const selectWork = useMemo(() => selectWorkFor(id), [id]);
+  const steps = useBrief(selectWork);
   const pane = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = pane.current;

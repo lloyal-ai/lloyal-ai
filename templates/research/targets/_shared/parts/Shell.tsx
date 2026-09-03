@@ -1,11 +1,12 @@
 /** The application shell: sidebar (wordmark · library · trust), run bar,
  *  canvas, and the docked composer. Moments render inside the canvas. */
-import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
 import { send, useBrief, useConnection } from "../store.js";
 import {
-  etaOf, selectControls, selectDepth, selectElapsed, selectLive,
-  selectNotice, selectRunShape, selectSeen, selectStatus, selectTaskCount, selectTitle,
+  etaOf, selectBanked, selectControls, selectEtaTasks, selectLive, selectMoment,
+  selectNotice, selectResumedAt, selectReviewing, selectRunDepth, selectRunShape,
+  selectSeen, selectStatus, selectTitle,
 } from "../select.js";
 import { paceFor } from "../pace.js";
 import { Lightbox } from "./Figures.js";
@@ -121,22 +122,34 @@ function Seen(): ReactElement | null {
 
 function RunBar(): ReactElement {
   const live = useBrief(selectLive);
+  const reviewing = useBrief(selectReviewing);
   const status = useBrief(selectStatus);
   const title = useBrief(selectTitle);
   const { paused, closing } = useBrief(selectControls);
-  const depth = useBrief(selectDepth);
+  const depth = useBrief(selectRunDepth);
   const shape = useBrief(selectRunShape);
-  const tasks = useBrief(selectTaskCount);
-  const elapsed = useBrief(selectElapsed);
+  const tasks = useBrief(selectEtaTasks);
+  const banked = useBrief(selectBanked);
+  const resumedAt = useBrief(selectResumedAt);
+  // The bar owns its own second hand (the Clock pattern): the fold only
+  // re-renders on events, and an estimate that moves only when something
+  // happens reads as frozen.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  const elapsed = banked + (resumedAt !== null ? now - resumedAt : 0);
   const eta = live ? etaOf(paceFor(depth, shape), tasks, elapsed) : null;
   const word = live && closing ? "Closing" : live && paused ? "Held" : status;
   return (
     <div style={S.runbar}>
       <span style={S.status}>
-        {live && (
+        {(live || reviewing) && (
           <span
-            className={paused ? undefined : "fn-lamp"}
-            style={{ ...S.lamp, background: paused ? color.wait : color.ember }}
+            className={paused || reviewing ? undefined : "fn-lamp"}
+            style={{ ...S.lamp, background: paused || reviewing ? color.wait : color.ember }}
           />
         )}
         {word}
@@ -185,6 +198,15 @@ export function Shell({ children, dock, library }: {
       writeCollapsed(!c);
       return !c;
     });
+  // A new document begins framing with the old one's scroll offset — the
+  // canvas div persists across moment swaps — so reset to the top when the
+  // canvas turns over to a fresh title.
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const title = useBrief(selectTitle);
+  const moment = useBrief(selectMoment);
+  useEffect(() => {
+    if (moment === "frame" && canvasRef.current) canvasRef.current.scrollTop = 0;
+  }, [title, moment]);
   return (
     <div style={S.app}>
       <style>{KEYFRAMES}</style>
@@ -200,9 +222,11 @@ export function Shell({ children, dock, library }: {
       </aside>
       <div style={S.main}>
         <ConnectionBanner />
-        <RunBar />
         <Notice />
-        <div style={S.canvas}>{children}</div>
+        <div ref={canvasRef} style={S.canvas}>
+          <RunBar />
+          {children}
+        </div>
         <div style={S.dock}>{dock}</div>
       </div>
     </div>
@@ -326,10 +350,16 @@ const S: Record<string, CSSProperties> = {
   trust: { display: "flex", alignItems: "center", gap: 8, color: color.dim, fontSize: 12 },
   lamp: { width: 7, height: 7, borderRadius: "50%", background: color.ok, flex: "none" },
   main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
+  /** Frosted glass: the bar lives INSIDE the scroll container and sticks, so
+   *  the brief genuinely passes beneath it — translucent ground + backdrop
+   *  blur reads the content through it. `sticky` anchors the progress child
+   *  exactly as `relative` did. */
   runbar: {
     height: 48, display: "flex", alignItems: "center", gap: 13, padding: "0 26px",
     borderBottom: `1px solid ${color.line}`, fontSize: 13, color: color.dim, flex: "none",
-    position: "relative",
+    position: "sticky", top: 0, zIndex: 5, marginBottom: 40,
+    background: "rgba(246,246,243,.7)",
+    backdropFilter: "saturate(1.8) blur(12px)", WebkitBackdropFilter: "saturate(1.8) blur(12px)",
   },
   eta: { color: color.dim, whiteSpace: "nowrap" },
   wire: {
@@ -371,7 +401,7 @@ const S: Record<string, CSSProperties> = {
     font: `12px ${font.ui}`, color: color.dim, border: `1px solid ${color.line}`,
     borderRadius: radius.control, padding: "0 5px",
   },
-  canvas: { flex: 1, overflowY: "auto", padding: "40px 0 34px", position: "relative" },
+  canvas: { flex: 1, overflowY: "auto", padding: "0 0 34px", position: "relative" },
   dock: { padding: "12px 26px 18px", borderTop: `1px solid ${color.line}`, flex: "none" },
 };
 

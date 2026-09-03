@@ -11,15 +11,16 @@ import type { Descriptor } from "@lloyal-labs/media";
 
 const DEFAULT_WSS = "ws://127.0.0.1:8787";
 
-/** An explicitly-configured host, or null for "wherever this page came from":
- *  build-time `VITE_WSS_URL` first, then a `?server=` query param. */
+/** An explicitly-configured host, or null for "wherever this page came from".
+ *  Build-time `VITE_WSS_URL` first, then a `?server=` query param. */
 function configuredWssUrl(): string | null {
   const env = (import.meta as unknown as { env?: { VITE_WSS_URL?: string } }).env?.VITE_WSS_URL;
   if (env) return env;
   return new URLSearchParams(window.location.search).get("server");
 }
 
-/** Where the served host lives. */
+/** Where the served host lives: build-time `VITE_WSS_URL`, a `?server=` query
+ *  param, then the local `npm run serve` default. */
 function resolveWssUrl(): string {
   return configuredWssUrl() ?? DEFAULT_WSS;
 }
@@ -30,9 +31,9 @@ function resolveWssUrl(): string {
  *
  * Never derived from `window.location`: the page is on :5173 in dev while the
  * host is on :8787, and the host is remote-capable. The default is RELATIVE so
- * Vite's proxy keeps dev same-origin; an explicitly-pointed host derives its
- * origin from the socket URL, so `?server=` moves both planes together and they
- * cannot drift apart.
+ * Vite's proxy keeps dev same-origin (no CORS at all); an explicitly-pointed
+ * host derives its origin from the socket URL, so `?server=` moves both planes
+ * together and they cannot drift apart.
  */
 function resolveContentBaseUrl(): string {
   const env = (import.meta as unknown as { env?: { VITE_CONTENT_URL?: string } }).env?.VITE_CONTENT_URL;
@@ -60,10 +61,16 @@ export function representationUrl(digest: string, index = 0): string {
 /**
  * Admit an image and get back its ROOT descriptor.
  *
+ * The bytes go over HTTP; only the descriptor goes over the socket. That split
+ * is the whole point of the content plane: the wss bridge keeps every frame
+ * for replay, so a base64 image on that wire would sit in the history forever,
+ * and the history is sized on the assumption that frames are tiny.
+ *
  * The host decides what "admitted" means — normalize, address, commit — and
- * hands back a reference. The browser never learns the digest of what it
- * uploaded: normalization changes the bytes, and the root is the manifest's
- * hash, not the file's.
+ * hands back a reference. The browser never learns the digest of anything it
+ * uploaded, because the digest of the ADMITTED representation is not the
+ * digest of the file: normalization changes the bytes, and the root is the
+ * manifest's hash, not either of theirs.
  */
 export async function ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
   const res = await fetch(`${resolveContentBaseUrl()}/v1/media/ingress`, {
@@ -75,7 +82,7 @@ export async function ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
   });
   if (!res.ok) {
     // The route answers 413 too large, 408 too slow, 400 not admitted, 501 no
-    // ingress installed. Its message beats anything invented here.
+    // ingress installed. Its own message is better than anything invented here.
     throw new Error((await res.text().catch(() => "")) || `upload failed (${res.status})`);
   }
   return (await res.json()) as Descriptor;

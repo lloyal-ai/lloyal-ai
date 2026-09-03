@@ -5,6 +5,8 @@
 import {
   extractStreamingReport,
   type AppState,
+  type DocState,
+  type DocPhase,
   type AgentRuntime,
   type TimelineItem,
 } from "../../harness/state.js";
@@ -16,43 +18,80 @@ import type { Pace } from "./pace.js";
 /** Which moment owns the canvas. Boot states render inside Ask. */
 export type Moment = "ask" | "frame" | "write" | "settle";
 
-const MOMENT_OF: Record<AppState["uiPhase"], Moment> = {
-  boot: "ask",
-  downloading: "ask",
-  loading: "ask",
-  boot_error: "ask",
-  backend_pack_offer: "ask",
-  composer: "ask",
-  discovering: "frame",
+/** The empty document — a VALUE, not a null-check. Selectors stay total:
+ *  with no active document they derive from this and return their natural
+ *  empties. Frozen so nothing can turn it into a place. */
+const EMPTY_DOC: DocState = Object.freeze({
+  id: "",
+  query: "",
+  attachments: [],
+  mode: null,
+  direct: false,
+  runEffort: null,
+  phase: "done",
+  plan: null,
+  agents: new Map(),
+  researchAgentIds: [],
+  reconAgentIds: [],
+  waitingTaskIndices: [],
+  pendingTaskIndex: null,
+  pendingTaskDescription: null,
+  researchSpawnCount: 0,
+  researchAgentCount: 0,
+  nextTimelineId: 0,
+  nextLabelIdx: 0,
+  synth: { open: false, buffer: "", done: false, stats: null },
+  answer: null,
+  exchanges: [],
+  ask: null,
+  askAttachments: [],
+  paused: false,
+  closing: false,
+  closedEarly: false,
+  pipelineElapsedMs: 0,
+  pipelineResumedAt: null,
+}) as DocState;
+
+/** The document the canvas shows; EMPTY_DOC at the picker. */
+const activeDoc = (app: AppState): DocState =>
+  (app.activeDocId !== null ? app.documents.get(app.activeDocId) : undefined) ?? EMPTY_DOC;
+
+/** The document the live run writes into; null when no run. */
+const runDoc = (app: AppState): DocState | null =>
+  app.runDocId !== null ? app.documents.get(app.runDocId) ?? null : null;
+
+
+const MOMENT_OF: Record<DocPhase, Moment> = {
   planning: "frame",
-  plan_review: "frame",
+  discovering: "frame",
   clarifying: "frame",
+  plan_review: "frame",
   research: "write",
+  synthesizing: "write",
   done: "settle",
 };
 
-/** After the answer lands the harness returns to `composer` for the next
- *  query — but the settled brief IS the document, so it keeps the canvas
- *  until a cold query resets the fold. A warm ask keeps it too: the ask
- *  streams beneath the document, never over it. */
-export const selectMoment = (app: AppState): Moment => {
-  const moment = MOMENT_OF[app.uiPhase];
-  if (app.answer && (moment === "ask" || app.ask !== null)) return "settle";
-  return moment;
-};
+/** The canvas moment: a total table over the active document's phase. No
+ *  overrides — an in-flight ask never leaves 'done' by construction (the
+ *  rule lives in the fold), and the picker IS the absence of a doc. */
+export const selectMoment = (app: AppState): Moment =>
+  app.activeDocId === null ? "ask" : MOMENT_OF[activeDoc(app).phase];
 
-/** The tab dot and the run-state lamp: work is actually in progress. */
-export const selectLive = (app: AppState): boolean =>
-  app.uiPhase === "discovering" ||
-  app.uiPhase === "planning" ||
-  app.uiPhase === "research";
+const LIVE_PHASES: ReadonlySet<DocPhase> = new Set([
+  "discovering", "planning", "research", "synthesizing",
+]);
+
+/** The tab dot and the run-state lamp: work in progress ANYWHERE — a
+ *  session truth, read off the run's document wherever the canvas is. */
+export const selectLive = (app: AppState): boolean => {
+  const d = runDoc(app);
+  return d !== null && (LIVE_PHASES.has(d.phase) || d.ask !== null);
+};
 
 // ── ask ──────────────────────────────────────────────────────────
 
-/** One knowledge source the brief can draw on. Two axes ride these rows and
- *  they are not the same: `enabled` is whether the ability CAN be used,
- *  `included` is whether the next brief will use it. Only the second is the
- *  user's toggle. */
+/** One knowledge source the brief can draw on. `included` mirrors the
+ *  per-query participation bit — the Ask byline's names toggle it. */
 export interface Library {
   name: string;
   title: string;
@@ -62,8 +101,9 @@ export interface Library {
   iconUrl?: string;
   /** In the registry — its factory ran, so it can actually be drawn on. */
   enabled: boolean;
-  /** Required config keys with no stored value. Non-empty ⇒ installed but not
-   *  yet usable, which is a different thing from the user excluding it. */
+  /** Required config keys with no stored value. Non-empty ⇒ the ability is
+   *  installed but cannot be enabled until they are set, which is a different
+   *  thing from a user having excluded it. */
   needs: string[];
   /** Its config surface, derived from the ability's OWN schema — nothing here
    *  knows what a corpus or an API key is, which is what lets a harness render
@@ -78,8 +118,8 @@ export interface AbilityField {
   required: boolean;
   /** `x-secret` — write-only. Never rendered, only replaced. */
   secret: boolean;
-  /** A value is stored. Key-presence only: the value never leaves the host, so
-   *  a form can say "stored" but can never show it. */
+  /** A value is stored. Key-presence only: the value never leaves the host,
+   *  so the form can say "stored" but can never show it. */
   set: boolean;
 }
 
@@ -103,32 +143,33 @@ const fieldsOf = (
   }));
 };
 
-/** EVERY installed ability, not only the enabled ones: `abilities:state`
- *  deliberately carries the disabled ones so a surface can offer configuration
- *  before first enable, and filtering them here hid that they exist at all. */
+/** EVERY installed ability — see the wire notes on abilities:state. */
 export const selectLibraries = (app: AppState): Library[] =>
-  app.abilities.map((a) => ({
-    name: a.name,
-    // The ability's own name — it identifies the chip beside its siblings, and
-    // stays true for an ability this harness has never heard of.
-    title: a.name,
-    detail:
-      a.name === "corpus" && app.corpusStatus
-        ? `${app.corpusStatus.fileCount} files`
-        : null,
-    included: app.participation[a.name] !== false,
-    iconUrl: a.iconUrl,
-    enabled: a.enabled,
-    needs: ((a.configSchema as { required?: string[] } | undefined)?.required ?? [])
-      .filter((k) => !(k in a.config)),
-    fields: fieldsOf(a.configSchema, a.config),
-  }));
+  app.session.abilities
+    .map((a) => ({
+      name: a.name,
+      // The ability's own name. The prose voice ("the web", "your corpus")
+      // belonged to a sentence that no longer exists — as a chip beside its
+      // siblings the bare name is what identifies it, and it stays true for
+      // an ability this harness has never heard of.
+      title: a.name,
+      detail:
+        a.name === "corpus" && app.session.corpusStatus
+          ? `${app.session.corpusStatus.fileCount} files`
+          : null,
+      included: app.session.participation[a.name] !== false,
+      iconUrl: a.iconUrl,
+      enabled: a.enabled,
+      needs: ((a.configSchema as { required?: string[] } | undefined)?.required ?? [])
+        .filter((k) => !(k in a.config)),
+      fields: fieldsOf(a.configSchema, a.config),
+    }));
 
 /** Whether the dev pane rides this wire. The ONE register exception hangs
  *  off it: with the pane docked, inquiry rows suffix the agent id the pane
  *  keys its rows by — correlation for the developer, invisible to everyone
  *  else. */
-export const selectDev = (app: AppState): boolean => app.dev;
+export const selectDev = (app: AppState): boolean => app.session.dev;
 
 /** The one transient notice — a save confirmation, an error the run
  *  surfaced. Nothing else in the register floats, so this renders as a
@@ -136,7 +177,7 @@ export const selectDev = (app: AppState): boolean => app.dev;
 export const selectNotice = (
   app: AppState,
 ): { id: number; message: string; tone: "info" | "success" | "warn" | "error" } | null =>
-  app.toast;
+  app.session.toast;
 
 export type Depth = "low" | "medium" | "high" | "ultra";
 
@@ -162,24 +203,47 @@ export const estimateLabel = (depth: Depth, tasks: number | null, pace: Pace): s
 };
 
 export const selectTaskCount = (app: AppState): number | null =>
-  app.plan?.tasks.length ?? null;
+  activeDoc(app).plan?.tasks.length ?? null;
 
 /** The clock's two stable inputs — the Clock re-renders on its own ticker,
  *  so its selectors must hold ONE identity; a fresh inline closure per tick
- *  would grow the fold's memo map (see the store's contract). */
-export const selectBanked = (app: AppState): number => app.pipelineElapsedMs;
+ *  would grow the fold's memo map (see the store's contract). The clock
+ *  rides the RUN, wherever the canvas is looking. */
+export const selectBanked = (app: AppState): number =>
+  runDoc(app)?.pipelineElapsedMs ?? 0;
 export const selectResumedAt = (app: AppState): number | null =>
-  app.pipelineResumedAt;
-
-/** Wall time the run has actually spent (paused spans excluded). */
-export const selectElapsed = (app: AppState): number =>
-  app.pipelineElapsedMs +
-  (app.pipelineResumedAt !== null ? Date.now() - app.pipelineResumedAt : 0);
+  runDoc(app)?.pipelineResumedAt ?? null;
 
 export const selectDepth = (app: AppState): Depth =>
-  (app.config?.defaults.effort ?? "high") as Depth;
+  (app.session.config?.defaults.effort ?? "high") as Depth;
 
-/** The two plan shapes, as document characters (flat/deep stay wire-only). */
+/** The RUNNING run's depth. The config default can be retoggled mid-run
+ *  (that is what the depth chips edit); time math keys off the effort the
+ *  run was actually submitted at. */
+export const selectRunDepth = (app: AppState): Depth =>
+  (activeDoc(app).runEffort ?? app.session.config?.defaults.effort ?? "high") as Depth;
+
+/** The honest task count for time math. During research, the fork count is
+ *  authoritative; while a plan is being framed or reviewed, its task list;
+ *  idle, null — so estimates price each depth at its own preset breadth
+ *  instead of the PREVIOUS run's plan. */
+export const selectEtaTasks = (app: AppState): number | null => {
+  const d = runDoc(app);
+  if (!d) return null;
+  if (d.phase === "research" || d.phase === "synthesizing") {
+    return d.researchAgentCount || d.plan?.tasks.length || null;
+  }
+  if (d.phase === "planning" || d.phase === "plan_review" || d.phase === "clarifying") {
+    return d.plan?.tasks.length ?? null;
+  }
+  return null;
+};
+
+/** How a brief is worked, as document characters (flat/deep stay wire-only).
+ *  `ask` is not a plan shape at all — it skips the planner and puts ONE agent
+ *  over every ability, which is why it carries `direct` rather than a mode of
+ *  its own. It rides `flat` on the wire because a single task has no order to
+ *  disagree about. */
 export type Shape = "survey" | "investigate" | "ask";
 
 export const SHAPES: readonly {
@@ -190,84 +254,64 @@ export const SHAPES: readonly {
   title: string;
   detail: string;
 }[] = [
-  // Ordered by what each costs the reader: one answer, then several lenses at
-  // once, then a chain that builds. Nothing indexes this table.
+  // Ordered by what they cost the reader: one answer, then several lenses at
+  // once, then a chain that builds. Nothing indexes this table — the order is
+  // the picker's reading order and nothing else.
   { shape: "ask", mode: "flat", direct: true, title: "Ask", detail: "one agent, every ability — straight answer" },
   { shape: "survey", mode: "flat", title: "Survey", detail: "independent lenses, side by side" },
   { shape: "investigate", mode: "deep", title: "Investigate", detail: "each step builds on the last" },
 ];
 
-/** The configured default. Only a plan shape can be one: `reasoningMode` has no
- *  value for `ask`, which is chosen per run and never persisted. */
+/** The configured default. Only a plan shape can be a default: `reasoningMode`
+ *  has no value for `ask`, which is chosen per run and never persisted. */
 export const selectShape = (app: AppState): Shape =>
-  (app.config?.defaults.reasoningMode ?? "flat") === "deep" ? "investigate" : "survey";
+  (app.session.config?.defaults.reasoningMode ?? "flat") === "deep" ? "investigate" : "survey";
 
 /** The shape of the run in flight (the submitted mode), not the config
  *  default — the pace record and the eta both speak about THIS run. A direct
  *  run rides `flat`, so the mode alone would call an ask a Survey. */
 export const selectRunShape = (app: AppState): Shape =>
-  app.direct ? "ask" : app.mode === "deep" ? "investigate" : "survey";
+  activeDoc(app).direct ? "ask" : activeDoc(app).mode === "deep" ? "investigate" : "survey";
 
 // ── boot, rendered in the shell's voice ──────────────────────────
 
-export interface BootProgress {
-  label: string;
-  got: number;
-  total: number;
-  active: boolean;
-}
-
 export interface Boot {
-  state: "quiet" | "downloading" | "loading" | "offer" | "error";
-  downloads: BootProgress[];
+  state: "quiet" | "loading";
   loadingLabel: string | null;
-  offer: AppState["backendPackOffer"];
-  error: AppState["bootError"];
 }
 
 export const selectBoot = (app: AppState): Boot => ({
-  state:
-    app.uiPhase === "downloading" ? "downloading"
-    : app.uiPhase === "loading" ? "loading"
-    : app.uiPhase === "backend_pack_offer" ? "offer"
-    : app.uiPhase === "boot_error" ? "error"
-    : "quiet",
-  downloads: app.downloads.map((d) => ({
-    label: d.label,
-    got: d.got,
-    total: d.total,
-    active: d.started && !d.done,
-  })),
-  loadingLabel: app.loadingLabel,
-  offer: app.backendPackOffer,
-  error: app.bootError,
+  state: app.session.phase === "boot" && app.session.loadingLabel !== null ? "loading" : "quiet",
+  loadingLabel: app.session.loadingLabel,
 });
 
 // ── the brief ────────────────────────────────────────────────────
 
 export const selectTitle = (app: AppState): string =>
-  app.query.replace(/\?\s*$/, "");
+  activeDoc(app).query.replace(/\?\s*$/, "");
 
-/** Digests of the images the model was shown with this question. */
+/** Ids of the images the model was shown with this question. */
 export const selectSeen = (app: AppState): string[] =>
-  app.attachments.map((a) => a.digest);
+  activeDoc(app).attachments.map((a) => a.digest);
 
-/** The run bar's one status word. */
-export const selectStatus = (app: AppState): string =>
-  selectMoment(app) === "settle" ? "Settled" : ({
-    boot: "Starting",
-    downloading: "Fetching the model",
-    loading: "Loading",
-    boot_error: "Stopped",
-    backend_pack_offer: "Ready",
-    composer: "Ready",
-    discovering: "Browsing your sources",
-    planning: "Framing",
-    plan_review: "Framing",
-    clarifying: "Framing",
-    research: "Writing",
-    done: "Settled",
-  })[app.uiPhase];
+const STATUS_OF: Record<DocPhase, string> = {
+  planning: "Framing",
+  discovering: "Browsing your sources",
+  clarifying: "Framing",
+  plan_review: "Framing",
+  research: "Writing",
+  synthesizing: "Writing",
+  done: "Settled",
+};
+
+/** The run bar's one status word — a total table over the active document's
+ *  phase; the picker reads the session's readiness. An in-flight ask means
+ *  writing is happening UNDER the settled document. */
+export const selectStatus = (app: AppState): string => {
+  if (app.activeDocId === null) return app.session.phase === "boot" ? "Starting" : "Ready";
+  const d = activeDoc(app);
+  return d.ask !== null ? "Writing" : STATUS_OF[d.phase];
+};
 
 /** The outline as the planner drafts it, live — complete `"description"`
  *  strings lifted from the grammar-forced JSON stream, plus the trailing
@@ -286,8 +330,8 @@ const unescape = (raw: string): string => {
 };
 
 export const selectOutlineDraft = (app: AppState): OutlineDraft | null => {
-  if (app.uiPhase !== "planning") return null;
-  const planner = [...app.agents.values()].find((a) => a.endedAt === null);
+  if (activeDoc(app).phase !== "planning") return null;
+  const planner = [...activeDoc(app).agents.values()].find((a) => a.endedAt === null);
   if (!planner) return { settled: [], partial: null };
   const think = planner.timeline.find(
     (t) => t.kind === "think" && t.id === planner.currentThinkId,
@@ -301,14 +345,17 @@ export const selectOutlineDraft = (app: AppState): OutlineDraft | null => {
 
 /** The settled plan, editable while the harness holds it for review. */
 export const selectOutline = (app: AppState): string[] =>
-  app.plan?.tasks.map((t) => t.description) ?? [];
+  activeDoc(app).plan?.tasks.map((t) => t.description) ?? [];
 
 export const selectReviewing = (app: AppState): boolean =>
-  app.uiPhase === "plan_review";
+  activeDoc(app).phase === "plan_review";
+
+/** A follow-up ask is in flight — writing under the settled document. */
+export const selectAskInFlight = (app: AppState): boolean => activeDoc(app).ask !== null;
 
 /** The planner's questions, when it needs the user before framing. */
 export const selectClarify = (app: AppState): string[] =>
-  app.uiPhase === "clarifying" ? (app.plan?.clarifyQuestions ?? []) : [];
+  activeDoc(app).phase === "clarifying" ? (activeDoc(app).plan?.clarifyQuestions ?? []) : [];
 
 /** The synth stream leaks its think block into the same buffer — only the
  *  close marker survives. While the think is open the text is deliberation,
@@ -335,14 +382,15 @@ export interface Answer {
 }
 
 /** The answer as it exists right now: the live synth stream, else the
- *  finalized text, else the most recent settled synth body. */
+ *  finalized text. Deliberately NOT scrollback — a stale synth body in the
+ *  session scrollback outlives every reset, and reading it here is what let
+ *  an old brief render under a new title. */
 export const selectAnswer = (app: AppState): Answer | null => {
-  if (app.synth.open && app.synth.buffer) {
-    return { ...splitThink(app.synth.buffer, true), streaming: true };
+  const d = activeDoc(app);
+  if (d.synth.open && d.synth.buffer) {
+    return { ...splitThink(d.synth.buffer, true), streaming: true };
   }
-  const settled = [...app.scrollback].reverse().find((s) => s.kind === "synth");
-  const text = app.answer ?? (settled?.kind === "synth" ? settled.body : "");
-  return text ? { ...splitThink(text, false), streaming: false } : null;
+  return d.answer !== null ? { ...splitThink(d.answer, false), streaming: false } : null;
 };
 
 // ── the sections: watch it write ─────────────────────────────────
@@ -372,8 +420,8 @@ export interface Section {
   inherits: boolean;
   inquiry: Inquiry | null;
   /** Named by the plan, but no branch free yet — `nSeqMax` is a hard
-   *  reservation, so a wide plan forks in waves. True only while queued; the
-   *  head wears a clock until its inquiry starts. */
+   *  reservation, so a wide plan forks in waves. True only while queued;
+   *  the section head wears a clock until its inquiry starts. */
   waiting: boolean;
   /** The section's prose: the inquiry's report (draft) — streaming while
    *  it writes, settled when it lands. Already inline-cited by the weave. */
@@ -431,10 +479,7 @@ const reportBody = (body: string): string => {
 };
 
 const agentForTask = (app: AppState, index: number): AgentRuntime | null => {
-  for (const a of app.agents.values()) if (a.taskIndex === index) return a;
-  for (const s of app.scrollback) {
-    if (s.kind === "agent" && s.agent.taskIndex === index) return s.agent;
-  }
+  for (const a of activeDoc(app).agents.values()) if (a.taskIndex === index) return a;
   return null;
 };
 
@@ -485,15 +530,15 @@ const proseOf = (a: AgentRuntime): { prose: string | null; streaming: boolean } 
 };
 
 export const selectSections = (app: AppState): Section[] =>
-  (app.plan?.tasks ?? []).map((task, index) => {
+  (activeDoc(app).plan?.tasks ?? []).map((task, index) => {
     const a = agentForTask(app, index);
     const { prose, streaming } = a ? proseOf(a) : { prose: null, streaming: false };
     return {
       index,
       title: sectionTitle(task.description),
       task: task.description,
-      inherits: app.mode === "deep" && index > 0,
-      waiting: !a && app.waitingTaskIndices.includes(index),
+      inherits: activeDoc(app).mode === "deep" && index > 0,
+      waiting: !a && activeDoc(app).waitingTaskIndices.includes(index),
       inquiry: a && {
         id: a.id,
         index,
@@ -510,6 +555,8 @@ export const selectSections = (app: AppState): Section[] =>
 
 export interface ReportEntry {
   path: string;
+  /** The identity — keys the route, the fold, and the run-dir. */
+  docId: string;
   title: string;
   savedAt: string;
   mode: "flat" | "deep" | null;
@@ -518,12 +565,12 @@ export interface ReportEntry {
 
 /** Every settled brief on disk, newest first. Opening one restores it as
  *  the session document — no body is ever held view-side. */
-export const selectLibrary = (app: AppState): ReportEntry[] => app.library.entries;
+export const selectLibrary = (app: AppState): ReportEntry[] => app.session.library.entries;
 
 /** The live library search, when one is running: its query and the report
  *  paths ranked best-first by the session reranker. */
 export const selectLibrarySearch = (app: AppState): { query: string; ranked: string[] } | null =>
-  app.librarySearch;
+  app.session.librarySearch;
 
 // ── the settled document ─────────────────────────────────────────
 
@@ -577,15 +624,12 @@ export const selectSettleProse = (app: AppState): string =>
  *  content: how it ended, how much it rests on, what closed unsettled. */
 export const selectMarks = (app: AppState): string[] => {
   const marks: string[] = [];
-  if (app.closedEarly) marks.push("Closed early — settled with what it had.");
+  if (activeDoc(app).closedEarly) marks.push("Closed early — settled with what it had.");
   const cited = selectCitations(app).length;
   if (cited === 1) marks.push("Rests on one source — read it before you lean on it.");
   else if (cited === 2) marks.push("Rests on two sources.");
   let unsettled = 0;
-  for (const a of app.agents.values()) if (a.failReason !== null && a.taskIndex !== null) unsettled += 1;
-  for (const s of app.scrollback) {
-    if (s.kind === "agent" && s.agent.failReason !== null && s.agent.taskIndex !== null) unsettled += 1;
-  }
+  for (const a of activeDoc(app).agents.values()) if (a.failReason !== null && a.taskIndex !== null) unsettled += 1;
   if (unsettled === 1) marks.push("One line of inquiry closed without settling.");
   else if (unsettled > 1) marks.push(`${unsettled} lines of inquiry closed without settling.`);
   return marks;
@@ -612,8 +656,8 @@ export interface Probe {
 export const selectProbes = (app: AppState): Probe[] => {
   const included = selectLibraries(app).filter((l) => l.included);
   const out: Probe[] = [];
-  app.reconAgentIds.forEach((id, i) => {
-    const a = app.agents.get(id);
+  activeDoc(app).reconAgentIds.forEach((id, i) => {
+    const a = activeDoc(app).agents.get(id);
     if (!a) return;
     let searches = 0;
     let found: number | null = null;
@@ -647,21 +691,23 @@ export const selectProbes = (app: AppState): Probe[] => {
  *  stream (the host is the author); the split is a view concern. */
 export const selectExchanges = (
   app: AppState,
-): { question: string; body: string; thinking: string | null }[] =>
-  app.exchanges.map((x) => ({ question: x.question, ...splitThink(x.body, false) }));
+): { question: string; body: string; thinking: string | null; attachments: string[] }[] =>
+  activeDoc(app).exchanges.map((x) => ({ question: x.question, attachments: x.attachments, ...splitThink(x.body, false) }));
 
 /** The warm ask in flight: its question, whatever of its answer has
  *  streamed, and its worker as a full inquiry — verbs, park honesty, and
  *  the disclosure — numbered after the document's own inquiries. */
 export const selectAsk = (
   app: AppState,
-): { question: string; body: string; inquiry: Inquiry | null } | null => {
-  if (app.ask === null) return null;
-  const index = (app.plan?.tasks.length ?? 0) + app.exchanges.length;
-  for (const a of app.agents.values()) {
+): { question: string; body: string; inquiry: Inquiry | null; attachments: string[] } | null => {
+  const d = activeDoc(app);
+  if (d.ask === null) return null;
+  const index = (d.plan?.tasks.length ?? 0) + d.exchanges.length;
+  for (const a of d.agents.values()) {
     if (a.endedAt === null) {
       return {
-        question: app.ask,
+        question: d.ask,
+        attachments: d.askAttachments,
         // While the think block is open the text is deliberation, never answer
         // prose — the row's verb already says "thinking it through".
         body: splitThink(liveProse(a) ?? "", true).body,
@@ -669,7 +715,7 @@ export const selectAsk = (
       };
     }
   }
-  return { question: app.ask, body: "", inquiry: null };
+  return { question: d.ask, body: "", inquiry: null, attachments: d.askAttachments };
 };
 
 /** What the run itself read about each source: the first snippet any tool
@@ -684,8 +730,7 @@ export const selectSourceNotes = (app: AppState): Map<string, string> => {
       }
     }
   };
-  for (const a of app.agents.values()) harvest(a);
-  for (const s of app.scrollback) if (s.kind === "agent") harvest(s.agent);
+  for (const a of activeDoc(app).agents.values()) harvest(a);
   return notes;
 };
 
@@ -754,7 +799,7 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
       // report's "## Sources" heading can never collide with it.
       entries.push({ anchor: "grid-sources", text: "Sources", level: 1, index: 0 });
     }
-    app.exchanges.forEach((x, i) => {
+    activeDoc(app).exchanges.forEach((x, i) => {
       // Each thread entry is its own document in the rail: the question heads
       // the group, and the answer's headings nest beneath it — an Extend's
       // full outline stands under its question, an Ask's short answer adds
@@ -787,27 +832,17 @@ const stepOf = (t: TimelineItem): WorkStep | null =>
   : t.kind === "tool_result" ? { kind: "result", text: resultMeta(t), live: false }
   : null;
 
-const agentById = (app: AppState, id: number): AgentRuntime | null => {
-  const live = app.agents.get(id);
-  if (live) return live;
-  for (const s of app.scrollback) {
-    if (s.kind === "agent" && s.agent.id === id) return s.agent;
-  }
-  return null;
-};
-
-const workSelectors = new Map<number, (app: AppState) => WorkStep[]>();
-
-/** A stable selector per inquiry (`useBrief` memoizes by selector identity):
- *  the whole stream, ready to disclose — thoughts as the fold parsed them,
- *  calls and results in the librarian's verbs, and the raw token tail while
- *  the model writes its next move. The report tail is omitted: it is already
- *  streaming in place as the section's prose. */
+/** A selector FACTORY for one inquiry's disclosed stream — thoughts as the
+ *  fold parsed them, calls and results in the librarian's verbs, and the raw
+ *  token tail while the model writes its next move. The report tail is
+ *  omitted: it is already streaming in place as the section's prose.
+ *
+ *  Pure factory: hold the result with `useMemo(() => selectWorkFor(id), [id])`
+ *  — `useBrief` memoizes by selector identity, so the caller owns the
+ *  identity for exactly as long as the inquiry renders. */
 export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
-  const cached = workSelectors.get(id);
-  if (cached) return cached;
-  const select = (app: AppState): WorkStep[] => {
-    const a = agentById(app, id);
+  return (app: AppState): WorkStep[] => {
+    const a = activeDoc(app).agents.get(id);
     if (!a) return [];
     const steps = a.timeline
       .map(stepOf)
@@ -817,16 +852,25 @@ export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
     }
     return steps;
   };
-  workSelectors.set(id, select);
-  return select;
 };
 
 /** The settling pass: after the inquiries, the brief is edited into one
  *  voice — the synth stream, deliberation split out. */
 export const selectSettling = (app: AppState): Answer | null =>
-  app.phase === "synth" && app.synth.open && app.synth.buffer
-    ? { ...splitThink(app.synth.buffer, true), streaming: true }
+  activeDoc(app).synth.open && activeDoc(app).synth.buffer
+    ? { ...splitThink(activeDoc(app).synth.buffer, true), streaming: true }
     : null;
+
+/** The canvas's document identity — the route mirrors this. */
+export const selectActiveDocId = (app: AppState): string | null => app.activeDocId;
+
+/** The Frame moment's recon gate. */
+export const selectDiscovering = (app: AppState): boolean =>
+  activeDoc(app).phase === "discovering";
+
+/** The ACTIVE doc's banked time — pace recording reads the settled doc. */
+export const selectBankedActive = (app: AppState): number =>
+  activeDoc(app).pipelineElapsedMs;
 
 // ── run controls ─────────────────────────────────────────────────
 
@@ -836,8 +880,8 @@ export interface RunControls {
 }
 
 export const selectControls = (app: AppState): RunControls => ({
-  paused: app.paused,
-  closing: app.closing,
+  paused: activeDoc(app).paused,
+  closing: activeDoc(app).closing,
 });
 
 /** Remaining time against the machine's pace — null until the plan gives

@@ -20,7 +20,7 @@
  * `ws` WebSocketServer, the wss per-connection binding, admit/release — is
  * reasoning.run's serving code verbatim.
  *
- * SNAPSHOT: reasoning.run @ 0.8.0 (src/serve/main.ts).
+ * LINEAGE: evolved from reasoning.run 0.8.0 (src/serve/main.ts).
  */
 import { main, suspend, call } from "effection";
 import type { Operation, Signal } from "effection";
@@ -167,14 +167,19 @@ main(function* () {
   // than to any one ingress: the same service serves an HTTP upload, a spine's
   // reference material and a tool's result, and all three must produce the
   // same admitted representation from the same bytes.
-  // Not parameterized by `model.image*Tokens`: those are the projector's own
-  // token budget and the real lever on KV cost, while this dial defaults to the
-  // projector's pixel ceiling and buys wire bytes, not cells.
+  // Deliberately NOT parameterized by `model.imageMinTokens/imageMaxTokens`.
+  // Those are the projector's own tokenization budget and are the direct lever
+  // on KV cost; `maxPixels` here is a different dial, defaulted to the projector's own
+  // ceiling (2048²). Measured on Qwen3.5 + cat.jpg: at that default,
+  // normalization changes cells by ZERO on both branches — below the ceiling it
+  // passes bytes through untouched, above it it lands on exactly the pixels the
+  // projector would have downscaled to anyway (17.4 MP raw and 4.19 MP
+  // normalized both cost 4047 cells). What it does buy is 73% off the wire and
+  // a format the decoder accepts. Coupling the two dials would trade image
+  // fidelity for bytes under a name that promises neither.
   const ingress = createImageIngress(media);
   const content = createContentRoutes({
     store: media,
-    // The bytes decide their own type — a client's Content-Type is a claim
-    // about content it did not produce.
     ingest: (bytes) => ingress.ingest(bytes),
     ...(process.env.LLOYAL_CONTENT_ORIGIN
       ? { allowedOrigin: process.env.LLOYAL_CONTENT_ORIGIN }

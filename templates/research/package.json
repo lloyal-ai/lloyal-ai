@@ -2,7 +2,7 @@
   "name": "__NAME__",
   "version": "0.1.0",
   "private": true,
-  "description": "A grounded multi-agent research harness scaffolded by `lloyal`. SNAPSHOT: reasoning.run @ 0.8.0.",
+  "description": "A grounded multi-agent research harness scaffolded by `lloyal`. Evolved from reasoning.run 0.8.0.",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -30,7 +30,8 @@
     "build:desktop": "npm run build && electron-vite build",
     "serve": "esbuild targets/web/serve.ts --bundle --platform=node --format=esm --packages=external --loader:.eta=text --outfile=dist/targets/web/serve.mjs && node bin/serve.js",
     "dev:web": "concurrently -k -n serve,web -c blue,magenta \"cross-env LLOYAL_DEV=1 npm run serve\" \"vite --config targets/web/vite.web.config.ts\"",
-    "build:web": "vite build --config targets/web/vite.web.config.ts"
+    "build:web": "vite build --config targets/web/vite.web.config.ts",
+    "test": "node --import tsx --import ./test/invariants/eta-hooks.mjs --test test/invariants/*.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

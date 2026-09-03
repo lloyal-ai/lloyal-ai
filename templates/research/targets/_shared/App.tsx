@@ -14,8 +14,9 @@ import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl, RunFraming } from "@lloyal-labs/dev-tools";
 import { send, useBrief } from "./store.js";
 import {
-  selectDepth, selectLive, selectMoment, selectRunShape, selectShape,
-  selectTaskCount, type Shape,
+  selectActiveDocId, selectAskInFlight, selectBankedActive, selectLive,
+  selectMoment, selectRunDepth, selectRunShape, selectShape, selectTaskCount,
+  type Shape,
 } from "./select.js";
 import { recordPace } from "./pace.js";
 import { Shell } from "./parts/Shell.js";
@@ -37,8 +38,14 @@ const FRAMING: RunFraming = {
     "research:start": "research",
     "synthesize:start": "synth",
   },
-  open: ["preflight:start", "plan:start", "query"],
-  close: ["complete", "ui:error", "ui:composer"],
+  // Wire order: the harness echoes `query` FIRST on every path, then the
+  // pipeline's preflight/plan markers follow. The declared order must match
+  // the wire's or the supersede heuristic double-resets.
+  open: ["query", "preflight:start", "plan:start"],
+  close: ["complete", "run:aborted"],
+  // Where the user's instruction lives on THIS wire — the pane shows it on
+  // the spine row only because we declare it here; it never guesses.
+  instruction: { event: "query", field: "query", attachments: "attachments" },
 };
 
 /** Per-image token budget steps. `auto` first, because handing the choice
@@ -107,6 +114,8 @@ const COMPOSER_HINT: Record<ReturnType<typeof selectMoment>, string> = {
 export function HarnessApp(): ReactElement {
   const moment = useBrief(selectMoment);
   const live = useBrief(selectLive);
+  const activeDocId = useBrief(selectActiveDocId);
+  const askInFlight = useBrief(selectAskInFlight);
   const configuredShape = useBrief(selectShape);
   const [chosenShape, setChosenShape] = useState<Shape | null>(null);
   const shape = chosenShape ?? configuredShape;
@@ -124,10 +133,10 @@ export function HarnessApp(): ReactElement {
   // once, on the edge into settle. Warm follow-ups (one synthetic task,
   // no research) would poison the figure, so single-task runs don't count.
   // The same edge refreshes the library: a settle means a new report.
-  const depth = useBrief(selectDepth);
+  const depth = useBrief(selectRunDepth);
   const runShape = useBrief(selectRunShape);
   const tasks = useBrief(selectTaskCount);
-  const banked = useBrief((app) => app.pipelineElapsedMs);
+  const banked = useBrief(selectBankedActive);
   const prevMoment = useRef(moment);
   useEffect(() => {
     if (moment === "settle" && prevMoment.current !== "settle") {
@@ -147,12 +156,16 @@ export function HarnessApp(): ReactElement {
     >
       <Shell
         library={<Library />}
-        dock={<Composer shape={shape} placeholder={COMPOSER_HINT[moment]} />}
+        dock={<Composer shape={shape} placeholder={askInFlight ? COMPOSER_HINT.write : COMPOSER_HINT[moment]} />}
       >
-        {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
-        {moment === "frame" && <Frame />}
-        {moment === "write" && <Write />}
-        {moment === "settle" && <Settle />}
+        {/* Identity remount — per-doc component state (disclosure toggles,
+            edit fields) resets when the canvas turns over to another doc. */}
+        <div key={activeDocId ?? "picker"} style={{ display: "contents" }}>
+          {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
+          {moment === "frame" && <Frame />}
+          {moment === "write" && <Write />}
+          {moment === "settle" && <Settle />}
+        </div>
       </Shell>
     </DevPane>
   );

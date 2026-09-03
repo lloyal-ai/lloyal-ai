@@ -24,15 +24,19 @@ export interface Bridge {
    *  the link as permanently 'connected' and never shows the banner. */
   onStatus?(cb: (status: WireStatus) => void): () => void;
   /** A displayable URL for an image the model was shown. On the bridge because
-   *  serving bytes is a transport question: web fetches over the content plane,
-   *  desktop reads from disk. A bridge that cannot omits it, and the view names
-   *  the image instead of rendering it. */
+   *  serving bytes is a transport question — web fetches over the content
+   *  plane, desktop reads from disk. Omitted by bridges that cannot (cli, and
+   *  desktop until its path lands); the view then names the image instead. */
   representationUrl?(digest: string, index?: number): string;
   /** Admit an image and return its ROOT descriptor — the write half of
-   *  `representationUrl`. Bytes go over HTTP; only the descriptor goes over the
-   *  socket, whose replay history is sized for small frames. A bridge with no
-   *  content plane omits it, and the composer offers no attach affordance at
-   *  all rather than one that fails on submit. */
+   *  `representationUrl`, and transport-specific for the same reason: web
+   *  POSTs to the content plane, desktop ingests in process. Bridges with no
+   *  content plane (cli) omit it, and the composer then offers no attach
+   *  affordance at all rather than one that fails on submit.
+   *
+   *  Bytes go over HTTP; only the descriptor goes over the socket. The wss
+   *  bridge keeps every frame for replay, so an image on that wire would sit
+   *  in the history forever. */
   ingestMedia?(bytes: Uint8Array): Promise<Descriptor>;
 }
 
@@ -116,6 +120,10 @@ export function useBrief<T>(select: (app: AppState) => T): T {
 
 /** Dispatch a command to the harness. */
 export const send = (command: Command): void => window.harness.send(command);
+
+/** The page's store, for non-React consumers (the web history adapter). The
+ *  same per-bridge singleton useBrief reads — nothing new is created. */
+export const appStore = (): BriefStore => storeFor(window.harness);
 
 /** The transport link's status, for the connection banner. A bridge without
  *  `onStatus` (cli, desktop-ipc — no droppable socket) reads 'connected'

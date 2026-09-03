@@ -107,9 +107,9 @@ export function Library(): ReactElement | null {
               tabIndex={0}
               title={e.title}
               style={{ ...S.entry, ...(title && e.title === title ? S.entryOn : null) }}
-              onClick={() => send({ type: "library_read", path: e.path })}
+              onClick={() => send({ type: "open_doc", docId: e.docId })}
               onKeyDown={(ev) => {
-                if (ev.key === "Enter") send({ type: "library_read", path: e.path });
+                if (ev.key === "Enter") send({ type: "open_doc", docId: e.docId });
               }}
             >
             <span style={S.entryBody}>

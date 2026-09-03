@@ -27,8 +27,13 @@ const seed = (bootstrap: WorkflowEvent[]): AppState =>
 const glyph = (p: AgentRuntime["phase"]): string =>
   p === "done" ? "✓" : p === "failed" ? "✗" : p === "tool" ? "◍" : p === "idle" ? "·" : "●";
 
-/** Where the input line is offered — the harness is idle and awaiting a query. */
-const CAN_INPUT = new Set<AppState["uiPhase"]>(["boot", "composer", "done", "clarifying"]);
+/** The document this austere view renders: the running one, else whatever
+ *  the canvas last activated. One derivation — the CLI never holds doc
+ *  state of its own. */
+const docOf = (state: AppState) =>
+  (state.runDocId !== null ? state.documents.get(state.runDocId) : undefined) ??
+  (state.activeDocId !== null ? state.documents.get(state.activeDocId) : undefined) ??
+  null;
 
 function Gauge({ used, total }: { used: number; total: number }): React.ReactElement | null {
   if (!total) return null;
@@ -84,13 +89,15 @@ function View({
   // Auto-accept the planner's plan — this austere view has no plan-review editor,
   // so a query flows straight through to research. `acceptedRef` de-bounces the
   // one transition into `plan_review`.
+  const doc = docOf(state);
+  const docPhase = doc?.phase ?? null;
   useEffect(() => {
-    if (state.uiPhase === "plan_review" && !acceptedRef.current) {
+    if (docPhase === "plan_review" && !acceptedRef.current) {
       acceptedRef.current = true;
       dispatch({ type: "accept_plan" });
     }
-    if (state.uiPhase !== "plan_review") acceptedRef.current = false;
-  }, [state.uiPhase, dispatch]);
+    if (docPhase !== "plan_review") acceptedRef.current = false;
+  }, [docPhase, dispatch]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
@@ -101,30 +108,38 @@ function View({
   });
 
   // Recon + research agents (skip the tool-less synth agent — taskIndex null).
-  const agents = [...state.agents.values()].filter((a) => a.taskIndex !== null);
+  const agents = doc ? [...doc.agents.values()].filter((a) => a.taskIndex !== null) : [];
 
-  // The streaming answer: the live synth buffer, else the finalized answer, else
-  // the most recent synth body pushed to scrollback.
-  const lastSynth = [...state.scrollback].reverse().find((s) => s.kind === "synth");
-  const streaming =
-    (state.synth.open && state.synth.buffer) ||
-    state.answer ||
-    (lastSynth && lastSynth.kind === "synth" ? lastSynth.body : "");
+  // The streaming answer: the live synth buffer, else the finalized answer,
+  // else the latest exchange's body. The doc is the memory.
+  const streaming = doc
+    ? (doc.synth.open && doc.synth.buffer) ||
+      (doc.ask === null && doc.exchanges.length > 0
+        ? doc.exchanges[doc.exchanges.length - 1].body
+        : "") ||
+      doc.answer ||
+      ""
+    : "";
 
-  const canInput = CAN_INPUT.has(state.uiPhase);
+  // Input is offered when nothing is mid-flight: no doc, a settled doc, or
+  // the planner waiting on a clarification.
+  const canInput = !doc || doc.phase === "done" || doc.phase === "clarifying";
 
   const onSubmit = (q: string): void => {
     const text = q.trim();
     if (!text) return;
-    if (state.uiPhase === "clarifying") {
+    if (doc?.phase === "clarifying") {
       dispatch({ type: "submit_clarification", answer: text });
     } else {
       // The run mode comes from the loaded config default (`config:loaded`
-      // seeds `state.config`); this austere view has no mode toggle.
+      // seeds `session.config`); this austere view has no mode toggle.
+      // A settled document makes the next submit an ask into it — the same
+      // rule the Composer applies; warm planned queries do not exist.
       dispatch({
         type: "submit_query",
         query: text,
-        mode: state.config?.defaults.reasoningMode ?? "flat",
+        mode: state.session.config?.defaults.reasoningMode ?? "flat",
+        skipPlanner: doc?.answer != null,
       });
     }
   };
@@ -136,8 +151,7 @@ function View({
         <Text color="gray">Model      resident · no API key</Text>
         <Text color="gray">Inference  local · no provider</Text>
         <Text color="gray">
-          Phase      {state.phase}
-          {state.uiPhase !== state.phase ? ` · ${state.uiPhase}` : ""}
+          Phase      {docPhase ?? state.session.phase}
         </Text>
       </Box>
 
@@ -150,16 +164,16 @@ function View({
               {a.toolCallCount > 0 ? ` · ${a.toolCallCount} tools` : ""}
             </Text>
           ))}
-          {state.pressure && (
-            <Gauge used={state.pressure.cellsUsed} total={state.pressure.nCtx} />
+          {state.session.pressure && (
+            <Gauge used={state.session.pressure.cellsUsed} total={state.session.pressure.nCtx} />
           )}
         </Box>
       )}
 
-      {state.uiPhase === "clarifying" && state.plan?.clarifyQuestions?.length ? (
+      {docPhase === "clarifying" && doc?.plan?.clarifyQuestions?.length ? (
         <Box flexDirection="column">
           <Text color="yellow">The planner needs to clarify:</Text>
-          {state.plan.clarifyQuestions.map((q, i) => (
+          {doc.plan.clarifyQuestions.map((q, i) => (
             <Text key={i} color="yellow">
               {"  "}
               {i + 1}. {q}
@@ -169,10 +183,9 @@ function View({
       ) : null}
 
       {streaming ? <Text color="cyan">{streaming}</Text> : null}
-      {state.bootError && (
-        <Text color="red">boot error ({state.bootError.kind}): {state.bootError.message}</Text>
+      {state.session.toast?.tone === "error" && (
+        <Text color="red">error: {state.session.toast.message}</Text>
       )}
-      {state.toast?.tone === "error" && <Text color="red">error: {state.toast.message}</Text>}
 
       {devOpen && <DevOverlay model={devModel} tail={devTail.current} />}
 
@@ -181,7 +194,7 @@ function View({
           <Text color="green">› </Text>
           <TextInput
             placeholder={
-              state.uiPhase === "clarifying"
+              docPhase === "clarifying"
                 ? "answer the planner, ctrl-c to stop"
                 : "type a question, ctrl-c to stop"
             }

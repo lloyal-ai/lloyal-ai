@@ -5,7 +5,7 @@
  * `--loader:.eta=text`, never run as raw `tsx`. The web target's `serve.ts`
  * injects this as the host's `run`.
  *
- * SNAPSHOT: reasoning.run @ main (src/served-session.ts).
+ * LINEAGE: evolved from reasoning.run's src/served-session.ts.
  */
 import { ensure } from "effection";
 import type { Operation, Signal } from "effection";
@@ -77,7 +77,7 @@ export function* runServedSession(
   // Trace only: per-session and dev-gated. The content store is created ONCE
   // by the host (`serve.ts`) and injected — one object shared by every Session,
   // not one per Session pointing at the same directory.
-  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev);
+  const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev, (ev) => events.send(ev));
   yield* RunnerCtx.set(
     makeServedRunner<Config, ConfigOrigin>(cfg, {
       traceWriter,

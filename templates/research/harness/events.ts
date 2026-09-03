@@ -8,11 +8,12 @@
  */
 
 import type { AgentEvent } from '@lloyal-labs/lloyal-agents';
+import type { Descriptor } from '@lloyal-labs/media';
 import type { HostResourcesEvent } from '@lloyal-labs/dev-tools';
 import type { PlanIntent, ResearchTask } from '@lloyal-labs/rig';
-import type { AbilityDescriptor, LibraryEntry, OpTiming } from './state-core.js';
+import type { AbilityDescriptor, DocId, LibraryEntry, Mode, OpTiming } from './state-core.js';
+import type { Effort } from './effort-presets.js';
 import type { Config, ConfigOrigin } from './config-types.js';
-import type { Descriptor } from '@lloyal-labs/media';
 
 /** The terminal event's stats payload. Everything optional: the research
  *  path fills the research fields, passthrough its own, and a library
@@ -35,16 +36,28 @@ export interface CompleteData {
 export type StepEvent =
   | {
       type: 'query';
+      /** THE echo — mints the document's identity. Every surface keys on it:
+       *  the fold's DocState, the /brief/:docId route, the run-dir folder. */
+      docId: DocId;
       query: string;
+      /** An ask INTO the (settled) document this event names. */
       warm: boolean;
-      /** Skip-planner run: the question IS the plan, so one agent answers with
-       *  every ability's tools registered. Distinct from `warm`, which says a
-       *  trunk existed — a COLD ask is direct and not warm. */
+      /** Skip-planner run: the question IS the plan, so one agent answers
+       *  with every ability's tools registered. A COLD ask is direct and
+       *  not warm; a WARM query is always direct (asks are the only
+       *  follow-up). */
       direct?: boolean;
+      /** The effort this run was submitted at. The config default can be
+       *  retoggled mid-run; time math must key off the run's own effort. */
+      effort?: Effort;
       /** Root manifest descriptors for images attached to THIS turn — never
-       *  bytes. The view resolves each to the ADMITTED representation over the
-       *  content plane, which is what the model saw; a local object URL is an
-       *  optimistic pre-submit preview and cannot be joined by digest. */
+       *  bytes. Bytes on the wire would land in the web bridge's 50k-frame
+       *  replay history, which is sized on the assumption that frames are
+       *  tiny. The view resolves each descriptor to the ADMITTED
+       *  representation over the content plane's GET, which is also what the
+       *  model actually saw — the local object URL is only an optimistic
+       *  pre-submit preview and cannot be joined by digest (the browser holds
+       *  the SOURCE hash; this is the MANIFEST hash). */
       attachments?: Descriptor[];
     }
   | {
@@ -58,9 +71,9 @@ export type StepEvent =
   | { type: 'research:start'; agentCount: number; mode: 'flat' | 'deep' }
   | { type: 'research:done'; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: 'fanout:tasks'; tasks: ResearchTask[] }
-  /** Tasks the plan named that cannot hold a branch yet. `nSeqMax` is a hard
-   *  reservation, so a plan wider than the budget forks in waves; these are the
-   *  ones still queued. Empty once every task has forked. */
+  /** Tasks the plan named that cannot hold a branch yet. `nSeqMax` is a
+   *  hard reservation, so a plan wider than the budget runs in waves; these
+   *  are the ones still queued. Empty once every task has forked. */
   | { type: 'fanout:waiting'; taskIndices: number[] }
   | { type: 'spine:task'; taskIndex: number; taskCount: number; description: string }
   | { type: 'spine:source'; taskIndex: number; source: string }
@@ -75,6 +88,23 @@ export type StepEvent =
       timeMs: number;
     }
   | { type: 'answer'; text: string }
+  /** A settled document, whole, from disk — upserts a DocState at phase
+   *  'done'. Does NOT activate (doc:active is its own event). Exchange
+   *  digests are store-validated by the sender. */
+  | {
+      type: 'doc';
+      docId: DocId;
+      title: string;
+      mode: Mode | null;
+      attachments?: Descriptor[];
+      answer: string;
+      exchanges: { question: string; body: string; attachments: string[] }[];
+    }
+  /** Activation is its own fact: what the canvas shows. Null = the picker. */
+  | { type: 'doc:active'; docId: DocId | null }
+  /** The run stopped short of complete (stop / cancel). A stillborn doc
+   *  dies with it; a settled doc stands with its ask cleared. No toast. */
+  | { type: 'run:aborted' }
   | {
       type: 'stats';
       timings: OpTiming[];
@@ -126,45 +156,21 @@ export type StepEvent =
   | { type: 'plan:task_added'; afterIndex: number }
   | { type: 'plan:task_deleted'; index: number }
   | { type: 'plan:task_moved'; from: number; to: number }
-  | { type: 'ui:composer'; prefill?: string }
-  /** The document is cleared and the picker is back. Distinct from
-   *  `ui:composer`, which moves the phase but keeps the settled answer. */
-  | { type: 'ui:new_run' }
   | { type: 'ui:plan_review' }
+  /** A toast — one meaning only. Never folds as an abort: a dying run
+   *  emits `run:aborted` alongside; a benign failure toasts alone. */
   | { type: 'ui:error'; message: string }
-  // ── Boot-phase events: download progress + weight-loading spinner ──
-  /** Pre-populates `state.downloads` with the full set of files about to
-   *  be fetched. Sent ONCE before any individual download:start so the
-   *  dynamic tree size is fixed from the moment 'downloading' begins. */
-  | { type: 'download:plan'; entries: { id: string; label: string; sizeBytes: number }[] }
-  | { type: 'download:start'; id: string; label: string; sizeBytes: number }
-  | { type: 'download:progress'; id: string; got: number; total: number; url?: string }
-  | { type: 'download:complete'; id: string }
-  | { type: 'weights:start'; label: string }
+  // ── Boot-phase events: the weight-loading spinner ──
   | { type: 'weights:label'; label: string }
   | { type: 'weights:done' }
   | { type: 'corpus:indexed'; corpusPath: string; fileCount: number; chunkCount: number }
   // ── The library: settled briefs on disk (the sidebar's Completed
-  // ── reports). Opening one restores it through the STANDARD
-  // ── query/answer/complete events — no dedicated body event exists.
+  // ── reports). Opening one upserts it whole via the `doc` event.
   | { type: 'library:list'; entries: LibraryEntry[] }
   /** Report paths ranked against `query`, best first. An empty query means
    *  the search is cleared. Scores stay host-side: they are logit-diffs whose
    *  gaps are not meaningful to render — only the ORDER travels. */
   | { type: 'library:search'; query: string; ranked: string[] }
-  | { type: 'boot:error'; kind: 'llm' | 'reranker' | 'backend-pack'; message: string }
-  /** Boot-time BACKEND_DL pack offer: a CUDA GPU was probed and a signed
-   *  full-arch pack is available for it. Rendered as a Download / Not now
-   *  dialog (uiPhase 'backend_pack_offer'); answered via the
-   *  accept_backend_pack / decline_backend_pack commands. */
-  | {
-      type: 'backendpack:offer';
-      gpuName: string;
-      sizeBytes: number;
-      needsRuntime: boolean;
-      runtimeSizeBytes: number;
-      reasons: string[];
-    }
   // Per-query Ability participation toggle. Emitted by main.ts in response to
   // a `toggle_participation` Command from the Composer. The reducer flips
   // the bit in `state.participation[name]`. Pure UI state — no harness

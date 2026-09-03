@@ -1,12 +1,13 @@
 /** The evidence the question carried, shown where the question is.
  *
- *  These are the ADMITTED REPRESENTATIONS — the bytes the model was given. The
- *  content plane serves nothing else on purpose: raw blobs answer HEAD only, so
- *  a retained source layer can never be handed out by mistake. Under the pixel
- *  ceiling normalization returns the file byte-identical, so this usually IS
- *  what was dropped; where it differs the image was too large, rotated by its
- *  EXIF tag, or carried a non-sRGB profile — the cases where what the model saw
- *  is the honest thing to show. */
+ *  These are the ADMITTED REPRESENTATIONS — the bytes the model was actually
+ *  given. The content plane serves nothing else on purpose: raw blobs answer
+ *  HEAD only, so a retained source layer can never be handed out by mistake.
+ *  For an image under the pixel ceiling normalization returns the file
+ *  byte-identical, so this usually IS what you dropped; where it differs the
+ *  image was too large, rotated by its EXIF tag, or carried a non-sRGB
+ *  profile — the cases where what the model saw is the honest thing to show,
+ *  because it is what the brief rests on. */
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { useBrief } from "../store.js";
@@ -16,18 +17,25 @@ const short = (digest: string): string => digest.replace(/^sha256:/, "").slice(0
 
 export function Figures(): ReactElement | null {
   const seen = useBrief(selectSeen);
+  return <FigureStrip digests={seen} />;
+}
+
+/** The strip itself, source-agnostic: the root brief passes its question's
+ *  media, each exchange passes its own — the evidence sits beside the
+ *  question that carried it, in thread order. */
+export function FigureStrip({ digests }: { digests: string[] }): ReactElement | null {
   const src = window.harness.representationUrl;
   const [open, setOpen] = useState<string | null>(null);
-  // Read off the loaded element: the descriptor carries a byte length, never
-  // pixels, and this is the representation's true size.
+  // Read off the loaded element rather than the wire: the descriptor carries a
+  // byte length, never pixels, and this is the representation's true size.
   const [dims, setDims] = useState<Record<string, string>>({});
 
-  if (seen.length === 0 || !src) return null;
+  if (digests.length === 0 || !src) return null;
 
   return (
     <>
       <div style={S.strip}>
-        {seen.map((digest) => (
+        {digests.map((digest) => (
           <button
             key={digest}
             type="button"
@@ -40,8 +48,10 @@ export function Figures(): ReactElement | null {
               alt="Attached image, as the model received it"
               style={S.img}
               onLoad={(e) => {
-                // Read the element NOW: `currentTarget` is only valid while the
-                // event is dispatching, and a state updater runs later.
+                // Read the element NOW. `currentTarget` is only valid while the
+                // event is dispatching — React nulls it afterwards, and a state
+                // updater runs later, so reading it in there throws and takes
+                // the whole tree down with it.
                 const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
                 setDims((d) => (d[digest] ? d : { ...d, [digest]: `${w}×${h}` }));
               }}
@@ -51,7 +61,7 @@ export function Figures(): ReactElement | null {
       </div>
       <p style={S.caption}>
         what the model saw
-        {seen.length === 1 && dims[seen[0]] ? ` · ${dims[seen[0]]}` : ""}
+        {digests.length === 1 && dims[digests[0]] ? ` · ${dims[digests[0]]}` : ""}
         {" · click to enlarge"}
       </p>
 

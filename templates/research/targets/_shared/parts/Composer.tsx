@@ -8,8 +8,8 @@ import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, t
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
-  DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectBanked,
-  selectDepth, selectLibraries, selectLive, selectMoment, selectResumedAt, selectTaskCount,
+  DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectActiveDocId, selectBanked,
+  selectDepth, selectEtaTasks, selectLibraries, selectLive, selectMoment, selectResumedAt,
   type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
@@ -17,10 +17,12 @@ import type { AppState } from "../../../harness/state.js";
 
 // Stable identities — the composer re-renders per keystroke, and a fresh
 // inline closure per render would grow the fold's memo map (store contract).
-const selectUiPhase = (app: AppState) => app.uiPhase;
 const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
-const selectQueryRaw = (app: AppState): string => app.query;
-const selectAskRaw = (app: AppState): string | null => app.ask;
+const selectActiveAsk = (app: AppState): string | null =>
+  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.ask ?? null : null;
+const selectClarifying = (app: AppState): boolean =>
+  app.activeDocId !== null &&
+  app.documents.get(app.activeDocId)?.phase === "clarifying";
 
 /** A HINT for the file picker, not a gate — drag-and-drop and paste bypass it,
  *  and the host's ingress is the only thing that decides what is admitted.
@@ -53,12 +55,6 @@ const CSS = `
   .cmp-pill:hover { background: ${color.card}; color: ${color.ink}; }
 `;
 
-const INTENTS = [
-  { intent: "ask", label: "Ask", hint: "answers from the warm context — instant" },
-  { intent: "extend", label: "Extend", hint: "a fresh brief that reframes fully" },
-] as const;
-type Intent = (typeof INTENTS)[number]["intent"];
-
 export function Composer({ shape, placeholder }: {
   shape: Shape;
   placeholder: string;
@@ -69,36 +65,42 @@ export function Composer({ shape, placeholder }: {
   const [uploading, setUploading] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
-  const [intent, setIntent] = useState<Intent>("ask");
-  /** The question, held after send until the fold acknowledges it. Some paths
-   *  do real work before their first event — a restored report prefills whole,
-   *  a clarify answer prefills before the planner resumes — so the dock keeps
-   *  your words visibly in hand instead of swallowing them into silence. */
-  const [pending, setPending] = useState<{ text: string; phase: AppState["uiPhase"] } | null>(null);
+  /** The question, held after send until the fold acknowledges it. The echo
+   *  mints or names a document within milliseconds, so the first clear arm
+   *  (the active doc changed) does nearly all the work; a warm ask clears on
+   *  its own echo, a clarify answer on leaving 'clarifying'. */
+  const [pending, setPending] = useState<
+    { text: string; docId: string | null; clarify: boolean } | null>(null);
   /** An ability just saved toward its first enable — its pill pulses until
    *  `abilities:state` confirms (a corpus enable INDEXES, which takes time). */
   const [enabling, setEnabling] = useState<string | null>(null);
   const depth = useBrief(selectDepth);
   const live = useBrief(selectLive);
-  const tasks = useBrief(selectTaskCount);
-  const uiPhase = useBrief(selectUiPhase);
+  const tasks = useBrief(selectEtaTasks);
   const settled = useBrief(selectSettled);
-  const direct = !settled && shape === "ask";
+  const activeDocId = useBrief(selectActiveDocId);
+  const clarifying = useBrief(selectClarifying);
+  // What submit() will actually send — the render gates below share the
+  // same truth instead of re-deriving it.
+  const willSkipPlanner = settled ? true : shape === "ask";
   const libraries = useBrief(selectLibraries);
   const [configFor, setConfigFor] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const configPanel = libraries.find((l) => l.name === configFor) ?? null;
-  const queryNow = useBrief(selectQueryRaw);
-  const askNow = useBrief(selectAskRaw);
+  const askNow = useBrief(selectActiveAsk);
 
-  // Acknowledgment: the fold echoed the question (cold or warm) or the phase
-  // moved on (clarify resumes under the original query, not the answer).
+  // Acknowledgment: a document was born or activated (the echo lands in
+  // milliseconds), the warm ask echoed, or the clarify round moved on.
   useEffect(() => {
     if (pending === null) return;
-    if (queryNow === pending.text || askNow === pending.text || uiPhase !== pending.phase) {
+    if (
+      activeDocId !== pending.docId ||
+      askNow === pending.text ||
+      (pending.clarify && !clarifying)
+    ) {
       setPending(null);
     }
-  }, [pending, queryNow, askNow, uiPhase]);
+  }, [pending, activeDocId, askNow, clarifying]);
   // The echo must not outlive plausibility — a dead wire has its own banner.
   useEffect(() => {
     if (pending === null) return;
@@ -185,9 +187,9 @@ export function Composer({ shape, placeholder }: {
     // an upload is in flight — and a second submit would upload the same files
     // again and send a second query.
     if (!text || uploading || pending !== null) return;
-    if (uiPhase === "clarifying") {
+    if (clarifying) {
       send({ type: "submit_clarification", answer: text });
-      setPending({ text, phase: uiPhase });
+      setPending({ text, docId: activeDocId, clarify: true });
       clear(images);
       return;
     }
@@ -221,12 +223,12 @@ export function Composer({ shape, placeholder }: {
       }
       send({
         type: "submit_query", query: text, mode,
-        // Cold: the Ask shape is the choice. Warm: the shape picker is gone
-        // and the Ask/Extend intent row stands in its place.
-        skipPlanner: settled ? intent === "ask" : shape === "ask",
+        // Cold: the Ask shape is the choice. Warm: every follow-up is an
+        // ask — one agent, every ability, into the settled document.
+        skipPlanner: willSkipPlanner,
         ...(attachments ? { attachments } : {}),
       });
-      setPending({ text, phase: uiPhase });
+      setPending({ text, docId: activeDocId, clarify: false });
       clear(picked);
     })();
   };
@@ -324,7 +326,9 @@ export function Composer({ shape, placeholder }: {
           style={{ ...S.input, ...(pending ? S.inputSent : null) }}
           value={pending ? pending.text : draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
+          }}
           onPaste={onPaste}
           placeholder={uploading ? "Sending your image…" : placeholder}
           disabled={uploading || pending !== null}
@@ -401,34 +405,21 @@ export function Composer({ shape, placeholder }: {
           })}
         </div>
         <span style={{ flex: 1 }} />
-        {settled && (
-          <div style={S.depths}>
-            {INTENTS.map((i) => (
-              <button
-                key={i.intent}
-                type="button"
-                className="cmp-pill" style={i.intent === intent ? S.depthOn : S.depth}
-                title={i.hint}
-                onClick={() => setIntent(i.intent)}
-              >
-                {i.label}
-              </button>
-            ))}
-          </div>
-        )}
         {/* Depth sets how many inquiries run and how long they may work. An ask
             runs exactly one agent to a straight answer, so there is no breadth to
             choose and the minutes would be quoted against a plan that never
             exists. The configured effort still bounds the agent; it is simply not
             a question worth asking here. */}
-        {!direct && (
-          <div style={S.depths}>
+        {!willSkipPlanner && (
+          <div style={S.depths} role="radiogroup" aria-label="Depth">
             {DEPTHS.map((d) => {
               const pace = paceFor(d.depth, shape);
               return (
                 <button
                   key={d.depth}
                   type="button"
+                  role="radio"
+                  aria-checked={d.depth === depth}
                   className="cmp-pill" style={d.depth === depth ? S.depthOn : S.depth}
                   title={pace.observed ? undefined : "estimated — runs on this machine refine it"}
                   onClick={() => send({ type: "set_effort", effort: d.depth })}

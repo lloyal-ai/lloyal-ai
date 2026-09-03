@@ -8,8 +8,8 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactElement } fr
 import { color, font, inquiryColor } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import {
-  selectClarify, selectDev, selectOutline, selectOutlineDraft, selectProbes,
-  selectReviewing, selectTitle, type Probe,
+  selectClarify, selectDev, selectDiscovering, selectOutline, selectOutlineDraft,
+  selectProbes, selectReviewing, selectTitle, type Probe,
 } from "../select.js";
 import { Work } from "../parts/InquiryRow.js";
 import { Figures } from "../parts/Figures.js";
@@ -20,7 +20,7 @@ const START_HOLD_S = 5;
 export function Frame(): ReactElement {
   const title = useBrief(selectTitle);
   const clarify = useBrief(selectClarify);
-  const discovering = useBrief((app) => app.uiPhase === "discovering");
+  const discovering = useBrief(selectDiscovering);
   const draft = useBrief(selectOutlineDraft);
   const outline = useBrief(selectOutline);
   const reviewing = useBrief(selectReviewing);
@@ -147,7 +147,7 @@ function Review({ outline }: { outline: string[] }): ReactElement {
                 onChange={(e) => setDraftText(e.target.value)}
                 onBlur={commitEdit}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") commitEdit();
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) commitEdit();
                   if (e.key === "Escape") setEditing(null);
                 }}
               />

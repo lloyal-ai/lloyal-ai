@@ -21,12 +21,14 @@ import { anchorsOf } from "../select.js";
  *  STACKED constructs (fractions, radicals, accents, sized operators and
  *  delimiters) by its own fonts' ink metrics; an inherited face's taller
  *  numerals crash into the fraction bar. So inline runs — the arithmetic a
- *  brief mostly carries — inherit the UI font, while stacked constructs
- *  keep KaTeX's faces. Plain math glyphs carry no family class of their
- *  own (they inherit from .katex), so the restore must be explicit. */
+ *  brief mostly carries — inherit the UI font, while stacked constructs are
+ *  excluded and fall back to katex.css's own font rules. */
 const MATH = `
   .katex { font-size: 1em !important; }
   .katex, .katex *:not(.delimsizing, .op-symbol) { font-family: inherit !important; }
+  /* Plain math glyphs carry no family class — they inherit from .katex, so
+     excluding them from the override above would still hand them the UI
+     font. Restore KaTeX's face explicitly where geometry needs it. */
   .katex :is(.mfrac, .sqrt, .root, .accent) * {
     font-family: KaTeX_Main, "Times New Roman", serif !important;
   }

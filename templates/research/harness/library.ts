@@ -50,6 +50,7 @@ export function listReports(outputDir: string): LibraryEntry[] {
     const meta = /^> (\S+) · (flat|deep)/.exec(metaLine);
     entries.push({
       path: reportPath,
+      docId: name,
       title: titleLine.replace(/^#\s*/, "") || name,
       savedAt: meta?.[1] ?? name,
       mode: meta?.[2] === "flat" || meta?.[2] === "deep" ? meta[2] : null,
@@ -83,12 +84,19 @@ export function readReport(
 }
 
 /** A topic's whole thread: the report plus every exchange beside it, in
- *  order. `readReport` parses each file — same format, same reader — and this
- *  only composes: the reopened document is the report with its exchanges
- *  appended, and its figures are the union of every entry's. */
+ *  order. `readReport` parses each file — same format, same reader. The
+ *  result is STRUCTURAL — `body`/`attachments` are the root's own, each
+ *  exchange keeps its question, body, and media — so the fold can put every
+ *  figure beside the question that carried it. `thread` is the whole
+ *  conversation as one text: what the trunk commit prefills, so the
+ *  reopened KV still holds the full thread. */
 export function readThread(
   reportPath: string,
-): { path: string; title: string; body: string; attachments: string[] } {
+): {
+  path: string; title: string; body: string; attachments: string[];
+  exchanges: { question: string; body: string; attachments: string[] }[];
+  thread: string;
+} {
   const root = readReport(reportPath);
   const dir = path.dirname(reportPath);
   const exchanges = fs.readdirSync(dir)
@@ -99,8 +107,10 @@ export function readThread(
   return {
     path: reportPath,
     title: root.title,
-    body: [root.body, ...exchanges.map((e) => `---\n\n# ${e.title}\n\n${e.body}`)].join('\n\n'),
-    attachments: [...new Set([root, ...exchanges].flatMap((e) => e.attachments))],
+    body: root.body,
+    attachments: root.attachments,
+    exchanges: exchanges.map((e) => ({ question: e.title, body: e.body, attachments: e.attachments })),
+    thread: [root.body, ...exchanges.map((e) => `---\n\n# ${e.title}\n\n${e.body}`)].join('\n\n'),
   };
 }
 

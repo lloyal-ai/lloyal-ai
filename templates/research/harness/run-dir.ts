@@ -44,36 +44,16 @@ export class RunDirSink {
   private mode: 'flat' | 'deep' | null = null;
   private startedAt: number | null = null;
   private synthStats: { tokens: number; ppl: number; timeMs: number } | null = null;
-  /** The thread's report.md — where follow-ups land. Survives reset(): the
-   *  anchor's lifecycle is finish/resume/clearAnchor, not the run's. */
-  private anchor: string | null = null;
   /** This run appends to the anchor instead of writing a fresh report. */
   private appending = false;
   /** Annexure numbers already taken by the anchored dir — this run's ordinals
    *  continue above them, so a follow-up's evidence can never collide. */
   private ordinalBase = 0;
 
-  /** A settled document stands — the next dock submit threads under it. */
-  get inThread(): boolean {
-    return this.anchor !== null;
-  }
-
-  /** Anchor a reopened report as the live thread. */
-  resume(reportPath: string): void {
-    this.anchor = reportPath;
-  }
-
-  /** Drop the anchor — unconditionally, or only if it names `onlyIf`
-   *  (a deleted report must stop collecting the thread). */
-  clearAnchor(onlyIf?: string): void {
-    if (!onlyIf || this.anchor === onlyIf) this.anchor = null;
-  }
-
-  /** Continue the anchored thread: same event flow, but `finish()` appends to
-   *  the anchored report. No new dir, no new library item. */
-  startThread(opts: { query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): void {
-    if (!this.anchor) return;
-    this.currentDir = path.dirname(this.anchor);
+  /** Continue a settled document's thread: same event flow, but `finish()`
+   *  appends an exchange beside its report. No new dir, no new library item. */
+  startThread(opts: { dir: string; query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): void {
+    this.currentDir = path.resolve(opts.dir);
     this.appending = true;
     this.inResearch = false;
     let taken = 0;
@@ -93,11 +73,12 @@ export class RunDirSink {
     this.synthStats = null;
   }
 
-  /** Begin a new query's run-dir. Returns the absolute path so callers can
-   *  emit a `ui:run_dir` event for the composer to display. */
-  start(opts: { outputDir: string; query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): string {
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
-    this.currentDir = path.resolve(opts.outputDir, ts);
+  /** Begin a document's run-dir. The caller passes the dir — the folder IS
+   *  the docId (`outputDir/<docId>`), minted once at the submit echo. Same-id
+   *  reuse would overwrite report.md; unreachable because every planner
+   *  submit mints a fresh id and every ask threads. */
+  start(opts: { dir: string; query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] }): string {
+    this.currentDir = path.resolve(opts.dir);
     fs.mkdirSync(this.currentDir, { recursive: true });
     this.inResearch = false;
     this.spawnOrdinal = 0;
@@ -210,10 +191,7 @@ export class RunDirSink {
         fs.writeFileSync(
           path.join(this.currentDir, `exchange-${taken + 1}.md`), doc, 'utf8');
       } else {
-        const report = path.join(this.currentDir, 'report.md');
-        fs.writeFileSync(report, doc, 'utf8');
-        // The document just born is what the next dock submit threads under.
-        this.anchor = report;
+        fs.writeFileSync(path.join(this.currentDir, 'report.md'), doc, 'utf8');
       }
     }
     this.reset();

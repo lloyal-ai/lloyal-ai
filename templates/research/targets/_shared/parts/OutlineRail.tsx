@@ -41,7 +41,8 @@ const LEVEL_STYLE: Record<OutlineEntry["level"], CSSProperties> = {
 
 const S: Record<string, CSSProperties> = {
   rail: {
-    position: "sticky", top: 4, alignSelf: "flex-start", width: 212, flex: "none",
+    // 52 clears the frosted runbar (48 + a breath) instead of sliding under it.
+    position: "sticky", top: 52, alignSelf: "flex-start", width: 212, flex: "none",
     maxHeight: "calc(100dvh - 230px)", overflowY: "auto",
     padding: "0 14px 12px 0", display: "flex", flexDirection: "column", gap: 1,
   },
@@ -52,10 +53,10 @@ const S: Record<string, CSSProperties> = {
     display: "flex", alignItems: "center", gap: 7,
   },
   /** The inquiry's identity, carried by a mark rather than by colouring the
-   *  words — the heading stays legible ink and the rail reads as a column of
-   *  headings, not a legend. Rendered at EVERY level so the gutter is reserved:
-   *  filled only for a section, but always occupying its width, which keeps
-   *  each level's indent measured from one origin. */
+   *  words — the heading stays legible ink and the rail still reads as a
+   *  column of headings, not a legend. Rendered at EVERY level so the gutter
+   *  is reserved: filled only for a section, but always occupying its width,
+   *  which keeps each level's indent measured from one origin. */
   dot: { width: 6, height: 6, borderRadius: "50%", flex: "none" },
   label: {
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,

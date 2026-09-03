@@ -5,7 +5,7 @@
  *  Download hand over the same markdown the run dir keeps — per document:
  *  the brief and each exchange each carry their own pair, mirroring the
  *  one-file-per-document layout on disk. */
-import { useMemo, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { useBrief } from "../store.js";
 import {
@@ -14,7 +14,7 @@ import {
   selectSourceNotes, selectTitle,
 } from "../select.js";
 import { Thinking, doc } from "../parts/Shell.js";
-import { Figures } from "../parts/Figures.js";
+import { Figures, FigureStrip } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose } from "../parts/Prose.js";
@@ -33,6 +33,19 @@ export function Settle(): ReactElement {
   const exchanges = useBrief(selectExchanges);
   const ask = useBrief(selectAsk);
   const [showThinking, setShowThinking] = useState(false);
+  // Anchor-on-submit: when a follow-up appears (the harness echoes the query
+  // the instant it accepts the submit), bring its block into view ONCE. No
+  // scroll on body growth or answer arrival — a reader who moves away is
+  // never yanked back.
+  const askRef = useRef<HTMLElement>(null);
+  const askQ = ask?.question ?? null;
+  const prevAskQ = useRef<string | null>(null);
+  useEffect(() => {
+    if (askQ !== null && prevAskQ.current === null) {
+      askRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+    prevAskQ.current = askQ;
+  }, [askQ]);
   const [copied, setCopied] = useState<string | null>(null);
   const [thinkOpen, setThinkOpen] = useState<string | null>(null);
 
@@ -110,6 +123,7 @@ export function Settle(): ReactElement {
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
           <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
+          <FigureStrip digests={x.attachments} />
           <p style={S.exchangeActions}>
             <button type="button" style={S.action} onClick={() => copy(x.body, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
             <button type="button" style={S.action} onClick={() => download(x.body, x.question)}>Download</button>
@@ -128,11 +142,12 @@ export function Settle(): ReactElement {
         </section>
       ))}
       {ask && (
-        <section style={S.exchange}>
+        <section ref={askRef} style={S.exchange}>
           <h2 style={S.exchangeHead}>
             {ask.question}
             <Thinking> answering…</Thinking>
           </h2>
+          <FigureStrip digests={ask.attachments} />
           {ask.inquiry && ask.inquiry.verb.kind !== "settled" && (
             <InquiryRow inquiry={ask.inquiry} closing={false} />
           )}
