@@ -5,6 +5,30 @@
  * run in the same sitting, so the two sets agree without cross-repo plumbing.
  */
 
+/** The arc's bump table: package → [level, fallback base for a package npm has
+ *  never seen]. A brand-new package needs ONE manual first `npm publish` — CI
+ *  cannot create a name (interactive 2FA). sdk and agents are MAJORs this arc,
+ *  as hdk's own table says. If a level changes in one repo, change the other.
+ *
+ *  Exported so the golden test reads THIS table rather than a copy of it: a
+ *  copy once said sdk was a minor while this said major, and stayed green.
+ *  @type {Record<string, ['major' | 'minor', string]>} */
+export const DEPS = {
+  '@lloyal-labs/lloyal.node': ['minor', '3.1.1'],
+  '@lloyal-labs/media': ['minor', '0.1.0'],
+  '@lloyal-labs/sdk': ['major', '3.1.0'],
+  '@lloyal-labs/lloyal-agents': ['major', '5.5.1'],
+  '@lloyal-labs/rig': ['minor', '5.5.0'],
+  '@lloyal-labs/dev-tools': ['minor', '0.4.3'],
+  'lloyal-ai': ['minor', '1.10.0'],
+};
+
+/** The table as `planAlphas` takes it.
+ *  @param {Record<string, ['major' | 'minor', string]>} deps
+ *  @returns {Array<{ name: string, level: 'major' | 'minor', fallback: string }>} */
+export const arcPackages = (deps) =>
+  Object.entries(deps).map(([name, [level, fallback]]) => ({ name, level, fallback }));
+
 /** `--cut <N>`: a non-negative integer, nothing else. `Number()` would take
  *  a missing or garbled value as NaN and stamp `-alpha.NaN` everywhere. */
 export function parseCut(arg) {

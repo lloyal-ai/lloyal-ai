@@ -73,6 +73,15 @@ function marker(dir: string): { template: string; targets: string[]; abilities: 
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).harnessdev;
 }
 
+/** A default spec's two halves — the pin travels with the spec. Derived from
+ *  DEFAULT_ABILITIES rather than copied: a copied version number is a second
+ *  source of truth that goes stale on the next ability release. */
+const halves = (spec: string): { name: string; semver: string } => {
+  const [name, semver] = spec.split('@');
+  return { name, semver };
+};
+const [CORPUS, WEB] = DEFAULT_ABILITIES.research;
+
 /** Specs passed to the (mocked) vendor step, in call order. */
 function vendoredSpecs(): string[] {
   return vendorMock.mock.calls.map((c) => (c[1] as { name: string; semver?: string }).name);
@@ -84,8 +93,8 @@ describe('new — default abilities are vendored regardless of TTY / --skip-inst
     const dir = await scaffold('r1', ['--template', 'research']);
     expect(vendoredSpecs()).toEqual(['lloyal/corpus', 'lloyal/web']);
     // The pin travels with the spec — the vendored version must be reproducible.
-    expect(vendorMock.mock.calls[0][1]).toMatchObject({ name: 'lloyal/corpus', semver: '2.0.1' });
-    expect(vendorMock.mock.calls[1][1]).toMatchObject({ name: 'lloyal/web', semver: '2.0.1' });
+    expect(vendorMock.mock.calls[0][1]).toMatchObject(halves(CORPUS));
+    expect(vendorMock.mock.calls[1][1]).toMatchObject(halves(WEB));
     expect(marker(dir).abilities).toEqual(DEFAULT_ABILITIES.research);
     // Nothing pending → the panel is the plain "ready" one.
     expect(stdout).toContain('is ready.');
@@ -107,16 +116,16 @@ describe('new — default abilities are vendored regardless of TTY / --skip-inst
     expect(vendorMock).not.toHaveBeenCalled();
     // The specs are still recorded, so `bin/run.js` can name them at boot.
     expect(marker(dir).abilities).toEqual(DEFAULT_ABILITIES.research);
-    expect(stdout).toContain('npx lloyal-ai install lloyal/corpus@2.0.1');
-    expect(stdout).toContain('npx lloyal-ai install lloyal/web@2.0.1');
+    expect(stdout).toContain(`npx lloyal-ai install ${CORPUS}`);
+    expect(stdout).toContain(`npx lloyal-ai install ${WEB}`);
     expect(stdout).toContain('will not typecheck or start');
   });
 
   it('a fetch failure warns and reports the spec as pending, but still scaffolds', async () => {
     vendorMock.mockRejectedValue(new Error('getaddrinfo ENOTFOUND apps.lloyal.ai'));
     const dir = await scaffold('r4', ['--template', 'research']);
-    expect(stderr).toContain('could not fetch default ability lloyal/corpus@2.0.1');
-    expect(stdout).toContain('npx lloyal-ai install lloyal/corpus@2.0.1');
+    expect(stderr).toContain(`could not fetch default ability ${CORPUS}`);
+    expect(stdout).toContain(`npx lloyal-ai install ${CORPUS}`);
     expect(marker(dir).template).toBe('research'); // the scaffold itself survived
   });
 });
