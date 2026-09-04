@@ -5,7 +5,7 @@
  * template). Kept here — not in a command module — so both share one copier and
  * one token set (`__NAME__` today).
  */
-import { readdirSync, readFileSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, statSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +50,18 @@ const DOTFILES: Record<string, string> = {
   gitignore: '.gitignore',
 };
 
+/**
+ * Never part of a template, whatever the directory holds. A checkout whose
+ * template has been `link-local`ed carries a `node_modules` of symlinks and
+ * binaries; scaffolding it would hand every developer that tree.
+ */
+const NEVER_COPIED = new Set(['node_modules']);
+
+/** Strict decoder: a file that is not valid UTF-8 is a binary and is copied
+ *  byte-for-byte — substitution is for text, and a text round trip turns a
+ *  binary's bytes into U+FFFD. */
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
 /** Recursively copy `src` → `dest`, applying `substitutions` to paths + text. */
 export function copyTreeWithSubstitutions(
   src: string,
@@ -63,6 +75,7 @@ export function copyTreeWithSubstitutions(
     const toPath = join(dest, toName);
 
     if (entry.isDirectory()) {
+      if (NEVER_COPIED.has(entry.name)) continue;
       copyTreeWithSubstitutions(fromPath, toPath, substitutions);
       continue;
     }
@@ -71,16 +84,28 @@ export function copyTreeWithSubstitutions(
   }
 }
 
-/** Copy one file, applying `__TOKEN__` substitutions to its text. */
+/** Copy one file, applying `__TOKEN__` substitutions to its text. A binary is
+ *  copied verbatim. Either way the source's mode travels with it, so an
+ *  executable stays executable. */
 export function copyFileWithSubstitutions(
   src: string,
   dest: string,
   substitutions: Record<string, string>,
 ): void {
-  const raw = readFileSync(src, 'utf-8');
-  const rendered = applySubstitutions(raw, substitutions);
   mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, rendered, 'utf-8');
+  const bytes = readFileSync(src);
+  let text: string | null;
+  try {
+    text = utf8.decode(bytes);
+  } catch {
+    text = null;
+  }
+  if (text === null) {
+    copyFileSync(src, dest);
+  } else {
+    writeFileSync(dest, applySubstitutions(text, substitutions), 'utf-8');
+  }
+  chmodSync(dest, statSync(src).mode & 0o777);
 }
 
 function applySubstitutions(s: string, substitutions: Record<string, string>): string {

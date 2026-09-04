@@ -14,10 +14,9 @@ settles, the document takes the room — citation chips, a sources grid,
 the deliberation on request — and every settled brief joins a library
 that the next brief can search, cite, and build on.
 
-> **SNAPSHOT: reasoning.run @ 0.8.0.** This template is a curated copy of
-> reasoning.run's RACE/DRB-tuned pipeline, conforming to the `lloyal new`
-> conventions — a real, editable starter, not a dependency. Drift from
-> upstream is expected.
+> **Lineage.** This template evolved from reasoning.run 0.8.0's RACE/DRB-tuned
+> pipeline — a real, editable starter, not a dependency. Its document model
+> is its own; the design record is `docs/document-identity.md`.
 
 ## Run it
 
@@ -31,8 +30,10 @@ reasoning LLM into `models/llm/`, and the reranker the sources score
 retrievals with into `models/reranker/`. (Prefer your own weight? Drop a
 `.gguf` in the role folder, or point a `path:` in `harness.yml` at one.)
 
-The SAME harness runs on three surfaces — same
+The SAME harness runs on every surface this project kept — same
 `harness(ctx, events, commands)`, same fold, a different binding:
+
+__RUN_STEPS__
 
 ```sh
 npm start             # a terminal app (Ink)
@@ -63,7 +64,7 @@ whatever surface is mounted; `commands` delivers that surface's
 — `harness/reducer.ts` turns events into ONE `AppState` that the Ink
 view, the desktop main process, and the browser page all share — and
 everything the user does is a command: `submit_query`, `accept_plan`,
-`pause`, `wrap_up`, `cancel_agent`, `library_read`. No view holds truth;
+`pause`, `wrap_up`, `cancel_agent`, `open_doc`. No view holds truth;
 no view calls the model.
 
 Inside, the pipeline runs: a pre-flight **recon** probe of each source →
@@ -154,6 +155,22 @@ Ordered by ambition — each step is one file:
    does: policies, budgets, the orchestration shapes.
 6. **A capability** — `npx lloyal-ai install <publisher>/<name>`, then
    add its factory to `abilities` in `harness/harness.ts`.
+
+## Documents, routes, and the laws
+
+Every brief is ONE identity — a `docId` minted when you submit — and that
+same string names it everywhere: the app's state, the run folder on disk
+(`reports/<docId>/`), the KV cache's ownership, and (on web) the address
+bar as `/brief/<docId>`. Back/forward navigate documents; a deep link
+restores a brief from disk. `docs/document-identity.md` is the design
+record — read it before changing how documents are born, switch, or die.
+
+`npm test` runs the behavioural suite in `test/invariants/`: real harness,
+scripted model (the sdk's published mock), no weights needed. The
+scenarios are the laws, written to be read — what a query births, what an
+abort keeps, what may never ride the wire. When you change the harness,
+they tell you what you broke; when you extend it, add the law you are
+promising.
 
 ## Configuration
 

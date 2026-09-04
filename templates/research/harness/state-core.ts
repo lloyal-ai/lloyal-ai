@@ -13,6 +13,8 @@
  */
 
 import type { Config, ConfigOrigin } from './config-types.js';
+import type { Descriptor } from '@lloyal-labs/media';
+import type { Effort } from './effort-presets.js';
 
 /** The view's transport link to the host — a fact of the wire, NOT the
  *  harness fold (the harness never knows if a browser's socket dropped).
@@ -21,24 +23,31 @@ import type { Config, ConfigOrigin } from './config-types.js';
  *  cli/desktop bridges never leave 'connected'. */
 export type WireStatus = 'connecting' | 'connected' | 'lost';
 
-export type Phase = 'idle' | 'recon' | 'query' | 'plan' | 'research' | 'synth' | 'done';
+/** One document's identity — the SAME string names the fold's DocState, the
+ *  browser route (/brief/:docId), and the run-dir folder on disk. ISO-
+ *  timestamp shaped (2026-09-02T10-30-00-000): sortable, URL-safe, minted
+ *  once by the harness at the query echo. */
+export type DocId = string;
 
-/** Drives which top-level view the App renders. Distinct from `phase` —
- *  `phase` tracks the workflow progress; `uiPhase` tracks what the user
- *  currently interacts with. */
-export type UiPhase =
-  | 'boot'           // before config:loaded
-  | 'downloading'    // model cache miss — spinner + per-file progress bars
-  | 'loading'        // createContext / createReranker running; single spinner
-  | 'composer'       // query input, source/mode editing
-  | 'discovering'    // pre-flight recon agent probing sources; streams live
-  | 'planning'       // planner running, spinner
-  | 'plan_review'    // plan dialog visible, accept/edit/change-mode
-  | 'clarifying'     // planner asked questions; composer takes the answer
-  | 'research'       // column layout streaming
-  | 'done'           // research complete, results visible, composer below
-  | 'boot_error'     // download/load failed; recovery via /model or /quit
-  | 'backend_pack_offer'; // CUDA pack available — Download / Not now dialog
+export type SessionPhase = 'boot' | 'ready';
+
+/** A document's lifecycle. The picker is NOT a phase — it is the absence of
+ *  an active document (activeDocId === null). */
+export type DocPhase =
+  | 'planning'      // planner running (also a warm ask's synthetic instant)
+  | 'discovering'   // pre-flight recon agents probing sources
+  | 'clarifying'    // planner asked questions; composer takes the answer
+  | 'plan_review'   // plan dialog visible, accept/edit/change-mode
+  | 'research'      // inquiries streaming
+  | 'synthesizing'  // the settling pass
+  | 'done';         // settled; asks stream beneath without leaving 'done'
+
+/** Every DocPhase, for totality walks — a table keyed by DocPhase plus this
+ *  list is the pattern that keeps moment/status maps honest by test. */
+export const DOC_PHASES: readonly DocPhase[] = [
+  'planning', 'discovering', 'clarifying', 'plan_review',
+  'research', 'synthesizing', 'done',
+];
 
 /** User-facing reasoning mode. 'deep' == chain-shaped orchestration
  *  (sequential tasks that build on each other); 'flat' == parallel-shaped
@@ -49,9 +58,13 @@ export type Mode = 'flat' | 'deep';
 /** One settled brief on disk — a sidebar library row (`library:list`). */
 export interface LibraryEntry {
   path: string;
+  /** The identity — the run-dir's basename; keys the route and the fold. */
+  docId: DocId;
   title: string;
   savedAt: string;
   mode: Mode | null;
+  /** The brief carried images — its meta line names their roots. */
+  hasMedia: boolean;
 }
 
 /** One cited source, extracted CONSUMER-side from a tool result (the Ability
@@ -70,8 +83,8 @@ export interface SourceMeta {
   host?: string;
 }
 
-/** Per-agent chronological stream item. Column.tsx renders one component
- *  per kind. `live: true` on a think item means its body is currently
+/** Per-agent chronological stream item — a renderer lays one component per
+ *  kind. `live: true` on a think item means its body is currently
  *  streaming tokens and should render with a `▎` cursor. */
 export type TimelineItem =
   | {
@@ -149,9 +162,8 @@ export interface AgentRuntime {
    *  (the model is writing tool-call JSON — the terminal `report` tool's body
    *  lives inside that JSON, between `<parameter=result>` and `</parameter>`,
    *  raw and unescaped). Renderers extract the live report body straight from
-   *  this buffer via `extractStreamingReport` below (consumed by Column.tsx's
-   *  ContentStream and the desktop renderer's Work.tsx) — same
-   *  marker-delimited technique the think block uses with `</think>`. Cleared
+   *  this buffer via `extractStreamingReport` below — same marker-delimited
+   *  technique the think block uses with `</think>`. Cleared
    *  on tool_call / report (those fire structured items instead). */
   contentBuffer: string;
   /** True while the agent is being force-recovered: `agent:done` fired (the
@@ -160,7 +172,7 @@ export interface AgentRuntime {
    *  Routes those `agent:produce` tokens into `contentBuffer` (→ "Writing
    *  report") instead of a think block, so a recovered report isn't mislabeled
    *  as the agent "Thinking". Set on `agent:done`, cleared on
-   *  `agent:return`/`agent:recovered`. See docs/upstream-issues.md. */
+   *  `agent:return`/`agent:recovered`. */
   recovering: boolean;
   /** Set when the agent's forced recovery FAILED (e.g. KV exhausted mid-report
    *  decode → `llama_decode failed`): no result was produced. Drives the terminal
@@ -189,36 +201,6 @@ export function extractStreamingReport(buffer: string): string | null {
   return body.replace(/^\n/, '');
 }
 
-/** Append-only items rendered via Ink's `<Static>` so they get written to
- *  terminal scrollback once and never re-render.
- *
- *  Two kinds:
- *    - 'synth' — synth answer body (markdown), pushed at `synthesize:done`.
- *    - 'agent' — a finished research agent's panel snapshot, pushed at
- *      `agent:report`. The agent is also dropped from `researchAgentIds`
- *      at that point so Narrative stops rendering it live.
- *
- *  Why this matters: anything in the dynamic tree that isn't actively
- *  streaming triggers Ink's clearTerminal-on-overflow when the dynamic
- *  tree exceeds viewport, wiping scrollback. Pushing completed content
- *  to Static keeps the dynamic tree small and preserves scrollback. */
-export type ScrollbackItem =
-  | {
-      key: string;
-      kind: 'synth';
-      /** Streamed body content (markdown). */
-      body: string;
-    }
-  | {
-      key: string;
-      kind: 'agent';
-      /** Snapshot of the agent's runtime state at agent:report time.
-       *  Reducer state is immutable so this reference is stable —
-       *  subsequent reductions create new AgentRuntime objects rather
-       *  than mutating this one. */
-      agent: AgentRuntime;
-    };
-
 export interface Pressure {
   pct: number;
   cellsUsed: number;
@@ -239,20 +221,6 @@ export interface OpTiming {
   timeMs: number;
 }
 
-export interface DownloadStatus {
-  id: string;
-  label: string;
-  got: number;
-  total: number;
-  done: boolean;
-  /** True once `download:start` has fired for this entry. Distinguishes
-   *  queued (planned but not begun) from active (bytes flowing). */
-  started: boolean;
-  /** Most recent URL the streamer is pulling from. Updates if a fallback
-   *  kicks in (e.g., HF fails → R2 takes over mid-download). */
-  url?: string;
-}
-
 export interface Toast {
   message: string;
   tone: 'info' | 'success' | 'warn' | 'error';
@@ -260,34 +228,55 @@ export interface Toast {
   id: number;
 }
 
-/** A signed entitlement disclosed by an ability's catalog metadata. The `key`
- *  maps to a privacy-label-style pill (network → Internet, etc.); `label`
- *  is the human-readable name carried alongside it. */
-export interface AppEntitlement {
-  key: string;
-  label: string;
-}
-
-/** The ability descriptor is rig substrate now — one builder, one shape. */
+/** The ability descriptor is rig substrate — one builder, one shape. */
 import type { AbilityDescriptor } from "@lloyal-labs/rig";
 export type { AbilityDescriptor };
 
-export interface AppState {
+/** Session-scoped facts: the machine, the configuration, the library. They
+ *  survive every document birth and switch — there is NO code path that
+ *  resets them. */
+export interface SessionState {
+  phase: SessionPhase;
+  /** The wire's dev signal (`config:loaded.dev` — the boot's LLOYAL_DEV). */
+  dev: boolean;
+  /** Merged config from CLI > env > file > default. Null until config:loaded. */
+  config: Config | null;
+  /** "Loading weights…" / "Loading reranker…" while the session boots. */
+  loadingLabel: string | null;
+  /** Corpus indexing summary — the Composer's Corpus chip. */
+  corpusStatus: { fileCount: number; chunkCount: number } | null;
+  /** KV pressure of the ONE shared llama context — machine truth; it
+   *  survives document switches because the cache does. */
+  pressure: Pressure | null;
+  /** Most recent transient toast (e.g. "saved → harness.json"). */
+  toast: Toast | null;
+  nextToastId: number;
+  /** Settled briefs on disk (`library:list`). */
+  library: { entries: LibraryEntry[] };
+  /** Live semantic search over the library; null when not searching. */
+  librarySearch: { query: string; ranked: string[] } | null;
+  /** Per-ability participation in the next query, keyed by manifest.name. */
+  participation: Record<string, boolean>;
+  /** Installed Abilities surfaced into the renderer. */
+  abilities: AbilityDescriptor[];
+}
+
+/** One document, whole: its identity, its content, and its run machinery.
+ *  Born by the query echo, grown by run events routed via `runDocId`,
+ *  upserted whole from disk by the `doc` event. Never reused, never reset —
+ *  a new document is a new entry. */
+export interface DocState {
+  id: DocId;
+  /** The document's title — the question that started it. */
   query: string;
-  warm: boolean;
-  /** Top-level view state — drives App.tsx branching. */
-  uiPhase: UiPhase;
-  /** Payload for uiPhase 'backend_pack_offer'; null outside that phase. */
-  backendPackOffer: {
-    gpuName: string;
-    sizeBytes: number;
-    needsRuntime: boolean;
-    runtimeSizeBytes: number;
-    reasons: string[];
-  } | null;
-  /** Workflow phase — drives footer label, narrative visibility, etc. */
-  phase: Phase;
+  /** Root manifest descriptors for images attached to the query. */
+  attachments: Descriptor[];
   mode: Mode | null;
+  /** Born as a direct ask (skipPlanner) — drives the run's shape chip. */
+  direct: boolean;
+  /** The run's own effort, as submitted — distinct from the config default. */
+  runEffort: Effort | null;
+  phase: DocPhase;
   plan: {
     intent: string;
     tasks: { description: string; ability?: string }[];
@@ -295,161 +284,72 @@ export interface AppState {
     tokenCount: number;
     timeMs: number;
   } | null;
+  /** Every agent this document ever ran, done agents included — the map is
+   *  the record; there is no separate archive. Bounded by task count. */
   agents: Map<number, AgentRuntime>;
   /** Research agents in spawn order — drives the column layout. */
   researchAgentIds: number[];
-  /** Pre-flight recon agents in spawn order — drives the Discovering view.
-   *  Kept separate from researchAgentIds so the two never cross-render; both
-   *  reuse the same Column timeline machinery. Cleared when the planner's
-   *  `query` event resets state for the run. */
+  /** Pre-flight recon agents in spawn order — drives the Discovering view. */
   reconAgentIds: number[];
-  /** Aggregate source count across all agents' tool_results (deduplicated
-   *  by host within a result). Rendered in the footer. */
-  sourceCount: number;
-  synth: SynthState;
-  answer: string | null;
-  pressure: Pressure | null;
-  timings: OpTiming[];
-  startedAt: number;
-  /** Accumulated milliseconds of pipeline-active time across the current
-   *  query's lifecycle (planning + research + synth). Excludes plan-review
-   *  dwell and composer idle. */
-  pipelineElapsedMs: number;
-  /** Timestamp (ms) of when the pipeline-active phase last resumed. Null
-   *  while paused (plan_review, composer, done). Live elapsed = paused
-   *  accumulator + (now - resume) while non-null. */
-  pipelineResumedAt: number | null;
-  /** Monotonic counters used by the reducer to assign stable ids. */
+  /** Plan tasks still queued for a branch (fork waves under nSeqMax). */
+  waitingTaskIndices: number[];
+  /** Set by spine:task in chain mode; consumed by the next agent:spawn. */
+  pendingTaskIndex: number | null;
+  pendingTaskDescription: string | null;
+  /** Count of research-phase spawns seen (assigns taskIndex in flat mode). */
+  researchSpawnCount: number;
+  /** Authoritative fork count from `research:start`. */
+  researchAgentCount: number;
+  /** Monotonic counters for stable timeline/label ids within this doc. */
   nextTimelineId: number;
   nextLabelIdx: number;
-  /** Set by spine:task in chain mode; consumed by the next research agent:spawn. */
-  pendingTaskIndex: number | null;
-  /** Set by spine:task; descriptor copied onto the next spawned agent. */
-  pendingTaskDescription: string | null;
-  /** Count of research-phase spawns seen (flat mode uses this to assign taskIndex). */
-  researchSpawnCount: number;
-  /** Authoritative fork count from `research:start` (= plan.tasks.length at the
-   *  harness). The "Forked N agents" label prefers this over the live agent set
-   *  or plan.tasks, which can be empty/late on the renderer side. 0 until research starts. */
-  researchAgentCount: number;
-  /** The wire's dev signal (`config:loaded.dev` — the boot's LLOYAL_DEV).
-   *  Lets the view align with the docked dev pane: inquiry rows suffix the
-   *  agent id the pane keys its rows by. Never rendered for consumers. */
-  dev: boolean;
-  /** Merged config from CLI > env > file > default. Null until config:loaded. */
-  config: Config | null;
-  /** Per-field origin — used to flag secrets as `(env)` in the composer. */
-  configOrigin: ConfigOrigin | null;
-  /** Most recent transient toast (e.g. "saved → harness.json"). */
-  toast: Toast | null;
-  /** Prefill for the composer when arriving from `edit_plan`. */
-  composerPrefill: string;
-  /** Set when the planner asks clarifying questions. Drives the clarifying
-   *  UI (questions stay visible above the composer while the user types
-   *  the answer) and carries the original query so main.ts can re-run the
-   *  planner with the Q&A as context. */
-  clarifyContext: {
-    originalQuery: string;
-    questions: string[];
-  } | null;
-  /** Active downloads (model cache misses). Rendered under BootStatus
-   *  while uiPhase === 'downloading'. Ordered by start time. */
-  downloads: DownloadStatus[];
-  /** Current "Loading weights…" / "Loading reranker…" label while
-   *  uiPhase === 'loading'. Null while the phase is inactive. */
-  loadingLabel: string | null;
-  nextToastId: number;
-  /** Append-only Static items (synth bodies). Persisted across queries so
-   *  prior answers stay in scrollback after a follow-up query starts. */
-  scrollback: ScrollbackItem[];
-  /** Corpus indexing summary — displayed in the Composer's Corpus chip
-   *  so the user can see how many files are in scope. Null until the
-   *  first `corpus:indexed` event lands; refreshes on path changes. */
-  corpusStatus: { fileCount: number; chunkCount: number } | null;
-  /** Set when boot fails (model/reranker download or load error). Renders
-   *  the error block + recovery prompt; the user can `/model <path>` or
-   *  `/reranker <path>` to retry with a local .gguf, or `/quit`. `kind`
-   *  determines which CTA is highlighted. Null once boot has progressed
-   *  past the failure or the recovery succeeded. */
-  bootError: { kind: 'llm' | 'reranker' | 'backend-pack'; message: string } | null;
-  /** The run is HELD at a tick boundary (`run:paused` → `run:resumed`).
-   *  Branches stay resident; nothing decodes until resume. */
-  paused: boolean;
-  /** Wind-down began (`run:windingDown`): agents drain to reports. The
-   *  view's cue to read "closing" and refuse pause / a second close. */
-  closing: boolean;
-  /** The run wound down before finishing on its own (user close or time) —
-   *  sticky through `complete` so the settled brief can say so; reset only
-   *  by the next query. */
-  closedEarly: boolean;
-  /** Settled briefs on disk (`library:list`). Opening one restores it as
-   *  the session document via the standard query/answer/complete events —
-   *  no report body is ever held here. */
-  library: { entries: LibraryEntry[] };
-  /** Warm-ask exchanges appended beneath the settled brief — the document
-   *  grows, it is never replaced. A full (cold) query clears them. */
-  exchanges: { question: string; body: string }[];
-  /** The warm ask in flight (its question); null otherwise. While set, the
-   *  root `query`/`answer` stay untouched — the ask streams beneath them. */
+  synth: SynthState;
+  answer: string | null;
+  /** Warm-ask exchanges appended beneath the settled brief. */
+  exchanges: { question: string; body: string; attachments: string[] }[];
+  /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
-  /** Per-ability participation in the next query, keyed by `manifest.name`.
-   *  `true` = included; `false` = configured-but-excluded (user opted out
-   *  for this session); missing key = treat as included by default. The
-   *  filter is applied at submit time in main.ts; `runQuery`'s
-   *  `abilityFilter` opt carries the included-names array. Reset to `true`
-   *  on reconfigure (`set_ability_config`) — a config
-   *  change is a strong signal of intent to use the ability. */
-  participation: Record<string, boolean>;
-  /** Installed Abilities surfaced into the renderer — one descriptor per
-   *  registry-enabled ability, joined with its signed catalog metadata. Drives
-   *  the Settings drawer. Re-emitted whole on boot completion and after
-   *  every registry enable/disable/config change. */
-  abilities: AbilityDescriptor[];
+  /** The in-flight ask's media digests, landed on the settled exchange. */
+  askAttachments: string[];
+  paused: boolean;
+  closing: boolean;
+  closedEarly: boolean;
+  /** Pipeline-active milliseconds (excludes review dwell and idle). */
+  pipelineElapsedMs: number;
+  pipelineResumedAt: number | null;
 }
 
-export const initialState: AppState = {
-  query: '',
-  warm: false,
-  uiPhase: 'boot',
-  backendPackOffer: null,
-  phase: 'idle',
-  mode: null,
-  plan: null,
-  agents: new Map(),
-  researchAgentIds: [],
-  reconAgentIds: [],
-  sourceCount: 0,
-  synth: { open: false, buffer: '', done: false, stats: null },
-  answer: null,
-  pressure: null,
-  timings: [],
-  startedAt: Date.now(),
-  pipelineElapsedMs: 0,
-  pipelineResumedAt: null,
-  nextTimelineId: 0,
-  nextLabelIdx: 0,
-  pendingTaskIndex: null,
-  pendingTaskDescription: null,
-  researchSpawnCount: 0,
-  researchAgentCount: 0,
+/** The ONE fold every target shares: session facts, the documents this
+ *  session has touched, and two pointers — what the canvas shows and what
+ *  the run writes into. Cross-document staleness is unrepresentable: no
+ *  run-scoped slot is ever reused across documents. */
+export interface AppState {
+  session: SessionState;
+  documents: Map<DocId, DocState>;
+  /** What the canvas shows; null = the picker. */
+  activeDocId: DocId | null;
+  /** What the live run writes into; null = no run. */
+  runDocId: DocId | null;
+}
+
+export const initialSession: SessionState = {
+  phase: 'boot',
   dev: false,
   config: null,
-  configOrigin: null,
-  toast: null,
-  composerPrefill: '',
-  clarifyContext: null,
-  downloads: [],
   loadingLabel: null,
-  nextToastId: 0,
-  scrollback: [],
   corpusStatus: null,
-  bootError: null,
-  paused: false,
-  closing: false,
-  closedEarly: false,
+  pressure: null,
+  toast: null,
+  nextToastId: 0,
   library: { entries: [] },
-  exchanges: [],
-  ask: null,
+  librarySearch: null,
   participation: {},
   abilities: [],
+};
+
+export const initialState: AppState = {
+  session: initialSession,
+  documents: new Map(),
+  activeDocId: null,
+  runDocId: null,
 };

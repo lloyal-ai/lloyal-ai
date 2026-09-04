@@ -11,8 +11,28 @@
 import { memo, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { color, font, radius } from "../theme.js";
 import { anchorsOf } from "../select.js";
+
+/** Math in the document's own face — where that is safe. KaTeX positions
+ *  STACKED constructs (fractions, radicals, accents, sized operators and
+ *  delimiters) by its own fonts' ink metrics; an inherited face's taller
+ *  numerals crash into the fraction bar. So inline runs — the arithmetic a
+ *  brief mostly carries — inherit the UI font, while stacked constructs are
+ *  excluded and fall back to katex.css's own font rules. */
+const MATH = `
+  .katex { font-size: 1em !important; }
+  .katex, .katex *:not(.delimsizing, .op-symbol) { font-family: inherit !important; }
+  /* Plain math glyphs carry no family class — they inherit from .katex, so
+     excluding them from the override above would still hand them the UI
+     font. Restore KaTeX's face explicitly where geometry needs it. */
+  .katex :is(.mfrac, .sqrt, .root, .accent) * {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+  }
+`;
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node
@@ -43,8 +63,10 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citation
       <Tag id={anchors[next++]?.anchor} style={HEADING[Tag]}>{children}</Tag>;
   return (
     <div style={S.prose}>
+      <style>{MATH}</style>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
         components={{
           a: ({ href, children }) => {
             const ordinal = href ? citations?.get(href) : undefined;

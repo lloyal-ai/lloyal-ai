@@ -1,5 +1,5 @@
 /**
- * reasoning.run/protocol — the harness's wire vocabulary.
+ * The harness's wire vocabulary.
  *
  * Its `WorkflowEvent` union (down) + `Command` union (up) — the two halves of
  * the headless interface `harness(ctx, events, commands)` speaks — plus the

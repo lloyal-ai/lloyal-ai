@@ -1,4 +1,4 @@
-// set_app_config with a bad corpus path: expect ui:error and NO config:updated
+// set_ability_config with a bad corpus path: expect ui:error and NO config:updated
 // / abilities:state after it (enable-failure rollback), then exit.
 const { fork } = require("node:child_process");
 const child = fork("dist/targets/cli/index.mjs", [], {
@@ -9,9 +9,9 @@ let sent = false, done = false, sawError = false;
 const finish = (c) => { if (done) return; done = true; child.kill(); process.exit(c); };
 child.on("message", (m) => {
   const ev = m?.payload;
-  if (ev?.type === "ui:composer" && !sent) {
+  if (ev?.type === "weights:done" && !sent) {
     sent = true;
-    child.send({ t: "command", payload: { type: "set_app_config", name: "corpus", values: { corpusPath: "/nonexistent-corpus-xyz" } } });
+    child.send({ t: "command", payload: { type: "set_ability_config", name: "corpus", values: { corpusPath: "/nonexistent-corpus-xyz" } } });
   } else if (sent && ev?.type === "ui:error") {
     sawError = true;
     console.log(`ui:error: ${ev.message}`);

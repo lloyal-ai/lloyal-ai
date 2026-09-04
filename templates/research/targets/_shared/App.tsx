@@ -12,10 +12,11 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import type { DevControl, RunFraming } from "@lloyal-labs/dev-tools";
-import { send, useBrief } from "./store.js";
+import { appStore, send, useBrief } from "./store.js";
 import {
-  selectDepth, selectLive, selectMoment, selectRunShape, selectShape,
-  selectTaskCount, type Shape,
+  depthOf, selectActiveDocId, selectAskInFlight, selectLive,
+  selectMoment, selectRunDocId, selectShape, shapeOf,
+  type Shape,
 } from "./select.js";
 import { recordPace } from "./pace.js";
 import { Shell } from "./parts/Shell.js";
@@ -37,9 +38,29 @@ const FRAMING: RunFraming = {
     "research:start": "research",
     "synthesize:start": "synth",
   },
-  open: ["preflight:start", "plan:start", "query"],
-  close: ["complete", "ui:error", "ui:composer"],
+  // Wire order: the harness echoes `query` FIRST on every path, then the
+  // pipeline's preflight/plan markers follow. The declared order must match
+  // the wire's or the supersede heuristic double-resets.
+  open: ["query", "preflight:start", "plan:start"],
+  close: ["complete", "run:aborted"],
+  // Where the user's instruction lives on THIS wire — the pane shows it on
+  // the spine row only because we declare it here; it never guesses.
+  instruction: { event: "query", field: "query", attachments: "attachments" },
 };
+
+/** Per-image token budget steps. `auto` first, because handing the choice
+ *  back to the model's metadata is the default and has to stay reachable. */
+const IMAGE_TOKEN_STEPS = ["auto", "256", "512", "1024", "2048", "4096"] as const;
+
+type ImageTokenModel = { imageMinTokens?: number; imageMaxTokens?: number };
+
+/** Config value → the step that represents it. 0 and undefined are the same
+ *  state (the binding applies the value only when > 0), and both read `auto`.
+ *  A value set in harness.yml that is not one of the steps shows as itself
+ *  rather than snapping to a neighbour — the slider then sits at `auto`,
+ *  which is honest: the UI cannot represent it. */
+const imageTokenStep = (v: number | undefined): string =>
+  !v ? "auto" : String(v);
 
 /** The dev pane's Settings contribution — pure data, dev-gated by the wire. */
 const DEV_CONTROLS: readonly DevControl[] = [
@@ -60,6 +81,27 @@ const DEV_CONTROLS: readonly DevControl[] = [
     note: "applies next run",
     read: (c) => (c.defaults as { reasoningMode?: string } | undefined)?.reasoningMode,
   },
+  // Sliders, not button rows: these are scales, so the ordering carries the
+  // meaning. 'auto' is a real step — it hands the choice back to the model's
+  // own metadata, which is the right default and must stay reachable.
+  {
+    key: "model.imageMaxTokens",
+    values: IMAGE_TOKEN_STEPS,
+    render: "slider",
+    command: "set_image_max_tokens",
+    field: "value",
+    note: "reloads the runtime",
+    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMaxTokens),
+  },
+  {
+    key: "model.imageMinTokens",
+    values: IMAGE_TOKEN_STEPS,
+    render: "slider",
+    command: "set_image_min_tokens",
+    field: "value",
+    note: "reloads the runtime",
+    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMinTokens),
+  },
 ];
 
 const COMPOSER_HINT: Record<ReturnType<typeof selectMoment>, string> = {
@@ -72,6 +114,8 @@ const COMPOSER_HINT: Record<ReturnType<typeof selectMoment>, string> = {
 export function HarnessApp(): ReactElement {
   const moment = useBrief(selectMoment);
   const live = useBrief(selectLive);
+  const activeDocId = useBrief(selectActiveDocId);
+  const askInFlight = useBrief(selectAskInFlight);
   const configuredShape = useBrief(selectShape);
   const [chosenShape, setChosenShape] = useState<Shape | null>(null);
   const shape = chosenShape ?? configuredShape;
@@ -86,21 +130,23 @@ export function HarnessApp(): ReactElement {
   }, []);
 
   // Each settled brief teaches the pickers this machine's pace — recorded
-  // once, on the edge into settle. Warm follow-ups (one synthetic task,
-  // no research) would poison the figure, so single-task runs don't count.
-  // The same edge refreshes the library: a settle means a new report.
-  const depth = useBrief(selectDepth);
-  const runShape = useBrief(selectRunShape);
-  const tasks = useBrief(selectTaskCount);
-  const banked = useBrief((app) => app.pipelineElapsedMs);
-  const prevMoment = useRef(moment);
+  // once, when THE RUN ends, from the document it ran in: a run that settles
+  // while the canvas is viewing another brief still counts. Warm follow-ups
+  // (one synthetic task, no research) would poison the figure, so
+  // single-task runs don't count; an abort teaches nothing. (The library
+  // refresh is not the view's to infer: the harness announces it on settle.)
+  const runDocId = useBrief(selectRunDocId);
+  const lastRun = useRef(runDocId);
   useEffect(() => {
-    if (moment === "settle" && prevMoment.current !== "settle") {
-      if (tasks !== null && tasks >= 2) recordPace(depth, runShape, tasks, banked);
-      send({ type: "library_list" });
-    }
-    prevMoment.current = moment;
-  }, [moment, depth, runShape, tasks, banked]);
+    const ended = lastRun.current;
+    lastRun.current = runDocId;
+    if (ended === null || runDocId !== null) return;
+    const { app } = appStore().getState();
+    const doc = app.documents.get(ended);
+    if (!doc || doc.phase !== "done") return;
+    const tasks = doc.plan?.tasks.length ?? 0;
+    if (tasks >= 2) recordPace(depthOf(app, doc), shapeOf(doc), tasks, doc.pipelineElapsedMs ?? 0);
+  }, [runDocId]);
 
   return (
     <DevPane
@@ -112,12 +158,16 @@ export function HarnessApp(): ReactElement {
     >
       <Shell
         library={<Library />}
-        dock={<Composer shape={shape} placeholder={COMPOSER_HINT[moment]} />}
+        dock={<Composer shape={shape} placeholder={askInFlight ? COMPOSER_HINT.write : COMPOSER_HINT[moment]} />}
       >
-        {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
-        {moment === "frame" && <Frame />}
-        {moment === "write" && <Write />}
-        {moment === "settle" && <Settle />}
+        {/* Identity remount — per-doc component state (disclosure toggles,
+            edit fields) resets when the canvas turns over to another doc. */}
+        <div key={activeDocId ?? "picker"} style={{ display: "contents" }}>
+          {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
+          {moment === "frame" && <Frame />}
+          {moment === "write" && <Write />}
+          {moment === "settle" && <Settle />}
+        </div>
       </Shell>
     </DevPane>
   );
