@@ -4,7 +4,7 @@
  * that can be wrong about a cut is decidable here without a registry.
  */
 import { describe, it, expect } from 'vitest';
-import { DEPS, arcPackages, parseCut, latestVersion, planAlphas, rewritePins } from '../scripts/cut-alpha.lib.mjs';
+import { DEPS, arcPackages, parseCut, latestVersion, planAlphas, rewritePins, include, unclosed } from '../scripts/cut-alpha.lib.mjs';
 
 const e404 = Object.assign(new Error('npm ERR! code E404'), { stderr: 'npm ERR! code E404\nnpm ERR! 404 Not Found' });
 const reset = Object.assign(new Error('npm ERR! code ECONNRESET'), { stderr: 'npm ERR! code ECONNRESET' });
@@ -47,6 +47,58 @@ describe('planAlphas', () => {
       '@lloyal-labs/dev-tools': '0.5.0-alpha.1',
       'lloyal-ai': '1.11.0-alpha.1',
     });
+  });
+});
+
+describe('include', () => {
+  const planned = {
+    'lloyal-ai': '1.11.0-alpha.4',
+    '@lloyal-labs/media': '0.2.0-alpha.4',
+    '@lloyal-labs/lloyal.node': '3.2.0-alpha.4',
+  };
+
+  it('a member left OUT keeps the pin the template already carries', () => {
+    // The defect this exists for: the binding was in the table but shipped
+    // nothing, so the cut stamped a version the registry would never serve.
+    const set = include(planned, ['lloyal-ai', '@lloyal-labs/media']);
+    const pkg = {
+      dependencies: {
+        '@lloyal-labs/media': '0.2.0-alpha.3',
+        '@lloyal-labs/lloyal.node': '3.2.0-alpha.3',
+      },
+    };
+    rewritePins(pkg, set);
+    expect(pkg.dependencies['@lloyal-labs/media']).toBe('0.2.0-alpha.4');
+    expect(pkg.dependencies['@lloyal-labs/lloyal.node']).toBe('3.2.0-alpha.3');
+  });
+
+  it('no names at all is refused — absence must cut nothing, never everything', () => {
+    // The old behaviour was "empty means the whole table", which is precisely
+    // how a member that shipped nothing got a version stamped for it.
+    expect(() => include(planned, [])).toThrow(/--include <name> is required/);
+  });
+
+  it('an unknown name throws — a typo must not silently shrink the cut', () => {
+    expect(() => include(planned, ['lloyal-ia'])).toThrow(/not in the cut/);
+  });
+});
+
+describe('unclosed', () => {
+  const templates = [
+    { path: 'templates/research', pkg: { dependencies: { '@lloyal-labs/media': '0.2.0-alpha.3', sharp: '^0.35.4' } } },
+    { path: 'templates/basic', pkg: { dependencies: { effection: '^4' } } },
+  ];
+
+  it('moving a template pin without moving lloyal-ai is refused — the templates ride ITS tarball', () => {
+    // git would record the new pin; the published CLI would keep scaffolding
+    // the previous set, and nobody would see the difference until a scaffold.
+    expect(unclosed({ '@lloyal-labs/media': '0.2.0-alpha.4' }, templates))
+      .toEqual([{ template: 'templates/research', dep: '@lloyal-labs/media' }]);
+  });
+
+  it('is silent once lloyal-ai is in the cut, which is the normal case', () => {
+    const set = { 'lloyal-ai': '1.11.0-alpha.4', '@lloyal-labs/media': '0.2.0-alpha.4' };
+    expect(unclosed(set, templates)).toEqual([]);
   });
 });
 

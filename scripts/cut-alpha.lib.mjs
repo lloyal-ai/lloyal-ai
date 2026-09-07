@@ -77,6 +77,63 @@ export function planAlphas({ cut, packages, view }) {
   return alphas;
 }
 
+/**
+ * The members this cut actually ships.
+ *
+ * `DEPS` says what the arc TOUCHED; it cannot say what moves on any given cut.
+ * Treating it as the set is what stamped an alpha for a binding that was not
+ * shipping, pinning manifests to a version that would never exist.
+ *
+ * A whitelist rather than an exclusion, because the failure modes are not
+ * symmetric. Forget to exclude and you stamp a phantom version. Forget to
+ * include and the package keeps its published version, which every dependent
+ * then pins — an incomplete set where everything still resolves. Omission has
+ * to degrade, not break.
+ *
+ * Throws on a name the table does not contain, and the caller must pass at
+ * least one: a cut is a decision, and there is no sensible default for it.
+ * Defaulting to the whole table is what stamped a version for a member that
+ * shipped nothing, so absence has to mean nothing, never everything.
+ */
+export function include(alphas, names) {
+  if (names.length === 0) {
+    throw new Error(`--include <name> is required (one or more of: ${Object.keys(alphas).join(', ')})`);
+  }
+  const kept = {};
+  for (const n of names) {
+    if (!(n in alphas)) {
+      throw new Error(`--include ${n}: not in the cut (${Object.keys(alphas).join(', ')})`);
+    }
+    kept[n] = alphas[n];
+  }
+  return kept;
+}
+
+/**
+ * Template pins that would move while `lloyal-ai` itself stays put.
+ *
+ * The templates are not published packages — they ride this package's tarball.
+ * So moving a template pin without moving `lloyal-ai` writes a change git
+ * records and the registry never sees: the published CLI keeps scaffolding the
+ * PREVIOUS set. hdk's closure rule is over its workspace graph; here the graph
+ * is one edge, and this is it.
+ *
+ * Returns `{ template, dep }` for each offending pin, empty when the cut is
+ * coherent.
+ */
+export function unclosed(alphas, templates) {
+  if (alphas['lloyal-ai']) return [];
+  const gaps = [];
+  for (const { path, pkg } of templates) {
+    for (const field of ['dependencies', 'devDependencies']) {
+      for (const dep of Object.keys(pkg[field] ?? {})) {
+        if (alphas[dep]) gaps.push({ template: path, dep });
+      }
+    }
+  }
+  return gaps;
+}
+
 /** Pin every alpha dependency EXACTLY — semver ranges exclude prereleases, so
  *  a caret would scaffold a project that cannot install. devDependencies
  *  count: the research template keeps @lloyal-labs/media there. Returns
