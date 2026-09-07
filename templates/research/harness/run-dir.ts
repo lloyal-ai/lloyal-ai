@@ -103,6 +103,17 @@ export class RunDirSink {
     return dir;
   }
 
+  /** Roots a tool result admitted during this run — booked with the run so
+   *  the meta line carries them: later runs are staged with them and reopen
+   *  restores them, exactly as the query's own attachments travel. */
+  admit(digests: readonly string[]): void {
+    const run = this.run;
+    if (!run) return;
+    const seen = new Set(run.attachments);
+    const fresh = digests.filter((d) => !seen.has(d));
+    if (fresh.length > 0) run.attachments = [...run.attachments, ...fresh];
+  }
+
   private begin(
     dir: string,
     opts: { query: string; mode: 'flat' | 'deep'; attachments?: readonly string[] },
@@ -156,6 +167,11 @@ export class RunDirSink {
       }
       case 'answer':
         run.lastAnswer = ev.text;
+        break;
+      case 'agent:prefilled':
+        // A tool result that carried roots admitted them: book them with the
+        // run, so the meta line carries them beside the query's own.
+        if (ev.attachments?.length) this.admit(ev.attachments.map((a) => a.digest));
         break;
       case 'synthesize:done':
         run.synthStats = { tokens: ev.tokenCount, ppl: ev.ppl, timeMs: ev.timeMs };

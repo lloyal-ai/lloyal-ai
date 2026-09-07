@@ -91,7 +91,7 @@ describe('new — default abilities are vendored regardless of TTY / --skip-inst
   it('research: vendors BOTH default abilities on the non-interactive (non-TTY) path', async () => {
     // This is the 0.7.1 bug verbatim: no TTY, so nothing was vendored.
     const dir = await scaffold('r1', ['--template', 'research']);
-    expect(vendoredSpecs()).toEqual(['lloyal/corpus', 'lloyal/web']);
+    expect(vendoredSpecs()).toEqual(['lloyal/corpus', 'lloyal/web', 'lloyal/documents']);
     // The pin travels with the spec — the vendored version must be reproducible.
     expect(vendorMock.mock.calls[0][1]).toMatchObject(halves(CORPUS));
     expect(vendorMock.mock.calls[1][1]).toMatchObject(halves(WEB));
@@ -108,7 +108,7 @@ describe('new — default abilities are vendored regardless of TTY / --skip-inst
 
   it('--skip-install does NOT suppress vendoring (it only skips `npm install`)', async () => {
     await scaffold('r2', ['--template', 'research', '--skip-install']);
-    expect(vendoredSpecs()).toEqual(['lloyal/corpus', 'lloyal/web']);
+    expect(vendoredSpecs()).toEqual(['lloyal/corpus', 'lloyal/web', 'lloyal/documents']);
   });
 
   it('--skip-abilities is the ONLY opt-out, and says the project will not run', async () => {

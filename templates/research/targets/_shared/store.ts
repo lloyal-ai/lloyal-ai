@@ -13,7 +13,6 @@ import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { reduce, initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import type { Descriptor } from "@lloyal-labs/media";
 
 export interface Bridge {
   onEvent(cb: (frame: { seq: number; ev: WorkflowEvent }) => void): () => void;
@@ -23,21 +22,18 @@ export interface Bridge {
    *  in-process bridges (cli, desktop-ipc) omit it — the view then treats
    *  the link as permanently 'connected' and never shows the banner. */
   onStatus?(cb: (status: WireStatus) => void): () => void;
-  /** A displayable URL for an image the model was shown. On the bridge because
-   *  serving bytes is a transport question — web fetches over the content
-   *  plane, desktop reads from disk. Omitted by bridges that cannot (cli, and
-   *  desktop until its path lands); the view then names the image instead. */
-  representationUrl?(digest: string, index?: number): string;
-  /** Admit an image and return its ROOT descriptor — the write half of
-   *  `representationUrl`, and transport-specific for the same reason: web
-   *  POSTs to the content plane, desktop ingests in process. Bridges with no
-   *  content plane (cli) omit it, and the composer then offers no attach
-   *  affordance at all rather than one that fails on submit.
+  /** The origin of the content plane — where bytes live. Uploads go up to it;
+   *  representations, manifests and configs come down from it. ONE transport
+   *  fact, and every URL is derived from it in `content-urls.ts`, so a bridge
+   *  implements one thing and inherits every route the plane has and every
+   *  route it grows. Omitted by a bridge with no plane (cli, and desktop until
+   *  its path lands); the view then offers no attach control and names an
+   *  attachment instead of showing it.
    *
-   *  Bytes go over HTTP; only the descriptor goes over the socket. The wss
-   *  bridge keeps every frame for replay, so an image on that wire would sit
-   *  in the history forever. */
-  ingestMedia?(bytes: Uint8Array): Promise<Descriptor>;
+   *  Bytes go over HTTP; only descriptors go over the socket. The wss bridge
+   *  keeps every frame for replay, so a payload on that wire would sit in the
+   *  history forever. */
+  contentOrigin?(): string;
 }
 
 declare global {

@@ -395,7 +395,7 @@ const SCOPE: Partial<Record<WorkflowEvent['type'], Scope>> = {
   'synthesize:start': 'run', 'synthesize:done': 'run',
   'answer': 'run', 'complete': 'run', 'ui:plan_review': 'run',
   'agent:spawn': 'run', 'agent:produce': 'run', 'agent:tool_call': 'run',
-  'agent:tool_retry': 'run', 'agent:tool_result': 'run', 'agent:tool_progress': 'run',
+  'agent:tool_retry': 'run', 'agent:tool_result': 'run', 'agent:tool_progress': 'run', 'agent:prefilled': 'run',
   'agent:return': 'run', 'agent:recovered': 'run', 'agent:failed': 'run',
   'agent:done': 'run',
   'run:paused': 'run', 'run:resumed': 'run', 'run:windingDown': 'run',
@@ -1115,6 +1115,23 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
 
     case 'agent:tool_progress':
       return doc;
+
+    case 'agent:prefilled': {
+      // A tool result that carried roots admitted them onto the run: they join
+      // the live ask (or the cold brief) as they land, once each, so the strip
+      // shows what the model saw while it works — the same roots the meta line
+      // books and a reopen restores.
+      const roots = ev.attachments ?? [];
+      if (roots.length === 0) return doc;
+      if (doc.ask !== null) {
+        const have = new Set(doc.askAttachments);
+        const fresh = roots.map((a) => a.digest).filter((digest) => !have.has(digest));
+        return fresh.length > 0 ? { ...doc, askAttachments: [...doc.askAttachments, ...fresh] } : doc;
+      }
+      const have = new Set(doc.attachments.map((a) => a.digest));
+      const fresh = roots.filter((a) => !have.has(a.digest));
+      return fresh.length > 0 ? { ...doc, attachments: [...doc.attachments, ...fresh] } : doc;
+    }
 
     case 'agent:return':
     case 'agent:recovered': {

@@ -7,6 +7,9 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
+import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
+import { resolveAsset } from "./Figures.js";
+import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectActiveDocId, selectBanked,
   selectDepth, selectEtaTasks, selectLibraries, selectLive, selectMoment, selectResumedAt,
@@ -29,7 +32,19 @@ const selectClarifying = (app: AppState): boolean =>
  *  Enumerating types here would be a second copy of a question the bytes
  *  answer — and wrong in both directions (the ingress converts and admits
  *  webp, heic and tiff happily). */
-const IMAGE_TYPES = "image/*";
+const ATTACH_TYPES = "image/*,application/pdf";
+
+/** An attachment is admitted the moment it is picked: the bytes cross HTTP
+ *  once, the host normalizes an image or reads a document, and the tray shows
+ *  the ADMITTED thing — an image's admitted pixels, a document's first page —
+ *  rather than a local preview that may not be what the model gets. Submit
+ *  then carries roots only, and a refused file says so before the question
+ *  is even written. A removed attachment leaves an unreferenced blob behind,
+ *  the same harmless orphan class the store's write order already accepts. */
+type Attached =
+  | { id: number; name: string; status: "uploading" }
+  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document"; thumb: string | null; title: string | null }
+  | { id: number; name: string; status: "failed"; error: string };
 
 /** A picked image, before submit.
  *
@@ -39,7 +54,6 @@ const IMAGE_TYPES = "image/*";
  *  by digest because the browser holds the source's hash while the fold holds
  *  the MANIFEST's. After submit the view resolves through the content plane
  *  instead, which shows the exact pixels the projector encoded. */
-type Attached = { id: number; name: string; url: string; file: File };
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
  *  inline background always beats the hover class, so selection never dims. */
@@ -54,6 +68,16 @@ const CSS = `
   .cmp-pill:hover { background: ${color.card}; color: ${color.ink}; }
 `;
 
+/** A page with a folded corner — the document chip's glyph. */
+function DocGlyph(): ReactElement {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
 export function Composer({ shape, placeholder }: {
   shape: Shape;
   placeholder: string;
@@ -61,7 +85,7 @@ export function Composer({ shape, placeholder }: {
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const uploading = images.some((a) => a.status === "uploading");
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
   /** The question, held after send until the fold acknowledges it. The echo
@@ -146,23 +170,47 @@ export function Composer({ shape, placeholder }: {
    *  — a second attach path is how the two drift. */
   const attach = (files: ArrayLike<File> | null): void => {
     setImageError("");
-    for (const file of Array.from(files ?? [])) {
-      setImages((prev) => [
-        ...prev,
-        { id: nextId.current++, name: file.name, url: URL.createObjectURL(file), file },
-      ]);
-    }
+    // Copy the list BEFORE resetting the picker: a FileList is live, and
+    // clearing the input empties it.
+    const chosen = Array.from(files ?? []);
     if (picker.current) picker.current.value = "";
+    if (chosen.length === 0) return;
+    const origin = contentOrigin();
+    if (origin === null) {
+      setImageError("This build cannot accept attachments.");
+      return;
+    }
+    for (const file of chosen) {
+      const id = nextId.current++;
+      setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
+      void (async () => {
+        try {
+          const root = await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
+          const asset = await resolveAsset(origin, root.digest);
+          const cover = asset.kind === "document" ? asset.meta.pages.find((p) => p.page === 1)?.render : undefined;
+          const thumb = asset.kind === "image"
+            ? representationUrl(origin, root.digest)
+            : cover ? representationUrl(origin, cover.digest) : null;
+          const title = asset.kind === "document" ? asset.meta.title : null;
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title } : a)));
+        } catch (err) {
+          // The host's own message — 413 too large, 408 too slow, 400 not
+          // admitted — beats anything invented here.
+          const error = err instanceof Error ? err.message : "Upload failed.";
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error } : a)));
+        }
+      })();
+    }
   };
 
   /** Paste is the shortest road from a screenshot to a question. The clipboard
    *  hands over the same File objects the picker does, so it feeds `attach`
-   *  rather than growing a second path. Only image items are taken, and the
-   *  default is prevented only when one was — otherwise a paste carrying text
-   *  would silently lose it. */
+   *  rather than growing a second path. Only image and PDF items are taken,
+   *  and the default is prevented only when one was — otherwise a paste
+   *  carrying text would silently lose it. */
   const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
     const files = Array.from(e.clipboardData?.items ?? [])
-      .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type === "application/pdf"))
       .map((i) => i.getAsFile())
       .filter((f): f is File => f !== null);
     if (files.length === 0) return;
@@ -170,11 +218,7 @@ export function Composer({ shape, placeholder }: {
     attach(files);
   };
 
-  const clear = (picked: Attached[]): void => {
-    // Object URLs are a document-lifetime leak until revoked, and the preview
-    // is over the moment the command is sent — after it the view resolves the
-    // ADMITTED representation through the content plane.
-    for (const i of picked) URL.revokeObjectURL(i.url);
+  const clear = (): void => {
     setDraft("");
     setImages([]);
     setImageError("");
@@ -189,47 +233,28 @@ export function Composer({ shape, placeholder }: {
     if (clarifying) {
       send({ type: "submit_clarification", answer: text });
       setPending({ text, docId: activeDocId, clarify: true });
-      clear(images);
+      clear();
+      return;
+    }
+    // A refused attachment is not silently dropped from the question: the
+    // user removes it, or retries it, before sending.
+    if (images.some((a) => a.status === "failed")) {
+      setImageError("Remove the attachment that was refused, or attach it again.");
       return;
     }
     const mode = SHAPES.find((s) => s.shape === shape)?.mode ?? "flat";
-    const picked = images;
-
-    // Upload FIRST, send references second. The bytes cross HTTP where the
-    // host normalizes, addresses and commits them; only the roots go over the
-    // socket. Nothing is submitted if an upload fails — a query whose images
-    // silently did not arrive is worse than one that did not start.
-    void (async () => {
-      let attachments;
-      if (picked.length > 0) {
-        const ingest = window.harness.ingestMedia;
-        if (!ingest) {
-          setImageError("This build cannot accept attachments.");
-          return;
-        }
-        setUploading(true);
-        try {
-          attachments = await Promise.all(picked.map(async (i) =>
-            ingest(new Uint8Array(await i.file.arrayBuffer()))));
-        } catch (err) {
-          // The host's own message — 413 too large, 408 too slow, 400 not a
-          // readable image — beats anything invented here.
-          setImageError(err instanceof Error ? err.message : "Upload failed.");
-          return;
-        } finally {
-          setUploading(false);
-        }
-      }
-      send({
-        type: "submit_query", query: text, mode,
-        // Cold: the Ask shape is the choice. Warm: every follow-up is an
-        // ask — one agent, every ability, into the settled document.
-        skipPlanner: willSkipPlanner,
-        ...(attachments ? { attachments } : {}),
-      });
-      setPending({ text, docId: activeDocId, clarify: false });
-      clear(picked);
-    })();
+    // The bytes already crossed HTTP at attach time; only the roots go over
+    // the socket.
+    const attachments = images.flatMap((a) => (a.status === "admitted" ? [a.root] : []));
+    send({
+      type: "submit_query", query: text, mode,
+      // Cold: the Ask shape is the choice. Warm: every follow-up is an
+      // ask — one agent, every ability, into the settled document.
+      skipPlanner: willSkipPlanner,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
+    setPending({ text, docId: activeDocId, clarify: false });
+    clear();
   };
 
   return (
@@ -238,8 +263,12 @@ export function Composer({ shape, placeholder }: {
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
           {images.map((img) => (
-            <span key={img.id} style={S.thumb} title={img.name}>
-              <img src={img.url} alt={img.name} style={S.thumbImg} />
+            <span key={img.id} style={S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
+              {img.status === "admitted" && img.thumb
+                ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
+                : img.status === "failed"
+                  ? <span style={{ ...S.docChip, color: color.danger }}><DocGlyph />{img.name} — {img.error}</span>
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
@@ -302,7 +331,7 @@ export function Composer({ shape, placeholder }: {
       <input
         ref={picker}
         type="file"
-        accept={IMAGE_TYPES}
+        accept={ATTACH_TYPES}
         multiple
         style={{ display: "none" }}
         onChange={(e) => attach(e.target.files)}
@@ -313,8 +342,8 @@ export function Composer({ shape, placeholder }: {
         <button
           type="button"
           className="cmp-icon" style={S.attach}
-          title="Attach an image"
-          aria-label="Attach an image"
+          title="Attach an image or PDF"
+          aria-label="Attach an image or PDF"
           onClick={() => picker.current?.click()}
         >
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -489,6 +518,13 @@ const S: Record<string, CSSProperties> = {
     borderRadius: 9, border: `1px solid ${color.line}`, background: color.card,
     color: color.dim, font: `600 12px ${font.ui}`, lineHeight: 1,
     display: "grid", placeItems: "center", cursor: "pointer", padding: 0,
+  },
+  /** An attachment the host has not answered for yet. */
+  admitting: { opacity: 0.6 },
+  docChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, height: 40, padding: "0 10px 0 8px",
+    font: `12px ${font.ui}`, color: color.ink, maxWidth: 240, overflow: "hidden",
+    textOverflow: "ellipsis", whiteSpace: "nowrap",
   },
   imageError: { font: `12px ${font.ui}`, color: color.danger },
   attach: {

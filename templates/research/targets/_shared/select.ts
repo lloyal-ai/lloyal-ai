@@ -298,6 +298,18 @@ export const selectTitle = (app: AppState): string =>
 export const selectSeen = (app: AppState): string[] =>
   activeDoc(app).attachments.map((a) => a.digest);
 
+/** Every root the thread holds — the brief's own, each exchange's, a live
+ *  ask's — so an `attachment://` citation resolves against digests the view
+ *  already knows and nothing else. */
+export const selectThreadDigests = (app: AppState): string[] => {
+  const doc = activeDoc(app);
+  return [...new Set([
+    ...doc.attachments.map((a) => a.digest),
+    ...doc.exchanges.flatMap((x) => x.attachments),
+    ...doc.askAttachments,
+  ])];
+};
+
 const STATUS_OF: Record<DocPhase, string> = {
   planning: "Framing",
   discovering: "Browsing your sources",
