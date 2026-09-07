@@ -45,6 +45,7 @@ const WORKSPACE_PACKAGES: Record<string, string> = {
   '@lloyal-labs/host': 'packages/host',
   '@lloyal-labs/web-ability': 'packages/abilities/web',
   '@lloyal-labs/corpus-ability': 'packages/abilities/corpus',
+  '@lloyal-labs/documents-ability': 'packages/abilities/documents',
 };
 const NODE_PACKAGE = '@lloyal-labs/lloyal.node';
 /** Sibling names probed for the lloyal.node repo when `--node` is not given. */

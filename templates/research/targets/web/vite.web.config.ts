@@ -29,6 +29,8 @@ export default defineConfig({
   // so a `file:` link delivers raw CJS to the browser and its named exports
   // vanish ("does not provide an export named 'connectWss'"). Forcing it into
   // dep-optimization restores the behaviour an installed copy gets.
-  optimizeDeps: { include: ["@lloyal-labs/binding/web"] },
+  // `@lloyal-labs/media` for the same reason: the view now reads a document's
+  // sidecar through its root entry (`asDocumentMeta`, `DOCUMENT_CONFIG_TYPE`).
+  optimizeDeps: { include: ["@lloyal-labs/binding/web", "@lloyal-labs/media"] },
   build: { outDir: resolve(__dirname, "../../dist-web"), emptyOutDir: true },
 });

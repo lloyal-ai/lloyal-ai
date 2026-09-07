@@ -239,3 +239,43 @@ test('selectRunDepth: the run keeps its own effort across preflight', () => {
   s = fold([{ type: 'preflight:start', query: 'Q', abilityCount: 2 } as WorkflowEvent], s);
   assert.equal(s.documents.get(A)!.runEffort, 'low');
 });
+
+// ── Admissions grow the thread live ────────────────────────────
+// A tool result that admitted roots reaches the fold on the bus as
+// `agent:prefilled`; the roots join the ask (or the brief) as they land, so the
+// strip shows what the model saw before the answer settles and without a reopen.
+const PAGE = { mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: 'sha256:' + 'c'.repeat(64), size: 700 };
+const PAGE2 = { ...PAGE, digest: 'sha256:' + 'd'.repeat(64) };
+const admitted = (roots: unknown[]) =>
+  ({ type: 'agent:prefilled', agentId: 3, cells: 1629, role: 'toolResult', attachments: roots }) as WorkflowEvent;
+
+test('a warm ask grows its attachments as a tool admits roots, once each, and settles them into the exchange', () => {
+  let s = fold([
+    { type: 'query', docId: A, query: 'the figure?', warm: true } as WorkflowEvent,
+    { type: 'research:start', agentCount: 1, mode: 'flat' } as WorkflowEvent,
+    admitted([PAGE]),
+  ], settled());
+  assert.deepEqual(s.documents.get(A)!.askAttachments, [PAGE.digest]);
+  // A heal replays the same admission; a second tool admits another root.
+  s = fold([admitted([PAGE]), admitted([PAGE2, PAGE])], s);
+  assert.deepEqual(s.documents.get(A)!.askAttachments, [PAGE.digest, PAGE2.digest]);
+  s = fold([{ type: 'answer', text: 'it shows…' } as WorkflowEvent, COMPLETE], s);
+  const doc = s.documents.get(A)!;
+  assert.deepEqual(doc.askAttachments, []);
+  assert.deepEqual(doc.exchanges[0].attachments, [PAGE.digest, PAGE2.digest]);
+  // The brief's own media is untouched by what an ask admitted.
+  assert.deepEqual(doc.attachments, []);
+});
+
+test("a cold brief grows its own media as a tool admits roots; a prefill without roots changes nothing", () => {
+  let s = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'research:start', agentCount: 1, mode: 'flat' } as WorkflowEvent,
+    { type: 'agent:prefilled', agentId: 3, cells: 40, role: 'toolResult' } as WorkflowEvent,
+  ]);
+  assert.deepEqual(s.documents.get(A)!.attachments, []);
+  s = fold([admitted([PAGE]), admitted([PAGE])], s);
+  assert.deepEqual(s.documents.get(A)!.attachments.map((a) => a.digest), [PAGE.digest]);
+  assert.deepEqual(s.documents.get(A)!.askAttachments, []);
+});
+

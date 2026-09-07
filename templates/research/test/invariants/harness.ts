@@ -41,6 +41,7 @@ import { createBus } from "@lloyal-labs/binding";
 import { RerankerCtx } from "@lloyal-labs/lloyal-agents";
 import type { Reranker, TraceWriter, TraceEvent } from "@lloyal-labs/lloyal-agents";
 import { makeServedRunner } from "@lloyal-labs/rig";
+import type { AttachmentStore } from "@lloyal-labs/media";
 import { harness } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
 import { bufferedCommandSignal } from "../../harness/served-runtime.js";
@@ -90,6 +91,10 @@ export interface HarnessSpec {
    *  BEFORE the harness runs — same affordance as the agents invariants
    *  harness. Diagnosis and fault injection. */
   instrument?: (ctx: MockSessionContext) => void;
+  /** The content store the harness resolves attachments through. A scenario
+   *  that attaches something commits it here first, then names its root on
+   *  the command. Defaults to the runner's own (a null store). */
+  attachmentStore?: AttachmentStore;
 }
 
 export interface HarnessRun {
@@ -236,6 +241,7 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
       dev: false,
       origin: DEFAULT_ORIGIN,
       sessionOriginMap: SESSION_ORIGIN_MAP,
+      ...(spec.attachmentStore ? { attachmentStore: spec.attachmentStore } : {}),
     },
   );
 

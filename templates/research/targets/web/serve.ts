@@ -28,7 +28,7 @@ import { WebSocketServer } from "ws";
 import type { WsServerSocket } from "@lloyal-labs/binding/node";
 import type { EventBus } from "@lloyal-labs/binding";
 import { resolveModel, catalogEntry, createProjectMediaStore, createContentRoutes } from "@lloyal-labs/rig/node";
-import { createImageIngress } from "@lloyal-labs/media/node";
+import { createContentIngress, MAX_DOCUMENT_BYTES, DOCUMENT_UPLOAD_TIMEOUT_MS } from "@lloyal-labs/media/node";
 import { createServedHostDriver } from "./driver.js";
 import { runServedSession } from "../../harness/served-session.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
@@ -176,10 +176,17 @@ main(function* () {
   // normalized both cost 4047 cells). What it does buy is 73% off the wire and
   // a format the decoder accepts. Coupling the two dials would trade image
   // fidelity for bytes under a name that promises neither.
-  const ingress = createImageIngress(media);
+  // One door for every upload: the bytes decide whether the normalizer (an
+  // image) or the document ingress (a PDF) admits them. The caps are the
+  // content plane's own, so every host that mounts it admits the same thing;
+  // the route's abort signal reaches the ingress, so a client that goes away
+  // stops holding a permit.
+  const ingress = createContentIngress(media);
   const content = createContentRoutes({
     store: media,
-    ingest: (bytes) => ingress.ingest(bytes),
+    ingest: (bytes, signal) => ingress.ingest(bytes, signal),
+    maxUploadBytes: MAX_DOCUMENT_BYTES,
+    uploadTimeoutMs: DOCUMENT_UPLOAD_TIMEOUT_MS,
     ...(process.env.LLOYAL_CONTENT_ORIGIN
       ? { allowedOrigin: process.env.LLOYAL_CONTENT_ORIGIN }
       : {}),

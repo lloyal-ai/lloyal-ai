@@ -41,8 +41,8 @@ import type {
   AbilityRegistry,
   AbilityConfigStore,
 } from "@lloyal-labs/lloyal-agents";
-import { asAttachment, materialize } from "@lloyal-labs/media";
-import type { Attachment, Descriptor } from "@lloyal-labs/media";
+import { asAttachment, materialize, MANIFEST_TYPE } from "@lloyal-labs/media";
+import type { Attachment, AttachmentStore, Descriptor } from "@lloyal-labs/media";
 import type { EventBus } from "@lloyal-labs/binding";
 import {
   createInMemoryConfigStore,
@@ -53,6 +53,7 @@ import type { PlanResult } from "@lloyal-labs/rig";
 import { TASK_ROUTING_KEY } from "@lloyal-labs/rig";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
+import { createDocumentsAbility } from "@lloyal-labs/documents-ability";
 import {
   abilityToc,
   runQuery,
@@ -62,6 +63,7 @@ import {
   CoverageCacheCtx,
   PromptsCtx,
   type Effort,
+  researchable,
 } from "./pipeline.js";
 import type { Config } from "./config-types.js";
 import type { WorkflowEvent, Command } from "./protocol.js";
@@ -77,27 +79,46 @@ import type { ConfigOrigin, SaveResult } from "./config-types.js";
 // (corpus/web both declare `services: ['reranker']`), resolves + loads the
 // backing model, and publishes it on `RerankerCtx` — so the harness stays IO-free.
 // Install more with `lloyal install <ability>` and add the factory here.
-export const abilities: AbilityFactory[] = [createCorpusAbility, createWebAbility];
+export const abilities: AbilityFactory[] = [createCorpusAbility, createWebAbility, createDocumentsAbility];
 const abilitiesInstalled: readonly AbilityFactory[] = abilities;
 
 const WEB_ABILITY = "web";
 const CORPUS_ABILITY = "corpus";
+const DOCUMENTS_ABILITY = "documents";
 
-/** Name → factory for the two first-party abilities this build ships. Drives the
+/** Name → factory for the three first-party abilities this build ships. Drives the
  *  `set_ability_config` re-enable path (NOT config-write routing, which is
  *  name-driven by the command payload). Returns undefined for unknown names. */
 const ABILITY_FACTORIES: Record<string, AbilityFactory> = {
   [WEB_ABILITY]: createWebAbility,
   [CORPUS_ABILITY]: createCorpusAbility,
+  [DOCUMENTS_ABILITY]: createDocumentsAbility,
 };
 function factoryFor(name: string): AbilityFactory | undefined {
   return ABILITY_FACTORIES[name];
 }
 
-/** Whether the named ability's factory needs stored config to enable. The web ability
- *  runs config-less (keyless search fallback); the corpus ability needs a path. */
+/** Whether the named ability's factory needs stored config to enable — read
+ *  from its manifest's `configSchema`, so a new ability is a list entry and
+ *  nothing else here. The web ability runs config-less (keyless fallback), the
+ *  documents ability reads the conversation's attachments, the corpus ability
+ *  needs a path. */
 function abilityRequiresConfig(name: string): boolean {
-  return name !== WEB_ABILITY;
+  const schema = factoryFor(name)?.manifest?.configSchema as { required?: unknown } | undefined;
+  return Array.isArray(schema?.required) && schema.required.length > 0;
+}
+
+/** The roots a thread recorded, rebuilt from what the store actually holds: a
+ *  digest whose manifest is gone is dropped, so a brief reopens without that
+ *  attachment rather than with a broken one. One rule for the report's own
+ *  media and each exchange's. */
+function threadRoots(store: AttachmentStore, digests: readonly string[]): Attachment[] {
+  const roots: Attachment[] = [];
+  for (const digest of digests) {
+    const bytes = store.getManifest(digest) ? store.get(digest) : null;
+    if (bytes) roots.push({ mediaType: MANIFEST_TYPE, digest, size: bytes.length } as Attachment);
+  }
+  return roots;
 }
 
 /** The ONE definition of "this config value is a path": the key says so
@@ -144,7 +165,7 @@ function corpusIndexedEvent(ability: Ability, corpusPath: unknown) {
  *  planner routes against. With ≥2 sources the planner assigns each task's routing key
  *  to the source that holds it — grounded by the pre-flight coverage probe that
  *  runQuery folds into the context alongside this catalog. */
-function buildPlannerContext(abilities: readonly Ability[]): string {
+function buildPlannerContext(abilities: readonly Ability[], attachments: readonly Attachment[] = []): string {
   if (abilities.length === 0) return "";
   const lines: string[] = [
     `Knowledge sources available for this research. Assign each task's \`${TASK_ROUTING_KEY}\` to the source that holds it, using its EXACT name below; the pre-flight \`Source coverage\` probe (when present) is the primary signal for which source covers what.`,
@@ -152,7 +173,7 @@ function buildPlannerContext(abilities: readonly Ability[]): string {
   for (const ability of abilities) {
     const protocol = ability.manifest.protocol;
     lines.push("", `### ${protocol.name}`, protocol.useWhen);
-    const toc = abilityToc(ability);
+    const toc = abilityToc(ability, attachments);
     if (toc) {
       lines.push("Files and top-level topics available in this source:", toc);
     }
@@ -312,8 +333,8 @@ export function* harness(
 
   // THE BUS RULE — two sends, one decision, stated once: anything that is
   // part of the RUN RECORD (run events, doc lifecycle, config echoes, error
-  // announcements) rides `agentEvents` — this forwarder gives it to the
-  // run-dir sink AND the UI. Pure UI chrome the record never needs
+  // announcements, the roots a tool result admitted) rides `agentEvents` —
+  // this forwarder gives it to the run-dir sink AND the UI. Pure UI chrome the record never needs
   // (config:loaded at boot, weights:*, corpus:indexed) rides `events`
   // directly. When adding an emission, pick by asking: does a replay of the
   // run dir need it?
@@ -383,15 +404,21 @@ export function* harness(
       });
     }
   }
-  // Web is always available: createWebAbility falls back to a keyless provider when no
-  // tavilyKey is configured. Enable it unconditionally.
-  try {
-    yield* registry.enable(createWebAbility);
-  } catch (err) {
-    events.send({
-      type: "ui:error",
-      message: `Web search disabled: ${errorMessage(err)}.`,
-    });
+  // Every ability that needs no stored config is always available — the web
+  // ability falls back to a keyless provider, the documents ability reads the
+  // conversation's attachments. Enable them unconditionally; the corpus
+  // ability (above) waits for its path.
+  for (const factory of abilitiesInstalled) {
+    const name = factory.manifest?.name;
+    if (!name || abilityRequiresConfig(name)) continue;
+    try {
+      yield* registry.enable(factory);
+    } catch (err) {
+      events.send({
+        type: "ui:error",
+        message: `${name} ability disabled: ${errorMessage(err)}.`,
+      });
+    }
   }
 
   // Surface the installed Abilities into the renderer. Re-call after every
@@ -454,6 +481,25 @@ export function* harness(
 
   const libraryDir = (): string =>
     runner.config().sources.outputDir ?? process.cwd();
+
+  /** The assets available to a run: the thread's recorded roots (the report's
+   *  own and every exchange's, as the store holds them) plus this query's.
+   *  Roots only — staging costs no KV; the pool projects nothing from it. */
+  function* stagedRoots(docId: DocId, own: readonly Descriptor[]): Operation<Attachment[]> {
+    const contentStore = yield* Attachments.expect();
+    const reportPath = confinedReport(libraryDir(), path.join(libraryDir(), docId, "report.md"));
+    const recorded = reportPath !== null ? readThread(reportPath) : null;
+    const digests = recorded
+      ? [...recorded.attachments, ...recorded.exchanges.flatMap((x) => x.attachments)]
+      : [];
+    const roots = new Map<string, Attachment>();
+    for (const r of threadRoots(contentStore, digests)) roots.set(r.digest, r);
+    for (const d of own) {
+      const a = asAttachment(d);
+      if (a) roots.set(a.digest, a);
+    }
+    return [...roots.values()];
+  }
 
   // Every settled brief becomes retrievable ground for the next one: when
   // the corpus ability is enabled, re-enable it after a run completes so the
@@ -662,6 +708,8 @@ export function* harness(
     /** Roots for images already on the trunk — carried so the planner's
      *  `query` event (which resets the fold) can seed them. */
     attachments?: readonly Descriptor[];
+    /** Assets available to the run — the thread's roots, this query's included. */
+    staged: readonly Attachment[];
     pending: (plan: PlanResult) => PendingPlan;
   }): Operation<void> {
     try {
@@ -669,10 +717,11 @@ export function* harness(
         ...harnessOpts,
         reasoningMode: spec.mode,
         effort: currentEffort,
-        context: buildPlannerContext(registry.enabled()),
+        context: buildPlannerContext(researchable(registry.enabled(), spec.staged), spec.staged),
         wallStartMs: spec.wallStartMs,
         abilityFilter: spec.abilityFilter,
         onStart: spec.onStart,
+        attachments: spec.staged,
       });
       if (result.type === "research_plan") {
         pendingPlan = spec.pending(result.plan);
@@ -712,6 +761,8 @@ export function* harness(
     abilityFilter: readonly string[];
     isAsk?: boolean;
     userSidePending?: boolean;
+    /** Assets available to the run — the thread's roots, this query's included. */
+    staged: readonly Attachment[];
   }): Operation<void> {
     try {
       yield* runResearchPlan(args.query, args.plan, session, {
@@ -722,6 +773,7 @@ export function* harness(
         abilityFilter: args.abilityFilter,
         isAsk: args.isAsk,
         userSidePending: args.userSidePending,
+        attachments: args.staged,
       });
       yield* reindexCorpus();
     } catch (err) {
@@ -1005,17 +1057,7 @@ export function* harness(
         // manifest is gone is dropped, and the brief reopens without a
         // figure instead of a broken one.
         const contentStore = yield* Attachments.expect();
-        const restored: Descriptor[] = [];
-        for (const digest of thread.attachments) {
-          const bytes = contentStore.get(digest);
-          if (bytes) {
-            restored.push({
-              mediaType: "application/vnd.oci.image.manifest.v1+json",
-              digest,
-              size: bytes.length,
-            });
-          }
-        }
+        const restored: Descriptor[] = threadRoots(contentStore, thread.attachments);
         yield* agentEvents.send({
           type: "doc",
           docId: cmd.docId,
@@ -1026,7 +1068,7 @@ export function* harness(
           exchanges: thread.exchanges.map((x) => ({
             question: x.question,
             body: x.body,
-            attachments: x.attachments.filter((d) => contentStore.get(d) !== undefined),
+            attachments: x.attachments.filter((d) => contentStore.get(d) !== null),
           })),
         });
         yield* activateDoc(cmd.docId);
@@ -1086,23 +1128,17 @@ export function* harness(
       // fold (and RESETS it), and it is emitted on two different paths from
       // here, so the roots have to outlive the barrier's scope.
       let attachments: readonly Descriptor[] = [];
+      // The roots the trunk will carry: only those that put pixels in front
+      // of the model. A document is staged, never projected, and is not
+      // recorded as if it were.
+      let projected: readonly Descriptor[] = [];
       let prepared: ReturnType<typeof materialize> | null = null;
       if (cmd.attachments && cmd.attachments.length > 0) {
-        if (!ctx.supportsVision()) {
-          // Say it plainly rather than dropping them: the user is looking at
-          // an attachment they believe was sent.
-          yield* agentEvents.send({
-            type: "ui:error",
-            message: "This model can't see images — it has no vision projector. "
-              + "Pick a vision-capable model, or ask without the attachment.",
-          });
-          return "continue";
-        }
         // The bytes were admitted on the way IN, over the content plane, so
         // there is nothing to ingest here — only to resolve. That is the whole
-        // shape of the descriptor-only wire: normalization and commit happen
-        // once, at the HTTP boundary, and the command carries references to
-        // what already exists.
+        // shape of the descriptor-only wire: admission and commit happen once,
+        // at the HTTP boundary, and the command carries references to what
+        // already exists.
         //
         // Two checks, and they are different questions. `asAttachment` asks
         // whether a descriptor is even the KIND of thing that can be a root —
@@ -1115,7 +1151,7 @@ export function* harness(
         if (roots.some((r) => r === null)) {
           yield* agentEvents.send({
             type: "ui:error",
-            message: "That attachment reference isn't an image the host admitted.",
+            message: "That attachment reference isn't one the host admitted.",
           });
           return "continue";
         }
@@ -1124,11 +1160,22 @@ export function* harness(
         } catch (err) {
           yield* agentEvents.send({
             type: "ui:error",
-            message: `Couldn't read that image back: ${errorMessage(err)}`,
+            message: `Couldn't read that attachment back: ${errorMessage(err)}`,
+          });
+          return "continue";
+        }
+        // Sight is asked for only by what materializes to pixels: a document
+        // is text the run retrieves from, and needs no projector.
+        if (prepared.bitmaps.length > 0 && !ctx.supportsVision()) {
+          yield* agentEvents.send({
+            type: "ui:error",
+            message: "This model can't see images — it has no vision projector. "
+              + "Pick a vision-capable model, or ask without the image.",
           });
           return "continue";
         }
         attachments = prepared.attachments;
+        projected = attachments.filter((a) => materialize(contentStore, [a as Attachment]).bitmaps.length > 0);
       }
 
       // ── The doc boundary — Session verbs only. Release the outgoing
@@ -1159,17 +1206,22 @@ export function* harness(
 
       if (warm) yield* commitOpenedReport();
 
-      if (prepared) {
+      if (prepared && prepared.bitmaps.length > 0) {
         const p = prepared;
         // Prefilled ONTO THE TRUNK exactly once; every agent forked from it
         // attends the same cells. N agents cost one projection, not N.
         yield* call(() => session.prefillUserMultimodal(
           query,
           p.bitmaps as Uint8Array[],
-          { attachments: p.attachments },
+          { attachments: projected },
         ));
         userSidePending = true;
       }
+
+      // Availability is not projection: the pool is staged with the thread's
+      // roots (zero KV) and reads them per tool call; only the trunk prefill
+      // above put anything in context.
+      const staged = yield* stagedRoots(docId, attachments);
 
       // Ask (skipPlanner): the user's question IS the plan — one warm task,
       // no planner. The echo above already carried `query` (direct) — the
@@ -1188,7 +1240,7 @@ export function* harness(
         });
         startRunDir(docId, query, mode, attachments);
         yield* startRun(() =>
-          runAcceptedPlan({ query, plan, mode, wallStartMs, abilityFilter, isAsk: true, userSidePending }),
+          runAcceptedPlan({ query, plan, mode, wallStartMs, abilityFilter, isAsk: true, userSidePending, staged }),
         );
         return "continue";
       }
@@ -1203,6 +1255,7 @@ export function* harness(
           onStart: () => startRunDir(docId, query, mode, attachments),
           clarify: "commit",
           attachments,
+          staged,
           pending: (plan) => ({
             plan,
             docId,
@@ -1248,6 +1301,7 @@ export function* harness(
         ...(prior.attachments?.length ? { attachments: [...prior.attachments] } : {}),
       });
       yield* call(() => session.prefillUser(cmd.answer));
+      const staged = yield* stagedRoots(prior.docId, prior.attachments ?? []);
       yield* startRun(() =>
         runPlannedQuery({
           docId: prior.docId,
@@ -1257,6 +1311,7 @@ export function* harness(
           abilityFilter: prior.abilityFilter,
           onStart: () => startRunDir(prior.docId, prior.query, prior.mode, prior.attachments),
           clarify: "prefill",
+          staged,
           pending: (plan) => ({ ...prior, plan, userSidePending: true }),
         }),
       );
@@ -1275,6 +1330,7 @@ export function* harness(
         effort: currentEffort,
         ...(prior.attachments?.length ? { attachments: [...prior.attachments] } : {}),
       });
+      const staged = yield* stagedRoots(prior.docId, prior.attachments ?? []);
       yield* startRun(() =>
         runPlannedQuery({
           docId: prior.docId,
@@ -1284,6 +1340,7 @@ export function* harness(
           abilityFilter: prior.abilityFilter,
           onStart: () => startRunDir(prior.docId, prior.query, mode, prior.attachments),
           clarify: "none",
+          staged,
           pending: (plan) => ({ ...prior, plan, mode }),
         }),
       );
@@ -1300,6 +1357,7 @@ export function* harness(
       const accepted = pendingPlan;
       pendingPlan = null;
       startRunDir(accepted.docId, accepted.query, accepted.mode, accepted.attachments);
+      const staged = yield* stagedRoots(accepted.docId, accepted.attachments ?? []);
       yield* startRun(() =>
         runAcceptedPlan({
           query: accepted.query,
@@ -1308,6 +1366,7 @@ export function* harness(
           wallStartMs: accepted.wallStartMs,
           abilityFilter: accepted.abilityFilter,
           userSidePending: accepted.userSidePending,
+          staged,
         }),
       );
       return "continue";

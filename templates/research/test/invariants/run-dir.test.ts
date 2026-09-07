@@ -37,3 +37,24 @@ test("two sinks on one document reserve distinct annexure names", () => {
   assert.ok(bodies.some((t) => /A's evidence/.test(t)));
   assert.ok(bodies.some((t) => /B's evidence/.test(t)));
 });
+
+test("roots a tool result admitted ride the meta line beside the query's own, once each", () => {
+  const lib = fs.mkdtempSync(path.join(os.tmpdir(), "run-dir-"));
+  const dir = path.join(lib, "2026-01-01T00-00-00-000");
+  const own = "sha256:" + "a".repeat(64);
+  const admitted = "sha256:" + "b".repeat(64);
+
+  const sink = new RunDirSink();
+  sink.start({ dir, query: "Q?", mode: "flat", attachments: [own] });
+  // A tool admitted a root mid-run — and re-admitted the query's own, which
+  // is one entry, not two. The admission arrives as the bus event the pool
+  // announces it with, the same stream every other run-record fact rides.
+  const root = (digest: string) => ({ mediaType: "application/vnd.oci.image.manifest.v1+json", digest, size: 700 });
+  sink.handle(ev({ type: "agent:prefilled", agentId: 3, cells: 1629, role: "toolResult", attachments: [root(admitted), root(own)] }));
+  sink.handle(ev({ type: "answer", text: "the answer" }));
+  sink.handle(ev({ type: "complete", data: { wallTimeMs: 1, planMs: 0, researchMs: 0, synthMs: 0, passthroughMs: 0 } }));
+
+  const meta = fs.readFileSync(path.join(dir, "report.md"), "utf8").split("\n")[2] ?? "";
+  assert.ok(meta.includes(`media ${own} ${admitted}`), meta);
+  assert.equal(meta.split(own).length - 1, 1);
+});

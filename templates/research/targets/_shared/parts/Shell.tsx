@@ -9,7 +9,8 @@ import {
   selectSeen, selectStatus, selectTitle,
 } from "../select.js";
 import { paceFor } from "../pace.js";
-import { Lightbox } from "./Figures.js";
+import { Lightbox, useAssets } from "./Figures.js";
+import { contentOrigin, representationUrl } from "../content-urls.js";
 
 /** The mark, the name, and the control that puts the panel away. Collapsed,
  *  the name and the library go and the rail keeps only the mark and the
@@ -94,13 +95,18 @@ export function TrustStrip({ detail }: { detail?: string }): ReactElement {
  *  rather than a second one. */
 function Seen(): ReactElement | null {
   const seen = useBrief(selectSeen);
-  const src = window.harness.representationUrl;
+  const origin = contentOrigin();
+  const assets = useAssets(seen);
   const [open, setOpen] = useState<string | null>(null);
   if (seen.length === 0) return null;
   return (
     <span style={S.seen}>
-      {seen.map((id) =>
-        src
+      {seen.map((id) => {
+        const asset = assets[id];
+        if (asset?.kind === "document") {
+          return <span key={id} style={S.seenChip} title={asset.meta.title}>{asset.meta.title}</span>;
+        }
+        return origin !== null
           ? (
             <button
               key={id}
@@ -110,11 +116,11 @@ function Seen(): ReactElement | null {
               aria-label="Enlarge the attached image"
               onClick={() => setOpen(id)}
             >
-              <img src={src(id)} alt="" style={S.seenImg} />
+              <img src={representationUrl(origin, id)} alt="" style={S.seenImg} />
             </button>
           )
-          : <span key={id} style={S.seenChip}>image</span>,
-      )}
+          : <span key={id} style={S.seenChip}>image</span>;
+      })}
       {open !== null && <Lightbox digest={open} onClose={() => setOpen(null)} />}
     </span>
   );

@@ -7,7 +7,6 @@
 import { connectWss, type WssClient } from "@lloyal-labs/binding/web";
 import { initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-import type { Descriptor } from "@lloyal-labs/media";
 
 const DEFAULT_WSS = "ws://127.0.0.1:8787";
 
@@ -50,42 +49,6 @@ function resolveContentBaseUrl(): string {
     // from a different host than the one commands go to.
     return "";
   }
-}
-
-/** Resolves THROUGH the manifest, so a retained source layer can never be
- *  served in place of the copy the projector actually encoded. */
-export function representationUrl(digest: string, index = 0): string {
-  return `${resolveContentBaseUrl()}/v1/media/${encodeURIComponent(digest)}/representations/${index}`;
-}
-
-/**
- * Admit an image and get back its ROOT descriptor.
- *
- * The bytes go over HTTP; only the descriptor goes over the socket. That split
- * is the whole point of the content plane: the wss bridge keeps every frame
- * for replay, so a base64 image on that wire would sit in the history forever,
- * and the history is sized on the assumption that frames are tiny.
- *
- * The host decides what "admitted" means — normalize, address, commit — and
- * hands back a reference. The browser never learns the digest of anything it
- * uploaded, because the digest of the ADMITTED representation is not the
- * digest of the file: normalization changes the bytes, and the root is the
- * manifest's hash, not either of theirs.
- */
-export async function ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
-  const res = await fetch(`${resolveContentBaseUrl()}/v1/media/ingress`, {
-    method: "POST",
-    // No `Content-Type`: the bytes answer that question, and the route stopped
-    // reading the header precisely because a client cannot be the authority on
-    // content it did not produce.
-    body: bytes as BodyInit,
-  });
-  if (!res.ok) {
-    // The route answers 413 too large, 408 too slow, 400 not admitted, 501 no
-    // ingress installed. Its own message is better than anything invented here.
-    throw new Error((await res.text().catch(() => "")) || `upload failed (${res.status})`);
-  }
-  return (await res.json()) as Descriptor;
 }
 
 /** Frames kept for replay. A session is one conversation; produce frames are
@@ -192,11 +155,9 @@ export function installWebBridge(): void {
       return Promise.resolve({ state: initialState, seq: 0 });
     },
     // Here, not in the view: which plane serves bytes is a transport fact.
-    representationUrl(digest: string, index = 0): string {
-      return representationUrl(digest, index);
-    },
-    ingestMedia(bytes: Uint8Array): Promise<Descriptor> {
-      return ingestMedia(bytes);
+    // Every door is derived from this one origin in `content-urls.ts`.
+    contentOrigin(): string {
+      return resolveContentBaseUrl();
     },
   };
 

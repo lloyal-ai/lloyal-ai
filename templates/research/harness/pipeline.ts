@@ -63,6 +63,7 @@ import {
   renderAgentPreamble,
 } from "@lloyal-labs/rig";
 import type { PlanResult, ResearchTask } from "@lloyal-labs/rig";
+import type { Attachment } from "@lloyal-labs/media";
 import { taskToContent, TASK_ROUTING_KEY } from "@lloyal-labs/rig";
 import { weaveSourcesIntoResult } from "./weave-sources.js";
 
@@ -362,10 +363,15 @@ export interface RunQueryOpts extends HarnessOpts {
    *  (preserves prior behavior). The Composer derives this from
    *  `state.participation` at submit time. */
   abilityFilter?: readonly string[];
+  /** Assets available to the run — the thread's roots, this query's included.
+   *  Staged into every pool the run opens; never projected by staging. */
+  attachments?: readonly Attachment[];
 }
 
 export interface RunResearchPlanOpts extends HarnessOpts {
   wallStartMs: number;
+  /** Assets available to the run — see {@link RunQueryOpts.attachments}. */
+  attachments?: readonly Attachment[];
   /** Per-query ability subset, by `manifest.name`. Mirrors `RunQueryOpts.abilityFilter`
    *  for the accept_plan path (where the planner already ran with the filter
    *  and the research pool needs the same subset). When omitted, the full
@@ -406,14 +412,15 @@ export interface PreflightResult {
  * as a clearly-separated trailing sentence.
  */
 const REPORT_CITATION_NUDGE =
-  "\n\nWhen you call report(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths).";
+  "\n\nWhen you call report(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's `cite` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.";
 
 /**
  * Per-spawn preamble for an agent assigned to an ability. `renderAgentPreamble`
- * prepends the boundary marker and renders the ability's `skill.eta`; we merge the
- * ability's own `source.promptData()` (corpus supplies `it.toc`; web supplies
- * nothing) into the render context. The structured-sources citation nudge is
- * appended last so research agents fill report()'s sources field with real URLs.
+ * prepends the boundary marker and renders the ability's `skill.eta` with the
+ * framework's render fields only. An ability's `promptData` is NOT merged
+ * here — it is placed once, on the spine, by `renderSpineWithReferenceData`.
+ * The structured-sources citation nudge is appended last so research agents
+ * fill report()'s sources field with real URLs.
  */
 function abilityPreamble(ability: Ability, ctx: AgentRenderCtx): string {
   return (
@@ -432,10 +439,10 @@ function abilityPreamble(ability: Ability, ctx: AgentRenderCtx): string {
  * duplicated into each spawn's suffix (six 4.8k-token TOC-bearing suffixes
  * overran a 32k context when measured).
  */
-function renderSpineWithReferenceData(abilities: readonly Ability[]): string {
+function renderSpineWithReferenceData(abilities: readonly Ability[], attachments: readonly Attachment[] = []): string {
   const blocks: string[] = [];
   for (const ability of abilities) {
-    const toc = abilityToc(ability);
+    const toc = abilityToc(ability, attachments);
     if (toc && toc.trim()) {
       blocks.push(
         `\n\n# ${ability.manifest.protocol.name} — available files\n${toc}`,
@@ -456,9 +463,12 @@ function* useStepSender(): Operation<(ev: StepEvent) => Operation<void>> {
 }
 
 /** An ability's `toc` prompt datum — the source's own content advert (one
- *  line per file for the corpus; absent for sources that advertise nothing). */
-export function abilityToc(ability: Ability): string | null {
-  const toc = ability.source.promptData()["toc"];
+ *  line per file for the corpus, one per document for the documents ability;
+ *  absent for sources that advertise nothing). `attachments` are the assets
+ *  the run is staged with: a source keyed on them lists those, the others
+ *  ignore the argument. */
+export function abilityToc(ability: Ability, attachments: readonly Attachment[] = []): string | null {
+  const toc = ability.source.promptData(attachments)["toc"];
   return typeof toc === "string" ? toc : null;
 }
 
@@ -657,12 +667,20 @@ function startTimer(): () => number {
  * this instead of `registry.enabled()` directly so the filter applies
  * uniformly.
  */
-function* effectiveAbilities(filter?: readonly string[]): Operation<readonly Ability[]> {
+function* effectiveAbilities(filter?: readonly string[], attachments: readonly Attachment[] = []): Operation<readonly Ability[]> {
   const registry = yield* AbilityRegistryCtx.expect();
   const all = registry.enabled();
-  if (!filter) return all;
-  const allow = new Set(filter);
-  return all.filter((a) => allow.has(a.manifest.name));
+  const allow = filter ? new Set(filter) : null;
+  return researchable(allow ? all.filter((a) => allow.has(a.manifest.name)) : all, attachments);
+}
+
+/** The abilities a run can research with: those that advertise no catalog
+ *  (web) or a non-empty one for this run's assets. A source whose catalog is
+ *  EMPTY for the run — documents with none attached, a corpus with no files —
+ *  has nothing to research and is left out, so it draws neither a coverage
+ *  probe nor a planner route, and its tools are not on the spine. */
+export function researchable(abilities: readonly Ability[], attachments: readonly Attachment[] = []): Ability[] {
+  return abilities.filter((a) => abilityToc(a, attachments) !== "");
 }
 
 /**
@@ -739,17 +757,18 @@ export function* runPreflight(
   query: string,
   session: Session,
   filter?: readonly string[],
+  attachments: readonly Attachment[] = [],
 ): Operation<PreflightResult> {
   const send = yield* useStepSender();
 
-  const abilities = yield* effectiveAbilities(filter);
+  const abilities = yield* effectiveAbilities(filter, attachments);
 
   const runner = yield* RunnerCtx.expect();
   yield* send({ type: "preflight:start", query, abilityCount: abilities.length });
   const timer = startTimer();
 
   const reconTools = [...abilities.flatMap((a) => [...a.tools]), reportTool];
-  const spinePrompt = renderSpineWithReferenceData(abilities);
+  const spinePrompt = renderSpineWithReferenceData(abilities, attachments);
   const currentDate = today();
 
   const { coverage, tokens, toolCalls } = yield* withSpine<{
@@ -769,6 +788,7 @@ export function* runPreflight(
         trace: runner.dev, // dev-pane epistemics (per-token entropy/surprisal; Runner-read — no env, portable)
         tools: reconTools,
         parent: reconSpine,
+        attachments,
         terminal: reportTool,
         maxTurns: RECON_MAX_TURNS,
         pruneOnReturn: true,
@@ -787,7 +807,7 @@ export function* runPreflight(
                 // can recognize what each source actually contains BEFORE
                 // probing — a corpus probe that doesn't know what the
                 // corpus IS misreads its chunks.
-                contents: abilityToc(ability),
+                contents: abilityToc(ability, attachments),
               },
             }),
             systemPrompt: preflight.system,
@@ -880,8 +900,9 @@ export function* useCoverage(
   query: string,
   session: Session,
   filter?: readonly string[],
+  attachments: readonly Attachment[] = [],
 ): Operation<PreflightResult> {
-  const abilities = yield* effectiveAbilities(filter);
+  const abilities = yield* effectiveAbilities(filter, attachments);
   if (abilities.length < 2) {
     return { coverage: "", tokens: 0, toolCalls: 0, timeMs: 0 };
   }
@@ -889,10 +910,10 @@ export function* useCoverage(
   // Compose the cache key from query + sorted filter so distinct
   // participation subsets get distinct cached coverage. Same query +
   // same subset across clarify rounds still hits the cache.
-  const key = filter
-    ? `${query}|${[...filter].sort().join(",")}`
-    : query;
-  return yield* cache.getOrCompute(key, () => runPreflight(query, session, filter));
+  // …and the staged roots: a new document is a new probe.
+  const roots = attachments.map((a) => a.digest).sort().join(",");
+  const key = `${filter ? `${query}|${[...filter].sort().join(",")}` : query}|${roots}`;
+  return yield* cache.getOrCompute(key, () => runPreflight(query, session, filter, attachments));
 }
 
 /**
@@ -908,6 +929,8 @@ export function* runPlanner(
     effort: Effort;
     context?: string;
     abilityFilter?: readonly string[];
+    /** Assets available to the run — see {@link RunQueryOpts.attachments}. */
+    attachments?: readonly Attachment[];
   },
 ): Operation<PlanResult> {
   const send = yield* useStepSender();
@@ -922,7 +945,7 @@ export function* runPlanner(
   // `abilityForTask` in runResearchPlan consumes `task.ability`. With <2 abilities there is
   // nothing to route between, so the field is dropped and tasks fall back to the
   // primary ability + open reads (authGuard).
-  const abilities = yield* effectiveAbilities(opts.abilityFilter);
+  const abilities = yield* effectiveAbilities(opts.abilityFilter, opts.attachments ?? []);
   const planTool = new PlanTool({
     prompt: planPrompt,
     session,
@@ -990,7 +1013,7 @@ export function* runQuery(
   // `runQuery` with the same filter reuses the probe instead of re-running
   // it; it also applies the ≥2-ability gate internally (a single effective source
   // has nothing to route between → empty coverage).
-  const preflight = yield* useCoverage(query, session, opts.abilityFilter);
+  const preflight = yield* useCoverage(query, session, opts.abilityFilter, opts.attachments ?? []);
   let plannerContext = opts.context;
   if (preflight.coverage) {
     const coverageSection =
@@ -1016,6 +1039,7 @@ export function* runQuery(
     effort: opts.effort,
     context: plannerContext,
     abilityFilter: opts.abilityFilter,
+    attachments: opts.attachments,
   });
 
   if (plan.intent === "clarify") {
@@ -1100,7 +1124,7 @@ export function* runResearchPlan(
   // it selects which ability's preamble (skill.eta) the agent gets and drives the
   // per-task UI chip; the model is free to pivot to another ability's read tools
   // mid-task. Ability-agnostic tasks fall back to the primary.
-  const abilities = yield* effectiveAbilities(opts.abilityFilter);
+  const abilities = yield* effectiveAbilities(opts.abilityFilter, opts.attachments ?? []);
   const primaryAbility = abilities[0];
   const byProtocol = new Map(abilities.map((a) => [a.manifest.protocol.name, a]));
   // A DIRECT answer is not scoped to one ability: the pool registers every
@@ -1122,7 +1146,7 @@ export function* runResearchPlan(
   // cited). The pool builds the terminal grammar from `terminal:` below, so the
   // registry entry and the `terminal:` arg MUST be the same tool.
   const researchTools = [...abilities.flatMap((a) => [...a.tools]), citedReportTool];
-  const spinePrompt = renderSpineWithReferenceData(abilities);
+  const spinePrompt = renderSpineWithReferenceData(abilities, opts.attachments ?? []);
 
   let synthTimeMs = 0;
   let researchTimeMs = 0;
@@ -1153,6 +1177,7 @@ export function* runResearchPlan(
         trace: runner.dev, // dev-pane epistemics (per-token entropy/surprisal; Runner-read — no env, portable)
         tools: researchTools,
         parent: querySpine,
+        attachments: opts.attachments,
         terminal: citedReportTool,
         maxTurns: opts.maxTurns,
         pruneOnReturn: true,
