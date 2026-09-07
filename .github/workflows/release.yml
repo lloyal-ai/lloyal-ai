@@ -63,6 +63,7 @@ jobs:
       # only, never the token.
       - name: OIDC available?
         run: |
+          echo "runner environment: ${RUNNER_ENVIRONMENT:-<unset>}"
           if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
             echo "OIDC token endpoint present - trusted publishing can authenticate."
           else
@@ -118,8 +119,19 @@ jobs:
                 echo "::error::$NAME@$VERSION would publish to latest. A manual dispatch may only ship a prerelease; production goes through a v* tag."
                 exit 1
               fi
+              # npm verifies the sigstore bundle's runner claim and refuses
+              # anything but a hosted one: "Only github-hosted runners are
+              # supported when publishing with provenance" (422). Measured, on
+              # lloyal-ai/hdk run 34142877384. Ask the environment rather than
+              # take a flag, so a hosted run keeps attestation with nothing to
+              # remember and a local one drops only what it cannot have.
               echo "publishing $NAME@$VERSION from $pkg (tag: $TAG) ..."
-              npm publish "$pkg" --access public --provenance --tag "$TAG"
+              if [ "${RUNNER_ENVIRONMENT:-}" = "github-hosted" ]; then
+                npm publish "$pkg" --access public --provenance --tag "$TAG"
+              else
+                echo "::warning::$NAME@$VERSION published WITHOUT provenance (runner is ${RUNNER_ENVIRONMENT:-unknown})"
+                npm publish "$pkg" --access public --tag "$TAG"
+              fi
             fi
           done
         env:
