@@ -4,7 +4,7 @@
  *  settled brief it carries the Ask/Extend choice: Ask answers from the
  *  warm context (skipPlanner — instant); Extend reframes fully as a new
  *  run. Depth applies on selection (`set_effort` — next run). */
-import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
 import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
@@ -86,6 +86,7 @@ export function Composer({ shape, placeholder }: {
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
   const uploading = images.some((a) => a.status === "uploading");
+  const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
   /** The question, held after send until the fold acknowledges it. The echo
@@ -218,6 +219,33 @@ export function Composer({ shape, placeholder }: {
     attach(files);
   };
 
+  /** Drop is the third road in, and it feeds the same `attach`. Only a file
+   *  drag lights the composer up — dragging selected text must not look like
+   *  it will attach something. */
+  const dragged = (e: DragEvent<HTMLDivElement>): boolean =>
+    e.dataTransfer.types.includes("Files");
+
+  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
+    if (!dragged(e)) return;
+    e.preventDefault();
+    setDragging(false);
+    attach(e.dataTransfer.files);
+  };
+
+  // A file dropped anywhere else would navigate the window to it — a blank app
+  // on desktop, the file itself in a browser. Swallowing both events app-wide
+  // makes a stray drop do nothing, and `dragover` is also what MAKES the
+  // composer a valid drop target.
+  useEffect(() => {
+    const swallow = (e: Event): void => e.preventDefault();
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, []);
+
   const clear = (): void => {
     setDraft("");
     setImages([]);
@@ -258,7 +286,14 @@ export function Composer({ shape, placeholder }: {
   };
 
   return (
-    <div style={S.shell}>
+    <div
+      style={{ ...S.shell, ...(dragging ? S.shellDrop : null) }}
+      onDragOver={(e) => { if (dragged(e)) { e.preventDefault(); setDragging(true); } }}
+      // Dragging over a CHILD fires dragleave on the parent; only a leave that
+      // actually exits the composer should drop the highlight.
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={onDrop}
+    >
       <style>{CSS}</style>
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
@@ -501,6 +536,9 @@ const depthBase: CSSProperties = {
 
 const S: Record<string, CSSProperties> = {
   shell: { display: "flex", flexDirection: "column", gap: 8 },
+  /** Outline, not border or padding: it must not move the composer as a file
+   *  passes over it. */
+  shellDrop: { outline: `2px dashed ${color.ember}`, outlineOffset: 6, borderRadius: radius.card },
   tray: {
     display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
     padding: "0 2px",

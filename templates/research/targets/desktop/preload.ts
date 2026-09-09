@@ -25,6 +25,12 @@ const api = {
   requestSnapshot(): Promise<{ state: AppState; seq: number }> {
     return ipcRenderer.invoke("harness:snapshot");
   },
+  /** Where the content plane lives on this target: a custom scheme, not a
+   *  port. Every route — reads and the ingress alike — is derived from it in
+   *  `content-urls.ts`, so this bridge implements one fact and nothing else. */
+  contentOrigin(): string {
+    return "attachment://store";
+  },
 };
 
 contextBridge.exposeInMainWorld("harness", api);

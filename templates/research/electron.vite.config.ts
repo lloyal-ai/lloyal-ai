@@ -26,6 +26,14 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, "targets/desktop"),
     plugins: [react()],
+    // `@lloyal-labs/media` is CommonJS, and the workspace link means Vite
+    // serves it straight from `/@fs/` rather than pre-bundling it — so a
+    // NAMED value import off it (`Figures.tsx` reads DOCUMENT_CONFIG_TYPE)
+    // fails at module eval with "does not provide an export named …", and a
+    // renderer that throws there paints nothing at all. `vite.web.config.ts`
+    // has carried this same line all along; the desktop renderer never did,
+    // which is why only this target went blank.
+    optimizeDeps: { include: ["@lloyal-labs/media"] },
     build: {
       rollupOptions: { input: resolve(__dirname, "targets/desktop/index.html") },
     },

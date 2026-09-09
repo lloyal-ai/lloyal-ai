@@ -17,8 +17,13 @@
 import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import type { Descriptor } from "@lloyal-labs/media";
 import { reduce, initialState, type AppState } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
+import { registerContentScheme, serveContentScheme } from "./content.js";
+
+// Before app ready, or it is ignored silently — see `./content.ts`.
+registerContentScheme();
 
 /** Only http(s) links may leave the app. */
 function isExternalUrl(url: string): boolean {
@@ -60,14 +65,41 @@ function spawnEngine(): void {
   });
   engine.stdout?.on("data", (d) => console.log("[engine]", d.toString().trimEnd()));
   engine.stderr?.on("data", (d) => console.error("[engine]", d.toString().trimEnd()));
-  engine.on("message", (msg: { t?: string; payload?: WorkflowEvent }) => {
+  engine.on("message", (msg: { t?: string; payload?: WorkflowEvent; id?: number; root?: Descriptor; error?: string }) => {
     if (msg?.t === "event" && msg.payload) {
       seq++;
       appState = reduce(appState, msg.payload);
       safeSend("harness:event", { seq, ev: msg.payload });
+      return;
     }
+    if (typeof msg?.id !== "number") return;
+    const waiting = pending.get(msg.id);
+    if (!waiting) return;
+    pending.delete(msg.id);
+    if (msg.t === "ingested" && msg.root) waiting.resolve(msg.root);
+    else if (msg.t === "ingestFailed") waiting.reject(new Error(msg.error ?? "ingest failed"));
   });
-  engine.on("exit", (code) => console.log("[engine] exited", code));
+  engine.on("exit", (code) => {
+    console.log("[engine] exited", code);
+    // An attach in flight when the engine dies must FAIL, not hang: the
+    // composer shows a failed chip the user can retry, instead of a spinner
+    // that never resolves.
+    for (const [, waiting] of pending) waiting.reject(new Error("the engine stopped before the file was ingested"));
+    pending.clear();
+  });
+}
+
+/** Ingests in flight, by request id — main relays, the engine writes. */
+const pending = new Map<number, { resolve: (d: Descriptor) => void; reject: (e: Error) => void }>();
+let ingestId = 0;
+
+/** Hand bytes to the engine and wait for the root descriptor it commits. */
+function ingest(bytes: Uint8Array): Promise<Descriptor> {
+  if (!engine) return Promise.reject(new Error("the engine is not running"));
+  const id = ++ingestId;
+  const answer = new Promise<Descriptor>((resolve, reject) => pending.set(id, { resolve, reject }));
+  engine.postMessage({ t: "ingest", id, bytes });
+  return answer;
 }
 
 function createWindow(): void {
@@ -114,6 +146,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  serveContentScheme(process.cwd(), ingest);
   spawnEngine();
   createWindow();
   // renderer → engine (Command)

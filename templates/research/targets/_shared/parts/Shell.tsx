@@ -415,4 +415,22 @@ export const doc: CSSProperties = {
   width: "94ch", maxWidth: "calc(100% - 92px)", margin: "0 auto", position: "relative",
 };
 
+/**
+ * The column beside its rail — every moment that shows an outline.
+ *
+ * The gutter lives HERE, not on {@link doc}. `doc` centres itself with
+ * `margin: 0 auto` and reserves its own 92px, which is right when it is the
+ * canvas's only child (Frame). Beside a 212px rail it is a FLEX ITEM, its
+ * `100%` still measures the whole canvas — the rail is not subtracted — so
+ * once `94ch + 212` outgrows the canvas the free space turns negative, auto
+ * margins resolve to zero, and the column shrinks flush against the sidebar
+ * with nothing to stop it. That is a layout the column cannot see from the
+ * inside; the container that places both is the one that can, so it pays for
+ * the gutter. 26px is the rhythm `runbar` and `dock` already keep, so the
+ * body lines up with the bar above it and the composer below.
+ */
+export const spread: CSSProperties = {
+  display: "flex", alignItems: "flex-start", padding: "0 26px",
+};
+
 export { radius };

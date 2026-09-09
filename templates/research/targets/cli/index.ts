@@ -25,6 +25,8 @@ import { startHostResources } from "@lloyal-labs/dev-tools/node";
 import { parseArgs } from "node:util";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels, catalogEntry, useTraceWriter, createProjectMediaStore } from "@lloyal-labs/rig/node";
+import { createContentIngress } from "@lloyal-labs/media/node";
+import { Ingress } from "@lloyal-labs/lloyal-agents";
 import { makeEdgeRunner } from "@lloyal-labs/rig";
 import { harness, abilities, HarnessExit } from "../../harness/harness.js";
 import { RunnerCtx } from "../../harness/runner-ctx.js";
@@ -34,6 +36,7 @@ import { loadConfig, loadYml, saveLocalConfig, SESSION_ORIGIN_MAP } from "../../
 import type { HarnessYml } from "../../harness/config.js";
 import type { Config, ConfigOrigin, ConfigPatch, LoadedConfig } from "../../harness/config-types.js";
 import { renderCli } from "./view.js";
+import { serveIngest } from "./ingest.js";
 // The layered config: cli > env > harness.json > harness.yml > default. A bad
 // manifest or defaults value fails HERE — before any model fetch. `bootEnv` is
 // snapshotted before `applyServedGpuEnv` writes LLOYAL_GPU, so re-layering
@@ -188,6 +191,11 @@ main(function* () {
   const events = createBus<WorkflowEvent>();
   const traceWriter = yield* useTraceWriter(cfg.sources.outputDir ?? process.cwd(), dev, (ev) => events.send(ev));
   const media = createProjectMediaStore(projectRoot);
+  // The one ingress every entry point goes through — a desktop attach, a
+  // tool returning image bytes, a spine. It belongs to the STORE rather than
+  // to any one caller, which is why it is built here and published on a
+  // context rather than passed down a call chain.
+  const ingress = createContentIngress(media);
   // Saves write harness.json, then re-layer for honest values + provenance
   // (a cleared key falls back to the rung beneath; env still outranks).
   const persist = (patch: ConfigPatch) => {
@@ -207,6 +215,9 @@ main(function* () {
     mode: oneShot ? "oneshot" : "interactive",
     initialQuery,
   });
+  // What lets a tool ingest bytes it produced. Without it a tool returning an
+  // image fails with "no ingress", which is what every non-web target did.
+  yield* Ingress.set(ingress);
 
   // Buffered: the bindings dispatch from the moment they mount, but the
   // harness's command loop only arms after boot — a desktop renderer's (or a
@@ -223,6 +234,9 @@ main(function* () {
   if (process.env.RR_BRIDGE) {
     // A desktop shell forked this bin: stream over the process channel.
     dispose = ipc<WorkflowEvent, Command>()(events, dispatch, bootstrap);
+    // …and answer its ingress requests on that same channel. Only here: a
+    // terminal picks no files, and a pipe has no renderer to answer.
+    yield* ensure(serveIngest(ingress));
   } else if (process.stdout.isTTY) {
     // A terminal: mount the Ink view.
     dispose = renderCli(events, dispatch, bootstrap);

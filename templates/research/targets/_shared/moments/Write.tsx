@@ -10,7 +10,7 @@ import { useBrief } from "../store.js";
 import {
   selectControls, selectRail, selectSections, selectSettling, selectTitle,
 } from "../select.js";
-import { Thinking, doc } from "../parts/Shell.js";
+import { Thinking, doc, spread } from "../parts/Shell.js";
 import { Figures } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
@@ -24,7 +24,7 @@ export function Write(): ReactElement {
   const { closing } = useBrief(selectControls);
 
   return (
-    <div style={S.spread}>
+    <div style={spread}>
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
       <Figures />
@@ -80,7 +80,6 @@ export function Write(): ReactElement {
 }
 
 const S: Record<string, CSSProperties> = {
-  spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 10px", textWrap: "balance" },
   section: { margin: "0 0 26px" },
   head: { font: `600 17px/1.35 ${font.ui}`, letterSpacing: "-.012em", margin: "22px 0 10px", textWrap: "balance" },

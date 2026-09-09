@@ -1,9 +1,11 @@
 /** Every door of the content plane, derived from ONE transport fact: the
  *  origin the bridge reports. The route grammar is rig's (`createContentRoutes`);
  *  this is its client half, shared by every target, so a route added there is
- *  a function added here and nowhere else. `contentOrigin()` is null on a
- *  bridge with no plane (cli, and desktop until its path lands) — the view
- *  then offers no attach control and names an attachment instead of showing it. */
+ *  a function added here and nowhere else. `contentOrigin()` is null only on a
+ *  bridge with no plane at all — the view then offers no attach control and
+ *  names an attachment instead of showing it. Web reports an http origin and
+ *  desktop an `attachment://` scheme; every route below, the ingress
+ *  included, is the same on both. */
 import type { Descriptor } from "@lloyal-labs/media";
 
 export const contentOrigin = (): string | null => window.harness.contentOrigin?.() ?? null;

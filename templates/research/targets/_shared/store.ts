@@ -26,13 +26,14 @@ export interface Bridge {
    *  representations, manifests and configs come down from it. ONE transport
    *  fact, and every URL is derived from it in `content-urls.ts`, so a bridge
    *  implements one thing and inherits every route the plane has and every
-   *  route it grows. Omitted by a bridge with no plane (cli, and desktop until
-   *  its path lands); the view then offers no attach control and names an
-   *  attachment instead of showing it.
+   *  route it grows — the ingress included, so a target that cannot run an HTTP
+   *  server serves the same route on its own scheme. Optional because a bridge
+   *  need not have a plane at all; the view then offers no attach control and
+   *  names an attachment instead of showing it.
    *
-   *  Bytes go over HTTP; only descriptors go over the socket. The wss bridge
-   *  keeps every frame for replay, so a payload on that wire would sit in the
-   *  history forever. */
+   *  Bytes travel over this origin, never over the event wire. The wss bridge
+   *  keeps every frame for replay, so a payload there would sit in the history
+   *  forever. */
   contentOrigin?(): string;
 }
 
