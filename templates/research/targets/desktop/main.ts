@@ -81,6 +81,11 @@ function spawnEngine(): void {
   });
   engine.on("exit", (code) => {
     console.log("[engine] exited", code);
+    // Drop the handle FIRST. A stale one still passes `if (!engine)`, and
+    // Electron discards messages to a dead process silently — so the next
+    // upload would join `pending` and wait on a reply that can never come.
+    // It also stops `harness:command` posting into the void.
+    engine = null;
     // An attach in flight when the engine dies must FAIL, not hang: the
     // composer shows a failed chip the user can retry, instead of a spinner
     // that never resolves.
@@ -93,13 +98,41 @@ function spawnEngine(): void {
 const pending = new Map<number, { resolve: (d: Descriptor) => void; reject: (e: Error) => void }>();
 let ingestId = 0;
 
-/** Hand bytes to the engine and wait for the root descriptor it commits. */
-function ingest(bytes: Uint8Array): Promise<Descriptor> {
+/**
+ * Hand bytes to the engine and wait for the root descriptor it commits.
+ *
+ * `signal` carries the caller's deadline all the way across: abandoning the
+ * promise would leave the engine decoding a file nobody is waiting for, so an
+ * abort drops the pending entry AND tells the engine to stop.
+ */
+function ingest(bytes: Uint8Array, signal: AbortSignal): Promise<Descriptor> {
   if (!engine) return Promise.reject(new Error("the engine is not running"));
   const id = ++ingestId;
   const answer = new Promise<Descriptor>((resolve, reject) => pending.set(id, { resolve, reject }));
-  engine.postMessage({ t: "ingest", id, bytes });
+  const settle = (fail: Error): void => {
+    const waiting = pending.get(id);
+    if (!waiting) return;
+    pending.delete(id);
+    waiting.reject(fail);
+  };
+  signal.addEventListener("abort", () => {
+    send({ t: "ingestCancel", id });
+    settle(new Error("the ingest was cancelled"));
+  }, { once: true });
+  // The handle can die between the guard above and this line.
+  if (!send({ t: "ingest", id, bytes })) settle(new Error("the engine is not running"));
   return answer;
+}
+
+/** Post to the engine, reporting whether it actually went. */
+function send(message: unknown): boolean {
+  if (!engine) return false;
+  try {
+    engine.postMessage(message);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function createWindow(): void {
@@ -151,7 +184,7 @@ app.whenReady().then(() => {
   createWindow();
   // renderer → engine (Command)
   ipcMain.on("harness:command", (_e, command: Command) => {
-    engine?.postMessage({ t: "command", payload: command });
+    send({ t: "command", payload: command });
   });
   // renderer (re)load → consistent cut: reduced state + the seq it reflects.
   ipcMain.handle("harness:snapshot", () => ({ state: appState, seq }));
