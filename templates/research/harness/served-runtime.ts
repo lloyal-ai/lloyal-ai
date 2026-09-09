@@ -62,6 +62,12 @@ export function createServedContext(cfg: Config): Promise<SessionContext> {
       nSeqMax: cfg.model.branches ?? 24,
       typeK: cfg.model.kvCache ?? "q4_0",
       typeV: cfg.model.kvCache ?? "q4_0",
+      // Vision, when the boot resolved a projector. `mmprojPath` is already a
+      // concrete file — `mmproj` beside it is the catalog id the boot resolved
+      // FROM, and is not a path.
+      ...(cfg.model.mmprojPath ? { mmprojPath: cfg.model.mmprojPath } : {}),
+      ...(cfg.model.imageMinTokens ? { imageMinTokens: cfg.model.imageMinTokens } : {}),
+      ...(cfg.model.imageMaxTokens ? { imageMaxTokens: cfg.model.imageMaxTokens } : {}),
     },
     cfg.model.gpu ? { gpuVariant: cfg.model.gpu } : undefined,
   );

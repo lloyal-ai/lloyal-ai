@@ -7,7 +7,7 @@ let step = 0, done = false;
 const finish = (c) => { if (done) return; done = true; child.kill(); process.exit(c); };
 child.on("message", (m) => {
   const ev = m?.payload;
-  if (ev?.type === "ui:composer" && step === 0) {
+  if (ev?.type === "weights:done" && step === 0) {
     step = 1;
     child.send({ t: "command", payload: { type: "set_output_dir", path: "localdir" } });
   } else if (ev?.type === "config:updated" && step === 1) {

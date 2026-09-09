@@ -8,11 +8,34 @@
  *  derives — the same pure list the outline rail reads, indexed in render
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
-import { memo, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import { memo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { color, font, radius } from "../theme.js";
-import { anchorsOf } from "../select.js";
+import { anchorsOf, selectThreadDigests } from "../select.js";
+import { useBrief } from "../store.js";
+import { parseAttachmentHref, resolvePrefix } from "../content-urls.js";
+import { Lightbox, useAssets } from "./Figures.js";
+
+/** Math in the document's own face — where that is safe. KaTeX positions
+ *  STACKED constructs (fractions, radicals, accents, sized operators and
+ *  delimiters) by its own fonts' ink metrics; an inherited face's taller
+ *  numerals crash into the fraction bar. So inline runs — the arithmetic a
+ *  brief mostly carries — inherit the UI font, while stacked constructs are
+ *  excluded and fall back to katex.css's own font rules. */
+const MATH = `
+  .katex { font-size: 1em !important; }
+  .katex, .katex *:not(.delimsizing, .op-symbol) { font-family: inherit !important; }
+  /* Plain math glyphs carry no family class — they inherit from .katex, so
+     excluding them from the override above would still hand them the UI
+     font. Restore KaTeX's face explicitly where geometry needs it. */
+  .katex :is(.mfrac, .sqrt, .root, .accent) * {
+    font-family: KaTeX_Main, "Times New Roman", serif !important;
+  }
+`;
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node
@@ -34,6 +57,12 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citation
   anchorPrefix?: string;
   citations?: Map<string, number>;
 }): ReactElement {
+  // A cited page opens where it is cited. The thread's roots are what an
+  // `attachment://` prefix may resolve to; the sidecar says which page root
+  // stands for the page.
+  const digests = useBrief(selectThreadDigests);
+  const assets = useAssets(digests);
+  const [openPage, setOpenPage] = useState<{ digest: string; label: string } | null>(null);
   // Models sometimes wrap a woven link in literal brackets — shed them.
   const markdown = raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
   const anchors = anchorPrefix ? anchorsOf(markdown, anchorPrefix) : [];
@@ -43,11 +72,38 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citation
       <Tag id={anchors[next++]?.anchor} style={HEADING[Tag]}>{children}</Tag>;
   return (
     <div style={S.prose}>
+      <style>{MATH}</style>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+        // Unknown schemes are stripped by default; the content plane's own is admitted.
+        urlTransform={(url) => (url.startsWith("attachment://") ? url : defaultUrlTransform(url))}
         components={{
           a: ({ href, children }) => {
             const ordinal = href ? citations?.get(href) : undefined;
+            const cited = href ? parseAttachmentHref(href) : null;
+            if (cited) {
+              // Evidence by content address: exactly one root in this thread
+              // answers to the prefix, and its sidecar names the page's render.
+              const root = resolvePrefix(cited.prefix, digests);
+              const asset = root ? assets[root] : undefined;
+              const meta = asset?.kind === "document" ? asset.meta : null;
+              const render = meta?.pages.find((p) => p.page === cited.page)?.render;
+              const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
+              if (!render || !meta) {
+                return <span style={S.citeLink} title={meta ? `${meta.title} · page ${cited.page}` : "page not in this thread"}>{mark}</span>;
+              }
+              return (
+                <button
+                  type="button"
+                  style={S.pageLink}
+                  title={`${meta.title} · page ${cited.page} — open`}
+                  onClick={() => setOpenPage({ digest: render.digest, label: `${meta.title} · page ${cited.page}` })}
+                >
+                  {mark}
+                </button>
+              );
+            }
             if (ordinal === undefined) {
               return (
                 <a href={href} target="_blank" rel="noreferrer" style={S.link}>
@@ -88,6 +144,9 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citation
       >
         {markdown}
       </ReactMarkdown>
+      {openPage !== null && (
+        <Lightbox digest={openPage.digest} label={openPage.label} onClose={() => setOpenPage(null)} />
+      )}
     </div>
   );
 });
@@ -103,6 +162,11 @@ const S: Record<string, CSSProperties> = {
     textDecorationColor: "#E4B7A8", textUnderlineOffset: 3,
   },
   citeLink: { textDecoration: "none", color: "inherit" },
+  // A cited page is a button in link's clothing: it opens the page here.
+  pageLink: {
+    background: "none", border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit",
+    textDecoration: "underline dotted", textUnderlineOffset: 3, cursor: "zoom-in",
+  },
   cite: {
     font: `600 10px/1 ${font.ui}`, color: color.emberDeep, background: color.emberWash,
     borderRadius: radius.pill, padding: "2px 5px", marginLeft: 2, verticalAlign: "super",

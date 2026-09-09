@@ -11,6 +11,19 @@ dist-web/
 # Model weights are fetched or dropped locally, never committed.
 models/**/*.gguf
 
+# Project-owned media content (an OCI Image Layout). `oci-layout` is committed
+# so the directory survives a clone; the mutable index, the payload, and the
+# write-staging area are not. NOTE: never place a .gitkeep inside
+# blobs/<algorithm>/ — every entry there must be a blob named by its own
+# encoded digest, so a placeholder is a malformed entry. The store recreates
+# index.json and blobs/sha256/ on first write.
+media/index.json
+media/blobs/
+media/.tmp/
+
+# Per-run attachment storage, superseded by media/.
+trace-*.attachments/
+
 *.log
 .DS_Store
 harness.json

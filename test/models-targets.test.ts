@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { writeModelField, readModelField } from '../src/scaffold/apply-model.js';
 import { readProjectMarker } from '../src/scaffold/write-marker.js';
+import { DEFAULT_ABILITIES } from '../src/commands/new.js';
 import { presentTargets } from '../src/scaffold/add-target.js';
 import { newCommand } from '../src/commands/new.js';
 import {
@@ -440,8 +441,9 @@ describe('marker', () => {
       template: 'basic',
       targets: ['cli', 'web'],
       // Recorded even under --skip-abilities: the harness still imports them, so
-      // `bin/run.js` needs the specs to name at boot.
-      abilities: ['lloyal/wikipedia@2.0.0'],
+      // `bin/run.js` needs the specs to name at boot. Read from the source, not
+      // copied: the numbers move with every ability release.
+      abilities: DEFAULT_ABILITIES.basic,
     });
   });
 
@@ -451,7 +453,7 @@ describe('marker', () => {
     expect(pkg(dir).harnessdev).toEqual({
       template: 'basic',
       targets: ['cli'],
-      abilities: ['lloyal/wikipedia@2.0.0'],
+      abilities: DEFAULT_ABILITIES.basic,
     });
   });
 });

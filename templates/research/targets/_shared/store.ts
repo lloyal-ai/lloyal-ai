@@ -22,6 +22,19 @@ export interface Bridge {
    *  in-process bridges (cli, desktop-ipc) omit it — the view then treats
    *  the link as permanently 'connected' and never shows the banner. */
   onStatus?(cb: (status: WireStatus) => void): () => void;
+  /** The origin of the content plane — where bytes live. Uploads go up to it;
+   *  representations, manifests and configs come down from it. ONE transport
+   *  fact, and every URL is derived from it in `content-urls.ts`, so a bridge
+   *  implements one thing and inherits every route the plane has and every
+   *  route it grows — the ingress included, so a target that cannot run an HTTP
+   *  server serves the same route on its own scheme. Optional because a bridge
+   *  need not have a plane at all; the view then offers no attach control and
+   *  names an attachment instead of showing it.
+   *
+   *  Bytes travel over this origin, never over the event wire. The wss bridge
+   *  keeps every frame for replay, so a payload there would sit in the history
+   *  forever. */
+  contentOrigin?(): string;
 }
 
 declare global {
@@ -104,6 +117,10 @@ export function useBrief<T>(select: (app: AppState) => T): T {
 
 /** Dispatch a command to the harness. */
 export const send = (command: Command): void => window.harness.send(command);
+
+/** The page's store, for non-React consumers (the web history adapter). The
+ *  same per-bridge singleton useBrief reads — nothing new is created. */
+export const appStore = (): BriefStore => storeFor(window.harness);
 
 /** The transport link's status, for the connection banner. A bridge without
  *  `onStatus` (cli, desktop-ipc — no droppable socket) reads 'connected'

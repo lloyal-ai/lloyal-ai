@@ -19,7 +19,7 @@
  * `run` (which pulls the `harness` + its `.eta`) is INJECTED — `serve.ts` supplies
  * `runServedSession` — so this file needs no esbuild and stays unit-testable.
  *
- * SNAPSHOT: reasoning.run @ 0.8.0 (src/serve/driver.ts).
+ * LINEAGE: evolved from reasoning.run 0.8.0 (src/serve/driver.ts).
  */
 import { randomUUID } from "node:crypto";
 import { resource } from "effection";

@@ -8,14 +8,47 @@ import { connectWss, type WssClient } from "@lloyal-labs/binding/web";
 import { initialState, type AppState, type WireStatus } from "../../harness/state.js";
 import type { WorkflowEvent, Command } from "../../harness/protocol.js";
 
+const DEFAULT_WSS = "ws://127.0.0.1:8787";
+
+/** An explicitly-configured host, or null for "wherever this page came from".
+ *  Build-time `VITE_WSS_URL` first, then a `?server=` query param. */
+function configuredWssUrl(): string | null {
+  const env = (import.meta as unknown as { env?: { VITE_WSS_URL?: string } }).env?.VITE_WSS_URL;
+  if (env) return env;
+  return new URLSearchParams(window.location.search).get("server");
+}
+
 /** Where the served host lives: build-time `VITE_WSS_URL`, a `?server=` query
  *  param, then the local `npm run serve` default. */
 function resolveWssUrl(): string {
-  const env = (import.meta as unknown as { env?: { VITE_WSS_URL?: string } }).env?.VITE_WSS_URL;
-  if (env) return env;
-  const q = new URLSearchParams(window.location.search).get("server");
-  if (q) return q;
-  return "ws://127.0.0.1:8787";
+  return configuredWssUrl() ?? DEFAULT_WSS;
+}
+
+/**
+ * Base URL for the content plane — HTTP carries bytes, the socket carries
+ * references to them.
+ *
+ * Never derived from `window.location`: the page is on :5173 in dev while the
+ * host is on :8787, and the host is remote-capable. The default is RELATIVE so
+ * Vite's proxy keeps dev same-origin (no CORS at all); an explicitly-pointed
+ * host derives its origin from the socket URL, so `?server=` moves both planes
+ * together and they cannot drift apart.
+ */
+function resolveContentBaseUrl(): string {
+  const env = (import.meta as unknown as { env?: { VITE_CONTENT_URL?: string } }).env?.VITE_CONTENT_URL;
+  const explicit = env ?? new URLSearchParams(window.location.search).get("content");
+  if (explicit) return explicit.replace(/\/$/, "");
+  const wss = configuredWssUrl();
+  if (!wss) return "";
+  try {
+    const u = new URL(wss);
+    u.protocol = u.protocol === "wss:" ? "https:" : "http:";
+    return u.origin;
+  } catch {
+    // An unparsable override is a config error, not a reason to fetch bytes
+    // from a different host than the one commands go to.
+    return "";
+  }
 }
 
 /** Frames kept for replay. A session is one conversation; produce frames are
@@ -120,6 +153,11 @@ export function installWebBridge(): void {
     // The wss stream carries no snapshot — start from initialState at seq 0.
     requestSnapshot(): Promise<{ state: AppState; seq: number }> {
       return Promise.resolve({ state: initialState, seq: 0 });
+    },
+    // Here, not in the view: which plane serves bytes is a transport fact.
+    // Every door is derived from this one origin in `content-urls.ts`.
+    contentOrigin(): string {
+      return resolveContentBaseUrl();
     },
   };
 

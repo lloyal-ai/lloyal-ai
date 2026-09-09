@@ -4,12 +4,15 @@
  *  settled brief it carries the Ask/Extend choice: Ask answers from the
  *  warm context (skipPlanner — instant); Extend reframes fully as a new
  *  run. Depth applies on selection (`set_effort` — next run). */
-import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { send, useBrief } from "../store.js";
+import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
+import { resolveAsset } from "./Figures.js";
+import type { Descriptor } from "@lloyal-labs/media";
 import {
-  DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectBanked,
-  selectDepth, selectLive, selectMoment, selectResumedAt, selectTaskCount,
+  DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectActiveDocId, selectBanked,
+  selectDepth, selectEtaTasks, selectLibraries, selectLive, selectMoment, selectResumedAt,
   type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
@@ -17,85 +20,488 @@ import type { AppState } from "../../../harness/state.js";
 
 // Stable identities — the composer re-renders per keystroke, and a fresh
 // inline closure per render would grow the fold's memo map (store contract).
-const selectUiPhase = (app: AppState) => app.uiPhase;
 const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
+const selectActiveAsk = (app: AppState): string | null =>
+  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.ask ?? null : null;
+const selectClarifying = (app: AppState): boolean =>
+  app.activeDocId !== null &&
+  app.documents.get(app.activeDocId)?.phase === "clarifying";
 
-const INTENTS = [
-  { intent: "ask", label: "Ask", hint: "answers from the warm context — instant" },
-  { intent: "extend", label: "Extend", hint: "a fresh brief that reframes fully" },
-] as const;
-type Intent = (typeof INTENTS)[number]["intent"];
+/** A HINT for the file picker, not a gate — drag-and-drop and paste bypass it,
+ *  and the host's ingress is the only thing that decides what is admitted.
+ *  Enumerating types here would be a second copy of a question the bytes
+ *  answer — and wrong in both directions (the ingress converts and admits
+ *  webp, heic and tiff happily). */
+const ATTACH_TYPES = "image/*,application/pdf";
+
+/** An attachment is admitted the moment it is picked: the bytes cross HTTP
+ *  once, the host normalizes an image or reads a document, and the tray shows
+ *  the ADMITTED thing — an image's admitted pixels, a document's first page —
+ *  rather than a local preview that may not be what the model gets. Submit
+ *  then carries roots only, and a refused file says so before the question
+ *  is even written. A removed attachment leaves an unreferenced blob behind,
+ *  the same harmless orphan class the store's write order already accepts. */
+type Attached =
+  | { id: number; name: string; status: "uploading" }
+  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document"; thumb: string | null; title: string | null }
+  | { id: number; name: string; status: "failed"; error: string };
+
+/** A picked image, before submit.
+ *
+ *  `url` is a LOCAL object URL — an optimistic preview of the file the user
+ *  chose, not of what the model will see. The two differ: normalization may
+ *  re-encode, and the preview cannot be joined to the admitted representation
+ *  by digest because the browser holds the source's hash while the fold holds
+ *  the MANIFEST's. After submit the view resolves through the content plane
+ *  instead, which shows the exact pixels the projector encoded. */
+
+/** Hover and pressed states inline styles cannot express. A selected pill's
+ *  inline background always beats the hover class, so selection never dims. */
+const CSS = `
+  .cmp-send { transition: background .12s ease, transform .06s ease; }
+  .cmp-send:hover:not(:disabled) { background: ${color.emberDeep}; }
+  .cmp-send:active:not(:disabled) { transform: scale(.94); }
+  .cmp-send:disabled { opacity: .55; cursor: default; }
+  .cmp-icon { transition: background .12s ease, color .12s ease; }
+  .cmp-icon:hover { color: ${color.ink}; background: ${color.card2}; }
+  .cmp-pill { transition: background .12s ease, color .12s ease; }
+  .cmp-pill:hover { background: ${color.card}; color: ${color.ink}; }
+`;
+
+/** A page with a folded corner — the document chip's glyph. */
+function DocGlyph(): ReactElement {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
 
 export function Composer({ shape, placeholder }: {
   shape: Shape;
   placeholder: string;
 }): ReactElement {
   const [draft, setDraft] = useState("");
-  const [intent, setIntent] = useState<Intent>("ask");
+  const [images, setImages] = useState<Attached[]>([]);
+  const [imageError, setImageError] = useState("");
+  const uploading = images.some((a) => a.status === "uploading");
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  const nextId = useRef(0);
+  /** The question, held after send until the fold acknowledges it. The echo
+   *  mints or names a document within milliseconds, so the first clear arm
+   *  (the active doc changed) does nearly all the work; a warm ask clears on
+   *  its own echo, a clarify answer on leaving 'clarifying'. */
+  const [pending, setPending] = useState<
+    { text: string; docId: string | null; clarify: boolean } | null>(null);
+  /** An ability just saved toward its first enable — its pill pulses until
+   *  `abilities:state` confirms (a corpus enable INDEXES, which takes time). */
+  const [enabling, setEnabling] = useState<string | null>(null);
   const depth = useBrief(selectDepth);
   const live = useBrief(selectLive);
-  const tasks = useBrief(selectTaskCount);
-  const uiPhase = useBrief(selectUiPhase);
+  const tasks = useBrief(selectEtaTasks);
   const settled = useBrief(selectSettled);
+  const activeDocId = useBrief(selectActiveDocId);
+  const clarifying = useBrief(selectClarifying);
+  // What submit() will actually send — the render gates below share the
+  // same truth instead of re-deriving it.
+  const willSkipPlanner = settled ? true : shape === "ask";
+  const libraries = useBrief(selectLibraries);
+  const [configFor, setConfigFor] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const configPanel = libraries.find((l) => l.name === configFor) ?? null;
+  const askNow = useBrief(selectActiveAsk);
+
+  // Acknowledgment: a document was born or activated (the echo lands in
+  // milliseconds), the warm ask echoed, or the clarify round moved on.
+  useEffect(() => {
+    if (pending === null) return;
+    if (
+      activeDocId !== pending.docId ||
+      askNow === pending.text ||
+      (pending.clarify && !clarifying)
+    ) {
+      setPending(null);
+    }
+  }, [pending, activeDocId, askNow, clarifying]);
+  // The echo must not outlive plausibility — a dead wire has its own banner.
+  useEffect(() => {
+    if (pending === null) return;
+    const t = setTimeout(() => setPending(null), 12_000);
+    return () => clearTimeout(t);
+  }, [pending]);
+  useEffect(() => {
+    if (enabling !== null && libraries.find((l) => l.name === enabling)?.enabled) {
+      setEnabling(null);
+    }
+  }, [enabling, libraries]);
+
+  const closeConfig = (): void => {
+    setConfigFor(null);
+    setValues({});
+  };
+  const openConfig = (name: string): void => {
+    setConfigFor((open) => (open === name ? null : name));
+    setValues({});
+  };
+  /** Only what was typed is sent: a stored value is never echoed back to the
+   *  form (the wire carries key-presence, not values), so an untouched field
+   *  must not be submitted as an empty string and wipe it. */
+  const saveConfig = (): void => {
+    if (!configPanel) return;
+    const entries = Object.entries(values).filter(([, v]) => v.trim() !== "");
+    if (entries.length > 0) {
+      send({
+        type: "set_ability_config",
+        name: configPanel.name,
+        values: Object.fromEntries(entries),
+      });
+      if (!configPanel.enabled) setEnabling(configPanel.name);
+    }
+    closeConfig();
+  };
+
+  // No size cap here any more. It existed because base64 inflated the wire by
+  // 4/3 and the socket carried the bytes; the bytes now go over HTTP, where
+  // the HOST bounds them — in size AND in time, which a client-side check
+  // never did. Refusing here would only be a second, weaker opinion that
+  // drifts from the one that counts.
+  /** Takes anything File-shaped so the picker and the clipboard feed ONE path
+   *  — a second attach path is how the two drift. */
+  const attach = (files: ArrayLike<File> | null): void => {
+    setImageError("");
+    // Copy the list BEFORE resetting the picker: a FileList is live, and
+    // clearing the input empties it.
+    const chosen = Array.from(files ?? []);
+    if (picker.current) picker.current.value = "";
+    if (chosen.length === 0) return;
+    const origin = contentOrigin();
+    if (origin === null) {
+      setImageError("This build cannot accept attachments.");
+      return;
+    }
+    for (const file of chosen) {
+      const id = nextId.current++;
+      setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
+      void (async () => {
+        try {
+          const root = await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
+          const asset = await resolveAsset(origin, root.digest);
+          const cover = asset.kind === "document" ? asset.meta.pages.find((p) => p.page === 1)?.render : undefined;
+          const thumb = asset.kind === "image"
+            ? representationUrl(origin, root.digest)
+            : cover ? representationUrl(origin, cover.digest) : null;
+          const title = asset.kind === "document" ? asset.meta.title : null;
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title } : a)));
+        } catch (err) {
+          // The host's own message — 413 too large, 408 too slow, 400 not
+          // admitted — beats anything invented here.
+          const error = err instanceof Error ? err.message : "Upload failed.";
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error } : a)));
+        }
+      })();
+    }
+  };
+
+  /** Paste is the shortest road from a screenshot to a question. The clipboard
+   *  hands over the same File objects the picker does, so it feeds `attach`
+   *  rather than growing a second path. Only image and PDF items are taken,
+   *  and the default is prevented only when one was — otherwise a paste
+   *  carrying text would silently lose it. */
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
+    const files = Array.from(e.clipboardData?.items ?? [])
+      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type === "application/pdf"))
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (files.length === 0) return;
+    e.preventDefault();
+    attach(files);
+  };
+
+  /** Drop is the third road in, and it feeds the same `attach`. Only a file
+   *  drag lights the composer up — dragging selected text must not look like
+   *  it will attach something. */
+  const dragged = (e: DragEvent<HTMLDivElement>): boolean =>
+    e.dataTransfer.types.includes("Files");
+
+  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
+    if (!dragged(e)) return;
+    e.preventDefault();
+    setDragging(false);
+    attach(e.dataTransfer.files);
+  };
+
+  // A file dropped anywhere else would navigate the window to it — a blank app
+  // on desktop, the file itself in a browser. Swallowing both events app-wide
+  // makes a stray drop do nothing, and `dragover` is also what MAKES the
+  // composer a valid drop target.
+  useEffect(() => {
+    const swallow = (e: Event): void => e.preventDefault();
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, []);
+
+  const clear = (): void => {
+    setDraft("");
+    setImages([]);
+    setImageError("");
+  };
 
   const submit = (): void => {
     const text = draft.trim();
-    if (!text) return;
-    if (uiPhase === "clarifying") send({ type: "submit_clarification", answer: text });
-    else {
-      const mode = SHAPES.find((s) => s.shape === shape)?.mode ?? "flat";
-      send({ type: "submit_query", query: text, mode, skipPlanner: settled && intent === "ask" });
+    // Enter is the only way to submit, so re-entry is one keypress away while
+    // an upload is in flight — and a second submit would upload the same files
+    // again and send a second query.
+    if (!text || uploading || pending !== null) return;
+    if (clarifying) {
+      send({ type: "submit_clarification", answer: text });
+      setPending({ text, docId: activeDocId, clarify: true });
+      clear();
+      return;
     }
-    setDraft("");
+    // A refused attachment is not silently dropped from the question: the
+    // user removes it, or retries it, before sending.
+    if (images.some((a) => a.status === "failed")) {
+      setImageError("Remove the attachment that was refused, or attach it again.");
+      return;
+    }
+    const mode = SHAPES.find((s) => s.shape === shape)?.mode ?? "flat";
+    // The bytes already crossed HTTP at attach time; only the roots go over
+    // the socket.
+    const attachments = images.flatMap((a) => (a.status === "admitted" ? [a.root] : []));
+    send({
+      type: "submit_query", query: text, mode,
+      // Cold: the Ask shape is the choice. Warm: every follow-up is an
+      // ask — one agent, every ability, into the settled document.
+      skipPlanner: willSkipPlanner,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
+    setPending({ text, docId: activeDocId, clarify: false });
+    clear();
   };
 
   return (
-    <div style={S.composer}>
-      <input
-        style={S.input}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        placeholder={placeholder}
-      />
-      {live && <Clock />}
-      {settled && (
-        <div style={S.depths}>
-          {INTENTS.map((i) => (
-            <button
-              key={i.intent}
-              type="button"
-              style={i.intent === intent ? S.depthOn : S.depth}
-              title={i.hint}
-              onClick={() => setIntent(i.intent)}
-            >
-              {i.label}
-            </button>
+    <div
+      style={{ ...S.shell, ...(dragging ? S.shellDrop : null) }}
+      onDragOver={(e) => { if (dragged(e)) { e.preventDefault(); setDragging(true); } }}
+      // Dragging over a CHILD fires dragleave on the parent; only a leave that
+      // actually exits the composer should drop the highlight.
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={onDrop}
+    >
+      <style>{CSS}</style>
+      {(images.length > 0 || imageError) && (
+        <div style={S.tray}>
+          {images.map((img) => (
+            <span key={img.id} style={S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
+              {img.status === "admitted" && img.thumb
+                ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
+                : img.status === "failed"
+                  ? <span style={{ ...S.docChip, color: color.danger }}><DocGlyph />{img.name} — {img.error}</span>
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
+              <button
+                type="button"
+                style={S.thumbX}
+                aria-label={`Remove ${img.name}`}
+                onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
+              >
+                ×
+              </button>
+            </span>
           ))}
+          {imageError && <span style={S.imageError}>{imageError}</span>}
         </div>
       )}
-      <div style={S.depths}>
-        {DEPTHS.map((d) => {
-          const pace = paceFor(d.depth, shape);
-          return (
-            <button
-              key={d.depth}
-              type="button"
-              style={d.depth === depth ? S.depthOn : S.depth}
-              title={pace.observed ? undefined : "estimated — runs on this machine refine it"}
-              onClick={() => send({ type: "set_effort", effort: d.depth })}
-            >
-              {d.title} · {estimateLabel(d.depth, tasks, pace)}
+      {configPanel && (
+        <div style={S.config} role="group" aria-label={`${configPanel.title} settings`}>
+          <div style={S.configHead}>
+            <b style={S.configName}>{configPanel.title}</b>
+            <span style={S.configNeed}>
+              {configPanel.needs.length > 0
+                ? `needs ${configPanel.needs.join(", ")}`
+                : "settings"}
+            </span>
+          </div>
+          {configPanel.fields.map((f) => (
+            <label key={f.key} style={S.configRow}>
+              <span style={S.configKey}>
+                {f.key}
+                {f.required && <span style={S.configReq}>required</span>}
+              </span>
+              <input
+                style={S.configInput}
+                type={f.secret ? "password" : "text"}
+                autoComplete={f.secret ? "new-password" : "off"}
+                // A stored value is never echoed to the form — the wire carries
+                // key-presence, not values — so the placeholder says which it is.
+                placeholder={f.set ? "stored — type to replace" : "not set"}
+                value={values[f.key] ?? ""}
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, [f.key]: e.target.value }))
+                }
+              />
+            </label>
+          ))}
+          {configPanel.fields.some((f) => f.secret) && (
+            <p style={S.configNote}>
+              Sent to the host running the model, and stored there.
+            </p>
+          )}
+          <div style={S.configActions}>
+            <button type="button" className="cmp-pill" style={S.configCancel} onClick={closeConfig}>
+              Cancel
             </button>
-          );
-        })}
+            <button type="button" style={S.configSave} onClick={saveConfig}>
+              {configPanel.enabled ? "Save" : "Enable"}
+            </button>
+          </div>
+        </div>
+      )}
+      <div style={S.composer}>
+      <input
+        ref={picker}
+        type="file"
+        accept={ATTACH_TYPES}
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => attach(e.target.files)}
+      />
+      <div style={S.stack}>
+      {/* Row 1 — the question, and only what acts on it. */}
+      <div style={S.entryRow}>
+        <button
+          type="button"
+          className="cmp-icon" style={S.attach}
+          title="Attach an image or PDF"
+          aria-label="Attach an image or PDF"
+          onClick={() => picker.current?.click()}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21.44 11.05l-8.49 8.49a5 5 0 01-7.07-7.07l8.49-8.49a3 3 0 014.24 4.24l-8.49 8.49a1 1 0 01-1.41-1.41l7.78-7.78" />
+          </svg>
+        </button>
+        <input
+          style={{ ...S.input, ...(pending ? S.inputSent : null) }}
+          value={pending ? pending.text : draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
+          }}
+          onPaste={onPaste}
+          placeholder={uploading ? "Sending your image…" : placeholder}
+          disabled={uploading || pending !== null}
+        />
+        {pending && <span className="fn-lamp" style={S.sentDot} />}
+        {live && <Clock />}
       </div>
-      <button type="button" style={S.send} onClick={submit} aria-label="Send">
+      {/* Row 2 — what the next brief will DRAW ON, then how it will be worked.
+          Both were elsewhere before: participation only on the landing, where it
+          vanished the moment a run started, and depth crowded onto the question
+          row. They belong together, and in the dock they are reachable at every
+          moment rather than only the first. */}
+      <div style={S.controlRow}>
+        <div style={S.libs}>
+          {libraries.map((l) => {
+            // An ability that has never been configured is not "excluded" — it
+            // CANNOT run yet, so its chip opens its settings rather than
+            // offering a toggle that could not do anything.
+            const blocked = !l.enabled;
+            const on = l.included && !blocked;
+            return (
+              <span key={l.name} style={{ ...S.lib, ...(on ? null : S.libOff) }}>
+                <button
+                  type="button"
+                  style={{ ...S.libMain, ...(blocked ? S.libBlocked : null) }}
+                  aria-pressed={blocked ? undefined : l.included}
+                  aria-expanded={blocked ? configFor === l.name : undefined}
+                  title={
+                    blocked
+                      ? `Needs ${l.needs.join(", ") || "configuration"} — click to set it`
+                      : l.included
+                        ? "Leave this out of the next brief"
+                        : "Include it again"
+                  }
+                  onClick={() =>
+                    blocked
+                      ? openConfig(l.name)
+                      : send({ type: "toggle_participation", name: l.name })
+                  }
+                >
+                  {l.iconUrl ? (
+                    <img src={l.iconUrl} alt="" width={12} height={12} style={S.libIcon} />
+                  ) : (
+                    <span
+                    className={enabling === l.name ? "fn-lamp" : undefined}
+                    style={{ ...S.libDot, ...(on || enabling === l.name ? null : S.libDotOff) }}
+                  />
+                  )}
+                  {l.title}
+                  {l.detail ? ` · ${l.detail}` : ""}
+                </button>
+                {/* Every ability that HAS settings shows the cog, configured or
+                    not — a pill that silently lacks one reads as a different
+                    kind of thing. What differs is only the body: it toggles
+                    when the ability can run, and opens the same settings when
+                    it cannot. */}
+                {l.fields.length > 0 && (
+                  <button
+                    type="button"
+                    className="cmp-icon" style={S.libGear}
+                    title={`${l.title} settings`}
+                    aria-label={`${l.title} settings`}
+                    aria-expanded={configFor === l.name}
+                    onClick={() => openConfig(l.name)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3.2" />
+                      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 110-4h.09A1.65 1.65 0 003.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 008 3.6 1.65 1.65 0 009 2.09V2a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0020.4 8v0a1.65 1.65 0 001.51 1H22a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                    </svg>
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+        <span style={{ flex: 1 }} />
+        {/* Depth sets how many inquiries run and how long they may work. An ask
+            runs exactly one agent to a straight answer, so there is no breadth to
+            choose and the minutes would be quoted against a plan that never
+            exists. The configured effort still bounds the agent; it is simply not
+            a question worth asking here. */}
+        {!willSkipPlanner && (
+          <div style={S.depths} role="radiogroup" aria-label="Depth">
+            {DEPTHS.map((d) => {
+              const pace = paceFor(d.depth, shape);
+              return (
+                <button
+                  key={d.depth}
+                  type="button"
+                  role="radio"
+                  aria-checked={d.depth === depth}
+                  className="cmp-pill" style={d.depth === depth ? S.depthOn : S.depth}
+                  title={pace.observed ? undefined : "estimated — runs on this machine refine it"}
+                  onClick={() => send({ type: "set_effort", effort: d.depth })}
+                >
+                  {d.title} · {estimateLabel(d.depth, tasks, pace)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      </div>
+      <button type="button" className="cmp-send" style={S.send} onClick={submit} aria-label="Send" disabled={uploading || pending !== null}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 19V5" />
           <path d="M5 12l7-7 7 7" />
         </svg>
       </button>
+      </div>
     </div>
   );
 }
@@ -129,14 +535,123 @@ const depthBase: CSSProperties = {
 };
 
 const S: Record<string, CSSProperties> = {
+  shell: { display: "flex", flexDirection: "column", gap: 8 },
+  /** Outline, not border or padding: it must not move the composer as a file
+   *  passes over it. */
+  shellDrop: { outline: `2px dashed ${color.ember}`, outlineOffset: 6, borderRadius: radius.card },
+  tray: {
+    display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+    padding: "0 2px",
+  },
+  thumb: {
+    position: "relative", display: "inline-flex", flex: "none",
+    borderRadius: 8, border: `1px solid ${color.line}`, background: color.card,
+    padding: 3, boxShadow: shadow.card,
+  },
+  thumbImg: {
+    width: 40, height: 40, objectFit: "cover", borderRadius: 6, display: "block",
+  },
+  thumbX: {
+    position: "absolute", top: -6, right: -6, width: 18, height: 18,
+    borderRadius: 9, border: `1px solid ${color.line}`, background: color.card,
+    color: color.dim, font: `600 12px ${font.ui}`, lineHeight: 1,
+    display: "grid", placeItems: "center", cursor: "pointer", padding: 0,
+  },
+  /** An attachment the host has not answered for yet. */
+  admitting: { opacity: 0.6 },
+  docChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, height: 40, padding: "0 10px 0 8px",
+    font: `12px ${font.ui}`, color: color.ink, maxWidth: 240, overflow: "hidden",
+    textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
+  imageError: { font: `12px ${font.ui}`, color: color.danger },
+  attach: {
+    width: 30, height: 30, borderRadius: 8, border: 0, background: "none",
+    color: color.dim, display: "grid", placeItems: "center", flex: "none",
+    cursor: "pointer", padding: 0,
+  },
   composer: {
     background: color.card, border: `1px solid ${color.line}`, borderRadius: radius.panel,
-    boxShadow: shadow.card, padding: "11px 13px", display: "flex", alignItems: "center", gap: 12,
+    boxShadow: shadow.card, padding: "12px 13px 10px",
+    // Send sits beside the two rows and bottom-aligns with them, so it rides
+    // the control row's line — the same baseline as the ability pills — rather
+    // than floating in the card's vertical middle.
+    display: "flex", alignItems: "flex-end", gap: 12,
   },
+  stack: { display: "flex", flexDirection: "column", gap: 9, flex: 1, minWidth: 0 },
+  /** The question and the two controls that act on it. The row carries its
+   *  own height so the field has room to breathe. */
+  entryRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 38 },
+  /** What the brief draws on, then how it is worked — sources left, shape of
+   *  the work right, reading in the order the decisions are actually made. */
+  /** Holds the depth picker's own height whether or not the picker is there, so
+   *  the card is the same size in every mode and the send button never moves. */
+  controlRow: { display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 32 },
+  libs: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 },
+  lib: {
+    font: `500 11.5px ${font.ui}`, color: color.ink, background: color.card2,
+    border: 0, borderRadius: 8, padding: "4px 9px", cursor: "pointer",
+    display: "inline-flex", alignItems: "center", gap: 6, flex: "none",
+  },
+  /** Excluded reads as quieter, never fainter than `dim` — it is still a
+   *  control, and the dot goes hollow so the state survives a mono palette. */
+  libOff: { color: color.dim, background: "none" },
+  libDot: { width: 6, height: 6, borderRadius: "50%", background: color.ember, flex: "none" },
+  libDotOff: { background: "none", boxShadow: `inset 0 0 0 1.5px ${color.dim}` },
+  /** The toggle half of a chip. The chip itself is a container now, because a
+   *  settings button cannot nest inside a button. */
+  libMain: {
+    font: "inherit", color: "inherit", background: "none", border: 0, padding: 0,
+    cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
+  },
+  libGear: {
+    background: "none", border: 0, padding: 0, cursor: "pointer", color: color.dim,
+    display: "inline-flex", flex: "none",
+    marginLeft: 2, paddingLeft: 7, borderLeft: `1px solid ${color.line}`,
+  },
+  /** Installed but not runnable — reads as unavailable, not as switched off.
+   *  Still a control: it opens the settings that would make it runnable. */
+  libBlocked: { opacity: 0.62 },
+  config: {
+    background: color.card, border: `1px solid ${color.line}`, borderRadius: radius.panel,
+    boxShadow: shadow.card, padding: "12px 14px", marginBottom: 8,
+    display: "flex", flexDirection: "column", gap: 9,
+  },
+  configHead: { display: "flex", alignItems: "baseline", gap: 8 },
+  configName: { font: `600 13px ${font.ui}`, color: color.ink },
+  configNeed: { font: `12px ${font.ui}`, color: color.dim },
+  configRow: { display: "flex", alignItems: "center", gap: 10 },
+  configKey: {
+    font: `500 12px ${font.mono}`, color: color.dim, width: 132, flex: "none",
+    display: "inline-flex", alignItems: "baseline", gap: 6,
+  },
+  configReq: { font: `10.5px ${font.ui}`, color: color.wait },
+  configInput: {
+    flex: 1, minWidth: 0, font: `13px ${font.ui}`, color: color.ink,
+    background: color.card2, border: `1px solid ${color.line}`, borderRadius: 8,
+    padding: "6px 9px", outline: 0,
+  },
+  configNote: { font: `11.5px ${font.ui}`, color: color.dim, margin: 0 },
+  configActions: { display: "flex", justifyContent: "flex-end", gap: 8 },
+  configCancel: {
+    font: `500 12px ${font.ui}`, color: color.dim, background: "none",
+    border: 0, borderRadius: 8, padding: "6px 11px", cursor: "pointer",
+  },
+  configSave: {
+    font: `600 12px ${font.ui}`, color: color.ground, background: color.ink,
+    border: 0, borderRadius: 8, padding: "6px 13px", cursor: "pointer",
+  },
+  /** An ability's own mark, when it names one. The dot is the fallback and
+   *  also the state indicator, so an icon-bearing ability leans on the chip's
+   *  own dimming to say whether it is included. */
+  libIcon: { display: "block", flex: "none", borderRadius: 3 },
   input: {
     flex: 1, border: 0, outline: 0, font: `14.5px ${font.ui}`, color: color.ink,
     background: "none", minWidth: 0,
   },
+  /** Words in hand, not yet taken — dimmed, beside a working lamp. */
+  inputSent: { color: color.dim },
+  sentDot: { width: 7, height: 7, borderRadius: "50%", background: color.ember, flex: "none" },
   clock: {
     display: "inline-flex", alignItems: "center", gap: 5, flex: "none",
     font: `500 12px ${font.mono}`, color: color.dim, fontVariantNumeric: "tabular-nums",
