@@ -14,6 +14,7 @@ import { protocol } from "electron";
 import { createProjectMediaStore, resolveContent } from "@lloyal-labs/rig/node";
 import { MAX_DOCUMENT_BYTES, DOCUMENT_UPLOAD_TIMEOUT_MS } from "@lloyal-labs/media/node";
 import type { Descriptor } from "@lloyal-labs/media";
+import { readBounded, TooLarge, TooSlow } from "./read-bounded.js";
 
 /**
  * Must run BEFORE app ready — afterwards the registration is ignored SILENTLY.
@@ -33,50 +34,6 @@ export function registerContentScheme(): void {
       privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
     },
   ]);
-}
-
-/** Over the cap. Separate from a refusal so the client is told which limit. */
-class TooLarge extends Error {}
-/** Past the deadline — the transfer, the ingest, or both together. */
-class TooSlow extends Error {}
-
-/**
- * Read the body, refusing AT the cap rather than after it.
- *
- * `Content-Length` is checked first because it costs nothing, but the stream is
- * the authority — the declared length is a claim. Chunks are dropped the moment
- * the total passes the ceiling, so an oversize upload is never accumulated and
- * never forwarded, and the reader is cancelled so the producer stops too.
- */
-async function readBounded(
-  body: ReadableStream<Uint8Array> | null,
-  cap: number,
-  signal: AbortSignal,
-): Promise<Uint8Array> {
-  if (!body) return new Uint8Array();
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let seen = 0;
-  try {
-    for (;;) {
-      if (signal.aborted) throw new TooSlow(`upload exceeded ${DOCUMENT_UPLOAD_TIMEOUT_MS}ms`);
-      const { done, value } = await reader.read();
-      if (done) break;
-      seen += value.byteLength;
-      if (seen > cap) throw new TooLarge(`upload exceeds ${cap} bytes`);
-      chunks.push(value);
-    }
-  } catch (err) {
-    await reader.cancel().catch(() => {});
-    throw err;
-  }
-  const out = new Uint8Array(seen);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.byteLength;
-  }
-  return out;
 }
 
 /**
@@ -121,13 +78,14 @@ export function serveContentScheme(
       } catch (err) {
         // The same statuses the HTTP route answers with, so a client cannot
         // tell the targets apart: 413 too large, 408 too slow, else refused.
-        const status = err instanceof TooLarge ? 413
-          : err instanceof TooSlow || ctrl.signal.aborted ? 408
-          : 400;
-        return Response.json(
-          { error: err instanceof Error ? err.message : "ingest failed" },
-          { status, headers: cors },
-        );
+        const late = err instanceof TooSlow || ctrl.signal.aborted;
+        const status = err instanceof TooLarge ? 413 : late ? 408 : 400;
+        // The deadline's own number belongs to the message, not to the reader
+        // that was merely told to stop.
+        const error = late
+          ? `upload exceeded ${DOCUMENT_UPLOAD_TIMEOUT_MS}ms end to end`
+          : err instanceof Error ? err.message : "ingest failed";
+        return Response.json({ error }, { status, headers: cors });
       } finally {
         clearTimeout(timer);
       }

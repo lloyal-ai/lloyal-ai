@@ -106,6 +106,10 @@ let ingestId = 0;
  * abort drops the pending entry AND tells the engine to stop.
  */
 function ingest(bytes: Uint8Array, signal: AbortSignal): Promise<Descriptor> {
+  // Before anything is booked or sent: an already-aborted signal fires no
+  // `abort` event, so the listener below would never run and the entry would
+  // sit in `pending` for the life of the process.
+  if (signal.aborted) return Promise.reject(new Error("the ingest was cancelled"));
   if (!engine) return Promise.reject(new Error("the engine is not running"));
   const id = ++ingestId;
   const answer = new Promise<Descriptor>((resolve, reject) => pending.set(id, { resolve, reject }));
