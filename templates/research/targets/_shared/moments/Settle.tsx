@@ -13,7 +13,7 @@ import {
   selectExchanges, selectMarks, selectRail, selectRunShape, selectSettleProse,
   selectSourceNotes, selectTitle,
 } from "../select.js";
-import { Thinking, doc } from "../parts/Shell.js";
+import { Thinking, doc, spread } from "../parts/Shell.js";
 import { Figures, FigureStrip } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
@@ -94,7 +94,7 @@ export function Settle(): ReactElement {
   };
 
   return (
-    <div style={S.spread}>
+    <div style={spread}>
     <div style={doc}>
       <h1 style={S.title}>{title}</h1>
       <Figures />
@@ -166,7 +166,6 @@ export function Settle(): ReactElement {
 }
 
 const S: Record<string, CSSProperties> = {
-  spread: { display: "flex", alignItems: "flex-start" },
   title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 6px", textWrap: "balance" },
   byline: {
     font: `12.5px ${font.ui}`, color: color.dim, margin: "0 0 18px",
