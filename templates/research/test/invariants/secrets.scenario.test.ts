@@ -12,17 +12,11 @@ const SECRET = "tvly-SECRET-do-not-ship-9f2c7a";
 
 test("a configured ability credential appears in NO event on the wire", async () => {
   const run = await runHarness({
-    config: {
-      version: 1,
-      sources: {},
-      abilities: { web: { tavilyKey: SECRET } },
-      defaults: { reasoningMode: "flat", effort: "low", maxTurns: 4 },
-      model: {},
-    },
+    config: { abilities: { web: { tavilyKey: SECRET } } },
     script: [
       // config:updated carries the whole config back out — the second place
       // redaction must hold (config:loaded at boot is the first).
-      { send: { type: "set_effort", effort: "medium" } },
+      { send: { type: "set_config", patch: { defaults: { effort: "medium" } } } },
       { on: (ev) => ev.type === "config:updated" },
     ],
   });

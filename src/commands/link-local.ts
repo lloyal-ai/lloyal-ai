@@ -43,6 +43,11 @@ const WORKSPACE_PACKAGES: Record<string, string> = {
   '@lloyal-labs/media': 'packages/media',
   '@lloyal-labs/binding': 'packages/binding',
   '@lloyal-labs/host': 'packages/host',
+  // The two packages step 4 split out of the targets. A generated app imports `ui` from `src/ui`
+  // and `desktop` from its Electron entry, so without these `link-local` leaves them resolving to
+  // the registry — where neither has ever been published.
+  '@lloyal-labs/ui': 'packages/ui',
+  '@lloyal-labs/desktop': 'packages/desktop',
   '@lloyal-labs/web-ability': 'packages/abilities/web',
   '@lloyal-labs/corpus-ability': 'packages/abilities/corpus',
   '@lloyal-labs/documents-ability': 'packages/abilities/documents',

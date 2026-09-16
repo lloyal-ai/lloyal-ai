@@ -63,8 +63,9 @@ export const targetsAddCommand: Command = {
     try {
       const root = harnessProjectRoot();
       const target = parsePrunable(positionals[0]);
-      assertSharedViewLayout(root);
       const marker = readProjectMarker(root);
+      // The guard needs the template: which layout is CORRECT depends on it.
+      assertSharedViewLayout(root, marker?.template);
       if (!marker) {
         throw new Error(
           'no `harnessdev.template` marker in package.json — cannot tell which template to copy the ' +
@@ -111,7 +112,8 @@ export const targetsRemoveCommand: Command = {
     try {
       const root = harnessProjectRoot();
       const target = parsePrunable(positionals[0]);
-      assertSharedViewLayout(root);
+      const template = readProjectMarker(root)?.template;
+      assertSharedViewLayout(root, template);
       const present = presentTargets(root);
       if (!present.includes(target)) {
         throw new Error(`target "${target}" is not present — nothing to remove.`);
@@ -127,7 +129,7 @@ export const targetsRemoveCommand: Command = {
         }
       }
       const remaining = present.filter((t) => t !== target) as Target[];
-      pruneTargets(root, remaining);
+      pruneTargets(root, remaining, template);
       setMarkerTargets(root, remaining);
       process.stdout.write(`removed ${target} → targets: [${remaining.join(', ')}]\n`);
       return 0;

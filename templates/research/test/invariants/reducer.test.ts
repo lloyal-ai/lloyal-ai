@@ -5,12 +5,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduce, initialState, DOC_PHASES, type AppState } from '../../harness/state.js';
-import type { WorkflowEvent } from '../../harness/events.js';
+import { reduce, initialState, DOC_PHASES, type AppState } from '../../src/ui/state.js';
+import type { WorkflowEvent } from '../../src/brief/protocol.js';
 import {
-  selectAnswer, selectEtaTasks, selectLive, selectMoment, selectReviewing,
-  selectRunDepth, selectStatus,
-} from '../../targets/_shared/select.js';
+  selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
+  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle,
+} from '../../src/ui/select.js';
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
   events.reduce(reduce, from);
@@ -58,6 +58,7 @@ test('idempotence: the second query keeps ONE identity through a clarify re-plan
     { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
     { type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent,
     { type: 'plan', intent: 'clarify', tasks: [], clarifyQuestions: ['which?'], tokenCount: 5, timeMs: 50 } as WorkflowEvent,
+    { type: 'ui:clarify', revision: 1 } as WorkflowEvent,
   ]);
   assert.equal(s.documents.get(A)!.phase, 'clarifying');
   const planBefore = s.documents.get(A)!.plan;
@@ -112,7 +113,7 @@ test('doc-switch isolation: the run streams into A while B is viewed, untouched'
     { type: 'agent:produce', agentId: 3, text: 'tokens for A', tokenCount: 4 } as WorkflowEvent,
   ], s);
   assert.equal(s.documents.get(B), bBefore); // reference-identical — untouched
-  assert.ok(s.documents.get(A)!.agents.has(3)); // A accrued the stream
+  assert.ok(s.documents.get(A)!.roster.agents.has(3)); // A accrued the stream
   assert.equal(s.activeDocId, B);
   assert.equal(s.runDocId, A);
 });
@@ -195,7 +196,7 @@ test('stragglers: run events with no live run are dropped, never crash', () => {
     { type: 'agent:produce', agentId: 9, text: 'orphan', tokenCount: 1 } as WorkflowEvent,
     { type: 'research:start', agentCount: 1, mode: 'flat' } as WorkflowEvent,
   ], settled());
-  assert.equal(s.documents.get(A)!.agents.size, settled().documents.get(A)!.agents.size);
+  assert.equal(s.documents.get(A)!.roster.agents.size, settled().documents.get(A)!.roster.agents.size);
 });
 
 test('a cold planned query reaches plan_review (the CLI contract)', () => {
@@ -279,3 +280,57 @@ test("a cold brief grows its own media as a tool admits roots; a prefill without
   assert.deepEqual(s.documents.get(A)!.askAttachments, []);
 });
 
+
+// ── A task is logical; an agent is one attempt at it ───────────
+// The pool names each spawn with its task's key and may seat them in any
+// order; a heal is a NEW agent under the SAME key. What the reader sees is
+// the task — worked by whichever attempt is the current one.
+
+test('a healed inquiry is the section the reader reads, and the brief is not marked unsettled', () => {
+  const s = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent,
+    { type: 'plan', intent: 'research', tasks: [{ description: 'the near half' }, { description: 'the far half' }], clarifyQuestions: [], tokenCount: 1, timeMs: 1 } as WorkflowEvent,
+    { type: 'research:start', agentCount: 2, mode: 'flat' } as WorkflowEvent,
+    // Admission reorders: the far task seats first.
+    { type: 'agent:spawn', agentId: 21, key: 'task:1' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 20, key: 'task:0' } as WorkflowEvent,
+    // The near task's first attempt dies; the pool spawns its replacement under the same key.
+    { type: 'agent:failed', agentId: 20, reason: 'decode_error' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 22, key: 'task:0' } as WorkflowEvent,
+    { type: 'agent:return', agentId: 22, result: 'near findings, second attempt' } as WorkflowEvent,
+    { type: 'agent:return', agentId: 21, result: 'far findings' } as WorkflowEvent,
+    { type: 'answer', text: 'the settled answer' } as WorkflowEvent,
+    COMPLETE,
+  ]);
+  const sections = selectSections(s);
+  assert.deepEqual(sections.map((x) => x.title), ['the near half', 'the far half']);
+  assert.equal(sections[0].prose, 'near findings, second attempt', "the healed attempt's findings are the section");
+  assert.equal(sections[0].inquiry?.verb.kind, 'settled');
+  assert.equal(sections[1].prose, 'far findings', 'the key names the task, not the order it was admitted in');
+  assert.deepEqual(selectMarks(s), [], 'nothing closed unsettled: every task has a settled attempt');
+  // The attempt that died is still there for the dev pane — only the section stopped reading it.
+  assert.equal(s.documents.get(A)!.roster.agents.get(20)!.failReason, 'decode_error');
+});
+
+test("the run bar commands the RUNNING document while the canvas shows another", () => {
+  // Run A pauses; the user opens settled B from the library. `live` reads the
+  // run document, so the controls beside it must too — or Hold reads B's
+  // `paused: false` and sends `pause` to a run that is already paused.
+  const s = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent,
+    PLAN,
+    { type: 'research:start', agentCount: 2, mode: 'flat' } as WorkflowEvent,
+    { type: 'run:paused' } as WorkflowEvent,
+    { type: 'doc', docId: B, title: 'Saved brief', answer: 'The saved body.', mode: 'flat', savedAt: B, attachments: [], exchanges: [] } as unknown as WorkflowEvent,
+    { type: 'doc:active', docId: B } as WorkflowEvent,
+  ]);
+  assert.equal(s.runDocId, A);
+  assert.equal(s.activeDocId, B);
+  assert.equal(selectLive(s), true);
+  assert.equal(selectControls(s).paused, true, "Hold must read the running document's pause");
+  assert.equal(selectStatus(s), 'Writing', "the status word describes the running document");
+  assert.equal(selectRunTitle(s), 'Q1', "the run bar names the running document");
+  assert.equal(selectTitle(s), 'Saved brief', "the canvas keeps the viewed document");
+});

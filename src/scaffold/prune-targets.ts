@@ -43,9 +43,17 @@ export const TARGET_PKG_FIELDS: Record<PrunableTarget, string[]> = {
   desktop: ['main'],
   web: [],
 };
-/** Per-target runtime deps. */
+/**
+ * Per-target runtime deps. The union over both templates — a name absent from a
+ * given template is simply not there to delete, and is never added back.
+ *
+ * `@lloyal-labs/ui` is deliberately NOT here. It reads like a renderer package
+ * and is not one: the fold (`src/ui/state.ts`) and the reducer both import
+ * `foldAgents` from it, and the TERMINAL view folds through those. Pruning it
+ * for a cli-only project breaks the one surface that cannot be pruned.
+ */
 export const TARGET_DEPS: Record<PrunableTarget, string[]> = {
-  desktop: [], // desktop's exclusive deps are all devDeps
+  desktop: ['@lloyal-labs/desktop'],
   web: ['@lloyal-labs/host', 'ws'],
 };
 /** Per-target devDeps. */
@@ -79,55 +87,86 @@ export const SHARED_RENDERER_DEPS = [
 ];
 export const SHARED_RENDERER_DEV_DEPS = ['@vitejs/plugin-react', '@types/react-dom', 'vite'];
 /**
- * Test files that read the shared view's selectors — on the SAME lifecycle as
- * {@link SHARED_RENDERER_DIR}: pruned with it (a cli-only project has no
- * `targets/_shared` to import), restored with the first DOM target.
- */
-export const RENDERER_TEST_FILES = ['test/invariants/reducer.test.ts'];
-/**
- * The React view itself (`App.tsx` + whatever it pulls in), on exactly the same
- * lifecycle as the deps above — kept while EITHER DOM target survives.
+ * Where a template parks a view directory that belongs to the DOM targets ALONE
+ * — deleted by a cli-only prune, restored with the first DOM target back. Keyed
+ * by template because the two answer differently.
  *
- * It lives in its own dir rather than inside `targets/desktop/` because it is
- * shared: web's `main.tsx` and desktop's `view.tsx` both mount it. Parking it in
- * one target meant pruning that target stranded the other's import, which broke
- * `--targets cli,web` and, worse, broke a WORKING project on
- * `targets:remove desktop`. Do not move it back under a target dir.
+ * `basic` parks it at `targets/_shared/`: only its renderers mount it, so it
+ * rides their lifecycle. It sits outside both target dirs because parking it in
+ * one meant pruning that target stranded the other's import — do not move it
+ * back under a target dir.
+ *
+ * `research` has NO entry, and that is the decision, not an omission. Its view
+ * lives under `src/ui/` beside the fold and the selectors the TERMINAL view
+ * reads, so no directory there belongs to the DOM targets alone. A cli-only
+ * research scaffold keeps those files — inert, not broken — rather than
+ * splitting `src/ui/` in two to save them.
  */
-export const SHARED_RENDERER_DIR = 'targets/_shared';
+export const SHARED_VIEW_DIR: Record<string, string | undefined> = {
+  basic: 'targets/_shared',
+};
 
 /**
- * Refuse to operate on a project laid out the pre-0.9 way (React view still
- * inside `targets/desktop/`).
+ * Refuse to operate on a project whose view is laid out differently from what
+ * its template declares — the tables above are keyed to that layout, so acting
+ * on a mismatch half-applies and reports success.
  *
- * 0.9 is a clean break — there is deliberately no migration. But breaking
- * loudly and breaking silently are different things, and without this check the
- * `targets:` verbs do the latter: `targets:add web` writes a `web/main.tsx`
- * importing `../_shared/App.js` into a project that has no `_shared`, then
- * reports success. Say so instead.
+ * Two shapes have been wrong in the field, in opposite directions. Before 0.9 a
+ * shared view sat inside `targets/desktop/`, so `targets:add web` wrote a
+ * `main.tsx` importing `../_shared/App.js` into a project with no `_shared`.
+ * And a research project scaffolded before the view moved to `src/ui/` still
+ * carries `targets/_shared/`, which nothing in the current template mounts.
+ * Neither has a migration path; both are cheap to name.
  *
- * A cli-only project legitimately has no `_shared` — nothing mounts the view —
- * so the check keys off a DOM target being present.
+ * A cli-only project mounts no view at all, so nothing here applies to it; and
+ * a project with no marker declares no template, so there is nothing for its
+ * layout to disagree WITH — {@link viewDirOf} reads the tree for those instead.
  */
-export function assertSharedViewLayout(projectDir: string): void {
+export function assertSharedViewLayout(projectDir: string, template: string | undefined): void {
   const hasDom = (['desktop', 'web'] as const).some((t) =>
     existsSync(join(projectDir, 'targets', t)),
   );
-  if (!hasDom || existsSync(join(projectDir, SHARED_RENDERER_DIR))) return;
+  if (!hasDom || template === undefined) return;
+  const declared = SHARED_VIEW_DIR[template];
+  const found = existsSync(join(projectDir, 'targets', '_shared'));
+  if (Boolean(declared) === found) return;
   throw new Error(
-    'this project predates lloyal 0.9 — its React view is still inside ' +
-      '`targets/desktop/`, but the `targets:` verbs now expect `targets/_shared/`.\n' +
-      '  0.9 moved the shared view so that removing desktop stops breaking the web build.\n' +
-      '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
-      'and copy your `harness/` (and your view) across.',
+    declared
+      ? 'this project predates lloyal 0.9 — its React view is still inside ' +
+        '`targets/desktop/`, but the `targets:` verbs now expect `targets/_shared/`.\n' +
+        '  0.9 moved the shared view so that removing desktop stops breaking the web build.\n' +
+        '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
+        'and copy your harness (and your view) across.'
+      : 'this project has a `targets/_shared/` directory, but its template keeps the view ' +
+        'under `src/ui/`.\n' +
+        '  It was scaffolded before the view moved, and the `targets:` verbs would write ' +
+        'entries for a layout it does not have.\n' +
+        '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
+        'and copy your `src/` across.',
   );
+}
+
+/**
+ * The view dir this project keeps on the DOM targets' lifecycle: what its
+ * template declares, or — for a project with no marker to name one — what is
+ * actually on disk. Only the legacy `targets/_shared` layout is detectable that
+ * way, and it is the only one such a project can have: a marker-less project
+ * predates the marker, and every layout since has kept its view beside the fold.
+ */
+function viewDirOf(projectDir: string, template: string | undefined): string | undefined {
+  if (template !== undefined) return SHARED_VIEW_DIR[template];
+  return existsSync(join(projectDir, 'targets', '_shared')) ? 'targets/_shared' : undefined;
 }
 
 /**
  * Reduce `<projectDir>` to `keep`. `keep` MUST include `'cli'`. A no-op when all
  * three targets are kept (beyond normalizing the `harness.yml` `targets:` line).
  */
-export function pruneTargets(projectDir: string, keep: readonly Target[]): void {
+export function pruneTargets(
+  projectDir: string,
+  keep: readonly Target[],
+  template: string | undefined,
+): void {
   const keepSet = new Set(keep);
   if (!keepSet.has('cli')) {
     throw new Error("pruneTargets: 'cli' is mandatory and cannot be pruned");
@@ -146,12 +185,11 @@ export function pruneTargets(projectDir: string, keep: readonly Target[]): void 
     rm('targets/web');
     for (const f of TARGET_FILES.web) rm(f);
   }
-  // The shared view outlives either target alone; only a cli-only project has
-  // nothing left to mount it. Same guard `prunePackageJson` uses for the deps.
-  if (pruneDesktop && pruneWeb) {
-    rm(SHARED_RENDERER_DIR);
-    for (const f of RENDERER_TEST_FILES) rm(f);
-  }
+  // A template's own view dir, when it has one, outlives either target alone:
+  // only a cli-only project has nothing left to mount it. Same guard
+  // `prunePackageJson` uses for the deps below.
+  const viewDir = viewDirOf(projectDir, template);
+  if (pruneDesktop && pruneWeb && viewDir) rm(viewDir);
 
   // 2. package.json — scripts + deps.
   if (pruneDesktop || pruneWeb) {
@@ -171,16 +209,15 @@ export function pruneTargets(projectDir: string, keep: readonly Target[]): void 
     }
     const nodeCfg = join(projectDir, 'tsconfig.json');
     if (existsSync(nodeCfg)) {
-      // `targets/_shared` matches neither pruned prefix, so it survives a
-      // single-target prune on its own — correct, the dir survives too. Only a
-      // cli-only prune deletes the dir, and then its exclude entry must go with
-      // it or it dangles.
+      // A view dir matches neither pruned prefix, so it survives a single-target
+      // prune on its own — correct, the dir survives too. Only a cli-only prune
+      // deletes it, and then its exclude entry must go too or it dangles.
       filterJsoncArray(
         nodeCfg,
         'exclude',
         (entry) =>
           !isUnderPruned(entry, pruneDesktop, pruneWeb) &&
-          !(!someDom && entry.startsWith(SHARED_RENDERER_DIR)),
+          !(!someDom && viewDir !== undefined && entry.startsWith(viewDir)),
       );
     }
   }

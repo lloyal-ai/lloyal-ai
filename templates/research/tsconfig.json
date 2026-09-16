@@ -24,12 +24,20 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["harness/**/*", "targets/**/*", "types/**/*"],
-  // Excluded here (built/typechecked by the sibling configs above): the whole
-  // Electron target (main/preload are CJS, App/view are DOM-React) and the web
-  // browser sources.
+  "include": ["src/**/*", "targets/**/*", "types/**/*"],
+  // Excluded here (built/typechecked by the sibling configs above): the DOM view
+  // under `src/ui/` — its shell, its moments, its parts, the adapter that reads
+  // the page's bridge, and the URL routing — plus the whole Electron target
+  // (main/preload are CJS) and the web browser sources. What stays is node-safe
+  // and the boots need it: the fold, the selectors, the pace record, and the
+  // terminal view, which is Ink and therefore Node's.
   "exclude": [
-    "targets/_shared",
+    "src/ui/App.tsx",
+    "src/ui/moments",
+    "src/ui/parts",
+    "src/ui/content-urls.ts",
+    "src/ui/history.ts",
+    "src/ui/theme.ts",
     "targets/desktop",
     "targets/web/main.tsx",
     "targets/web/boot.ts",

@@ -17,7 +17,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { runHarness, warmDeltas, sessionReleasesOf, docIdOfQuery } from "./harness.js";
+import {
+  runHarness, warmDeltas, sessionReleasesOf, docIdOfQuery, accept, answer,
+} from "./harness.js";
 
 const CLARIFY_JSON = JSON.stringify({
   intent: "clarify",
@@ -39,12 +41,11 @@ test("clarify round-trip: cold bootstrap → split-half answer → pair closed o
     ],
     script: [
       { send: { type: "submit_query", query: "Compare adoption", mode: "flat" } },
-      // The answer fires the instant the plan event lands — the harshest
-      // client timing. The park arms a hop later and the round-1 commit is
-      // still in flight; the handler absorbs both (early-arm + settle-await).
-      { on: (ev) => ev.type === "plan" && (ev as { intent: string }).intent === "clarify",
-        send: { type: "submit_clarification", answer: "Since 2024, EU only." } },
-      { on: (ev) => ev.type === "ui:plan_review", send: { type: "accept_plan" } },
+      // The answer fires the instant the round is announced — the harshest
+      // client timing: the round-1 commit is still in flight, and the owner
+      // sequences the continuation behind its settle.
+      { on: (ev) => ev.type === "ui:clarify", send: answer("Since 2024, EU only.") },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
       { on: (ev) => ev.type === "complete" },
     ],
   });

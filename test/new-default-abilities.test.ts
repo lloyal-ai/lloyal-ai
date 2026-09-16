@@ -161,7 +161,10 @@ describe('DEFAULT_ABILITIES covers what each template actually imports', () => {
   it.each(['basic', 'research'] as const)(
     '%s: one default ability spec per `*-ability` package harness.ts imports',
     (template) => {
-      const src = readFileSync(join(TEMPLATES, template, 'harness', 'harness.ts'), 'utf8');
+      // The file that installs the abilities: `harness/harness.ts` in basic,
+      // `src/app.ts` in research, whose whole point is that it names them.
+      const entry = template === 'research' ? ['src', 'app.ts'] : ['harness', 'harness.ts'];
+      const src = readFileSync(join(TEMPLATES, template, ...entry), 'utf8');
       const imported = [...src.matchAll(/from "(@[\w-]+\/[\w-]+-ability)"/g)].map((m) => m[1]);
       expect(imported.length).toBeGreaterThan(0);
       // Not a name-for-name check (the npm name comes from the signed catalog at

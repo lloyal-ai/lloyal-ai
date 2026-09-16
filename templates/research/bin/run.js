@@ -2,7 +2,7 @@
 // Boot the built cli target.
 //
 // One failure here is worth translating rather than dumping: a MISSING Ability.
-// harness/harness.ts imports its abilities at the top level, so a project whose abilities
+// src/app.ts imports its abilities at the top level, so a project whose abilities
 // were never fetched dies on this import with a bare ERR_MODULE_NOT_FOUND stack.
 // But that SAME code covers an unbuilt dist/ and any un-installed dependency, so
 // classify the unresolved specifier before naming a fix — advice for the wrong

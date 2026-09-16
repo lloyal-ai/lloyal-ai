@@ -43,8 +43,15 @@ describe('planAlphas', () => {
       '@lloyal-labs/media': '0.2.0-alpha.1',
       '@lloyal-labs/sdk': '4.0.0-alpha.1',
       '@lloyal-labs/lloyal-agents': '6.0.0-alpha.1',
+      // Absent from the registry map above, so each falls back to its table base.
+      // binding's is STABLE and bumps; ui's and desktop's carry a `-`, which
+      // `nextBase` keeps — that is what holds their first release at the 0.1.0
+      // triple instead of stamping 0.2.0 for a package nobody has published.
+      '@lloyal-labs/binding': '0.2.0-alpha.1',
       '@lloyal-labs/rig': '5.6.0-alpha.1',
       '@lloyal-labs/dev-tools': '0.5.0-alpha.1',
+      '@lloyal-labs/ui': '0.1.0-alpha.1',
+      '@lloyal-labs/desktop': '0.1.0-alpha.1',
       'lloyal-ai': '1.11.0-alpha.1',
     });
   });

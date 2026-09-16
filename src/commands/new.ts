@@ -257,7 +257,7 @@ async function performScaffold(
   try {
     copyTreeWithSubstitutions(templateDir, dest, buildSubstitutions(plan.name));
     if (plan.targets.length < ALL_TARGETS.length) {
-      pruneTargets(dest, plan.targets);
+      pruneTargets(dest, plan.targets, plan.template);
     }
     const recommendedContext = MODEL_CATALOG.find(
       (m) => m.role === 'llm' && m.id === plan.llm,
