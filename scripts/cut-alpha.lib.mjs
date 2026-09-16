@@ -19,6 +19,12 @@ export const DEPS = {
   '@lloyal-labs/sdk': ['major', '3.1.0'],
   '@lloyal-labs/lloyal-agents': ['major', '5.5.1'],
   '@lloyal-labs/binding': ['minor', '0.1.0'],
+  // `templates/basic` names host DIRECTLY, at a caret. Left out of this table
+  // `rewritePins` cannot touch it, and the scaffold still installs — `^0.1.0` is
+  // satisfied by the published 0.1.0 — but it gets the OLD host, which pins
+  // `binding ^0.1.0`, so basic ends up with a stale binding beside the stamped
+  // one. `relay` needs no entry: neither template names it.
+  '@lloyal-labs/host': ['minor', '0.1.0'],
   '@lloyal-labs/rig': ['minor', '5.5.0'],
   '@lloyal-labs/dev-tools': ['minor', '0.4.3'],
   // The two packages the recut's template imports directly. Their fallbacks

@@ -20,7 +20,7 @@ import { main, call, ensure, createSignal } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import { ipc, ndjson } from "@lloyal-labs/binding/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
-import { startHostResources } from "@lloyal-labs/dev-tools/node";
+import { startHostResources } from "@lloyal-labs/rig/node";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { createContext } from "@lloyal-labs/lloyal.node";
 import { resolveModel, provisionAbilityModels } from "@lloyal-labs/rig/node";

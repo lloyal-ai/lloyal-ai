@@ -48,6 +48,9 @@ describe('planAlphas', () => {
       // `nextBase` keeps — that is what holds their first release at the 0.1.0
       // triple instead of stamping 0.2.0 for a package nobody has published.
       '@lloyal-labs/binding': '0.2.0-alpha.1',
+      // Absent from the registry map, so it falls back to its table base — which
+      // is STABLE and therefore bumps, unlike ui's and desktop's prerelease ones.
+      '@lloyal-labs/host': '0.2.0-alpha.1',
       '@lloyal-labs/rig': '5.6.0-alpha.1',
       '@lloyal-labs/dev-tools': '0.5.0-alpha.1',
       '@lloyal-labs/ui': '0.1.0-alpha.1',

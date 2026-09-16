@@ -21,7 +21,7 @@ import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
 import { provisionAbilityModels } from "@lloyal-labs/rig/node";
-import { startHostResources } from "@lloyal-labs/dev-tools/node";
+import { startHostResources } from "@lloyal-labs/rig/node";
 import { NullTraceWriter, JsonlTraceWriter } from "@lloyal-labs/lloyal-agents";
 import type { TraceWriter } from "@lloyal-labs/lloyal-agents";
 import { makeServedRunner } from "@lloyal-labs/rig";
