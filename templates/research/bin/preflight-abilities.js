@@ -24,7 +24,7 @@
  * but never npm-installed" is left to `bin/run.js`, which sees the real
  * resolution failure and so cannot guess wrong about it.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, lstatSync } from "node:fs";
 
 const pkg = readPkg();
 const specs = recordedSpecs(pkg);
@@ -33,6 +33,15 @@ const specs = recordedSpecs(pkg);
 // harness-cli/src/scaffold/write-marker.ts). Blocking here would break any
 // project that predates the marker or was written by hand.
 if (specs.length === 0) process.exit(0);
+
+// A workspace checkout (`lloyal link-local`) gets its Abilities from the workspace:
+// they are SYMLINKED into node_modules, never vendored. The rule below asks only
+// whether a tarball was vendored, so without this it fails a project that boots
+// perfectly well — and that is the documented in-place development path. A
+// generated app has no symlink here, so nothing is loosened for a real user; an
+// Ability that is linked but absent still fails, in `bin/run.js`, where the real
+// resolution error can be named.
+if (linkedWorkspace()) process.exit(0);
 
 const vendored = new Set(
   Object.values(pkg.dependencies ?? {}).filter(
@@ -53,6 +62,16 @@ if (missing.length) {
       `${missing.map((spec) => `  npx lloyal-ai install ${spec}`).join("\n")}\n\n`,
   );
   process.exit(1);
+}
+
+/** True when the platform packages are symlinked in rather than installed. */
+function linkedWorkspace() {
+  try {
+    const dir = new URL("../node_modules/@lloyal-labs/", import.meta.url);
+    return readdirSync(dir).some((entry) => lstatSync(new URL(entry, dir)).isSymbolicLink());
+  } catch {
+    return false; // no node_modules yet — nothing is linked, so the rule applies
+  }
 }
 
 /** The `lloyal install` specs `lloyal new` recorded for this project. */

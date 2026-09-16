@@ -52,6 +52,18 @@ const WORKSPACE_PACKAGES: Record<string, string> = {
   '@lloyal-labs/corpus-ability': 'packages/abilities/corpus',
   '@lloyal-labs/documents-ability': 'packages/abilities/documents',
 };
+/**
+ * Packages that must exist EXACTLY ONCE across the linked tree, resolved from the
+ * workspace's own install rather than the project's.
+ *
+ * A symlinked platform package resolves its dependencies up its REAL path, into
+ * the workspace's `node_modules`. So without this the project gets a SECOND
+ * effection — and effection is not a library, it is the runtime: `createContext`
+ * registers against module state, so two copies mean the app's contexts are
+ * invisible to the framework's. It fails as types first (two identities for one
+ * `Operation`) and as silent wrong behaviour after, which is the worse half.
+ */
+const SHARED_RUNTIME = ['effection'];
 const NODE_PACKAGE = '@lloyal-labs/lloyal.node';
 /** Sibling names probed for the lloyal.node repo when `--node` is not given. */
 const NODE_SIBLINGS = ['lloyal-node', 'lloyal.node'];
@@ -143,6 +155,10 @@ export const linkLocalCommand: Command = {
       const isAbility = name.endsWith('-ability');
       const wanted = deps[name] != null ? !String(deps[name]).startsWith('file:vendor/') : isAbility;
       if (wanted && existsSync(join(dir, 'package.json'))) links.push({ name, dir });
+    }
+    for (const name of SHARED_RUNTIME) {
+      const dir = join(workspace, 'node_modules', name);
+      if (deps[name] != null && existsSync(join(dir, 'package.json'))) links.push({ name, dir });
     }
     if (deps[NODE_PACKAGE] != null) {
       if (nodeRepo) links.push({ name: NODE_PACKAGE, dir: nodeRepo });

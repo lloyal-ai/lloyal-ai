@@ -8,14 +8,35 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { WebSearchTool } from "../../node_modules/@lloyal-labs/web-ability/dist/tools/web-search.js";
+import { run } from "effection";
+import { AbilityConfigStoreCtx } from "@lloyal-labs/lloyal-agents";
+import { createInMemoryConfigStore } from "@lloyal-labs/rig";
+import { createWebAbility } from "@lloyal-labs/web-ability";
 import { runHarness, docIdOfQuery, accept } from "./harness.js";
 import type { Utterance } from "./harness.js";
 
-/** The web, at the tool boundary: a search answers with one result, so an agent can search as long as its turns last. */
-WebSearchTool.prototype.execute = function* (args: { query: string }) {
+/**
+ * The web, at the tool boundary: a search answers with one result, so an agent
+ * can search as long as its turns last.
+ *
+ * Reached through the ability's own factory rather than by importing the tool's
+ * module: where that class lives inside the package is its business, not this
+ * test's. The harness builds its OWN ability, so the stub has to land on the
+ * PROTOTYPE every instance shares — patching the instance below would leave the
+ * harness talking to the real network.
+ */
+const webSearchProto = await run(function* () {
+  const store = createInMemoryConfigStore();
+  yield* store.set("web", { tavilyKey: "test-key" });
+  yield* AbilityConfigStoreCtx.set(store);
+  const web = yield* createWebAbility();
+  const tool = web.tools.find((t) => t.name === "web_search");
+  if (!tool) throw new Error("the web ability no longer offers a `web_search` tool");
+  return Object.getPrototypeOf(tool) as { execute: unknown };
+});
+webSearchProto.execute = function* (args: { query: string }) {
   return { results: [{ title: `About ${args.query}`, url: `https://a.io/${args.query}`, snippet: `${args.query}, in brief` }] };
-} as typeof WebSearchTool.prototype.execute;
+};
 
 const PLAN_JSON = JSON.stringify({
   intent: "research",
