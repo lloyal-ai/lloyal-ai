@@ -15,11 +15,9 @@ import {
 test("boot: config → abilities → weights:done, and nothing touches the KV", async () => {
   const run = await runHarness();
   const types = typesOf(run.events);
-  // config:loaded and weights:done ride the bus directly (sync); the
-  // abilities snapshot rides the agent-event forwarder (async), so it lands
-  // after weights:done. That asymmetry is the two-bus seam, visible.
+  // One wire: the initializer says config and abilities, then the app says it is ready.
   assert.deepEqual(types.filter((t) => ["config:loaded", "abilities:state", "weights:done"].includes(t)),
-    ["config:loaded", "weights:done", "abilities:state"]);
+    ["config:loaded", "abilities:state", "weights:done"]);
   assert.equal(warmDeltas(run.trace).length, 0);
 });
 

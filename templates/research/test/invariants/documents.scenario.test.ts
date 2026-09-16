@@ -13,8 +13,10 @@ import { FileAttachmentStore } from "@lloyal-labs/media/node";
 import { DOCUMENT_CONFIG_TYPE } from "@lloyal-labs/media";
 import type { Attachment, DocumentMeta } from "@lloyal-labs/media";
 import type { MockSessionContext } from "@lloyal-labs/sdk/testing";
-import { runHarness } from "./harness.js";
-import type { WorkflowEvent } from "../../harness/protocol.js";
+import {
+  runHarness, accept,
+} from "./harness.js";
+import type { WorkflowEvent } from "../../src/brief/protocol.js";
 import type { TraceEvent } from "@lloyal-labs/lloyal-agents";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);

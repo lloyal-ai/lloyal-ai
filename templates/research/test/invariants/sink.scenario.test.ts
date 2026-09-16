@@ -10,7 +10,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { runHarness, docIdOfQuery } from "./harness.js";
+import {
+  runHarness, docIdOfQuery, accept,
+} from "./harness.js";
 
 const PLAN_JSON = JSON.stringify({
   intent: "research",
@@ -52,7 +54,7 @@ test("a benign ui:error mid-run is a toast: the run still settles and writes its
     ],
     script: [
       { send: { type: "submit_query", query: "Q?", mode: "flat" } },
-      { on: (ev) => ev.type === "ui:plan_review", send: { type: "accept_plan" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
       // Mid-research, a config path that does not exist: the handler toasts and returns.
       { on: (ev) => ev.type === "research:start",
         send: { type: "set_ability_config", name: "corpus", values: { corpusPath: "/no/such/dir" } } },

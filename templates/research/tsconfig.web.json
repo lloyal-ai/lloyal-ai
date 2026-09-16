@@ -10,7 +10,10 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    // `node` too: the brief's vocabulary and the interface's fold name the app's `Config`, a type derived from the
+    // table in `app.ts`, and following that type-only import lands tsc in the app's Node imports. Nothing Node reaches
+    // the bundle — a type import is erased — and the browser bundle's own import check is step 4's.
+    "types": ["vite/client", "node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,12 +21,17 @@
     "noEmit": true
   },
   "include": [
-    "harness/protocol.ts",
-    "harness/state.ts",
-    "targets/_shared/**/*",
+    "src/brief/protocol.ts",
+    "src/research/budgets.ts",
+    "src/research/prompts.ts",
+    "src/ui/**/*",
+    "types/**/*",
     "targets/desktop/view.tsx",
     "targets/web/main.tsx",
     "targets/web/boot.ts",
     "targets/web/web-bridge.ts"
-  ]
+  ],
+  // `src/ui/**/*` sweeps the whole view directory, and the terminal view lives
+  // there too — it is Ink, not DOM, and the Node config above owns it.
+  "exclude": ["src/ui/cli.tsx"]
 }

@@ -1,0 +1,203 @@
+/**
+ * The brief's own words on the wire — its commands up, its events down — beside
+ * the vocabularies rig owns: the run controls (`RunCommand`) and settings
+ * (`SettingsCommand`, `SettingsEvent`). Types only, node-free, so a renderer
+ * imports this to speak the protocol without depending on the harness.
+ */
+import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
+import type { HostResourcesEvent } from "@lloyal-labs/rig";
+import type { Descriptor } from "@lloyal-labs/media";
+import type { PlanIntent, ResearchTask, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
+import type { Config, Origin } from "../app.js";
+import type { Effort } from "../research/budgets.js";
+import type { Inputs } from "../research/research.js";
+
+/** One brief's identity — the SAME string names the fold's document, the browser route
+ *  (`/brief/:docId`) and the folder on disk. ISO stamp then a UUID: sortable, URL-safe. */
+export type DocId = string;
+
+/** 'deep' is chain-shaped research (each inquiry builds on the last); 'flat' is parallel. */
+export type Mode = "flat" | "deep";
+
+/** One settled brief on disk — a library row. */
+export interface LibraryEntry {
+  path: string;
+  docId: DocId;
+  title: string;
+  savedAt: string;
+  mode: Mode | null;
+  /** What wrote it, when the record says: a brief reopened months later must not wear the reader's current dial. */
+  effort: Effort | null;
+  direct: boolean;
+  /** The brief carried images — its meta line names their roots. */
+  hasMedia: boolean;
+}
+
+/** A settled brief read whole from its folder: the report and every exchange beside it, in order. */
+export interface Thread {
+  docId: DocId;
+  title: string;
+  body: string;
+  /** Root manifest digests the report recorded. */
+  attachments: string[];
+  exchanges: { question: string; body: string; attachments: string[] }[];
+  /** The run's own choices, off the report's meta line; null where the record predates them. */
+  mode: Mode | null;
+  effort: Effort | null;
+  direct: boolean;
+  /** The whole conversation as one text — what a restore commits to the trunk. */
+  thread: string;
+}
+
+export interface OpTiming {
+  label: string;
+  tokens: number;
+  detail: string;
+  timeMs: number;
+}
+
+/** The terminal event's stats payload. Everything optional: research fills its
+ *  fields, a passthrough its own. */
+export interface CompleteData {
+  intent?: string;
+  planTokens?: number;
+  agentTokens?: number;
+  synthTokens?: number;
+  passthroughTokens?: number;
+  totalToolCalls?: number;
+  agentCount?: number;
+  wallTimeMs?: number;
+  planMs?: number;
+  researchMs?: number;
+  synthMs?: number;
+  passthroughMs?: number;
+}
+
+// ── Commands ─────────────────────────────────────────────────────
+
+/** The revision names the planning round the interface saw; a stale one is refused with a toast. */
+export type BriefCommand =
+  | {
+      type: "submit_query";
+      query: string;
+      mode: Mode;
+      /** The question IS the plan: one agent answers with every source's tools registered. */
+      skipPlanner?: boolean;
+      /** ROOT descriptors for content already admitted over the content plane — never bytes.
+       *  Untrusted: a claim about content, checked by `admitted` before anything moves. */
+      attachments?: Descriptor[];
+    }
+  | { type: "submit_clarification"; revision: number; answer: string }
+  | { type: "accept_plan"; revision: number }
+  | { type: "cancel_plan" }
+  | { type: "edit_plan"; query: string }
+  | { type: "change_mode"; mode: Mode }
+  | { type: "update_task_description"; revision: number; index: number; description: string }
+  | { type: "add_task"; revision: number; afterIndex: number }
+  | { type: "delete_task"; revision: number; index: number }
+  | { type: "move_task"; revision: number; from: number; to: number }
+  | { type: "toggle_participation"; name: string }
+  /** Halt anything live, clear the canvas, return to the picker. */
+  | { type: "new_run" }
+  /** Navigate the canvas to a brief — view-only, legal during runs. Null is the picker. */
+  | { type: "open_doc"; docId: DocId | null };
+
+export type LibraryCommand =
+  | { type: "library_list" }
+  /** Rank the library against a query with the session reranker; empty clears. Ignored while a run is live. */
+  | { type: "library_search"; query: string }
+  /** Remove a brief's whole folder. Confined to the library. */
+  | { type: "library_delete"; path: string };
+
+export type Command = BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
+
+// ── Events ───────────────────────────────────────────────────────
+
+export type BriefEvent =
+  | {
+      type: "query";
+      /** THE echo — the first event of every accepted ask; mints the brief's identity. */
+      docId: DocId;
+      query: string;
+      /** An ask INTO the settled brief this names. */
+      warm: boolean;
+      /** A direct ask: the question is the plan. */
+      direct?: boolean;
+      effort?: Effort;
+      attachments?: Descriptor[];
+    }
+  | { type: "plan:start"; query: string; mode: Mode }
+  | { type: "plan"; intent: PlanIntent; tasks: ResearchTask[]; clarifyQuestions: string[]; tokenCount: number; timeMs: number }
+  /** The planner asked; this round's `revision` must come back with the answer. */
+  | { type: "ui:clarify"; revision: number }
+  /** The plan awaits the reader's yes; this round's `revision` must come back with it and with every edit. */
+  | { type: "ui:plan_review"; revision: number }
+  | { type: "plan:task_updated"; index: number; description: string }
+  | { type: "plan:task_added"; afterIndex: number }
+  | { type: "plan:task_deleted"; index: number }
+  | { type: "plan:task_moved"; from: number; to: number }
+  | { type: "preflight:start"; query: string; abilityCount: number }
+  | { type: "preflight:done"; coverage: string; tokens: number; toolCalls: number; timeMs: number }
+  | { type: "research:start"; agentCount: number; mode: Mode }
+  | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
+  | { type: "fanout:tasks"; tasks: ResearchTask[] }
+  | { type: "spine:task"; taskIndex: number; taskCount: number; description: string }
+  | { type: "spine:source"; taskIndex: number; source: string }
+  | { type: "spine:task:done"; taskIndex: number; stageFindings: number; accumulated: number }
+  | { type: "synthesize:start" }
+  | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
+  | { type: "answer"; text: string }
+  | { type: "stats"; timings: OpTiming[]; ctxPct: number; ctxPos: number; ctxTotal: number }
+  | { type: "complete"; data: CompleteData }
+  /** A settled brief, whole, from disk. Does not activate. */
+  | { type: "doc"; docId: DocId; title: string; mode: Mode | null; effort?: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; exchanges: { question: string; body: string; attachments: string[] }[] }
+  /** What the canvas shows. Null is the picker. */
+  | { type: "doc:active"; docId: DocId | null }
+  /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
+  | { type: "run:aborted" }
+  | { type: "participation:toggled"; name: string }
+  /** The session is ready: the model is resident and the abilities are enabled. */
+  | { type: "weights:done" };
+
+export type LibraryEvent =
+  | { type: "library:list"; entries: LibraryEntry[] }
+  /** Report paths ranked against `query`, best first; an empty query clears. */
+  | { type: "library:search"; query: string; ranked: string[] }
+  /** The corpus ability indexed the library (at boot, and after every settle). */
+  | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
+
+export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+
+// ── The small builders ───────────────────────────────────────────
+
+export const queryEvent = (ask: Inputs, { warm }: { warm: boolean }): Extract<BriefEvent, { type: "query" }> => ({
+  type: "query",
+  docId: ask.docId,
+  query: ask.text,
+  warm,
+  ...(ask.direct ? { direct: true } : {}),
+  effort: ask.effort,
+  ...(ask.attachments.length ? { attachments: [...ask.attachments] } : {}),
+});
+
+export const docEvent = (thread: Thread, restored: Descriptor[]): Extract<BriefEvent, { type: "doc" }> => ({
+  type: "doc",
+  docId: thread.docId,
+  title: thread.title,
+  mode: thread.mode,
+  ...(thread.effort ? { effort: thread.effort } : {}),
+  direct: thread.direct,
+  ...(restored.length > 0 ? { attachments: restored } : {}),
+  answer: thread.body,
+  exchanges: thread.exchanges,
+});
+
+/** The planner's questions as the assistant's turn, so the next planner fork attends the whole dialogue. */
+export function formatClarifyAsAssistantMsg(questions: readonly string[]): string {
+  return ["I need to clarify a few things before researching:", "", ...questions.map((q, i) => `${i + 1}. ${q}`)].join("\n");
+}
+
+export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/** A one-shot run the harness could not proceed past — rig's: the boot writes its message and exits with its code. */
+export { HarnessExit } from "@lloyal-labs/rig";

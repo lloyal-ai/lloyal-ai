@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
-  runHarness, warmDeltas, docIdOfQuery, writeReportFixture,
+  runHarness, warmDeltas, docIdOfQuery, writeReportFixture, accept,
 } from "./harness.js";
 
 const PLAN_JSON = JSON.stringify({
@@ -29,7 +29,7 @@ test("stop mid-run: the wire hears run:aborted", async () => {
     ],
     script: [
       { send: { type: "submit_query", query: "A?", mode: "flat" } },
-      { on: (ev) => ev.type === "ui:plan_review", send: { type: "accept_plan" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
       { on: (ev) => ev.type === "research:start" },
       { on: (ev) => ev.type === "agent:produce", send: { type: "stop" } },
       { on: (ev) => ev.type === "run:aborted" },
@@ -56,7 +56,7 @@ test("submit from another doc DURING a run: the death is ANNOUNCED before the ne
           if (ev.type === "query" && aDocId === null) aDocId = (ev as { docId: string }).docId;
           return ev.type === "ui:plan_review";
         },
-        send: { type: "accept_plan" } },
+        send: accept },
       { on: (ev) => ev.type === "research:start" },
       // Interrupt only once A's agent is STREAMING — the utterance queue
       // assigns by sample order, and a pre-sample halt would hand A's
@@ -108,7 +108,7 @@ test("new_run DURING a run: halts to the picker, announced", async () => {
     ],
     script: [
       { send: { type: "submit_query", query: "A?", mode: "flat" } },
-      { on: (ev) => ev.type === "ui:plan_review", send: { type: "accept_plan" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
       { on: (ev) => ev.type === "research:start" },
       { on: (ev) => ev.type === "agent:produce", send: { type: "new_run" } },
       { on: (ev) => ev.type === "doc:active" && (ev as { docId: string | null }).docId === null },

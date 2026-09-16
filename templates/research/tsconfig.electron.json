@@ -16,5 +16,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["targets/desktop/main.ts", "targets/desktop/preload.ts"]
+  "include": ["targets/desktop/main.ts", "targets/desktop/preload.ts", "types/**/*"]
 }

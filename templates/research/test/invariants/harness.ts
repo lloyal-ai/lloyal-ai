@@ -24,6 +24,8 @@
  *   kind 'report' → parseChatOutput presents it as a terminal `report()`
  *                   tool call — what a non-Ask research agent must produce
  *                   to settle voluntarily.
+ *   kind 'tool'   → a call of `tool.name` with `tool.args`; the branch's
+ *                   next turn, after the result is prefilled, is `then`.
  *
  * Choreography — `script` is a cursor of steps walked by the event stream:
  *   { send }      fire a command now (buffered until the loop arms).
@@ -40,14 +42,12 @@ import type { SessionContext } from "@lloyal-labs/sdk";
 import { createBus } from "@lloyal-labs/binding";
 import { RerankerCtx } from "@lloyal-labs/lloyal-agents";
 import type { Reranker, TraceWriter, TraceEvent } from "@lloyal-labs/lloyal-agents";
-import { makeServedRunner } from "@lloyal-labs/rig";
+import { bufferedCommandSignal, makeServedRunner, RunnerCtx } from "@lloyal-labs/rig";
+import { runnerConfig } from "@lloyal-labs/rig/node";
 import type { AttachmentStore } from "@lloyal-labs/media";
-import { harness } from "../../harness/harness.js";
-import { RunnerCtx } from "../../harness/runner-ctx.js";
-import { bufferedCommandSignal } from "../../harness/served-runtime.js";
-import { SESSION_ORIGIN_MAP } from "../../harness/config.js";
-import type { Config, ConfigOrigin } from "../../harness/config-types.js";
-import type { WorkflowEvent, Command } from "../../harness/protocol.js";
+import { harness, config } from "../../src/app.js";
+import type { Config, Origin } from "../../src/app.js";
+import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
 
 const STOP = 999;
 const FILLER = 7;
@@ -57,10 +57,17 @@ export interface Utterance {
   /** The branch's whole output — plan JSON, an answer, report findings. */
   text: string;
   /** How parseChatOutput presents it (see module doc). */
-  kind: "text" | "report";
+  kind: "text" | "report" | "tool";
+  /** For kind 'tool': the call the turn makes. */
+  tool?: { name: string; args: Record<string, unknown> };
+  /** The same branch's next turn — after a tool result, or the recovery turn a reaped agent is given. A function is
+   *  asked when that turn begins, so a scenario can decide it from what the wire has said since. */
+  then?: Utterance | (() => Utterance | undefined);
   /** Filler ticks streamed before the utterance — scheduling room for the
    *  command loop. A "live run" a scenario interrupts wants hundreds. */
   stallTokens?: number;
+  /** A report's grammar-forced sources; empty when absent. */
+  sources?: { title: string; url: string }[];
 }
 
 /** A step's command may be a THUNK, resolved at fire time — for commands
@@ -81,7 +88,7 @@ export type Step =
 export interface HarnessSpec {
   /** Merged over the minimal config; `sources.outputDir` is always the
    *  rig's fresh temp dir (exposed on the run). */
-  config?: Partial<Config>;
+  config?: { abilities?: Config["abilities"]; defaults?: Partial<Config["defaults"]>; model?: Partial<Config["model"]> };
   utterances?: Utterance[];
   script?: Step[];
   /** Runs after the temp library dir exists, before the harness boots —
@@ -95,6 +102,21 @@ export interface HarnessSpec {
    *  that attaches something commits it here first, then names its root on
    *  the command. Defaults to the runner's own (a null store). */
   attachmentStore?: AttachmentStore;
+  /** Hands the scenario the controls the wire does not carry: `halt` ends the
+   *  task that runs `harness()` — the scope that owns `initAgents` and so the
+   *  context — the way a disconnect does, from wherever the scenario stands
+   *  (an instrumented native call included, where no event can flow);
+   *  `send` fires a command from the same places; `eventCount` is how many
+   *  events the wire has carried so far. A halted run returns normally with
+   *  `halted: true`. */
+  controls?: (c: { halt: () => Promise<void>; send: (c: Command) => void; eventCount: () => number }) => void;
+  /** The composition to run in place of the app's own `harness` — a scenario that swaps a part. */
+  harness?: typeof harness;
+  /** Run once, non-interactive, with this query: the Runner's `oneshot` mode. The harness's own failure comes
+   *  back as `failure` instead of throwing. */
+  oneshot?: string;
+  /** The mock context's sequence budget — how many branches may be alive at once. Unbounded by default. */
+  nSeqMax?: number;
 }
 
 export interface HarnessRun {
@@ -110,6 +132,12 @@ export interface HarnessRun {
    *  which rightly emits a release) — a scenario asserting "the trunk was
    *  never released" means never released BEFORE this mark. */
   shutdownTraceIndex: number;
+  /** The run ended by the scenario's `halt`, not by `quit`. */
+  halted: boolean;
+  /** `trace.length` when each event arrived: `traceAt[i]` is the trace position of `events[i]`. */
+  traceAt: number[];
+  /** In `oneshot` mode: what the harness threw, if it did. */
+  failure?: unknown;
 }
 
 class CapturingTrace implements TraceWriter {
@@ -139,28 +167,19 @@ const stubReranker: Reranker = {
   dispose: () => {},
 };
 
-const DEFAULT_ORIGIN: ConfigOrigin = {
-  reasoningMode: "default",
-  modelPath: "default",
-  reranker: "default",
-  nCtx: "default",
-  gpu: "default",
-  outputDir: "default",
-  mmproj: "default",
-};
+/** The planning round the harness last armed (`ui:plan_review` / `ui:clarify`) in the run in flight — what a yes or an
+ *  answer must name. Scenarios run one at a time, so one module-level number is the current run's. */
+let latestRevision = 0;
+/** A yes to the parked plan, at the revision the wire announced. Send as a thunk: it reads the revision when it fires. */
+export const accept: Sendable = () => ({ type: "accept_plan", revision: latestRevision });
+/** An answer to the planner's questions, at the round announced. */
+export const answer = (text: string): Sendable => () => ({ type: "submit_clarification", revision: latestRevision, answer: text });
+/** The round announced last — for a command built by hand at fire time. */
+export const revision = (): number => latestRevision;
 
-function baseConfig(outputDir: string, over?: Partial<Config>): Config {
-  return {
-    version: 1,
-    sources: { outputDir },
-    abilities: {},
-    defaults: { reasoningMode: "flat", effort: "low", maxTurns: 4 },
-    model: {},
-    ...over,
-    // The output dir is the rig's regardless of what `over` carried.
-    ...(over?.sources ? { sources: { ...over.sources, outputDir } } : { sources: { outputDir } }),
-  };
-}
+/** The brief folders under a library root, sorted. */
+export const dirs = (outputDir: string): string[] =>
+  fs.readdirSync(outputDir).filter((n) => fs.statSync(path.join(outputDir, n)).isDirectory()).sort();
 
 /** Write a settled brief the library will list — the same 3-line header
  *  `readReport` parses (`# title`, blank, `> savedAt · mode · …`, body). */
@@ -184,36 +203,56 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   const utterances = spec.utterances ?? [];
   const steps = spec.script ?? [];
 
-  const ctx = new MockSessionContext({ nCtx: 32_768 });
+  const ctx = new MockSessionContext({ nCtx: 32_768, ...(spec.nSeqMax !== undefined ? { nSeqMax: spec.nSeqMax } : {}) });
 
   // ── The utterance wiring (see module doc) ──
+  // Every turn is numbered the first time a branch streams it: the fat token names its turn.
+  const turns: Utterance[] = [];
+  const turnIndex = new Map<Utterance, number>();
   let nextUtterance = 0;
-  const assigned = new Map<number, { idx: number; produced: number }>();
+  /** Per branch: the turn streaming now (`u`), the turn after it (`next`, taken up when `u` is over), the one it last
+   *  finished (`last`, what parseChatOutput presents), and how many tokens of the current turn it has produced. */
+  const assigned = new Map<number, { u: Utterance | undefined; next: Utterance["then"]; last: Utterance | undefined; produced: number }>();
   let lastSampled = 0;
   ctx._branchSample = (handle: number): number => {
     lastSampled = handle;
     let a = assigned.get(handle);
     if (!a) {
-      a = { idx: nextUtterance++, produced: 0 };
+      a = { u: utterances[nextUtterance++], next: undefined, last: undefined, produced: 0 };
       assigned.set(handle, a);
     }
-    const u = utterances[a.idx];
-    if (!u) return STOP; // unscripted branch — stops immediately
+    if (a.u === undefined && a.next !== undefined) {
+      a.u = typeof a.next === "function" ? a.next() : a.next;   // the next turn, decided as it begins
+      a.next = undefined;
+      a.produced = 0;
+    }
+    const u = a.u;
+    if (!u) { a.last = undefined; return STOP; } // unscripted branch, or a turn past its script — stops at once
+    if (!turnIndex.has(u)) { turnIndex.set(u, turns.length); turns.push(u); }
     const stall = u.stallTokens ?? 0;
     a.produced++;
     if (a.produced <= stall) return FILLER;
-    if (a.produced === stall + 1) return UTTER_BASE + a.idx;
+    if (a.produced === stall + 1) return UTTER_BASE + turnIndex.get(u)!;
+    a.last = u;   // the turn is over; a branch with a `then` starts it next, one without says the same thing again
+    if (u.then !== undefined) { a.u = undefined; a.next = u.then; }
     return STOP;
   };
   ctx.tokenToText = (token: number): string => {
-    if (token >= UTTER_BASE) return utterances[token - UTTER_BASE]?.text ?? "";
+    if (token >= UTTER_BASE) return turns[token - UTTER_BASE]?.text ?? "";
     return token === FILLER ? " ." : "";
   };
   ctx.parseChatOutput = (output, _format, opts) => {
     const a = assigned.get(lastSampled);
-    const u = a ? utterances[a.idx] : undefined;
+    const u = a?.last;
     if (opts?.isPartial || !u) {
       return { content: "", reasoningContent: "", toolCalls: [] };
+    }
+    if (u.kind === "tool") {
+      return {
+        content: "",
+        reasoningContent: "",
+        toolCalls: [{ id: "c1", name: u.tool!.name, arguments: JSON.stringify(u.tool!.args) }],
+      };
     }
     if (u.kind === "report") {
       return {
@@ -223,7 +262,7 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
           {
             id: "c1",
             name: "report",
-            arguments: JSON.stringify({ result: u.text, sources: [] }),
+            arguments: JSON.stringify({ result: u.text, sources: u.sources ?? [] }),
           },
         ],
       };
@@ -234,18 +273,27 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   spec.instrument?.(ctx);
 
   const trace = new CapturingTrace();
-  const runner = makeServedRunner<Config, ConfigOrigin>(
-    baseConfig(outputDir, spec.config),
-    {
-      traceWriter: trace,
-      dev: false,
-      origin: DEFAULT_ORIGIN,
-      sessionOriginMap: SESSION_ORIGIN_MAP,
-      ...(spec.attachmentStore ? { attachmentStore: spec.attachmentStore } : {}),
-    },
-  );
+  // The app's own table, layered over an empty manifest with the rig's temp dir as the library and `low` effort.
+  const loaded = runnerConfig(config, { sources: { outputDir }, defaults: { effort: "low" } } as never, { env: {}, cwd: outputDir });
+  const cfg = {
+    ...loaded.config,
+    ...(spec.config?.abilities ? { abilities: spec.config.abilities } : {}),
+    defaults: { ...loaded.config.defaults, ...(spec.config?.defaults ?? {}) },
+    model: { ...loaded.config.model, ...(spec.config?.model ?? {}) },
+    sources: { outputDir },
+  } as Config;
+  const served = makeServedRunner<Config, Origin>(cfg, {
+    traceWriter: trace,
+    dev: false,
+    origin: loaded.origin,
+    sessionOriginMap: loaded.sessionOriginMap,
+    frozen: loaded.frozen,
+    ...(spec.attachmentStore ? { attachmentStore: spec.attachmentStore } : {}),
+  });
+  const runner: typeof served = spec.oneshot === undefined ? served : { ...served, mode: "oneshot", initialQuery: spec.oneshot };
 
   const events: WorkflowEvent[] = [];
+  const traceAt: number[] = [];
   const bus = createBus<WorkflowEvent>();
   const rawCommands = bufferedCommandSignal<Command>();
   // RIG_DEBUG=1 narrates the choreography — every event with the cursor
@@ -292,9 +340,12 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
       cursor++;
     }
   };
+  latestRevision = 0;
   bus.subscribe((ev) => {
     events.push(ev);
-    if (debug) console.error(`[rig] ev ${ev.type} (cursor ${cursor}/${steps.length})`);
+    traceAt.push(trace.events.length);
+    if (ev.type === "ui:plan_review" || ev.type === "ui:clarify") latestRevision = ev.revision;
+    if (debug) console.error(`[rig] ev ${ev.type}${ev.type === "ui:error" ? ` ${JSON.stringify(ev.message)}` : ""} (cursor ${cursor}/${steps.length})`);
     if (cursor >= steps.length) return;
     const st = steps[cursor];
     if ("until" in st) {
@@ -321,12 +372,31 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   enterStep();
 
   let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let halted = false;
+  let failure: unknown;
+  const compose = spec.harness ?? harness;
+  const task = run(function* () {
+    yield* RunnerCtx.set(runner);
+    yield* RerankerCtx.set(stubReranker);
+    yield* compose(ctx as unknown as SessionContext, bus, rawCommands);
+  });
+  spec.controls?.({
+    halt: () => {
+      halted = true;
+      return task.halt();
+    },
+    send: (c) => commands.send(c),
+    eventCount: () => events.length,
+  });
   try {
     await Promise.race([
-      run(function* () {
-        yield* RunnerCtx.set(runner);
-        yield* RerankerCtx.set(stubReranker);
-        yield* harness(ctx as unknown as SessionContext, bus, rawCommands);
+      // A task ended by `halt` rejects with "halted" when consumed; for the
+      // scenario that asked for the halt, that is the run's normal end. A
+      // one-shot run's own failure is the scenario's to inspect.
+      task.catch((err: unknown) => {
+        if (halted && err instanceof Error && err.message === "halted") return;
+        if (spec.oneshot !== undefined) { failure = err; return; }
+        throw err;
       }),
       new Promise<never>((_, reject) => {
         // REF'd on purpose: a stalled scenario drains the event loop, and an
@@ -341,7 +411,7 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
     clearTimeout(watchdog);
   }
 
-  return { events, trace: trace.events, outputDir, shutdownTraceIndex };
+  return { events, trace: trace.events, outputDir, shutdownTraceIndex, halted, traceAt, ...(failure !== undefined ? { failure } : {}) };
 }
 
 // ── Assertion helpers — the vocabulary scenarios speak ──

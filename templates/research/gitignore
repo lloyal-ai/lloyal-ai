@@ -24,6 +24,10 @@ media/.tmp/
 # Per-run attachment storage, superseded by media/.
 trace-*.attachments/
 
+# Local environment overrides — one machine's numbers, never the project's.
+# The committed `.env` beside them holds the defaults a reader should see.
+*.local
+
 *.log
 .DS_Store
 harness.json
