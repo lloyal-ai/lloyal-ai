@@ -18,8 +18,17 @@ export const DEPS = {
   '@lloyal-labs/media': ['minor', '0.1.0'],
   '@lloyal-labs/sdk': ['major', '3.1.0'],
   '@lloyal-labs/lloyal-agents': ['major', '5.5.1'],
+  '@lloyal-labs/binding': ['minor', '0.1.0'],
   '@lloyal-labs/rig': ['minor', '5.5.0'],
   '@lloyal-labs/dev-tools': ['minor', '0.4.3'],
+  // The two packages the recut's template imports directly. Their fallbacks
+  // carry a `-` on purpose: `nextBase` keeps the base of a prerelease and BUMPS
+  // a stable, so a plain '0.1.0' here would stamp 0.2.0-alpha.N for a package
+  // whose first release is meant to be the 0.1.0 triple. It only matters until
+  // their first manual publish, after which the registry answers instead — but
+  // that is exactly the run where it would be wrong.
+  '@lloyal-labs/ui': ['minor', '0.1.0-alpha.0'],
+  '@lloyal-labs/desktop': ['minor', '0.1.0-alpha.0'],
   'lloyal-ai': ['minor', '1.10.0'],
 };
 
