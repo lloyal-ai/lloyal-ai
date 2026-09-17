@@ -1,10 +1,11 @@
 /**
- * A brief's life: asked, framed, written, settled. An ask into the brief the
- * canvas shows, while the trunk holds its thread, threads beneath it; anything
- * else begins a new brief. Two facts of the brief's own (`trunkDocId`,
- * `pendingPlan`) and two of the Session's (`trunk`, `userSidePending`) decide
- * every trunk write; nothing is shadowed. No handler waits on native work:
- * `submit`, `abortRun` and the clarification post to the owner and return.
+ * A brief's life: asked, framed, written, settled. This file is what a reader can do and what happens when they
+ * do it; what the MODEL does at each step is the research this is handed.
+ *
+ * It is also the only place the trunk is written — the trunk being the model's running memory of one brief's
+ * conversation. An ask into the brief on the canvas threads onto the trunk when the trunk holds that brief; any
+ * other ask begins a new brief on a fresh one. No handler waits on the model: each hands its work to `run` and
+ * returns, which is why a Stop is always heard.
  */
 import { scoped } from "effection";
 import type { Channel, Operation } from "effection";
@@ -14,10 +15,11 @@ import { admitted, singleTaskPlan, OperationFailure } from "@lloyal-labs/rig";
 import type { Execution, Handlers, PlanResult, ResearchTask, Coverage } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
 import type { Inputs, Research } from "../research/research.js";
-import type { Config } from "../app.js";
+import type { Config } from "../config.js";
 import type { Library } from "./library.js";
 import type { Command, DocId, Mode, WorkflowEvent } from "./protocol.js";
-import { queryEvent, docEvent, formatClarifyAsAssistantMsg, errorMessage, HarnessExit } from "./protocol.js";
+import { queryEvent, docEvent, errorMessage, HarnessExit } from "./protocol.js";
+import { WORDS } from "../research/prompts.js";
 
 /** A planner result held for the reader's yes, with the round the interface echoes back. */
 type PendingPlan = { plan: PlanResult; inputs: Inputs; revision: number };
@@ -35,6 +37,7 @@ export function briefs(deps: {
   handlers: Handlers<Command>;
   submit(text: string, opts?: SubmitOptions): Operation<Operation<void> | null>;
   fail(err: unknown): Operation<"exit" | void>;
+  unhandled(command: { type: string }): Operation<void>;
   fatal(): Operation<void>;
 } {
   const { session, library, run, wire, config, research } = deps;
@@ -47,6 +50,103 @@ export function briefs(deps: {
   let revision = 0;
   const participation: Record<string, boolean> = {};   // per source, for the next ask; absent means on
   const coverage = new Map<string, Coverage>();                   // what each source was found to cover, for the session
+
+  // What a reader can do, by the moment they do it in; how each is done is below. (Function declarations are
+  // hoisted, so the table can come first.)
+  return {
+    handlers: {
+      // Ask
+      *submit_query(c) {
+        yield* submit(c.query, { mode: c.mode, direct: !!c.skipPlanner, attachments: c.attachments });
+      },
+      *toggle_participation({ name }) {
+        participation[name] = participation[name] === false;
+        yield* wire.send({ type: "participation:toggled", name, included: participation[name] });
+      },
+
+      // Frame: every gesture names the planning round it saw (`revision`); one that is over is refused.
+      *submit_clarification({ revision: rev, answer }) {
+        if (!pendingPlan) return;
+        if (pendingPlan.revision !== rev) return yield* wire.send(STALE_PLAN);
+        const { plan, inputs } = pendingPlan;
+        pendingPlan = null;   // the round is over; a late answer to it finds nothing
+        yield* wire.send(queryEvent(inputs, { warm: false }));
+        yield* startRun(inputs, function* () {
+          // The round joins the trunk as it is answered: the question paired with what was asked, then the answer as the
+          // open user side the planner's fork reads. A round the reader walks away from leaves nothing on the trunk.
+          yield* commitAnswer(inputs.text, WORDS.clarifyTurn(plan.clarifyQuestions));
+          yield* waitUntilSettled(session.prefillUser(answer));
+          yield* frame(inputs, true);
+        });
+      },
+      *change_mode({ mode }) {
+        if (!pendingPlan) return;
+        const inputs = { ...pendingPlan.inputs, mode };
+        pendingPlan = null;   // the round is over; the next plan gets a new revision
+        yield* wire.send(queryEvent(inputs, { warm: false }));
+        yield* startRun(inputs, () => frame(inputs, true));
+      },
+      *update_task_description({ revision: rev, index, description }) {
+        yield* updatePlan(rev, (t) => t.map((task, i) => (i === index ? { ...task, description } : task)));
+      },
+      *add_task({ revision: rev, afterIndex }) {
+        yield* updatePlan(rev, (t) => { const at = Math.max(0, Math.min(t.length, afterIndex + 1)); return [...t.slice(0, at), { description: "" }, ...t.slice(at)]; });
+      },
+      *delete_task({ revision: rev, index }) {
+        yield* updatePlan(rev, (t) => (t.length > 1 && index >= 0 && index < t.length ? t.filter((_, i) => i !== index) : t));   // a plan keeps at least one task
+      },
+      *move_task({ revision: rev, from, to }) {
+        yield* updatePlan(rev, (t) => {
+          if (from === to || from < 0 || from >= t.length || to < 0 || to >= t.length) return t;
+          const next = [...t]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next;
+        });
+      },
+      *accept_plan({ revision: rev }) {
+        if (!pendingPlan) return;
+        if (pendingPlan.revision !== rev) return yield* wire.send(STALE_PLAN);
+        const { plan, inputs } = pendingPlan;
+        pendingPlan = null;   // consumed once; a late second yes finds nothing
+        if (plan.intent === "clarify") return yield* abortRun();
+        yield* startRun(inputs, () => write(inputs, plan, false));
+      },
+      *cancel_plan() { yield* abortRun(); },
+      *edit_plan() { yield* abortRun(); },
+
+      // Write: the controls of the live run. `run` owns it, so these only pass the word along.
+      *stop() { yield* abortRun(); },
+      *wrap_up() { run.wrapUp(); },
+      *pause() { run.pause(); },
+      *resume() { run.resume(); },
+      *cancel_agent({ agentId }) { run.cancel(agentId); },
+
+      // Settle
+      *open_doc({ docId }) { yield* openDoc(docId); },
+      *new_run() {
+        yield* abortRun();
+        yield* openDoc(null);
+      },
+    },
+    submit,
+    /** A handler threw. A poisoned owner ends the session; otherwise the handler may have stopped half way
+     *  through a change of run, so the run is abandoned and the next ask starts clean. */
+    *fail(err: unknown): Operation<"exit" | void> {
+      yield* wire.send({ type: "ui:error", message: errorMessage(err) });
+      if (run.poisoned) return "exit";   // the model's state cannot be trusted: the host reaps the session, or the process ends
+      yield* abortRun();
+    },
+    /** A command no part of the app handles: a view wired to something that was never offered. That is the
+     *  view's mistake, so it is said and the reader's run is left alone. */
+    *unhandled(command: { type: string }): Operation<void> {
+      yield* wire.send({ type: "ui:error", message: `Nothing in this app handles "${command.type}".` });
+    },
+    /** Settles when the model's state can no longer be trusted — a run's cleanup failed — having said why. The
+     *  command loop races this, so the session ends then and there. The reader is told, and offered a new one,
+     *  which beats leaving them a session that browses but can never answer again. */
+    *fatal(): Operation<void> {
+      const err = yield* run.whenPoisoned;
+      yield* wire.send({ type: "ui:error", message: `The session cannot continue: ${errorMessage(err)}` });
+    },
+  };
 
   // ── Ask ────────────────────────────────────────────────────────────────────
 
@@ -78,8 +178,13 @@ export function briefs(deps: {
     };
     yield* wire.send(queryEvent(ask, { warm }));   // the first thing said about every accepted ask
     return yield* startRun(ask, function* () {
-      // Everything native runs under the run, where Stop can reach it. The trunk is trusted only when it holds
-      // this brief's thread with every pair closed; anything less is released and rebuilt from the library.
+      // Everything that touches the model runs in here, under the run, where Stop can reach it. The trunk is
+      // trusted only when it holds this brief's thread with every pair closed; anything less is released and
+      // rebuilt from the library.
+      //
+      // `waitUntilSettled` is how a call into the model is awaited. A Stop halts this operation at once, but a
+      // call already inside the model cannot be dropped half way: the halt waits for it to finish before
+      // anything it touched is released. Wrap every call on `session` in it.
       const holds = trunkDocId === docId && session.trunk !== null && !session.userSidePending;
       if (!holds) {
         trunkDocId = null;
@@ -103,19 +208,17 @@ export function briefs(deps: {
 
   // ── Frame ──────────────────────────────────────────────────────────────────
 
-  /** The plan the canvas frames — said EXACTLY once, here, from what the algorithm returned. A planner's own
-   *  progress may say anything on the wire; the brief's state is decided by the value it hands back. */
+  /** The plan the canvas frames, said only here: from what the planner returned, and again whenever the reader
+   *  edits it. A planner's own progress may say anything on the wire; the brief's state is the value it hands back. */
   function* publish(plan: PlanResult): Operation<void> {
     yield* wire.send({ type: "plan", intent: plan.intent, tasks: plan.tasks, clarifyQuestions: plan.clarifyQuestions, tokenCount: plan.tokenCount, timeMs: plan.timeMs });
   }
 
   /** Plan the brief. The plan waits for the reader's yes — unless the model must ask first, or can answer at once. */
   function* frame(ask: Inputs, review: boolean): Operation<void> {
-    // The round opens HERE, before the planner runs. `plan:start` is not telemetry: it withdraws the
-    // review the canvas is showing, drops the parked plan, sets the mode and empties the roster. An
-    // algorithm the developer replaced returns a value and says nothing, so leaving this to the
-    // algorithm left the reader looking at the previous round's outline — still acceptable — for as
-    // long as the new planner took to think.
+    // The brief opens the round, not the planner: `plan:start` withdraws whatever review the canvas is showing
+    // and clears the last round's plan. A planner only has to return a value, so it must not be the one the
+    // canvas is waiting to hear from.
     yield* wire.send({ type: "plan:start", query: ask.text, mode: ask.mode });
     const plan = yield* research.plan(session.trunk, ask, coverage);
     yield* publish(plan);
@@ -133,21 +236,25 @@ export function briefs(deps: {
     yield* write(ask, plan, false);   // a passthrough, or a plan nobody needs to see
   }
 
-  /** Change the parked plan and say so — only the round the interface saw. A stale edit is refused. */
-  function* updatePlan(rev: number, change: (tasks: ResearchTask[]) => ResearchTask[], said: WorkflowEvent): Operation<void> {
+  /** Change the parked plan and say the plan again, whole — only for the round the interface saw; a stale
+   *  edit is refused. The rules of an edit live here alone: the view shows whatever plan it is told. */
+  function* updatePlan(rev: number, change: (tasks: ResearchTask[]) => ResearchTask[]): Operation<void> {
     if (!pendingPlan) return;
     if (pendingPlan.revision !== rev) return yield* wire.send(STALE_PLAN);
     pendingPlan = { ...pendingPlan, plan: { ...pendingPlan.plan, tasks: change(pendingPlan.plan.tasks) } };
-    yield* wire.send(said);
+    yield* publish(pendingPlan.plan);
   }
 
   // ── Write ──────────────────────────────────────────────────────────────────
 
-  /** Write the brief: its inquiries, then the settling pass. The answer joins the trunk and the library. */
+  /** Write the brief. The brief says the writing began and ended, and keeps what came back: the writer it was
+   *  handed only has to return a value, and may say as much or as little on the wire as it likes. */
   function* write(ask: Inputs, plan: PlanResult, warm: boolean): Operation<void> {
     library.begin(ask.docId, ask, { warm });   // its folder: a first report, or a thread beside a settled one
+    yield* wire.send({ type: "research:start", agentCount: plan.tasks.length, mode: ask.mode });
     const written = yield* research.write(session.trunk, ask, plan);
     yield* commitAnswer(ask.text, written.answer);
+    library.written(ask.docId, written);   // held until `complete` is said, which is when the report is made
     yield* wire.send({ type: "answer", text: written.answer });
     yield* wire.send({ type: "stats", ...written.stats });
     live = null;   // said as complete, nothing here is left for a stop to abort; what follows is bookkeeping a replacement may cut short
@@ -161,17 +268,15 @@ export function briefs(deps: {
     yield* waitUntilSettled(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
   }
 
-  /** One step of a brief's life, under the run's ownership. Returns the accepted run. An ordinary failure — the body's
-   *  own, or a child's — releases the folder, says why, and stays on the run's future. A run no longer live is being
-   *  halted: whatever reaches it then is rethrown as it came for the owner to judge.
+  /** Run one step of a brief's life under `run`, the session's one owner of long work, and return the accepted
+   *  run. `scoped` is the boundary: whatever the body starts — agents, forks of the model's state — is finished
+   *  and cleaned up before the run counts as over, so the next run never meets this one's leftovers.
    *
-   *  What this catch CANNOT do is tell the body's own failure from a teardown failure raised inside it. Both arrive
-   *  here by the same route: the pool's cleanups run within `body()`, so a branch that will not release surfaces
-   *  exactly where a failed planner does (the poison law in `owner.scenario.test.ts` is that case). Only a failure
-   *  this function raises ITSELF is known — `HarnessExit`, thrown forward by the framing with nothing unwinding — and
-   *  only that one is marked as the operation's own. The rest keep the owner's fatal-during-halt reading, which is
-   *  safe but, as the third review showed, can poison a session whose cleanup actually succeeded. Closing that needs
-   *  the scope that RUNS a cleanup to say so; see docs/plan/review-3-findings.md. */
+   *  A failure of the body releases the brief's folder, says why, and is recorded on the run. One case is kept
+   *  apart. If this run is no longer the live one, it is being stopped, and an error arriving then is rethrown
+   *  untouched for `run` to judge: a cleanup that failed means the model's state cannot be trusted. `run` cannot
+   *  tell that from the body's own failure arriving late, so the one failure raised here deliberately,
+   *  `HarnessExit`, is marked as the body's own. */
   function* startRun(ask: Inputs, body: () => Operation<void>): Operation<Operation<void>> {
     live = ask.docId;   // until the body says `complete`, parks, or dies below
     return yield* run.replace(ask.docId, () => scoped(function* () {   // the boundary: a failing child fails here, not the session
@@ -223,92 +328,6 @@ export function briefs(deps: {
     yield* wire.send({ type: "ui:error", message: "That brief is no longer there." });
   }
 
-  return {
-    submit,
-    /** A handler threw. A poisoned owner ends the session; anything else abandons the run and says why. */
-    *fail(err: unknown): Operation<"exit" | void> {
-      yield* wire.send({ type: "ui:error", message: errorMessage(err) });
-      if (run.poisoned) return "exit";   // the model's state cannot be trusted: the host reaps the session, or the process ends
-      yield* abortRun();
-    },
-    /**
-     * The model's state cannot be trusted again: say why, and end the session — settling this is
-     * what ends the command loop, so nothing waits for a question to be asked first.
-     *
-     * The reader does not lose anything by this. The host reaps the session and closes the
-     * connection, and the canvas says the session ended and offers a new one; staying open would
-     * only mean browsing a brief that can no longer be worked on, and discovering that by asking.
-     */
-    *fatal(): Operation<void> {
-      const err = yield* run.whenPoisoned;
-      yield* wire.send({ type: "ui:error", message: `The session cannot continue: ${errorMessage(err)}` });
-    },
-    handlers: {
-      *submit_query(c) {
-        yield* submit(c.query, { mode: c.mode, direct: !!c.skipPlanner, attachments: c.attachments });
-      },
-      *submit_clarification({ revision: rev, answer }) {
-        if (!pendingPlan) return;
-        if (pendingPlan.revision !== rev) return yield* wire.send(STALE_PLAN);
-        const { plan, inputs } = pendingPlan;
-        pendingPlan = null;   // the round is over; a late answer to it finds nothing
-        yield* wire.send(queryEvent(inputs, { warm: false }));
-        yield* startRun(inputs, function* () {
-          // The round joins the trunk as it is answered: the question paired with what was asked, then the answer as the
-          // open user side the planner's fork reads. A round the reader walks away from leaves nothing on the trunk.
-          yield* commitAnswer(inputs.text, formatClarifyAsAssistantMsg(plan.clarifyQuestions));
-          yield* waitUntilSettled(session.prefillUser(answer));
-          yield* frame(inputs, true);
-        });
-      },
-      *change_mode({ mode }) {
-        if (!pendingPlan) return;
-        const inputs = { ...pendingPlan.inputs, mode };
-        pendingPlan = null;   // the round is over; the next plan gets a new revision
-        yield* wire.send(queryEvent(inputs, { warm: false }));
-        yield* startRun(inputs, () => frame(inputs, true));
-      },
-      *accept_plan({ revision: rev }) {
-        if (!pendingPlan) return;
-        if (pendingPlan.revision !== rev) return yield* wire.send(STALE_PLAN);
-        const { plan, inputs } = pendingPlan;
-        pendingPlan = null;   // consumed once; a late second yes finds nothing
-        if (plan.intent === "clarify") return yield* abortRun();
-        yield* startRun(inputs, () => write(inputs, plan, false));
-      },
-      *cancel_plan() { yield* abortRun(); },
-      *edit_plan() { yield* abortRun(); },
-      *update_task_description({ revision: rev, index, description }) {
-        yield* updatePlan(rev, (t) => t.map((task, i) => (i === index ? { ...task, description } : task)), { type: "plan:task_updated", index, description });
-      },
-      *add_task({ revision: rev, afterIndex }) {
-        yield* updatePlan(rev, (t) => { const at = Math.max(0, Math.min(t.length, afterIndex + 1)); return [...t.slice(0, at), { description: "" }, ...t.slice(at)]; }, { type: "plan:task_added", afterIndex });
-      },
-      *delete_task({ revision: rev, index }) {
-        yield* updatePlan(rev, (t) => (t.length > 1 && index >= 0 && index < t.length ? t.filter((_, i) => i !== index) : t), { type: "plan:task_deleted", index });
-      },
-      *move_task({ revision: rev, from, to }) {
-        yield* updatePlan(rev, (t) => {
-          if (from === to || from < 0 || from >= t.length || to < 0 || to >= t.length) return t;
-          const next = [...t]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next;
-        }, { type: "plan:task_moved", from, to });
-      },
-      *toggle_participation({ name }) {
-        participation[name] = participation[name] === false;
-        yield* wire.send({ type: "participation:toggled", name });
-      },
-      *new_run() {
-        yield* abortRun();
-        yield* openDoc(null);
-      },
-      *open_doc({ docId }) { yield* openDoc(docId); },
-      *stop() { yield* abortRun(); },
-      *wrap_up() { run.wrapUp(); },
-      *pause() { run.pause(); },
-      *resume() { run.resume(); },
-      *cancel_agent({ agentId }) { run.cancel(agentId); },
-    },
-  };
 }
 
 export interface SubmitOptions {

@@ -20,6 +20,12 @@ const CLARIFY_JSON = JSON.stringify({ intent: "clarify", tasks: [], clarifyQuest
 const STALE = /plan changed under you/;
 const toasts = (events: readonly WorkflowEvent[]): string[] =>
   events.filter((e) => e.type === "ui:error").map((e) => (e as { message: string }).message);
+/** The tasks the run actually worked: each inquiry's annexure names the task it was given. */
+const tasksWorked = (outputDir: string, docId: string): string[] => {
+  const dir = path.join(outputDir, docId);
+  return fs.readdirSync(dir).filter((f) => /^annexure-\d+\.md$/.test(f)).sort()
+    .map((f) => /\*\*Task:\*\* (.*)/.exec(fs.readFileSync(path.join(dir, f), "utf8"))?.[1] ?? "");
+};
 
 test("plan review: a stale yes is refused and the plan stays parked; the right yes runs it; a second yes finds nothing", async () => {
   const run = await runHarness({
@@ -38,11 +44,10 @@ test("plan review: a stale yes is refused and the plan stays parked; the right y
     ],
   });
   assert.deepEqual(toasts(run.events).map((m) => STALE.test(m)), [true, true], "the stale yes and the stale edit were refused, nothing else toasted");
-  assert.equal(run.events.filter((e) => e.type === "plan:task_updated").length, 0, "a stale edit changes nothing");
+  assert.equal(run.events.filter((e) => e.type === "plan").length, 1, "a stale edit changes nothing: the plan was never said again");
   assert.equal(run.events.filter((e) => e.type === "research:start").length, 1, "one run: the second yes found nothing");
   assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0);
-  const tasks = (run.events.find((e) => e.type === "fanout:tasks") as { tasks: { description: string }[] }).tasks;
-  assert.equal(tasks[0].description, "investigate the topic", "the parked plan was untouched by the stale edit");
+  assert.deepEqual(tasksWorked(run.outputDir, docIdOfQuery(run.events)), ["investigate the topic"], "the parked plan was untouched by the stale edit");
   assert.ok(fs.existsSync(path.join(run.outputDir, docIdOfQuery(run.events), "report.md")));
 });
 
@@ -56,12 +61,12 @@ test("an edit at the announced revision changes the parked plan, and the accepte
     script: [
       { send: { type: "submit_query", query: "Q?", mode: "flat" } },
       { on: (ev) => ev.type === "ui:plan_review", send: () => ({ type: "update_task_description", revision: revision(), index: 0, description: "look closer" }) },
-      { on: (ev) => ev.type === "plan:task_updated", send: accept },
+      // The edit is answered with the plan, said again as it now stands.
+      { on: (ev) => ev.type === "plan" && (ev as { tasks: { description: string }[] }).tasks[0]?.description === "look closer", send: accept },
       { on: (ev) => ev.type === "complete" },
     ],
   });
-  const tasks = (run.events.find((e) => e.type === "fanout:tasks") as { tasks: { description: string }[] }).tasks;
-  assert.deepEqual(tasks.map((t) => t.description), ["look closer"]);
+  assert.deepEqual(tasksWorked(run.outputDir, docIdOfQuery(run.events)), ["look closer"], "the inquiry worked the edited task");
 });
 
 test("a changed mode supersedes the round: the old revision is refused, the new one proceeds", async () => {

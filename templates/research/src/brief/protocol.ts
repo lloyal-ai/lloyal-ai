@@ -1,14 +1,16 @@
 /**
- * The brief's own words on the wire — its commands up, its events down — beside
- * the vocabularies rig owns: the run controls (`RunCommand`) and settings
- * (`SettingsCommand`, `SettingsEvent`). Types only, node-free, so a renderer
- * imports this to speak the protocol without depending on the harness.
+ * Everything this app says and hears. `Command` is everything a reader can do, and it is the table of contents
+ * of the app: each one has a handler in the brief, the library or rig's settings. `WorkflowEvent` is everything
+ * a view is told; a view shows nothing it was not told here.
+ *
+ * rig owns two vocabularies that sit beside the brief's own: the controls of a live run (`RunCommand`) and
+ * settings (`SettingsCommand`, `SettingsEvent`). Node-free, so a view imports this without importing the engine.
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
 import type { PlanIntent, ResearchTask, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
-import type { Config, Origin } from "../app.js";
+import type { Config, Origin } from "../config.js";
 import type { Effort } from "../research/budgets.js";
 import type { Inputs } from "../research/research.js";
 
@@ -63,6 +65,8 @@ export interface CompleteData {
   planTokens?: number;
   agentTokens?: number;
   synthTokens?: number;
+  /** The settling pass's perplexity, when there was one. */
+  synthPpl?: number;
   passthroughTokens?: number;
   totalToolCalls?: number;
   agentCount?: number;
@@ -127,23 +131,17 @@ export type BriefEvent =
       attachments?: Descriptor[];
     }
   | { type: "plan:start"; query: string; mode: Mode }
+  /** The plan as it stands: said when the planner returns it, and again whenever the reader edits it. */
   | { type: "plan"; intent: PlanIntent; tasks: ResearchTask[]; clarifyQuestions: string[]; tokenCount: number; timeMs: number }
   /** The planner asked; this round's `revision` must come back with the answer. */
   | { type: "ui:clarify"; revision: number }
   /** The plan awaits the reader's yes; this round's `revision` must come back with it and with every edit. */
   | { type: "ui:plan_review"; revision: number }
-  | { type: "plan:task_updated"; index: number; description: string }
-  | { type: "plan:task_added"; afterIndex: number }
-  | { type: "plan:task_deleted"; index: number }
-  | { type: "plan:task_moved"; from: number; to: number }
   | { type: "preflight:start"; query: string; abilityCount: number }
   | { type: "preflight:done"; coverage: string; tokens: number; toolCalls: number; timeMs: number }
+  /** The writing began. Said by the brief, so it is said whatever writer it was handed. */
   | { type: "research:start"; agentCount: number; mode: Mode }
   | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
-  | { type: "fanout:tasks"; tasks: ResearchTask[] }
-  | { type: "spine:task"; taskIndex: number; taskCount: number; description: string }
-  | { type: "spine:source"; taskIndex: number; source: string }
-  | { type: "spine:task:done"; taskIndex: number; stageFindings: number; accumulated: number }
   | { type: "synthesize:start" }
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
   | { type: "answer"; text: string }
@@ -155,7 +153,8 @@ export type BriefEvent =
   | { type: "doc:active"; docId: DocId | null }
   /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
   | { type: "run:aborted" }
-  | { type: "participation:toggled"; name: string }
+  /** Whether a source takes part in the next ask. */
+  | { type: "participation:toggled"; name: string; included: boolean }
   /** The session is ready: the model is resident and the abilities are enabled. */
   | { type: "weights:done" };
 
@@ -167,6 +166,18 @@ export type LibraryEvent =
   | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
 
 export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+
+// ── Which task an agent is working ───────────────────────────────
+
+/** The key a research spawn carries (`agent:spawn.key`). It names the TASK, not the agent: the pool seats tasks
+ *  in whatever order the context allows, and a healed task is a new agent under the same key. The view and the
+ *  library both file an agent's work by reading this back, so an agent spawned without one belongs to no task. */
+export const taskKey = (taskIndex: number): string => `task:${taskIndex}`;
+
+export const taskIndexOf = (key: string | undefined): number | null => {
+  const named = /^task:(\d+)$/.exec(key ?? "");
+  return named ? Number(named[1]) : null;
+};
 
 // ── The small builders ───────────────────────────────────────────
 
@@ -191,11 +202,6 @@ export const docEvent = (thread: Thread, restored: Descriptor[]): Extract<BriefE
   answer: thread.body,
   exchanges: thread.exchanges,
 });
-
-/** The planner's questions as the assistant's turn, so the next planner fork attends the whole dialogue. */
-export function formatClarifyAsAssistantMsg(questions: readonly string[]): string {
-  return ["I need to clarify a few things before researching:", "", ...questions.map((q, i) => `${i + 1}. ${q}`)].join("\n");
-}
 
 export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 

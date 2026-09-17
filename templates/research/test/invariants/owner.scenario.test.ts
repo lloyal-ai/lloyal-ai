@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { runHarness, warmDeltas, docIdOfQuery, writeReportFixture, accept } from "./harness.js";
+import type { Command } from "../../src/brief/protocol.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });
 const B = "2026-01-01T00-00-00-000";
@@ -60,6 +61,29 @@ test("an ability's settings are refused while a run is live: a toast, and the ru
   assert.match(toast.message, /Wait for the run to finish/);
   assert.equal(run.events.filter((e) => e.type === "config:updated").length, 0, "nothing was saved");
   assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0);
+});
+
+test("a command nobody handles, sent while a run is live, is a toast: the run settles untouched", async () => {
+  // A view can be wired to a command the harness has no handler for — a renamed setting, a stale control.
+  // That is a wiring mistake in the view; the reader's run must not pay for it.
+  const unhandled = { type: "set_effort", effort: "low" } as unknown as Command;
+  const run = await runHarness({
+    utterances: [
+      { text: PLAN_JSON, kind: "text" },
+      { text: "findings", kind: "report", stallTokens: 200 },
+    ],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "research:start", send: unhandled },
+      { on: (ev) => ev.type === "ui:error" },
+      { on: (ev) => ev.type === "complete" || ev.type === "run:aborted" },
+    ],
+  });
+  const toast = run.events.find((e) => e.type === "ui:error") as { message: string };
+  assert.match(toast.message, /set_effort/, "the toast names the command that had no handler");
+  assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0, "the run was aborted by a command it never understood");
+  assert.ok(fs.existsSync(path.join(run.outputDir, docIdOfQuery(run.events), "report.md")), "the brief settled");
 });
 
 test("a change of output directory takes effect for the next brief", async () => {

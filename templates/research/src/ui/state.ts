@@ -12,7 +12,7 @@
  * columns, sections, panes — is the renderer's business, not this file's.
  */
 
-import type { Config } from '../app.js';
+import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../research/budgets.js';
 import type { DocId, Mode, LibraryEntry, OpTiming } from '../brief/protocol.js';
@@ -35,13 +35,6 @@ export type DocPhase =
   | 'research'      // inquiries streaming
   | 'synthesizing'  // the settling pass
   | 'done';         // settled; asks stream beneath without leaving 'done'
-
-/** Every DocPhase, for totality walks — a table keyed by DocPhase plus this
- *  list is the pattern that keeps moment/status maps honest by test. */
-export const DOC_PHASES: readonly DocPhase[] = [
-  'planning', 'discovering', 'clarifying', 'plan_review',
-  'research', 'synthesizing', 'done',
-];
 
 /** The agent records are the generic fold's (`@lloyal-labs/ui/fold`): one agent's life on a view, folded from
  *  the bus events every pool emits; this app decides only what a spawn is for. */
@@ -131,15 +124,8 @@ export interface DocState {
   /** Every agent this document ever ran, done agents included, as the generic fold keeps them:
    *  its value, folded in place, never spelled out here. Bounded by task count. */
   roster: AgentRoster;
-  /** Research agents in spawn order — drives the column layout. */
-  researchAgentIds: number[];
   /** Pre-flight recon agents in spawn order — drives the Discovering view. */
   reconAgentIds: number[];
-  /** Set by spine:task in chain mode; consumed by the next agent:spawn. */
-  pendingTaskIndex: number | null;
-  pendingTaskDescription: string | null;
-  /** Count of research-phase spawns seen (assigns taskIndex in flat mode). */
-  researchSpawnCount: number;
   /** Authoritative fork count from `research:start`. */
   researchAgentCount: number;
 

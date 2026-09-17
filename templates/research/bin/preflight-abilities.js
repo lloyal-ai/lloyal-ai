@@ -13,12 +13,11 @@
  *
  *   harnessdev.abilities        the install specs `lloyal new` recorded
  *   dependencies[<name>]   `file:vendor/<publisher>__<name>-<version>.tgz`,
- *                          written by verifyAndVendorAbility → setFileDependency
- *                          (harness-cli/src/scaffold/vendor-ability.ts)
+ *                          written by the CLI when it vendors an ability
  *
  * A spec is satisfied when some dependency points at its vendored tarball. That
  * `vendor/<flat>-<version>.tgz` shape is the ONE thing this script assumes about
- * the CLI — keep it in sync with vendor-ability.ts if it ever changes.
+ * the CLI. If the CLI ever names its vendored tarballs differently, this has to follow.
  *
  * Deliberately narrow: this checks only that the abilities were VENDORED. "Vendored
  * but never npm-installed" is left to `bin/run.js`, which sees the real
@@ -29,9 +28,8 @@ import { readFileSync } from "node:fs";
 const pkg = readPkg();
 const specs = recordedSpecs(pkg);
 
-// An absent/empty `abilities` marker means UNKNOWN, never "none" (see the contract in
-// harness-cli/src/scaffold/write-marker.ts). Blocking here would break any
-// project that predates the marker or was written by hand.
+// An absent or empty `abilities` marker means UNKNOWN, never "none". Blocking here would break any project
+// that predates the marker or was written by hand.
 if (specs.length === 0) process.exit(0);
 
 const vendored = new Set(

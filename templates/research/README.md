@@ -27,10 +27,13 @@ keeping apart, because they solve different problems:
   unmodified in a terminal, a native window and a browser. One fold,
   three bindings, no view holding truth.
 
-> **Lineage.** Ships as **Fieldnote** — the sidebar mark and the window
-> title. Rename those freely, but leave the `fieldnote.*` keys a browser
-> stores under: they hold a reader's open panel and their pacing, and a
-> rename forgets both. Evolved from reasoning.run 0.8.0's RACE/DRB-tuned
+> **Its name.** `src/ui/presentation.ts` says what this app is called, once:
+> the sidebar, the browser tab, the desktop window, the terminal and the
+> served host all read it. Rename it there. The `storage` key beside it
+> prefixes what a browser remembers for a reader (their open panel, this
+> machine's pace); leave it alone when you rename, or those are forgotten.
+>
+> **Lineage.** Evolved from reasoning.run 0.8.0's RACE/DRB-tuned
 > pipeline — a real, editable starter, not a dependency. Its document model
 > is its own; the design record is `docs/document-identity.md`.
 
@@ -130,9 +133,6 @@ reopen restores the document; a warm ask stages it again; a cold submit
   does not
 ```
 
-Fixtures to try it with are committed: `fixtures/paper.pdf` and four
-figures, `figure-A` through `figure-D`.
-
 ## How the harness works
 
 The platform contract is one generator:
@@ -162,9 +162,12 @@ what YOUR machine actually does.
 ## The library learning loop
 
 Every settled brief is written to `reports/` — `report.md` (the woven
-answer) plus one annexure per inquiry, references included. The corpus
-ability points at that same directory, so the system reads what it has
-written:
+answer) plus one annexure per inquiry, references included. Point the
+corpus ability at that same directory and the system reads what it has
+written. The corpus ships installed but off, because it needs a path
+before it can run: uncomment `abilities.corpus.corpusPath: reports` in
+`harness.yml`, or set it from the corpus chip's settings in the composer.
+Then:
 
 1. A brief settles → its folder lands in `reports/` → the corpus
    re-indexes.
@@ -187,34 +190,89 @@ the reranker. **Memory as evidence, not technique**: nothing is
 summarized away, relevance is judged per question, and forgetting is a
 reader's gesture.
 
-## The shape
+## Read it in this order
 
-Four things under `src/`. Everything else is the platform's.
+Follow one question through the app. The same four words — **Ask · Frame ·
+Write · Settle** — name the same four moments of a brief's life in every
+file below: the brief's sections, the selectors' modules, the view's
+components.
+
+1. `src/app.ts` — the whole app in one generator: what is installed, the
+   three parts, the command loop. Start here.
+2. `src/brief/protocol.ts` — everything a reader can do (`Command`) and
+   everything a view is told (`WorkflowEvent`). The table of contents.
+3. `src/brief/brief.ts` — what happens when the reader does each thing.
+   Its handlers come first, grouped by moment; how each is done is below
+   them. This is where you see why a Stop is always heard, and why an
+   attached image costs one projection however many agents look at it.
+4. `src/research/research.ts` — what the model does: `plan`, `write`,
+   `answer`. `inquire` is the whole strategy — side by side or one after
+   another — in one expression, and every stage can be replaced alone.
+5. `src/ui/reduce.ts`, then `src/ui/select.ts`, then `src/ui/moments/` —
+   events become one state, state becomes the brief's language, language
+   becomes four components. No view holds truth, which is why the
+   terminal, the window and the browser cannot disagree.
+6. `src/brief/library.ts` — what is kept, and how every settled brief
+   becomes ground the next one can search.
+7. `targets/` — the payoff: three surfaces, each a boot entry of a few
+   lines over the same `harness`.
+
+## Reading this code
+
+The engine is written with [Effection](https://frontside.com/effection).
+You can read it without knowing Effection, with five things in hand:
+
+- **`function*` and `yield*` read as `async function` and `await`.** A
+  function that returns `Operation<T>` is one you `yield*`.
+- **Whatever an operation starts, it owns.** When it ends — returns,
+  fails, or is stopped — everything it started is stopped and cleaned up
+  first. That is why there is almost no teardown code here, and why Stop
+  works in the middle of anything.
+- **Some things are ambient.** `initializeHarness` sets the session up
+  once; code further in asks for what it needs (`useWire()`,
+  `Ctx.expect()`) instead of having it passed down. Outside a session,
+  those throw.
+- **A call into the model is wrapped in `waitUntilSettled`.** A stop
+  cannot abandon native work half way, so it waits for the call to
+  finish before releasing what the call touched.
+- **Accepted is not finished.** `run.replace(...)` returns the moment a
+  run is accepted, handing back the run. A command handler stops there,
+  so the loop stays free; only the one-shot path waits for the run too.
+
+Each of these is explained once in the code, at the place it first
+matters. The model's memory has its own two words: the **trunk** is the
+running conversation of one brief, and a **spine** is a shared prefix
+that a run's agents all fork from, so what is on it is paid for once.
+
+## The shape
 
 ```
 src/
-  app.ts               what is installed, and how the parts are put together
+  app.ts               the app: what is installed, the parts, the loop
+  config.ts            what can be configured, declared once as data
   brief/               what a brief is: asked · framed · written · settled
+    protocol.ts        everything it says and hears
     brief.ts           its life; the only place the trunk is written
-    library.ts         settled briefs on disk, and the run record
-    protocol.ts        the events (↓) and commands (↑) this harness speaks
-  research/            how a brief is researched
-    research.ts        the algorithm, in the framework's own grammar
+    library.ts         settled briefs on disk
+  research/            what the model does
+    research.ts        plan · write · answer, and the stages of write
+    instructions.ts    what this app is for, in the model's hearing
     budgets.ts         every number it obeys, effort as the one knob
-    prompts/           the seven tuned .eta prompts
+    prompts.ts         the prompts, and the few single sentences
+    prompts/           the tuned .eta prompt files
   ui/                  what it looks like
-    App.tsx            thin: the moment table and the dev pane mount
-    select.ts          THE seam: AppState → the brief's language
-    state.ts           AppState, the ONE fold every surface shares
-    reduce.ts          reduce(state, event) → AppState
-    theme.ts           the visual register as data: palette, type, motion
+    presentation.ts    what it is called
+    reduce.ts          reduce(state, event): the ONE fold every surface shares
+    state.ts           the shape of that state
+    select.ts          the seam: state → the brief's language
+    select/            …one module per moment
     moments/           one component per moment: Ask · Frame · Write · Settle
-    parts/             the grammar: Shell, Composer, Library, InquiryRow,
-                       OutlineRail, Prose, Figures, Sources
+    parts/             the pieces they are built from
+    App.tsx            puts the current moment in the shell
+    cli.tsx            the terminal view
+    theme.ts           the visual register as data: palette, type, motion
 targets/               boot entries only — the platform owns what is below
-  cli/ · web/ · desktop/
-test/invariants/       the laws
-fixtures/              a PDF and four figures, for the multimodal path
+test/invariants/       the laws, as scenarios over the real harness
 media/                 the content-addressed store (OCI Image Layout)
 models/                resident weights (fetched on first run; gitignored)
 vendor/                signed Abilities — Ed25519-verified tarballs, committed
@@ -224,22 +282,38 @@ harness.yml            models, output dir, ability config, gate scope
 
 ## Where to begin
 
+**Seeing an edit take effect.** Two halves of this project reload
+differently. The view (`src/ui/`) hot-reloads under `npm run dev:web` and
+`npm run dev:desktop`. The engine — `src/app.ts`, `src/brief/`,
+`src/research/` and the prompts — is bundled once when the dev command
+starts, so after editing it, stop the dev command, start it again, and
+ask a fresh question. A running session keeps the instructions it was
+started with.
+
 Ordered by ambition — each step is one file:
 
-1. **A prompt** — the seven in `src/research/prompts/` are yours to edit.
-2. **A number** — `src/research/budgets.ts` holds every limit the writing
+1. **What it is for** — `src/research/instructions.ts` holds two sentences
+   of yours: who the app works for, and what every answer must do. They are
+   said on every path an answer can take — a direct question, a follow-up,
+   a planned investigation — so this is the one edit that makes it your app.
+2. **What it is called** — `src/ui/presentation.ts`, read by every surface.
+3. **A prompt** — the files in `src/research/prompts/` are yours to edit.
+   Their worked examples (immunotherapy trials, voice-agent latency) come
+   from the domains this pipeline was tuned on: replace them with examples
+   from yours first. `prompts.ts` beside them holds the few single sentences.
+4. **A number** — `src/research/budgets.ts` holds every limit the writing
    obeys, with effort as the single knob each row fans out from.
-3. **The register** — `src/ui/theme.ts` is the whole look as data.
-4. **A derivation** — `src/ui/select.ts` is where machinery becomes
+5. **The register** — `src/ui/theme.ts` is the whole look as data.
+6. **A derivation** — `src/ui/select.ts` is where machinery becomes
    language ("Searched — 8 results · en.wikipedia.org"). Add a selector,
    render it in a moment.
-5. **A moment** — `moments/` and `parts/` are plain React over the fold.
+7. **A moment** — `moments/` and `parts/` are plain React over the fold.
    The terminal view folds the same state.
-6. **The algorithm** — `src/research/research.ts` owns what the
+8. **The algorithm** — `src/research/research.ts` owns what the
    intelligence does, written in the framework's grammar: a spine to fork
    from, a pool that runs agents together, a terminal that ends a turn, a
    settling pass. Hand `app.ts` a different one and everything else stands.
-7. **A capability** — `npx lloyal-ai install <publisher>/<name>`, then add
+9. **A capability** — `npx lloyal-ai install <publisher>/<name>`, then add
    its factory to `abilities` in `src/app.ts`.
 
 ## Documents, routes, and the laws

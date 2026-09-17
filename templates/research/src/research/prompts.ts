@@ -1,8 +1,9 @@
 /**
- * What the model is told, seven files. The `.eta` sources are inlined as text
- * at build time (esbuild `--loader:.eta=text`; the test rig's loader hook does
- * the same), so nothing here reads a file. Each file is a system prompt, a
- * `---` line, and a user template rendered with Eta.
+ * Everything the model is told by this app's own hand: the prompt files beside this one, and the few single
+ * sentences that need no file. (What the app is FOR is yours to say, in `instructions.ts`.)
+ *
+ * Each `.eta` file is a system prompt, a `---` line, and a user template rendered with Eta. They are inlined as
+ * text when the engine is bundled, so nothing here reads a file — and an edit needs the dev command restarted.
  */
 import PLAN_RAW from "./prompts/plan.eta";
 import PLAN_FLAT_RAW from "./prompts/plan-flat.eta";
@@ -20,6 +21,20 @@ function parse(raw: string): Prompt {
   if (sep === -1) return { system: trimmed, user: "" };
   return { system: trimmed.slice(0, sep).trim(), user: trimmed.slice(sep + 5).trim() };
 }
+
+/** The single sentences. */
+export const WORDS = {
+  /** The report's grammar forces the SHAPE of its `sources`; this nudges their CONTENT toward real URLs and inline citations. */
+  citationNudge:
+    "\n\nWhen you call report(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's `cite` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.",
+  /** Said once to an inquiry that reports before it has looked anything up. */
+  evidenceFloor: "You must use tools before submitting results.",
+  /** How an investigation's next task is put to the spine. */
+  researchTask: (description: string): string => `Research task: ${description}`,
+  /** The planner's questions as the assistant's turn, so the next planner fork attends the whole dialogue. */
+  clarifyTurn: (questions: readonly string[]): string =>
+    ["I need to clarify a few things before researching:", "", ...questions.map((q, i) => `${i + 1}. ${q}`)].join("\n"),
+} as const;
 
 export const PROMPTS = {
   plan: parse(PLAN_RAW),

@@ -1,16 +1,11 @@
 /**
- * The terminal view — a `render`-style binding: `(bus, dispatch, bootstrap) =>
- * dispose`. It subscribes to your events, folds them through the REAL research
- * `reduce` (state.ts), and renders an austere slice of the rich
- * `AppState`: the phase, the live agents, a KV gauge, and the streaming answer.
+ * The terminal view. It subscribes to the same events and folds them through the same `reduce` as the desktop
+ * and browser views, then renders a few lines of that state: the phase, the live agents, how full the context
+ * is, and the answer as it streams.
  *
- * Austere on purpose. The same state carries a full product UI — a
- * plan-review editor, a sources ledger, a settings drawer are all derivable
- * from it; this view folds it through a handful of lines. It auto-accepts
- * the planner's plan (no interactive plan-review here) so a query runs
- * recon → plan → agents → synth end-to-end. Swap it, or grow it, or bring a
- * whole app — the harness never changes; the framework holds the binding
- * seam, never the UI.
+ * Austere on purpose — the same state carries the whole product interface. It accepts the planner's plan at
+ * once, because it has no plan editor, so a question runs end to end. Swap it, grow it, or bring your own: the
+ * harness does not change, and the framework owns the binding, never the view.
  */
 import React, { useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput } from "ink";
@@ -19,8 +14,9 @@ import type { EventBus } from "@lloyal-labs/binding";
 import { initialState, reduce } from "./state.js";
 import type { AgentRuntime, AppState } from "./state.js";
 import type { Command, WorkflowEvent } from "../brief/protocol.js";
-import { DevOverlay } from "@lloyal-labs/dev-tools/ink";
-import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
+import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
+import { APP } from "./presentation.js";
+import { FRAMING } from "./devtools.js";
 
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
   bootstrap.reduce(reduce, initialState);
@@ -62,30 +58,10 @@ function View({
   const app = useApp();
   const acceptedRef = useRef(false);
 
-  // The dev overlay's model + a SHORT formatted tail — folded alongside the
-  // view's own reduce from the same subscription. The overlay renders nothing
-  // unless config:loaded carried dev: true (LLOYAL_DEV).
-  // Lazy init: an inline initializer would allocate a fresh model every
-  // render only to be discarded after the first.
-  const devModelRef = useRef<ReturnType<typeof createPaneModel> | null>(null);
-  devModelRef.current ??= createPaneModel();
-  const devModel = devModelRef.current;
-  const devTail = useRef<string[]>([]);
-  const [devOpen, setDevOpen] = useState(false);
+  // The dev overlay: nothing unless the wire said dev (LLOYAL_DEV), ctrl+g to show it. The hook owns the rest.
+  const dev = useDevOverlay(bus, { framing: FRAMING });
 
-  useEffect(() => bus.subscribe((ev) => {
-    // Truly wire-gated: only config:loaded can flip the gate, so until it
-    // says dev, the ONLY event folded is config:loaded itself — a non-dev
-    // run never pays the per-token fold.
-    if (devModel.dev || ev.type === "config:loaded") {
-      foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
-      if (devModel.dev && ev.type !== "agent:produce" && ev.type !== "agent:tick") {
-        devTail.current.push(ev.type);
-        if (devTail.current.length > 24) devTail.current.shift();
-      }
-    }
-    apply(ev);
-  }), [bus]);
+  useEffect(() => bus.subscribe(apply), [bus]);
 
   // Auto-accept the planner's plan — this austere view has no plan-review editor,
   // so a query flows straight through to research. `acceptedRef` de-bounces the
@@ -105,7 +81,7 @@ function View({
       dispatch({ type: "quit" });
       app.exit();
     }
-    if (key.ctrl && input === "g") setDevOpen((v) => !v);
+    if (key.ctrl && input === "g") dev.toggle();
   });
 
   // Recon + research agents (skip the tool-less synth agent — taskIndex null).
@@ -148,7 +124,7 @@ function View({
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
-        <Text bold>{"Fieldnote"}</Text>
+        <Text bold>{APP.name}</Text>
         <Text color="gray">Model      resident · no API key</Text>
         <Text color="gray">Inference  local · no provider</Text>
         <Text color="gray">
@@ -188,7 +164,7 @@ function View({
         <Text color="red">error: {state.session.toast.message}</Text>
       )}
 
-      {devOpen && <DevOverlay model={devModel} tail={devTail.current} />}
+      {dev.overlay}
 
       {canInput && (
         <Box>

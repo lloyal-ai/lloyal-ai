@@ -9,15 +9,15 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command, LibraryEntry } from "../../brief/protocol.js";
 import {
-  selectLibrary, selectLibrarySearch, selectLive, selectTitle, type ReportEntry,
+  selectLibrary, selectLibrarySearch, selectLive, selectTitle,
 } from "../select.js";
 
 /** Order entries by a best-first path ranking; anything the ranking does not
  *  name keeps its place at the tail. The HOST ranks — the view only follows,
  *  so relevance has exactly one author. */
-const rankBy = (entries: ReportEntry[], ranked: string[]): ReportEntry[] => {
+const rankBy = (entries: LibraryEntry[], ranked: string[]): LibraryEntry[] => {
   const rank = new Map(ranked.map((p, i) => [p, i]));
   return [...entries].sort(
     (a, b) => (rank.get(a.path) ?? Infinity) - (rank.get(b.path) ?? Infinity),

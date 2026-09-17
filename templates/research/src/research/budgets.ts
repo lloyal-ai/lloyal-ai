@@ -55,7 +55,7 @@ export const BUDGETS = {
     time: { softLimit: 120_000, hardLimit: 180_000 },
     recovery: { minToolCalls: 1 },
   },
-  /** The settling pass has run unbounded until now; this row is that decision, made visible. */
+  /** The settling pass: a turn cap and nothing else, so it writes for as long as the answer needs. */
   settle: { maxTurns: 10 },
   /** The passthrough: one turn on a fork of the trunk. */
   answer: { maxTurns: 1 },

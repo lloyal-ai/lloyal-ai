@@ -1,20 +1,17 @@
 /**
- * The plug point is where `app.ts` says it is: the algorithm is handed to the
- * brief. Two of the five change points, run as scenarios over the real
- * composition with one part exchanged: the stock writer with only its settling
- * stage replaced runs to a settled brief; a replaced planner keeps the stock
- * review, continuation and library behaviour. Each scenario composes the
- * harness the way `app.ts` does, with the one line changed.
+ * The plug point is where `app.ts` says it is: the algorithm is handed to the brief. Each scenario composes the
+ * harness the way `app.ts` does with one part exchanged — a settling stage, a planner, the whole writer — and
+ * runs it for real.
  *
- * The planner's contract is the sharp one, so it is walked to the canvas: a
- * replacement RETURNS a PlanResult and nothing else — the brief publishes it —
- * so the plan it returned is the outline the reader reviews, the sections the
- * brief is written into, and the questions the composer asks.
+ * The contract is the same for every part: a replacement RETURNS a value and may say nothing on the wire. The
+ * brief publishes the plan, says when writing began and ended, and keeps what came back, so the reader sees a
+ * coherent brief whatever they were handed.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { sleep } from "effection";
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
 import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
@@ -25,7 +22,7 @@ import { briefs } from "../../src/brief/brief.js";
 import { openLibrary } from "../../src/brief/library.js";
 import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
 import * as research from "../../src/research/research.js";
-import type { Inputs, Research } from "../../src/research/research.js";
+import type { Inputs, Research, Written } from "../../src/research/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";
@@ -44,7 +41,7 @@ const composed = (algorithm: Research): typeof harness => function* (ctx, events
   const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
   const brief = briefs({ session, library, run, wire, config: runner.config, research: algorithm });
   yield* wire.send({ type: "weights:done" });
-  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], { onError: brief.fail });
+  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], { onError: brief.fail, onUnhandled: brief.unhandled });
 };
 
 /** What the canvas holds the moment `at` is announced: the real fold over the wire this run carried. */
@@ -99,9 +96,8 @@ test("a replaced planner keeps the stock review, continuation and library behavi
   assert.equal(calls, 1, "the replacement planner was not the one that ran");
   assert.equal(run.events.filter((e) => e.type === "plan:start").length, 2, "each round is opened by the brief: the planned ask and the direct one");
   assert.equal(run.events.filter((e) => e.type === "ui:plan_review").length, 1, "the review is the brief's, kept");
-  const tasks = (run.events.find((e) => e.type === "fanout:tasks") as { tasks: { description: string }[] }).tasks;
-  assert.deepEqual(tasks.map((t) => t.description), ["look into: Q?"]);
   const dir = path.join(run.outputDir, docIdOfQuery(run.events));
+  assert.match(fs.readFileSync(path.join(dir, "annexure-1.md"), "utf8"), /\*\*Task:\*\* look into: Q\?/, "the inquiry worked the replacement's task");
   assert.ok(fs.existsSync(path.join(dir, "report.md")), "the library kept the brief");
   assert.equal(fs.readdirSync(dir).filter((f) => /^exchange-\d+\.md$/.test(f)).length, 1, "and the continuation threaded beside it");
 });
@@ -188,6 +184,55 @@ test("replanning from an open review withdraws it: the brief owns the reset, not
     `the canvas never left the first review while the replacement planner ran: ${JSON.stringify([...new Set(between)])}`);
   assert.equal(doc.mode, "flat", "the reader's mode never reached the fold");
   assert.deepEqual(selectOutline(s), ["round 2: Q?"], "the second round's plan is the one on the canvas");
+});
+
+/** A planner and a writer that touch no model and say nothing on the wire: the smallest algorithm the brief can be handed. */
+const onePlan = function* (_trunk: Branch | null, ask: Inputs): Operation<PlanResult> {
+  return { intent: "research", tasks: [{ description: `look into: ${ask.text}` }], clarifyQuestions: [], tokenCount: 0, timeMs: 0 } as PlanResult;
+};
+const silent = (body: (ask: Inputs) => Operation<void> = function* () {}): Research["write"] =>
+  function* (_trunk, ask, plan): Operation<Written> {
+    yield* body(ask);
+    return { answer: `WRITTEN BY HAND: ${ask.text}`, inquiries: [], stats: { timings: [], ctxPct: 0, ctxPos: 0, ctxTotal: 1 }, complete: { intent: plan.intent } };
+  };
+
+test("a whole writer that says nothing on the wire still gives a brief its life: writing, saved, and warm for a follow-up", async () => {
+  const run = await runHarness({
+    harness: composed({ plan: onePlan, write: silent() }),
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "complete", send: { type: "submit_query", query: "And then?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  // The reader is shown a brief being written, not a plan still being framed, for as long as the writer works.
+  let s: AppState = initialState;
+  const beforeTheAnswer: string[] = [];
+  for (const ev of run.events) {
+    if (ev.type === "answer") break;
+    s = reduce(s, ev);
+    const doc = s.runDocId ? s.documents.get(s.runDocId) : undefined;
+    if (doc) beforeTheAnswer.push(doc.phase);
+  }
+  assert.equal(beforeTheAnswer[beforeTheAnswer.length - 1], "research", `the canvas never reached the writing moment: ${JSON.stringify([...new Set(beforeTheAnswer)])}`);
+  const dir = path.join(run.outputDir, docIdOfQuery(run.events));
+  assert.match(fs.readFileSync(path.join(dir, "report.md"), "utf8"), /WRITTEN BY HAND: Q\?/, "the library kept what the writer returned");
+  assert.match(fs.readFileSync(path.join(dir, "exchange-1.md"), "utf8"), /WRITTEN BY HAND: And then\?/, "and the follow-up threaded beside it");
+});
+
+test("a whole writer that says nothing on the wire can still be stopped", async () => {
+  const run = await runHarness({
+    harness: composed({ plan: onePlan, write: silent(function* () { yield* sleep(60_000); }) }),
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "research:start", send: { type: "stop" } },
+      { on: (ev) => ev.type === "run:aborted" },
+    ],
+  });
+  assert.equal(run.events.filter((e) => e.type === "answer").length, 0, "nothing was written");
+  assert.deepEqual(fs.readdirSync(run.outputDir), [], "and the brief's folder went with the stop");
 });
 
 /** A store holding one document — a second participating source, so the stock planner probes coverage. */

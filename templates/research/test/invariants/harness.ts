@@ -46,7 +46,7 @@ import { bufferedCommandSignal, makeServedRunner, RunnerCtx } from "@lloyal-labs
 import { runnerConfig } from "@lloyal-labs/rig/node";
 import type { AttachmentStore } from "@lloyal-labs/media";
 import { harness, config } from "../../src/app.js";
-import type { Config, Origin } from "../../src/app.js";
+import type { Config, Origin } from "../../src/config.js";
 import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
 
 const STOP = 999;

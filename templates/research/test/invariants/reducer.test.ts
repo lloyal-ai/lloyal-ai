@@ -5,10 +5,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduce, initialState, DOC_PHASES, type AppState } from '../../src/ui/state.js';
+import { reduce, initialState, type AppState } from '../../src/ui/state.js';
 import type { WorkflowEvent } from '../../src/brief/protocol.js';
 import {
-  selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
+  DOC_PHASES, selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
   selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle,
 } from '../../src/ui/select.js';
 

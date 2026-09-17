@@ -16,6 +16,7 @@
 import { emptyRoster, foldAgents } from '@lloyal-labs/ui/fold';
 import type { AgentRoster, AgentEvent as FoldableAgentEvent } from '@lloyal-labs/ui/fold';
 import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState } from './state.js';
+import { taskIndexOf } from '../brief/protocol.js';
 import type { WorkflowEvent } from '../brief/protocol.js';
 
 /** This harness's terminal tool: its call ends the turn and is no timeline row. */
@@ -47,12 +48,14 @@ function replaceAgent(doc: DocState, id: number, patch: (a: AgentRuntime) => Age
 
 const EMPTY_SYNTH: SynthState = { open: false, buffer: '', done: false, stats: null };
 
-/** Where an event lands. 'session' folds into SessionState; 'run' folds into
- *  the document the run owns (`runDocId`). Events with richer routing (query,
- *  doc, doc:active, run:aborted, ui:error) have explicit cases in `reduce`.
- *  Anything unlisted (agent:trace, host telemetry) is ignored. */
-type Scope = 'session' | 'run';
-const SCOPE: Partial<Record<WorkflowEvent['type'], Scope>> = {
+/** Where an event lands. 'session' folds into SessionState; 'run' folds into the document the run owns
+ *  (`runDocId`); 'own' has a case of its own in `reduce`, because it names its document or touches more than
+ *  one; 'ignored' is folded by nobody here. Total over the wire: an event added to the protocol does not
+ *  compile until it is given a route, so none is dropped by omission. */
+type Scope = 'session' | 'run' | 'own' | 'ignored';
+const SCOPE: Record<WorkflowEvent['type'], Scope> = {
+  'query': 'own', 'doc': 'own', 'doc:active': 'own', 'run:aborted': 'own', 'ui:error': 'own',
+  'agent:trace': 'ignored', 'host:resources': 'ignored',   // the dev pane folds these itself
   // session facts
   'config:loaded': 'session', 'config:updated': 'session',
   'participation:toggled': 'session', 'abilities:state': 'session',
@@ -61,12 +64,8 @@ const SCOPE: Partial<Record<WorkflowEvent['type'], Scope>> = {
   'stats': 'session', 'agent:tick': 'session', // both feed session.pressure
   // the running document
   'plan:start': 'run', 'plan': 'run',
-  'plan:task_updated': 'run', 'plan:task_added': 'run',
-  'plan:task_deleted': 'run', 'plan:task_moved': 'run',
   'preflight:start': 'run', 'preflight:done': 'run',
   'research:start': 'run', 'research:done': 'run',
-  'fanout:tasks': 'run',
-  'spine:task': 'run', 'spine:source': 'run', 'spine:task:done': 'run',
   'synthesize:start': 'run', 'synthesize:done': 'run',
   'answer': 'run', 'complete': 'run', 'ui:plan_review': 'run', 'ui:clarify': 'run',
   'agent:spawn': 'run', 'agent:produce': 'run', 'agent:tool_call': 'run',
@@ -94,9 +93,8 @@ export function emptyDoc(): DocState {
     id: '', query: '', attachments: [], mode: null, direct: false, runEffort: null,
     phase: 'done', plan: null, revision: null,
     roster: emptyRoster(),
-    researchAgentIds: [], reconAgentIds: [],
-    pendingTaskIndex: null, pendingTaskDescription: null,
-    researchSpawnCount: 0, researchAgentCount: 0,
+    reconAgentIds: [],
+    researchAgentCount: 0,
     synth: EMPTY_SYNTH, answer: null, exchanges: [], ask: null, askAttachments: [],
     paused: false, closing: false, closedEarly: false,
     pipelineElapsedMs: 0, pipelineResumedAt: null,
@@ -142,8 +140,8 @@ function settledDoc(ev: Extract<WorkflowEvent, { type: 'doc' }>): DocState {
     query: ev.title,
     attachments: ev.attachments ?? [],
     mode: ev.mode,
-    // What the run that WROTE it chose. A report from before these were recorded reports null, and the
-    // byline falls back to the reader's dial — which is the old behaviour, now only where the record is silent.
+    // What the run that WROTE it chose. A report that does not say reads null, and the byline then shows the
+    // reader's own dial.
     runEffort: ev.effort ?? null,
     direct: ev.direct,
     answer: ev.answer,
@@ -246,7 +244,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
     const out = next === doc ? state : withDoc(state, doc.id, next, {});
     return ev.type === 'complete' ? { ...out, runDocId: null } : out;
   }
-  return state; // agent:trace, host telemetry — the dev pane folds its own
+  return state;
 }
 
 // ── session facts ────────────────────────────────────────────────
@@ -279,16 +277,10 @@ function sessionReduce(s: SessionState, ev: WorkflowEvent): SessionState {
       };
     }
 
-    case 'participation:toggled': {
-      const current = s.participation[ev.name] ?? true;
-      // Any change to the filter drops a standing toast: whatever it was
-      // complaining about, the user has just answered it.
-      return {
-        ...s,
-        participation: { ...s.participation, [ev.name]: !current },
-        toast: null,
-      };
-    }
+    case 'participation:toggled':
+      // Any change to the filter drops a standing toast: whatever it was complaining about, the user has
+      // just answered it.
+      return { ...s, participation: { ...s.participation, [ev.name]: ev.included }, toast: null };
 
     case 'abilities:state':
       return { ...s, abilities: ev.abilities };
@@ -345,48 +337,6 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
         },
       };
 
-    case 'plan:task_updated': {
-      if (!doc.plan) return doc;
-      if (ev.index < 0 || ev.index >= doc.plan.tasks.length) return doc;
-      const tasks = doc.plan.tasks.map((t, i) =>
-        i === ev.index ? { ...t, description: ev.description } : t,
-      );
-      return { ...doc, plan: { ...doc.plan, tasks } };
-    }
-
-    case 'plan:task_added': {
-      if (!doc.plan) return doc;
-      // afterIndex: -1 prepends; otherwise insert at afterIndex + 1.
-      const insertAt = Math.max(0, Math.min(doc.plan.tasks.length, ev.afterIndex + 1));
-      const tasks = [
-        ...doc.plan.tasks.slice(0, insertAt),
-        { description: '' },
-        ...doc.plan.tasks.slice(insertAt),
-      ];
-      return { ...doc, plan: { ...doc.plan, tasks } };
-    }
-
-    case 'plan:task_deleted': {
-      if (!doc.plan) return doc;
-      // Don't allow deleting the only task — keeps the plan-review valid.
-      if (doc.plan.tasks.length <= 1) return doc;
-      if (ev.index < 0 || ev.index >= doc.plan.tasks.length) return doc;
-      const tasks = doc.plan.tasks.filter((_, i) => i !== ev.index);
-      return { ...doc, plan: { ...doc.plan, tasks } };
-    }
-
-    case 'plan:task_moved': {
-      if (!doc.plan) return doc;
-      const n = doc.plan.tasks.length;
-      if (ev.from === ev.to) return doc;
-      if (ev.from < 0 || ev.from >= n) return doc;
-      if (ev.to < 0 || ev.to >= n) return doc;
-      const tasks = [...doc.plan.tasks];
-      const [moved] = tasks.splice(ev.from, 1);
-      tasks.splice(ev.to, 0, moved);
-      return { ...doc, plan: { ...doc.plan, tasks } };
-    }
-
     case 'preflight:start':
       // A new recon pass — clear the run scaffolding, keep the document.
       if (asking) return { ...doc, pipelineResumedAt: Date.now() };
@@ -395,20 +345,13 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
         phase: 'discovering',
         roster: emptyRoster(),
         reconAgentIds: [],
-        researchAgentIds: [],
-        pendingTaskIndex: null,
-        pendingTaskDescription: null,
-        researchSpawnCount: 0,
         researchAgentCount: 0,
         pipelineResumedAt: Date.now(),
       };
 
     case 'preflight:done':
-      // Discovery is over; the planner speaks next. `preflight:start` moved the canvas to
-      // 'discovering' and nothing moved it back — the round's own `plan:start` used to, which is how
-      // ONE event came to own two jobs: opening a round, and ending discovery. The brief opens the
-      // round now, before any of this, so the end of discovery says so itself: the probes' timeline
-      // vanishes and the planner is A0 again, which is what lets the outline draft in the view.
+      // Discovery is over and the planner speaks next: back to planning, with the probes' timeline cleared so
+      // the outline can draft in the view.
       if (asking) return doc;
       return {
         ...doc,
@@ -432,10 +375,6 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
         mode: ev.mode === 'flat' ? 'flat' : 'deep',
         roster: emptyRoster(),
         reconAgentIds: [],
-        researchAgentIds: [],
-        pendingTaskIndex: null,
-        pendingTaskDescription: null,
-        researchSpawnCount: 0,
         researchAgentCount: 0,
         pipelineResumedAt: Date.now(),
       };
@@ -465,16 +404,6 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
 
     case 'research:done':
       return asking ? doc : { ...doc, phase: 'synthesizing' };
-
-    case 'fanout:tasks':
-      return doc;
-
-    case 'spine:task':
-      return { ...doc, pendingTaskIndex: ev.taskIndex, pendingTaskDescription: ev.description };
-
-    case 'spine:source':
-    case 'spine:task:done':
-      return doc;
 
     case 'synthesize:start':
       return {
@@ -551,37 +480,17 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       if (doc.phase !== 'research' && !asking) {
         return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), terminal: TERMINAL }));
       }
-      // Research: the spawn names its task (`key: task:<i>`, carried by the pool); a spawn without one falls back to
-      // spawn order, as before the key existed. Deep mode's task description arrives on `spine:task` just before.
-      const keyed = /^task:(\d+)$/.exec(ev.key ?? '');
-      let taskIndex: number;
-      let description: string | null;
-      let nextPendingIdx: number | null = doc.pendingTaskIndex;
-      let nextPendingDesc: string | null = doc.pendingTaskDescription;
-      if (keyed) {
-        taskIndex = Number(keyed[1]);
-        description = (doc.mode === 'deep' ? nextPendingDesc : null) ?? doc.plan?.tasks[taskIndex]?.description ?? null;
-        nextPendingIdx = null;
-        nextPendingDesc = null;
-      } else if (doc.mode === 'deep') {
-        taskIndex = nextPendingIdx ?? doc.researchSpawnCount;
-        description = nextPendingDesc ?? doc.plan?.tasks[taskIndex]?.description ?? null;
-        nextPendingIdx = null;
-        nextPendingDesc = null;
-      } else {
-        taskIndex = doc.researchSpawnCount;
-        description = doc.plan?.tasks[taskIndex]?.description ?? null;
+      // Research: the spawn's key names the task it works. Spawn order says nothing — the pool seats what the
+      // context can hold, and a heal is a new agent on the same task — so an agent with no task key is tracked
+      // like any other agent outside research: counted, without a timeline.
+      const taskIndex = taskIndexOf(ev.key);
+      if (taskIndex === null) {
+        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), terminal: TERMINAL }));
       }
+      const taskDescription = doc.plan?.tasks[taskIndex]?.description ?? null;
       const dependencyHint = doc.mode === 'deep' && taskIndex > 0 ? `builds on Task ${taskIndex}` : null;
-      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex, taskDescription: description, dependencyHint }), terminal: TERMINAL });
-      return {
-        ...doc,
-        researchAgentIds: [...doc.researchAgentIds, ev.agentId],
-        researchSpawnCount: doc.researchSpawnCount + 1,
-        pendingTaskIndex: nextPendingIdx,
-        pendingTaskDescription: nextPendingDesc,
-        roster,
-      };
+      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex, taskDescription, dependencyHint }), terminal: TERMINAL });
+      return { ...doc, roster };
     }
 
     case 'agent:produce': {

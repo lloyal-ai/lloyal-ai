@@ -10,10 +10,8 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    // `node` too: the brief's vocabulary and the interface's fold name the app's `Config`, a type derived from the
-    // table in `app.ts`, and following that type-only import lands tsc in the app's Node imports. Nothing Node reaches
-    // the bundle — a type import is erased — and the browser bundle's own import check is step 4's.
-    "types": ["vite/client", "node"],
+    // No Node types here on purpose: if the view starts to need them, something node-only has leaked into it.
+    "types": ["vite/client"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

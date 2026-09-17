@@ -12,6 +12,7 @@ import {
 import { paceFor } from "../pace.js";
 import { Lightbox, useAssets } from "./Figures.js";
 import { contentOrigin, representationUrl } from "../content-urls.js";
+import { APP } from "../presentation.js";
 
 /** The mark, the name, and the control that puts the panel away. Collapsed,
  *  the name and the library go and the rail keeps only the mark and the
@@ -37,7 +38,7 @@ export function Wordmark({ collapsed = false, onToggle }: {
       {!collapsed && (
         <>
           <span style={S.divider} />
-          Fieldnote
+          {APP.name}
           <span style={{ flex: 1 }} />
         </>
       )}
@@ -60,7 +61,7 @@ export function Wordmark({ collapsed = false, onToggle }: {
   );
 }
 
-const PANEL_KEY = "fieldnote.panel";
+const PANEL_KEY = `${APP.storage}.panel`;
 /** A per-viewer convenience, so it is remembered but never load-bearing:
  *  a browser that refuses storage just opens expanded. */
 const readCollapsed = (): boolean => {
@@ -367,12 +368,8 @@ const S: Record<string, CSSProperties> = {
     background: "none", border: 0, padding: 4, borderRadius: 7, cursor: "pointer",
     color: color.dim, display: "inline-flex", flex: "none",
   },
-  /** Math notation, not a logo. Georgia ships only 400 and 700, so the old
-   *  `700 20px` had nowhere to go but heavy — and it outsized the 14.5px sans
-   *  beside it by a third, which is what read as chunky. The regular italic at
-   *  19px carries the same presence at the weight the notation actually wants;
-   *  the half-pixel lift settles the italic's optical baseline against the
-   *  upright label. */
+  /** Math notation, not a logo: the regular italic, sized to sit beside the sans label, and lifted half a pixel
+   *  to settle the italic's optical baseline against the upright text. */
   mark: {
     font: `italic 400 19px/1 ${font.math}`, color: color.ink,
     letterSpacing: "0.005em", position: "relative", top: -0.5,
@@ -449,20 +446,10 @@ export const doc: CSSProperties = {
   width: "94ch", maxWidth: "calc(100% - 92px)", margin: "0 auto", position: "relative",
 };
 
-/**
- * The column beside its rail — every moment that shows an outline.
- *
- * The gutter lives HERE, not on {@link doc}. `doc` centres itself with
- * `margin: 0 auto` and reserves its own 92px, which is right when it is the
- * canvas's only child (Frame). Beside a 212px rail it is a FLEX ITEM, its
- * `100%` still measures the whole canvas — the rail is not subtracted — so
- * once `94ch + 212` outgrows the canvas the free space turns negative, auto
- * margins resolve to zero, and the column shrinks flush against the sidebar
- * with nothing to stop it. That is a layout the column cannot see from the
- * inside; the container that places both is the one that can, so it pays for
- * the gutter. 26px is the rhythm `runbar` and `dock` already keep, so the
- * body lines up with the bar above it and the composer below.
- */
+/** The column beside its rail, for every moment that shows an outline. The gutter lives here and not on `doc`:
+ *  beside a rail `doc` is a flex item whose `100%` still measures the whole canvas, so it cannot reserve its own
+ *  margin — the container that places both has to. The padding matches the run bar's and the dock's, so the
+ *  body lines up with the bar above it and the composer below. */
 export const spread: CSSProperties = {
   display: "flex", alignItems: "flex-start", padding: "0 26px",
 };

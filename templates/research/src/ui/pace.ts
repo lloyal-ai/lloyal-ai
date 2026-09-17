@@ -6,7 +6,9 @@
  *  brief records its wall time, keyed by depth and shape, halved toward
  *  the newest run. */
 import { BUDGETS } from "../research/budgets.js";
-import type { Depth, Shape } from "./select.js";
+import type { Effort } from "../research/budgets.js";
+import type { Shape } from "./select.js";
+import { APP } from "./presentation.js";
 
 export interface Pace {
   perTaskMs: number;
@@ -20,12 +22,11 @@ export interface Pace {
 const PRIOR: Record<Shape, { perTaskMs: number; synthMs: number }> = {
   investigate: { perTaskMs: 240_000, synthMs: 240_000 },
   survey: { perTaskMs: 120_000, synthMs: 360_000 },
-  // One agent answering straight, and no settling pass at all: synth is gated
-  // on plan.tasks.length > 1, which an ask never satisfies.
+  // One agent answering straight: a lone inquiry is its own answer, so nothing settles it afterwards.
   ask: { perTaskMs: 90_000, synthMs: 0 },
 };
 
-const depthFactor = (depth: Depth): number =>
+const depthFactor = (depth: Effort): number =>
   BUDGETS.effort[depth].time.softLimit /
   BUDGETS.effort.medium.time.softLimit;
 
@@ -35,7 +36,7 @@ interface KV {
 }
 
 const storage = (globalThis as { localStorage?: KV }).localStorage;
-const KEY = "fieldnote.pace";
+const KEY = `${APP.storage}.pace`;
 
 type Paces = Record<string, number>; // `${depth}/${shape}` → ms per inquiry
 
@@ -47,7 +48,7 @@ const read = (): Paces => {
   }
 };
 
-export const paceFor = (depth: Depth, shape: Shape): Pace => {
+export const paceFor = (depth: Effort, shape: Shape): Pace => {
   const stored = read()[`${depth}/${shape}`];
   const { perTaskMs, synthMs } = PRIOR[shape];
   return stored != null
@@ -58,7 +59,7 @@ export const paceFor = (depth: Depth, shape: Shape): Pace => {
 /** Halved toward the newest run, so a machine that warms up (or throttles
  *  on battery) re-prices within a couple of briefs. The settling pass is
  *  netted out at its prior before the per-inquiry figure is stored. */
-export const recordPace = (depth: Depth, shape: Shape, tasks: number, ms: number): void => {
+export const recordPace = (depth: Effort, shape: Shape, tasks: number, ms: number): void => {
   if (tasks < 1 || ms <= 0) return;
   const paces = read();
   const key = `${depth}/${shape}`;
