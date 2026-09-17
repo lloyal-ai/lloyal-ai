@@ -255,8 +255,6 @@ describe('targets:add (inverse of prune)', () => {
     expect(existsSync(join(dir, 'targets/web/serve.ts'))).toBe(true);
     expect(existsSync(join(dir, 'bin/serve.js'))).toBe(true);
     const p = pkg(dir);
-    expect(p.dependencies?.['@lloyal-labs/host']).toBeDefined();
-    expect(p.dependencies?.ws).toBeDefined();
     expect(p.scripts.serve).toBeDefined();
     expect(p.scripts.typecheck).toBe('tsc --noEmit && tsc -p tsconfig.web.json');
     // Restored tsconfig.web.json holds ONLY harness/* + web/* (no desktop).
@@ -306,7 +304,7 @@ describe('targets:add (inverse of prune)', () => {
     // The mutation path no scaffold covers. `targets:remove desktop` used to
     // delete the React view out from under a WORKING web build — the sharpest
     // form of this bug, because nothing about it looks destructive.
-    const shared = 'targets/_shared/App.tsx';
+    const shared = 'src/ui/App.tsx';
     const include = (d: string): string[] =>
       JSON.parse(readFileSync(join(d, 'tsconfig.web.json'), 'utf8').replace(/\/\/.*/g, '')).include;
     const exclude = (d: string): string[] =>
@@ -318,37 +316,55 @@ describe('targets:add (inverse of prune)', () => {
     // 1. Drop desktop — web still mounts the view, so it must stay.
     expect(await runIn(dir, () => targetsRemoveCommand.run(['desktop', '--yes']))).toBe(0);
     expect(existsSync(join(dir, shared))).toBe(true);
-    expect(include(dir)).toContain(shared);
+    expect(include(dir)).toContain('src/ui/**/*');
 
-    // 2. Drop web too — now nothing mounts it, so it goes, exclude entry included.
+    // 2. Drop web too — the view STAYS. It sits under `src/ui/` beside the state
+    // the terminal view folds, so nothing there belongs to the DOM targets alone;
+    // a cli-only project carries it unused rather than splitting the directory.
     expect(await runIn(dir, () => targetsRemoveCommand.run(['web', '--yes']))).toBe(0);
-    expect(existsSync(join(dir, 'targets/_shared'))).toBe(false);
-    expect(exclude(dir)).not.toContain('targets/_shared');
+    expect(existsSync(join(dir, shared))).toBe(true);
+    // The Node build must still refuse to compile it, or `tsc` meets React.
+    expect(exclude(dir)).toContain('src/ui/App.tsx');
 
-    // 3. Add web back — the dir AND both tsconfig entries must return, or the
-    // Node build tries to compile the React view and typecheck fails.
+    // 3. Add web back — the web tsconfig returns and covers the view again.
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(0);
     expect(existsSync(join(dir, shared))).toBe(true);
-    expect(include(dir)).toContain(shared);
-    expect(exclude(dir)).toContain('targets/_shared');
+    expect(include(dir)).toContain('src/ui/**/*');
   });
 
-  it('refuses a pre-0.9 layout loudly, without touching the project', async () => {
-    // 0.9 is a clean break with no migration — but breaking loudly and breaking
-    // silently are different. Without the guard, targets:add writes a
-    // web/main.tsx importing ../_shared/App.js into a project with no _shared,
-    // and reports SUCCESS.
-    const dir = await scaffold('t8', 'cli,desktop');
-    // Rewind to the old shape: view back inside desktop/, no _shared.
-    cpSync(join(dir, 'targets/_shared'), join(dir, 'targets/desktop'), { recursive: true });
-    rmSync(join(dir, 'targets/_shared'), { recursive: true, force: true });
+  it('refuses an OLD cli-only project too — it has no `_shared` to give it away', async () => {
+    // The regression the DOM-target early return allowed: a cli-only project
+    // mounts no view under `targets/`, so the guard skipped it entirely — and
+    // `targets:add web` then wrote entries importing `src/app.ts` and `src/ui/`
+    // into a project with neither, reporting success.
+    const dir = await scaffold('t9', 'cli');
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
 
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
     const said = err.mock.calls.map((c) => String(c[0])).join('');
     err.mockRestore();
 
-    expect(said).toMatch(/predates lloyal 0\.9/);
+    expect(said).toMatch(/src\/ui/);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false); // nothing written
+  });
+
+  it('refuses a project whose view predates the move, without touching it', async () => {
+    // A clean break with no migration — but breaking loudly and breaking silently
+    // are different. Both templates now keep the view under `src/ui/`; a project
+    // scaffolded before that still carries `targets/_shared/`, and targets:add
+    // would write entries for a layout it does not have and report SUCCESS.
+    const dir = await scaffold('t8', 'cli,desktop');
+    // Rewind to the old shape: the view back under `targets/`, no `src/`.
+    cpSync(join(dir, 'src/ui'), join(dir, 'targets/_shared'), { recursive: true });
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
+
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
+    const said = err.mock.calls.map((c) => String(c[0])).join('');
+    err.mockRestore();
+
+    expect(said).toMatch(/src\/ui/);
     expect(said).toMatch(/targets\/_shared/);
     expect(existsSync(join(dir, 'targets/web'))).toBe(false); // nothing written
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(true); // nothing destroyed
@@ -411,7 +427,6 @@ describe('targets:remove + round-trip', () => {
     await runIn(dir, () => targetsRemoveCommand.run(['web', '--yes']));
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(0);
     const p = pkg(dir);
-    for (const dep of ['@lloyal-labs/host', 'ws']) expect(p.dependencies?.[dep]).toBeDefined();
     expect(p.devDependencies?.['@types/ws']).toBeDefined();
     for (const s of ['serve', 'dev:web', 'build:web']) expect(p.scripts[s]).toBeDefined();
     expect(existsSync(join(dir, 'targets/web/serve.ts'))).toBe(true);

@@ -1,4 +1,4 @@
-# harness.yml — the deployment manifest. Your program lives in harness/harness.ts.
+# harness.yml — the deployment manifest. Your program lives in src/harness/harness.ts.
 # Every surface listed explicitly; only the fields you chose are shown.
 #
 #   cli      a terminal app      (npm start)
@@ -6,7 +6,7 @@
 #   web      a browser app       (npm run serve, then npm run dev:web)
 #
 # One harness, three surfaces — same events over a different binding, all folding
-# the one reduce in harness/state.ts.
+# the one reduce in src/ui/state.ts.
 targets: [cli, desktop, web]
 
 model:

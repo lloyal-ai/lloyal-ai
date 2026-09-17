@@ -10,7 +10,7 @@
 import { isValidElement, memo, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { slugify } from "../../harness/state.js";
+import { slugify } from "./state.js";
 
 /** Flatten a heading's children to text, for the anchor slug — recursing into
  *  inline elements (`**bold**`, `` `code` ``, links) so a heading with markup

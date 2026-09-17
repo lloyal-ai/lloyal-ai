@@ -15,7 +15,7 @@
  * fold immutable (new `Map` + new object only for what changed), and the views
  * update for free.
  */
-import type { WorkflowEvent, BootFacts } from "./protocol.js";
+import type { WorkflowEvent, BootFacts } from "../harness/protocol.js";
 
 export type Phase = "booting" | "ready" | "working" | "answered" | "error";
 

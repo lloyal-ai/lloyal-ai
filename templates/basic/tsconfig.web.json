@@ -18,12 +18,15 @@
     "noEmit": true
   },
   "include": [
-    "harness/protocol.ts",
-    "harness/state.ts",
-    "targets/_shared/App.tsx",
+    "src/harness/protocol.ts",
+    "src/ui/**/*",
+    "types/**/*",
     "targets/desktop/view.tsx",
     "targets/web/main.tsx",
     "targets/web/boot.ts",
     "targets/web/web-bridge.ts"
-  ]
+  ],
+  // The Ink view is React, but it runs on Node — the sibling `tsconfig.json`
+  // compiles it under the node libs it actually has.
+  "exclude": ["src/ui/cli.tsx"]
 }
