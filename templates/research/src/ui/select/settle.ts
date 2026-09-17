@@ -2,7 +2,7 @@
  *  beneath it. */
 import { type AppState, type AgentRuntime } from "../state.js";
 import { type Answer, activeDoc, splitThink } from "./canvas.js";
-import { type Inquiry, currentAttempts, findingsField, liveProse, verbOf } from "./inquiry.js";
+import { type Inquiry, currentAttempts, handingIn, liveProse, verbOf } from "./inquiry.js";
 
 /** The answer as it exists right now: the live synth stream, else the
  *  finalized text. Deliberately NOT scrollback — the session scrollback
@@ -126,8 +126,8 @@ export const selectAsk = (
         attachments: d.askAttachments,
         // While the think block is open the text is deliberation, never answer
         // prose — the row's verb already says "thinking it through".
-        body: splitThink(liveProse(a, findingsField(d)) ?? "", true).body,
-        inquiry: { id: a.id, index, verb: verbOf(a, findingsField(d)), startedAt: a.startedAt, endedAt: a.endedAt },
+        body: splitThink(liveProse(a, handingIn(d)) ?? "", true).body,
+        inquiry: { id: a.id, index, verb: verbOf(a, handingIn(d)), startedAt: a.startedAt, endedAt: a.endedAt },
       };
     }
   }

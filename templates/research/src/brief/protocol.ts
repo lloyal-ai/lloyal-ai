@@ -174,6 +174,9 @@ export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEve
  *  the model writes it. `field: null` shows working state until the findings are in. */
 export interface Reports { tool: string; field: string | null }
 
+/** rig's own report tool, which rig's source probes end on — and what a run that says nothing is read as. */
+export const RIG_REPORT: Reports = { tool: "report", field: "result" };
+
 // ── Which task an agent is working ───────────────────────────────
 
 /** The key a research spawn carries (`agent:spawn.key`). It names the TASK, not the agent: the pool seats tasks

@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { sleep } from "effection";
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
-import { Tool } from "@lloyal-labs/lloyal-agents";
+import { Tool, parallel } from "@lloyal-labs/lloyal-agents";
 import type { JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Output } from "@lloyal-labs/rig";
 import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
@@ -25,7 +25,7 @@ import { briefs } from "../../src/brief/brief.js";
 import { openLibrary } from "../../src/brief/library.js";
 import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
 import * as research from "../../src/research/research.js";
-import type { Inputs, Research, Written } from "../../src/research/research.js";
+import type { Evidence, Inputs, Research, Written } from "../../src/research/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";
@@ -55,8 +55,8 @@ const foldTo = (events: readonly WorkflowEvent[], at: WorkflowEvent["type"]): Ap
 };
 
 test("the stock writer with only its settling stage replaced runs to a settled brief", async () => {
-  const settle = function* (_spine: Branch, _ask: Inputs, _plan: PlanResult, found: readonly string[]): Operation<{ answer: string; tokens: number; timeMs: number }> {
-    return { answer: `SETTLED BY HAND: ${found.map((f) => f.trim()).join(" + ")}`, tokens: 0, timeMs: 0 };
+  const settle = function* (_spine: Branch, _ask: Inputs, _plan: PlanResult, { findings }: Evidence): Operation<{ answer: string; tokens: number; timeMs: number }> {
+    return { answer: `SETTLED BY HAND: ${findings.map((f) => f.trim()).join(" + ")}`, tokens: 0, timeMs: 0 };
   };
   const run = await runHarness({
     harness: composed({ ...research, write: (trunk, ask, plan) => research.write(trunk, ask, plan, { settle }) }),
@@ -113,8 +113,8 @@ test("a replacement planner's RETURNED plan is the outline the reader reviews an
       clarifyQuestions: [], tokenCount: 0, timeMs: 0,
     } as PlanResult;
   };
-  const settle = function* (_spine: Branch, _ask: Inputs, _plan: PlanResult, found: readonly string[]): Operation<{ answer: string; tokens: number; timeMs: number }> {
-    return { answer: `the brief, from ${found.length} inquiries`, tokens: 0, timeMs: 0 };
+  const settle = function* (_spine: Branch, _ask: Inputs, _plan: PlanResult, { findings }: Evidence): Operation<{ answer: string; tokens: number; timeMs: number }> {
+    return { answer: `the brief, from ${findings.length} inquiries`, tokens: 0, timeMs: 0 };
   };
   const run = await runHarness({
     harness: composed({ ...research, plan, write: (trunk, ask, p) => research.write(trunk, ask, p, { settle }) }),
@@ -236,6 +236,44 @@ test("a whole writer that says nothing on the wire can still be stopped", async 
   });
   assert.equal(run.events.filter((e) => e.type === "answer").length, 0, "nothing was written");
   assert.deepEqual(fs.readdirSync(run.outputDir), [], "and the brief's folder went with the stop");
+});
+
+/** What the settling agent was given to read: its own compiled prompt, and whether the spine it forks from grew. */
+const settlingSaw = (run: { trace: readonly unknown[] }): { prompt: string; spineGrew: number } => {
+  const trace = run.trace as { type: string; role?: string; promptText?: string }[];
+  const prompts = trace.filter((t) => t.type === "prompt:format" && t.role === "agentSuffix").map((t) => t.promptText ?? "");
+  return { prompt: prompts[prompts.length - 1] ?? "", spineGrew: trace.filter((t) => t.type === "spine:extend").length };
+};
+const twoFindings = [
+  { text: TWO_TASKS, kind: "text" as const },
+  { text: "FIRST-FINDING", kind: "report" as const },
+  { text: "SECOND-FINDING", kind: "report" as const },
+  { text: "the settled brief", kind: "text" as const },
+];
+const planned = (mode: "flat" | "deep") => [
+  { send: { type: "submit_query" as const, query: "Q?", mode } },
+  { on: (ev: WorkflowEvent) => ev.type === "ui:plan_review", send: accept },
+  { on: (ev: WorkflowEvent) => ev.type === "complete" },
+];
+
+test("only the strategy replaced: an investigation run side by side still settles from what its inquiries found", async () => {
+  // Whether the settling agent can already read the findings is a fact of the STRATEGY — the stock chain commits
+  // each to the spine as it goes; `parallel` commits nothing — and never of the reader's choice of shape.
+  const sideBySide: Research["write"] = (trunk, ask, plan) =>
+    research.write(trunk, ask, plan, { inquire: (_ask, tasks, specFor) => parallel(tasks.map((task, i) => specFor(task, i, true))) });
+  const run = await runHarness({ harness: composed({ ...research, write: sideBySide }), utterances: twoFindings, script: planned("deep") });
+  const saw = settlingSaw(run);
+  assert.equal(saw.spineGrew, 0, "this strategy commits nothing to the spine");
+  assert.ok(saw.prompt.includes("FIRST-FINDING") && saw.prompt.includes("SECOND-FINDING"), "the settling agent was given nothing to settle");
+});
+
+test("the stock strategies hand their findings over once: on the spine for an investigation, in the prompt for a survey", async () => {
+  const deep = settlingSaw(await runHarness({ utterances: twoFindings, script: planned("deep") }));
+  assert.equal(deep.spineGrew, 2, "each inquiry's findings joined the spine");
+  assert.ok(!deep.prompt.includes("FIRST-FINDING"), "findings the spine already holds were said again in the prompt");
+  const flat = settlingSaw(await runHarness({ utterances: twoFindings, script: planned("flat") }));
+  assert.equal(flat.spineGrew, 0);
+  assert.ok(flat.prompt.includes("FIRST-FINDING") && flat.prompt.includes("SECOND-FINDING"));
 });
 
 /** An output of the developer's own: another terminal tool, its findings in another argument. */

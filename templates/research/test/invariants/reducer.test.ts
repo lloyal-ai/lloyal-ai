@@ -313,6 +313,36 @@ test('a healed inquiry is the section the reader reads, and the brief is not mar
   assert.equal(s.documents.get(A)!.roster.agents.get(20)!.failReason, 'decode_error');
 });
 
+test("an ordinary tool that shares the findings' argument name is a step of the work, never the findings", () => {
+  // The inquiries hand in with `finish(body)`; `write_file(body)` is just a tool they may call. The argument's
+  // name cannot tell the two apart — only the tool's can.
+  const base = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent,
+    { type: 'plan', intent: 'research', tasks: [{ description: 'the only task' }], clarifyQuestions: [], tokenCount: 1, timeMs: 1 } as WorkflowEvent,
+    { type: 'research:start', agentCount: 1, mode: 'flat', reports: { tool: 'finish', field: 'body' } } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 20, key: 'task:0' } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: 'planning</think>', tokenCount: 1 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: '<tool_call>\n<function=write_file>\n<parameter=body>\nFILE CONTENTS', tokenCount: 9 } as WorkflowEvent,
+  ]);
+  const [writingAFile] = selectSections(base);
+  assert.equal(writingAFile.prose, null, "a file's contents were shown as the section's findings");
+  assert.notEqual(writingAFile.inquiry?.verb.kind, 'writing', 'the inquiry was said to be writing its section while it wrote a file');
+
+  const called = fold([{ type: 'agent:tool_call', agentId: 20, tool: 'write_file', args: '{"path":"notes.md"}' } as WorkflowEvent], base);
+  const steps = called.documents.get(A)!.roster.agents.get(20)!.timeline.filter((t) => t.kind === 'tool_call');
+  assert.equal(steps.length, 1, 'the write_file call vanished from the work the reader can open');
+
+  const finishing = fold([
+    { type: 'agent:tool_result', agentId: 20, tool: 'write_file', result: '{}' } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: 'done</think>', tokenCount: 12 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: '<tool_call>\n<function=finish>\n<parameter=body>\nTHE FINDINGS', tokenCount: 20 } as WorkflowEvent,
+  ], called);
+  const [handingIn] = selectSections(finishing);
+  assert.equal(handingIn.prose, 'THE FINDINGS');
+  assert.equal(handingIn.streaming, true);
+});
+
 test("the run bar commands the RUNNING document while the canvas shows another", () => {
   // Run A pauses; the user opens settled B from the library. `live` reads the
   // run document, so the controls beside it must too — or Hold reads B's

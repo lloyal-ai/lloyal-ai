@@ -13,7 +13,7 @@
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
 import { Ctx, agentPool, useAgent, chain, parallel, renderTemplate, withSpine } from "@lloyal-labs/lloyal-agents";
-import type { Ability, AgentRenderCtx, Budget, GuardOverrides, Orchestrator, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Ability, AgentRenderCtx, Budget, GuardOverrides, Orchestrator, PoolContext, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Attachment, Descriptor } from "@lloyal-labs/media";
 import {
   PlanTool, TASK_ROUTING_KEY, abilityToc, citedReport, coverage as probe, participating,
@@ -57,6 +57,13 @@ export type Research = { plan: typeof plan; write: typeof write; reports?: Repor
 /** The writer's stages. Each defaults to this file's own; hand `write` one to replace it alone. `output` is
  *  an output whose `read` yields the findings as text — research's contract. */
 export type Stages = { answer: typeof answer; inquire: typeof inquire; settle: typeof settle; output: Output<string> };
+/** What the inquiries found, as it is handed to the settling stage: each task's findings in plan order, and the
+ *  one fact only the run can establish — whether the spine already holds them. The settling agent is a fork of the
+ *  spine, so findings the strategy committed there are ATTENDED already and saying them again costs their length
+ *  twice; findings it did not commit are nowhere the agent can see unless the prompt carries them. That depends on
+ *  the strategy that ran, never on the shape the reader chose. */
+export type Evidence = { findings: readonly string[]; attended: boolean };
+
 /** One task's spawn, made for the strategy that asks. `beside` says its siblings work at the same time, which
  *  is what the agent is told about them. */
 export type SpecFor = (task: ResearchTask, index: number, beside: boolean) => SpawnSpec;
@@ -175,13 +182,14 @@ export function inquire(ask: Inputs, tasks: readonly ResearchTask[], specFor: Sp
     : chain([...tasks], (task: ResearchTask, i: number) => ({ task: specFor(task, i, false), userContent: WORDS.researchTask(task.description) }));
 }
 
-/** The settling pass: one agent on the same spine folds the inquiries' findings into the answer. Sends synthesize:*. */
-export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, found: readonly string[]): Operation<{ answer: string; tokens: number; timeMs: number; ppl?: number }> {
+/** The settling pass: one agent on the same spine folds the inquiries' findings into the answer. Findings the
+ *  spine already holds are read from it; findings it does not hold are given in the prompt. Sends synthesize:*. */
+export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: Evidence): Operation<{ answer: string; tokens: number; timeMs: number; ppl?: number }> {
   const wire = yield* useWire<WorkflowEvent>();
   yield* wire.send({ type: "synthesize:start" });
   const at = timer();
-  const prompt = ask.mode === "flat" ? PROMPTS.synthesizeFlat : PROMPTS.synthesize;
-  const ctx = { query: ask.text, findings: ask.mode === "flat" ? assembleFindings(found, plan.tasks) : undefined, agentCount: plan.tasks.length };
+  const prompt = evidence.attended ? PROMPTS.synthesize : PROMPTS.synthesizeFlat;
+  const ctx = { query: ask.text, findings: evidence.attended ? undefined : assembleFindings(evidence.findings, plan.tasks), agentCount: plan.tasks.length };
   const agent = yield* useAgent({
     systemPrompt: framed(renderTemplate(prompt.system, ctx), { writesTheAnswer: true }), task: renderTemplate(prompt.user, ctx),
     parent: spine, budget: BUDGETS.settle, acceptFreeText: true,
@@ -190,6 +198,24 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, found: rea
   const ppl = agent.branch.disposed ? 0 : agent.branch.perplexity;
   yield* wire.send({ type: "synthesize:done", agentId: agent.id, ppl, tokenCount: agent.tokenCount, toolCallCount: agent.toolCallCount, timeMs });
   return { answer: agent.result || "", tokens: agent.tokenCount, timeMs, ppl };
+}
+
+/** A strategy, run as it is, with a note kept of what it commits to the spine. Nothing else can say whether the
+ *  settling agent already attends a finding: a strategy is free to commit every finding, some, or none. */
+function watchingTheSpine(orchestrate: Orchestrator): { orchestrate: Orchestrator; committed: Set<string> } {
+  const committed = new Set<string>();
+  const watched = (ctx: PoolContext): PoolContext => ({
+    get spine() { return ctx.spine; },
+    spawn: (spec) => ctx.spawn(spec),
+    waitFor: (agent) => ctx.waitFor(agent),
+    canFit: (tokens) => ctx.canFit(tokens),
+    *extendSpine(userContent, assistantContent) {
+      const grew = yield* ctx.extendSpine(userContent, assistantContent);
+      if (grew > 0) committed.add(assistantContent);
+      return grew;
+    },
+  });
+  return { committed, orchestrate: (ctx) => orchestrate(watched(ctx)) };
 }
 
 /** Every inquiry under one shared spine, then the settling pass. The brief has already said the writing began;
@@ -243,11 +269,12 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
   return yield* withSpine<Written>(
     { parent: trunk ?? undefined, systemPrompt: renderSpine({ abilities: sources, reference: ask.sources }), tools },
     function* (spine) {
+      const strategy = watchingTheSpine(s.inquire(ask, tasks, specFor));
       const pool = yield* agentPool({
         parent: spine, tools, terminal: s.output.tool, attachments: ask.sources,
         budget, guards: ask.guards, hooks: sources.length > 0 ? [EVIDENCE_FIRST] : [], acceptFreeText: ask.direct,
         scorer: primary?.source.createScorer(ask.text),
-        orchestrate: s.inquire(ask, tasks, specFor),
+        orchestrate: strategy.orchestrate,
       });
       const researchMs = at();
       yield* wire.send({ type: "research:done", totalTokens: pool.totalTokens, totalToolCalls: pool.totalToolCalls, timeMs: researchMs });
@@ -257,7 +284,13 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       let settled: { tokens: number; timeMs: number; ppl?: number } = { tokens: 0, timeMs: 0 };
       if (tasks.length === 1) text = found[0].trim();                 // one inquiry is its own answer
       else if (found.every((f) => !f.trim())) text = NOTHING_FOUND;   // nothing to settle: say so, never invent
-      else { const r = yield* s.settle(spine, ask, plan, found); text = r.answer; settled = r; }
+      else {
+        // Attended only if EVERY finding there is was committed: one that was not would be lost to a prompt that
+        // supplies none, so anything short of all of them is handed over in the prompt, whole.
+        const said = found.filter((f) => f.trim());
+        const r = yield* s.settle(spine, ask, plan, { findings: found, attended: said.every((f) => strategy.committed.has(f)) });
+        text = r.answer; settled = r;
+      }
 
       return {
         answer: text,

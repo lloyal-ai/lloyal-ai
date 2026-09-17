@@ -16,15 +16,17 @@
 import { emptyRoster, foldAgents } from '@lloyal-labs/ui/fold';
 import type { AgentRoster, AgentEvent as FoldableAgentEvent } from '@lloyal-labs/ui/fold';
 import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState } from './state.js';
-import { taskIndexOf } from '../brief/protocol.js';
-import type { WorkflowEvent } from '../brief/protocol.js';
+import { RIG_REPORT, taskIndexOf } from '../brief/protocol.js';
+import type { Reports, WorkflowEvent } from '../brief/protocol.js';
 
+/** What the generic fold needs to know of how agents hand in: the call that ends a turn is recognised by its
+ *  tool's name and is no timeline row, and its text streams from one argument of that call. */
+const foldsAs = (r: Reports): { terminal: string; terminalField?: string } =>
+  ({ terminal: r.tool, ...(r.field ? { terminalField: r.field } : {}) });
 /** rig's source probes end their turn on rig's own report tool. */
-const PROBE = { terminal: 'report' } as const;
-/** What the generic fold needs to know of how this run's agents hand in: the call that ends a turn is no
- *  timeline row, and its text streams from one argument. Said by `research:start`, never assumed. */
-const handsIn = (doc: DocState): { terminal?: string; terminalField?: string } =>
-  doc.reports ? { terminal: doc.reports.tool, ...(doc.reports.field ? { terminalField: doc.reports.field } : {}) } : {};
+const PROBE = foldsAs(RIG_REPORT);
+/** This run's agents, as `research:start` said they hand in. */
+const handsIn = (doc: DocState): { terminal: string; terminalField?: string } => foldsAs(doc.reports ?? RIG_REPORT);
 
 /** Collapse a home-prefixed absolute path for a toast: `~/…`. Hand-written to stay browser-safe — no
  *  `node:os`, no `node:path` — because every target runs this file. Its inverse, `~` expansion for
