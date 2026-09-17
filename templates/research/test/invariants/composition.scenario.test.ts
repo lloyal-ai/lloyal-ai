@@ -14,6 +14,9 @@ import * as path from "node:path";
 import { sleep } from "effection";
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
+import { Tool } from "@lloyal-labs/lloyal-agents";
+import type { JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Output } from "@lloyal-labs/rig";
 import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
 import type { PlanResult } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
@@ -233,6 +236,40 @@ test("a whole writer that says nothing on the wire can still be stopped", async 
   });
   assert.equal(run.events.filter((e) => e.type === "answer").length, 0, "nothing was written");
   assert.deepEqual(fs.readdirSync(run.outputDir), [], "and the brief's folder went with the stop");
+});
+
+/** An output of the developer's own: another terminal tool, its findings in another argument. */
+class FileFindings extends Tool<Record<string, unknown>> {
+  readonly name = "file_findings";
+  readonly description = "Hand in what you found.";
+  readonly parameters: JsonSchema = { type: "object", properties: { summary: { type: "string" } }, required: ["summary"] };
+  readonly hooks: ToolLifecycleHooks = { onReturn: ({ args }) => ({ type: "accept", result: String((args as { summary?: unknown }).summary ?? "") }) };
+  *execute(): Operation<unknown> { throw new Error("a terminal ends the turn; it is never dispatched"); }
+}
+const filed: Output<string> = { tool: new FileFindings(), read: (o) => o.result };
+
+test("an output of the developer's own: another terminal, another argument, and the brief still reads and keeps the findings", async () => {
+  const run = await runHarness({
+    harness: composed({
+      plan: onePlan,
+      write: (trunk, ask, plan) => research.write(trunk, ask, plan, { output: filed }),
+      reports: { tool: "file_findings", field: "summary" },
+    }),
+    terminal: { tool: "file_findings", field: "summary" },
+    utterances: [{ text: "what was found", kind: "report" }],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const s = foldTo(run.events, "answer");
+  const [section] = selectSections(s);
+  assert.equal(section.prose, "what was found", "the section reads what the inquiry handed in");
+  const agent = [...s.documents.get(s.activeDocId!)!.roster.agents.values()].find((a) => a.taskIndex === 0)!;
+  assert.deepEqual(agent.timeline.filter((t) => t.kind === "tool_call"), [], "handing in is the end of the turn, not a step of the work");
+  const dir = path.join(run.outputDir, docIdOfQuery(run.events));
+  assert.match(fs.readFileSync(path.join(dir, "annexure-1.md"), "utf8"), /what was found/);
 });
 
 /** A store holding one document — a second participating source, so the stock planner probes coverage. */

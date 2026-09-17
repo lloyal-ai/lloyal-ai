@@ -251,7 +251,7 @@ export function briefs(deps: {
    *  handed only has to return a value, and may say as much or as little on the wire as it likes. */
   function* write(ask: Inputs, plan: PlanResult, warm: boolean): Operation<void> {
     library.begin(ask.docId, ask, { warm });   // its folder: a first report, or a thread beside a settled one
-    yield* wire.send({ type: "research:start", agentCount: plan.tasks.length, mode: ask.mode });
+    yield* wire.send({ type: "research:start", agentCount: plan.tasks.length, mode: ask.mode, reports: research.reports ?? null });
     const written = yield* research.write(session.trunk, ask, plan);
     yield* commitAnswer(ask.text, written.answer);
     library.written(ask.docId, written);   // held until `complete` is said, which is when the report is made

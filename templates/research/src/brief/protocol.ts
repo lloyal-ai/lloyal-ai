@@ -140,7 +140,7 @@ export type BriefEvent =
   | { type: "preflight:start"; query: string; abilityCount: number }
   | { type: "preflight:done"; coverage: string; tokens: number; toolCalls: number; timeMs: number }
   /** The writing began. Said by the brief, so it is said whatever writer it was handed. */
-  | { type: "research:start"; agentCount: number; mode: Mode }
+  | { type: "research:start"; agentCount: number; mode: Mode; reports: Reports | null }
   | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: "synthesize:start" }
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
@@ -166,6 +166,13 @@ export type LibraryEvent =
   | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
 
 export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+
+// ── How an inquiry hands in its findings ─────────────────────────
+
+/** The tool whose call ends an inquiry's turn, and the argument of that call whose text is the findings. The
+ *  view needs both: the call is the end of the work, not a step of it, and the argument is what it can show as
+ *  the model writes it. `field: null` shows working state until the findings are in. */
+export interface Reports { tool: string; field: string | null }
 
 // ── Which task an agent is working ───────────────────────────────
 

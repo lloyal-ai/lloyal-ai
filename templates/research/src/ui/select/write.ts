@@ -2,7 +2,7 @@
  *  the settling pass that follows them. */
 import { type AppState } from "../state.js";
 import { type Answer, activeDoc, splitThink } from "./canvas.js";
-import { type Inquiry, currentAttempts, proseOf, verbOf } from "./inquiry.js";
+import { type Inquiry, currentAttempts, findingsField, proseOf, verbOf } from "./inquiry.js";
 
 export interface Section {
   index: number;
@@ -28,9 +28,10 @@ const sectionTitle = (task: string): string => task;
 export const selectSections = (app: AppState): Section[] => {
   const doc = activeDoc(app);
   const attempts = currentAttempts(doc);
+  const field = findingsField(doc);
   return (doc.plan?.tasks ?? []).map((task, index) => {
     const a = attempts.get(index) ?? null;
-    const { prose, streaming } = a ? proseOf(a) : { prose: null, streaming: false };
+    const { prose, streaming } = a ? proseOf(a, field) : { prose: null, streaming: false };
     return {
       index,
       title: sectionTitle(task.description),
@@ -41,7 +42,7 @@ export const selectSections = (app: AppState): Section[] => {
       inquiry: a && {
         id: a.id,
         index,
-        verb: verbOf(a),
+        verb: verbOf(a, field),
         startedAt: a.startedAt,
         endedAt: a.endedAt,
       },

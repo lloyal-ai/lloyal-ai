@@ -2,7 +2,7 @@
  *  reader's yes, and the planner's questions. */
 import { type AppState } from "../state.js";
 import { activeDoc } from "./canvas.js";
-import { type Inquiry, doing, resultMeta, verbOf } from "./inquiry.js";
+import { type Inquiry, doing, findingsField, resultMeta, verbOf } from "./inquiry.js";
 import { selectSources } from "./ask.js";
 
 /** The outline as the planner drafts it, live — complete `"description"`
@@ -90,7 +90,7 @@ export const selectProbes = (app: AppState): Probe[] => {
       : null;
     out.push({
       title: included[i]?.title ?? "a source",
-      inquiry: { id: a.id, index: i, verb: verbOf(a), startedAt: a.startedAt, endedAt: a.endedAt },
+      inquiry: { id: a.id, index: i, verb: verbOf(a, findingsField(activeDoc(app))), startedAt: a.startedAt, endedAt: a.endedAt },
       searches,
       found,
       peek,

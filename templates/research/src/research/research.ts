@@ -26,7 +26,7 @@ import { PROMPTS, WORDS } from "./prompts.js";
 import type { Prompt } from "./prompts.js";
 import { framed } from "./instructions.js";
 import { taskKey } from "../brief/protocol.js";
-import type { CompleteData, DocId, Mode, OpTiming, WorkflowEvent } from "../brief/protocol.js";
+import type { CompleteData, DocId, Mode, OpTiming, Reports, WorkflowEvent } from "../brief/protocol.js";
 
 /** An ask, as the brief hands it over. */
 export type Inputs = {
@@ -51,14 +51,18 @@ export type Stats = { timings: OpTiming[]; ctxPct: number; ctxPos: number; ctxTo
  *  order: the library keeps one annexure for each that found something, so a writer that ran none returns
  *  none. `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
 export type Written = { answer: string; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
-/** What the brief is handed: the planner, and the writer. */
-export type Research = { plan: typeof plan; write: typeof write };
+/** What the brief is handed: the planner, the writer, and how the writer's inquiries hand in their findings,
+ *  which is what lets the view show them. Replace `write`'s `output` and you replace `reports` with it. */
+export type Research = { plan: typeof plan; write: typeof write; reports?: Reports };
 /** The writer's stages. Each defaults to this file's own; hand `write` one to replace it alone. `output` is
  *  an output whose `read` yields the findings as text — research's contract. */
 export type Stages = { answer: typeof answer; inquire: typeof inquire; settle: typeof settle; output: Output<string> };
 /** One task's spawn, made for the strategy that asks. `beside` says its siblings work at the same time, which
  *  is what the agent is told about them. */
 export type SpecFor = (task: ResearchTask, index: number, beside: boolean) => SpawnSpec;
+
+/** How this file's inquiries hand in: rig's cited report, whose findings are its `result`. */
+export const reports: Reports = { tool: citedReport.tool.name, field: "result" };
 
 /** The evidence floor a research agent keeps: a first report short of it is refused once, then stands. */
 const EVIDENCE_FIRST: ToolLifecycleHooks = {

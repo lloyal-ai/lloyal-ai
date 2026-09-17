@@ -19,8 +19,12 @@ import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState 
 import { taskIndexOf } from '../brief/protocol.js';
 import type { WorkflowEvent } from '../brief/protocol.js';
 
-/** This harness's terminal tool: its call ends the turn and is no timeline row. */
-const TERMINAL = 'report';
+/** rig's source probes end their turn on rig's own report tool. */
+const PROBE = { terminal: 'report' } as const;
+/** What the generic fold needs to know of how this run's agents hand in: the call that ends a turn is no
+ *  timeline row, and its text streams from one argument. Said by `research:start`, never assumed. */
+const handsIn = (doc: DocState): { terminal?: string; terminalField?: string } =>
+  doc.reports ? { terminal: doc.reports.tool, ...(doc.reports.field ? { terminalField: doc.reports.field } : {}) } : {};
 
 /** Collapse a home-prefixed absolute path for a toast: `~/…`. Hand-written to stay browser-safe — no
  *  `node:os`, no `node:path` — because every target runs this file. Its inverse, `~` expansion for
@@ -94,7 +98,7 @@ export function emptyDoc(): DocState {
     phase: 'done', plan: null, revision: null,
     roster: emptyRoster(),
     reconAgentIds: [],
-    researchAgentCount: 0,
+    researchAgentCount: 0, reports: null,
     synth: EMPTY_SYNTH, answer: null, exchanges: [], ask: null, askAttachments: [],
     paused: false, closing: false, closedEarly: false,
     pipelineElapsedMs: 0, pipelineResumedAt: null,
@@ -399,6 +403,7 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
         // Authoritative fork count — derived harness-side from plan.tasks
         // BEFORE the pool spawns; the renderer's plan can be empty/late.
         researchAgentCount: ev.agentCount,
+        reports: ev.reports,
         pipelineResumedAt: Date.now(),
       };
 
@@ -474,22 +479,22 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       // in reconAgentIds so the research column never picks it up.
       if (doc.phase === 'discovering') {
         return { ...doc, reconAgentIds: [...doc.reconAgentIds, ev.agentId],
-          roster: foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: 0, taskDescription: 'Probing sources' }), terminal: TERMINAL }) };
+          roster: foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: 0, taskDescription: 'Probing sources' }), ...PROBE }) };
       }
       // Outside research, an agent is tracked without a timeline. An in-flight ask researches while the doc stays 'done'.
       if (doc.phase !== 'research' && !asking) {
-        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), terminal: TERMINAL }));
+        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), ...handsIn(doc) }));
       }
       // Research: the spawn's key names the task it works. Spawn order says nothing — the pool seats what the
       // context can hold, and a heal is a new agent on the same task — so an agent with no task key is tracked
       // like any other agent outside research: counted, without a timeline.
       const taskIndex = taskIndexOf(ev.key);
       if (taskIndex === null) {
-        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), terminal: TERMINAL }));
+        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), ...handsIn(doc) }));
       }
       const taskDescription = doc.plan?.tasks[taskIndex]?.description ?? null;
       const dependencyHint = doc.mode === 'deep' && taskIndex > 0 ? `builds on Task ${taskIndex}` : null;
-      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex, taskDescription, dependencyHint }), terminal: TERMINAL });
+      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex, taskDescription, dependencyHint }), ...handsIn(doc) });
       return { ...doc, roster };
     }
 
@@ -507,7 +512,7 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       }
       // Muted phases. 'discovering' streams like 'research'; an in-flight ask researches under a 'done' doc.
       if (doc.phase !== 'research' && doc.phase !== 'discovering' && !asking) return doc;
-      return folded(doc, foldAgents(doc.roster, ev, { terminal: TERMINAL }));
+      return folded(doc, foldAgents(doc.roster, ev, doc.phase === 'discovering' ? PROBE : handsIn(doc)));
     }
 
     case 'agent:tool_call':
@@ -517,7 +522,7 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
     case 'agent:recovered':
     case 'agent:failed':
     case 'agent:done':
-      return folded(doc, foldAgents(doc.roster, ev as FoldableAgentEvent, { terminal: TERMINAL }));
+      return folded(doc, foldAgents(doc.roster, ev as FoldableAgentEvent, doc.phase === 'discovering' ? PROBE : handsIn(doc)));
 
     case 'agent:tool_progress':
       return doc;

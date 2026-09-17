@@ -1,6 +1,6 @@
 /** One agent's work, in the reader's language: what it is doing right now, the prose it has written so far,
  *  and the whole stream of its work for anyone who opens it. Every moment that shows an agent reads it here. */
-import { extractStreamingReport, type AppState, type DocState, type AgentRuntime, type TimelineItem } from "../state.js";
+import { extractStreamingReport, DEFAULT_TERMINAL_FIELD, type AppState, type DocState, type AgentRuntime, type TimelineItem } from "../state.js";
 import { activeDoc } from "./canvas.js";
 
 /** One step of an inquiry's activity, in the librarian's voice. */
@@ -42,24 +42,27 @@ export const resultMeta = (t: Extract<TimelineItem, { kind: "tool_result" }>): s
   return `${doneVerb(t.tool)} — ${meta}${t.hosts[0] ? ` · ${t.hosts[0]}` : ""}`;
 };
 
-/** The live report stream, extracted through the terminal tool's envelope
- *  once it opens — recovery streams re-emit the envelope too, so it is never
- *  rendered. A recovery stream that never opens one is bare prose; leading
- *  tag fragments are held back until real text arrives. */
-export const liveProse = (a: AgentRuntime): string | null => {
-  const report = extractStreamingReport(a.contentBuffer);
+/** The argument of the terminal tool's call that carries an agent's findings: what `research:start` said of
+ *  this run, the generic fold's default where it said nothing, and null where there is none to stream from. */
+export const findingsField = (doc: DocState): string | null => (doc.reports ? doc.reports.field : DEFAULT_TERMINAL_FIELD);
+
+/** The findings as the model writes them, read out of the terminal tool's call once it opens. An agent that
+ *  was cut short and asked to report may write bare prose with no call around it; leading tag fragments are
+ *  held back until real text arrives. */
+export const liveProse = (a: AgentRuntime, field: string | null): string | null => {
+  const report = field === null ? null : extractStreamingReport(a.contentBuffer, field);
   if (report !== null) return report;
   if (!a.recovering) return null;
   return a.contentBuffer.replace(/^(?:\s*<[^>\n]*>?\n?)*/, "") || null;
 };
 
-/** The report body may arrive as the report tool's raw JSON argument —
- *  unwrap `.result` only when parsing yields exactly that shape. */
-const reportBody = (body: string): string => {
-  if (body.trimStart().startsWith("{")) {
+/** The findings may arrive as the terminal tool's raw JSON arguments — unwrap the findings' own argument, and
+ *  only when parsing yields exactly that shape. */
+const reportBody = (body: string, field: string | null): string => {
+  if (field !== null && body.trimStart().startsWith("{")) {
     try {
-      const parsed = JSON.parse(body) as { result?: unknown };
-      if (typeof parsed?.result === "string") return parsed.result;
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      if (typeof parsed?.[field] === "string") return parsed[field] as string;
     } catch { /* raw markdown */ }
   }
   return body;
@@ -84,7 +87,7 @@ const FAIL_TEXT: Record<string, string> = {
 const failText = (reason: string): string =>
   FAIL_TEXT[reason] ?? "couldn't finish this line of inquiry";
 
-export const verbOf = (a: AgentRuntime): InquiryVerb => {
+export const verbOf = (a: AgentRuntime, field: string | null): InquiryVerb => {
   if (a.failReason) return { kind: "failed", text: failText(a.failReason) };
   if (a.phase === "done") {
     const kept = a.timeline.some((t) => t.kind === "report");
@@ -99,7 +102,7 @@ export const verbOf = (a: AgentRuntime): InquiryVerb => {
       retryAt: a.retry.retryAt,
     };
   }
-  if (a.recovering || liveProse(a) !== null) {
+  if (a.recovering || liveProse(a, field) !== null) {
     return { kind: "writing", text: "settling the section into the brief" };
   }
   const lastCall = [...a.timeline].reverse().find((t) => t.kind === "tool_call");
@@ -113,10 +116,10 @@ export const verbOf = (a: AgentRuntime): InquiryVerb => {
   return { kind: "thinking", text: "thinking it through" };
 };
 
-export const proseOf = (a: AgentRuntime): { prose: string | null; streaming: boolean } => {
+export const proseOf = (a: AgentRuntime, field: string | null): { prose: string | null; streaming: boolean } => {
   const report = [...a.timeline].reverse().find((t) => t.kind === "report");
-  if (report?.kind === "report") return { prose: reportBody(report.body), streaming: false };
-  const live = a.phase !== "done" ? liveProse(a) : null;
+  if (report?.kind === "report") return { prose: reportBody(report.body, field), streaming: false };
+  const live = a.phase !== "done" ? liveProse(a, field) : null;
   return live ? { prose: live, streaming: true } : { prose: null, streaming: false };
 };
 
@@ -149,7 +152,7 @@ export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
     const steps = a.timeline
       .map(stepOf)
       .filter((s): s is WorkStep => s !== null);
-    if (a.phase !== "done" && a.contentBuffer && liveProse(a) === null) {
+    if (a.phase !== "done" && a.contentBuffer && liveProse(a, findingsField(activeDoc(app))) === null) {
       steps.push({ kind: "tokens", text: a.contentBuffer, live: true });
     }
     return steps;

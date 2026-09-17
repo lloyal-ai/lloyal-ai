@@ -15,7 +15,7 @@
 import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../research/budgets.js';
-import type { DocId, Mode, LibraryEntry, OpTiming } from '../brief/protocol.js';
+import type { DocId, Mode, LibraryEntry, OpTiming, Reports } from '../brief/protocol.js';
 
 export type { DocId, Mode, LibraryEntry, OpTiming } from '../brief/protocol.js';
 export { reduce } from './reduce.js';
@@ -39,7 +39,7 @@ export type DocPhase =
 /** The agent records are the generic fold's (`@lloyal-labs/ui/fold`): one agent's life on a view, folded from
  *  the bus events every pool emits; this app decides only what a spawn is for. */
 export type { AgentRoster, AgentRuntime, TimelineItem, SourceMeta } from '@lloyal-labs/ui/fold';
-export { extractStreamingReport } from '@lloyal-labs/ui/fold';
+export { extractStreamingReport, DEFAULT_TERMINAL_FIELD } from '@lloyal-labs/ui/fold';
 import type { AgentRoster, AgentRuntime } from '@lloyal-labs/ui/fold';
 
 export interface Pressure {
@@ -128,6 +128,8 @@ export interface DocState {
   reconAgentIds: number[];
   /** Authoritative fork count from `research:start`. */
   researchAgentCount: number;
+  /** How this run's inquiries hand in their findings, as `research:start` said; null when it did not say. */
+  reports: Reports | null;
 
   synth: SynthState;
   answer: string | null;
