@@ -14,7 +14,7 @@
  * desktop's preload (IPC) or web's boot (`connectWss`).
  */
 import "./app.css";
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import {
   reduce,
@@ -31,6 +31,8 @@ import {
   type AgentView,
   type WikiSource,
 } from "./state.js";
+import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
+import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
 import type { WorkflowEvent, Command } from "../harness/protocol.js";
 import { Markdown } from "./Markdown.js";
 
@@ -122,51 +124,50 @@ function AgentEntry({ a }: { a: AgentView }): ReactElement {
   );
 }
 
-export function HarnessApp({ surface }: { surface: string }): ReactElement {
-  const [state, setState] = useState<AppState>(initialState);
-  const seqRef = useRef(-1);
-  const [query, setQuery] = useState("");
-  const [topic, setTopic] = useState("");
-
+/**
+ * The wire and the session as ONE word the view can render. Both planes are
+ * optional on a `Bridge`: the desktop's in-process link cannot drop, so it
+ * reports no status — absence there means connected, not broken.
+ */
+function useAvailability(): Availability {
+  const [wire, setWire] = useState<WireStatus>(
+    window.harness.onStatus ? "connecting" : "connected",
+  );
+  const [session, setSession] = useState<SessionState | null>(null);
   useEffect(() => {
-    let alive = true;
-    let seeded = false;
-    // Subscribe FIRST so no frame is missed, but hold frames until the snapshot
-    // lands — applying them live would let a frame advance `seqRef` and then be
-    // overwritten by an older snapshot cut (a lost-event gap on reload).
-    const pending: { seq: number; ev: WorkflowEvent }[] = [];
-    const apply = (frame: { seq: number; ev: WorkflowEvent }): void => {
-      if (frame.seq <= seqRef.current) return;
-      seqRef.current = frame.seq;
-      setState((s) => reduce(s, frame.ev));
-    };
-    const seed = (base: AppState, baseSeq: number): void => {
-      if (!alive || seeded) return;
-      let next = base;
-      let cur = baseSeq;
-      for (const f of pending) {
-        if (f.seq <= cur) continue;
-        cur = f.seq;
-        next = reduce(next, f.ev);
-      }
-      pending.length = 0;
-      seqRef.current = cur;
-      seeded = true;
-      setState(next);
-    };
-    const off = window.harness.onEvent((frame) => {
-      if (seeded) apply(frame);
-      else pending.push(frame);
-    });
-    window.harness
-      .requestSnapshot()
-      .then((snap) => seed(snap.state, snap.seq))
-      .catch(() => seed(initialState, -1));
+    const offs = [window.harness.onStatus?.(setWire), window.harness.onSession?.(setSession)];
     return () => {
-      alive = false;
-      off();
+      for (const off of offs) off?.();
     };
   }, []);
+  return availabilityOf(session, wire);
+}
+
+/** What each availability means to a reader, in their terms — never the wire's. */
+const WIRE_WORDS: Record<Availability, string> = {
+  connecting: "connecting…",
+  queued: "waiting for a free slot…",
+  warming: "loading the model…",
+  ready: "",
+  ended: "this session ended.",
+  lost: "the host is not up — retrying…",
+};
+
+export function HarnessApp({ surface }: { surface: string }): ReactElement {
+  // The projection owns the fold: it seeds from the bridge's snapshot, holds
+  // frames until that lands, and RE-SEEDS when the stream's `epoch` changes — a
+  // reconnected socket, or a desktop engine replaced by `recover`. Comparing
+  // `seq` alone (which this view used to do) silently drops the new stream's
+  // frames, because a fresh stream restarts its numbering.
+  const projection = useMemo(
+    () => connectProjection<WorkflowEvent, Command, AppState>(window.harness, initialState, reduce),
+    [],
+  );
+  useEffect(() => () => projection.dispose(), [projection]);
+  const state = useSyncExternalStore(projection.subscribe, projection.getSnapshot);
+  const availability = useAvailability();
+  const [query, setQuery] = useState("");
+  const [topic, setTopic] = useState("");
 
   const submit = (): void => {
     const q = query.trim();
@@ -230,6 +231,16 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
               {state.kv.total > 0 && ` · kv ${Math.round((100 * state.kv.used) / state.kv.total)}%`}
             </span>
           </div>
+          {availability !== "ready" && availability !== "connecting" && (
+            <span className="wiki-wire" role="status">
+              {WIRE_WORDS[availability]}
+              {availability === "ended" && window.harness.recover && (
+                <button type="button" onClick={() => window.harness.recover?.()}>
+                  start a new session
+                </button>
+              )}
+            </span>
+          )}
           <form
             className="wiki-search"
             onSubmit={(e) => {

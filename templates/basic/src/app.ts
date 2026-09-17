@@ -10,6 +10,7 @@
  * the platform's; what is yours is `harness` below and the program it calls.
  */
 import { statSync } from "node:fs";
+import { basename } from "node:path";
 import { each } from "effection";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
@@ -44,6 +45,23 @@ export const config = defineConfig({
 });
 export type Config = ConfigOf<typeof config>;
 export type Origin = OriginOf<typeof config>;
+
+/**
+ * What to CALL the model in the header: whichever selection actually won.
+ *
+ * A configured `model.path` outranks the catalog id, and the boot resolves both
+ * into `model.path` — so reading `model.id` alone would name the yml's catalog
+ * entry while entirely different weights are resident. Provenance is what tells
+ * the two apart: anything but `default` on `model.path` means someone chose it.
+ */
+function modelLabel(
+  model: { id?: string; path?: string },
+  origin: Record<string, string>,
+): string {
+  const chosen = origin["model.path"] !== undefined && origin["model.path"] !== "default";
+  if (chosen && model.path) return basename(model.path);
+  return model.id ?? (model.path ? basename(model.path) : "model");
+}
 
 /** The resolved weight's size on disk, for the boot header. Measured here rather
  *  than carried in config: the boot resolves the path, so the file IS the fact,
@@ -96,7 +114,7 @@ export function* harness(
   yield* wire.send({
     type: "ready",
     facts: {
-      model: { id: model.id ?? "model", sizeBytes: weightBytes(model.path) },
+      model: { id: modelLabel(model, runner.origin()), sizeBytes: weightBytes(model.path) },
       abilities: registry.enabled().map((a) => a.name),
     },
   });

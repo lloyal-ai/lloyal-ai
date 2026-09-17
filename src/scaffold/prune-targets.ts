@@ -107,38 +107,34 @@ export const SHARED_VIEW_DIR: Record<string, string | undefined> = {};
  * its template declares — the tables above are keyed to that layout, so acting
  * on a mismatch half-applies and reports success.
  *
- * Two shapes have been wrong in the field, in opposite directions. Before 0.9 a
- * shared view sat inside `targets/desktop/`, so `targets:add web` wrote a
- * `main.tsx` importing `../_shared/App.js` into a project with no `_shared`.
- * And a project scaffolded before its template's view moved to `src/ui/` still
- * carries `targets/_shared/`, which nothing in the current template mounts.
- * Neither has a migration path; both are cheap to name.
+ * Both templates now keep the view under `src/ui/`, so that directory IS the
+ * test. Every older shape fails it the same way: a pre-0.9 project whose view
+ * sat inside `targets/desktop/`, and a project scaffolded before its template's
+ * view moved, which still carries `targets/_shared/`. Neither has a migration
+ * path; both are cheap to name.
  *
- * A cli-only project mounts no view at all, so nothing here applies to it; and
- * a project with no marker declares no template, so there is nothing for its
- * layout to disagree WITH — {@link viewDirOf} reads the tree for those instead.
+ * The test does NOT ask whether a DOM target is present. It used to, because a
+ * view under `targets/` only existed when a renderer did — but a cli-only
+ * project keeps `src/ui/` too, and an OLD cli-only project had its
+ * `targets/_shared/` pruned away, so there was nothing left to give it away and
+ * `targets:add web` wrote entries for a layout it did not have, reporting
+ * success. A project with no marker declares no template, so there is nothing
+ * for its layout to disagree WITH — {@link viewDirOf} reads the tree for those.
  */
 export function assertSharedViewLayout(projectDir: string, template: string | undefined): void {
-  const hasDom = (['desktop', 'web'] as const).some((t) =>
-    existsSync(join(projectDir, 'targets', t)),
-  );
-  if (!hasDom || template === undefined) return;
-  const declared = SHARED_VIEW_DIR[template];
-  const found = existsSync(join(projectDir, 'targets', '_shared'));
-  if (Boolean(declared) === found) return;
+  if (template === undefined) return;
+  if (existsSync(join(projectDir, 'src', 'ui'))) return;
+  const legacy = existsSync(join(projectDir, 'targets', '_shared'));
   throw new Error(
-    declared
-      ? 'this project predates lloyal 0.9 — its React view is still inside ' +
-        '`targets/desktop/`, but the `targets:` verbs now expect `targets/_shared/`.\n' +
-        '  0.9 moved the shared view so that removing desktop stops breaking the web build.\n' +
-        '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
-        'and copy your harness (and your view) across.'
-      : 'this project has a `targets/_shared/` directory, but its template keeps the view ' +
-        'under `src/ui/`.\n' +
-        '  It was scaffolded before the view moved, and the `targets:` verbs would write ' +
-        'entries for a layout it does not have.\n' +
-        '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
-        'and copy your `src/` across.',
+    'this project predates the move of the React view to `src/ui/`, which both templates ' +
+      'now use.\n' +
+      (legacy
+        ? '  Its view is still at `targets/_shared/`.\n'
+        : '  It has no `src/ui/` at all — its view is still under `targets/`.\n') +
+      '  The `targets:` verbs would write entries importing `src/app.ts` and `src/ui/` into a ' +
+      'project that has neither, and report success.\n' +
+      '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` and ' +
+      'copy your harness (and your view) across.',
   );
 }
 

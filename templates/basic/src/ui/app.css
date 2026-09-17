@@ -59,6 +59,26 @@
   font-size: 11.5px;
   color: var(--faint);
 }
+/* The wire's word, when it is not `ready`. It sits between the masthead and the
+   composer because it explains why the composer may not answer — a banner at the
+   page foot would be read after the confusion, not before it. */
+.wiki-wire {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.wiki-wire button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .wiki-search {
   display: flex;
   gap: 0;

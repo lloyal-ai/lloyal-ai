@@ -332,14 +332,32 @@ describe('targets:add (inverse of prune)', () => {
     expect(include(dir)).toContain('src/ui/**/*');
   });
 
+  it('refuses an OLD cli-only project too — it has no `_shared` to give it away', async () => {
+    // The regression the DOM-target early return allowed: a cli-only project
+    // mounts no view under `targets/`, so the guard skipped it entirely — and
+    // `targets:add web` then wrote entries importing `src/app.ts` and `src/ui/`
+    // into a project with neither, reporting success.
+    const dir = await scaffold('t9', 'cli');
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
+
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
+    const said = err.mock.calls.map((c) => String(c[0])).join('');
+    err.mockRestore();
+
+    expect(said).toMatch(/src\/ui/);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false); // nothing written
+  });
+
   it('refuses a project whose view predates the move, without touching it', async () => {
     // A clean break with no migration — but breaking loudly and breaking silently
     // are different. Both templates now keep the view under `src/ui/`; a project
     // scaffolded before that still carries `targets/_shared/`, and targets:add
     // would write entries for a layout it does not have and report SUCCESS.
     const dir = await scaffold('t8', 'cli,desktop');
-    // Rewind to the old shape: a `targets/_shared/` the current template has no entry for.
+    // Rewind to the old shape: the view back under `targets/`, no `src/`.
     cpSync(join(dir, 'src/ui'), join(dir, 'targets/_shared'), { recursive: true });
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
 
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
