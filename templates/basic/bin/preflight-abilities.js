@@ -3,7 +3,7 @@
  * Fail fast, naming the command that fixes it, when an Ability this harness
  * imports was never vendored.
  *
- * `harness/harness.ts` imports its abilities at the top level, so a scaffold made
+ * `src/app.ts` imports its abilities at the top level, so a scaffold made
  * with `--skip-abilities` — or one whose fetch failed — cannot typecheck. Without
  * this guard `npm start` dies inside `tsc` with a bare TS2307: the compiler
  * complaining about a supply problem. Running ahead of the compiler puts the

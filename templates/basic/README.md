@@ -33,7 +33,7 @@ vendor/          signed Abilities — Ed25519-verified tarballs, committed
 harness.yml      targets + model
 ```
 
-Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The center — `harness/harness.ts` — is where you program what your intelligence does: which agents exist, how they collaborate, what they trust, when work is done. `basic` runs a `parallel` pool + synth; `chain` is a one-line swap.
+Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The center — `src/harness/harness.ts` — is where you program what your intelligence does: which agents exist, how they collaborate, what they trust, when work is done. `basic` runs a `parallel` pool + synth; `chain` is a one-line swap.
 
 ## Add capabilities
 
@@ -41,7 +41,7 @@ Everything under `targets/` is convention handled for you — the boot mounts a 
 npx lloyal-ai install <publisher>/<name>   # a signed Ability from apps.lloyal.ai
 ```
 
-Enable it in `harness/harness.ts` alongside `createWikipediaAbility`.
+Enable it in `src/app.ts`, in the `abilities` array alongside `createWikipediaAbility`.
 
 Abilities are **Ed25519-verified and vendored locally** — `lloyal` fetches the
 signed tarball, checks its signature, and writes it to `vendor/` with a `file:`

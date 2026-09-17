@@ -88,23 +88,19 @@ export const SHARED_RENDERER_DEPS = [
 export const SHARED_RENDERER_DEV_DEPS = ['@vitejs/plugin-react', '@types/react-dom', 'vite'];
 /**
  * Where a template parks a view directory that belongs to the DOM targets ALONE
- * — deleted by a cli-only prune, restored with the first DOM target back. Keyed
- * by template because the two answer differently.
+ * — deleted by a cli-only prune, restored with the first DOM target back.
  *
- * `basic` parks it at `targets/_shared/`: only its renderers mount it, so it
- * rides their lifecycle. It sits outside both target dirs because parking it in
- * one meant pruning that target stranded the other's import — do not move it
- * back under a target dir.
- *
- * `research` has NO entry, and that is the decision, not an omission. Its view
- * lives under `src/ui/` beside the fold and the selectors the TERMINAL view
- * reads, so no directory there belongs to the DOM targets alone. A cli-only
- * research scaffold keeps those files — inert, not broken — rather than
+ * It is EMPTY, and that is the decision, not an omission. Both templates now
+ * keep the view under `src/ui/`, beside the fold and the state the TERMINAL view
+ * reads, so in neither does a directory there belong to the DOM targets alone. A
+ * cli-only scaffold keeps those files — inert, not broken — rather than
  * splitting `src/ui/` in two to save them.
+ *
+ * `basic` parked it at `targets/_shared/` until it took the same composition as
+ * `research`. The entry is gone with the directory; a project scaffolded before
+ * that still has one, which {@link assertSharedViewLayout} names.
  */
-export const SHARED_VIEW_DIR: Record<string, string | undefined> = {
-  basic: 'targets/_shared',
-};
+export const SHARED_VIEW_DIR: Record<string, string | undefined> = {};
 
 /**
  * Refuse to operate on a project whose view is laid out differently from what
@@ -114,7 +110,7 @@ export const SHARED_VIEW_DIR: Record<string, string | undefined> = {
  * Two shapes have been wrong in the field, in opposite directions. Before 0.9 a
  * shared view sat inside `targets/desktop/`, so `targets:add web` wrote a
  * `main.tsx` importing `../_shared/App.js` into a project with no `_shared`.
- * And a research project scaffolded before the view moved to `src/ui/` still
+ * And a project scaffolded before its template's view moved to `src/ui/` still
  * carries `targets/_shared/`, which nothing in the current template mounts.
  * Neither has a migration path; both are cheap to name.
  *

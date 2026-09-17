@@ -25,19 +25,19 @@ import {
   resultMeta,
   wikipediaSources,
   isResearchAgent,
-} from "../../harness/state.js";
+} from "./state.js";
 import type {
   AgentView,
   AppState,
   Phase,
   ToolStep,
   WikiSource,
-} from "../../harness/state.js";
-import type { Command, WorkflowEvent } from "../../harness/protocol.js";
+} from "./state.js";
+import type { Command, WorkflowEvent } from "../harness/protocol.js";
 import { DevOverlay } from "@lloyal-labs/dev-tools/ink";
 import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
 
-const seed = (bootstrap: WorkflowEvent[]): AppState =>
+const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
   bootstrap.reduce(reduce, initialState);
 
 const glyph = (s: AgentView["status"]): string =>
@@ -151,7 +151,7 @@ function View({
 }: {
   bus: EventBus<WorkflowEvent>;
   dispatch: (c: Command) => void;
-  bootstrap: WorkflowEvent[];
+  bootstrap: readonly WorkflowEvent[];
 }): React.ReactElement {
   const [state, apply] = useReducer(reduce, bootstrap, seed);
   const app = useApp();
@@ -251,7 +251,7 @@ function View({
               <Text color="gray">{`Model      ${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · resident`}</Text>
               <Text color="gray">Inference  local · no provider</Text>
               <Text color="gray">{`Abilities       ${state.boot.abilities.length ? state.boot.abilities.join(", ") : "none installed"}`}</Text>
-              <Text color="gray">{`Surface    ${state.boot.surface}`}</Text>
+              <Text color="gray">Surface    cli</Text>
             </>
           ) : (
             <Text color="gray">booting…</Text>
@@ -292,7 +292,7 @@ function View({
 export function renderCli(
   bus: EventBus<WorkflowEvent>,
   dispatch: (c: Command) => void,
-  bootstrap: WorkflowEvent[],
+  bootstrap: readonly WorkflowEvent[],
 ): () => void {
   const instance = render(
     <View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />,

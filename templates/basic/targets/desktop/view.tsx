@@ -3,6 +3,6 @@
  * preload has already injected `window.harness` (IPC bridge) before this runs.
  */
 import { createRoot } from "react-dom/client";
-import { HarnessApp } from "../_shared/App.js";
+import { HarnessApp } from "../../src/ui/App.js";
 
-createRoot(document.getElementById("root")!).render(<HarnessApp />);
+createRoot(document.getElementById("root")!).render(<HarnessApp surface="desktop" />);

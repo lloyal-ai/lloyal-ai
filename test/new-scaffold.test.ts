@@ -161,7 +161,7 @@ describe('preflight-abilities — the ability guard runs before the compiler', (
 
 describe('the shared React view outlives either DOM target alone', () => {
   const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
-  const SHARED = 'targets/_shared/App.tsx';
+  const SHARED = 'src/ui/App.tsx';
 
   /** Entries of a JSONC array field, comments stripped. */
   function jsoncArray(file: string, key: string): string[] {
@@ -176,15 +176,21 @@ describe('the shared React view outlives either DOM target alone', () => {
     const dir = freshBlankProject();
     pruneTargets(dir, keep as unknown as Target[], 'basic');
     expect(existsSync(join(dir, SHARED))).toBe(true);
-    // …and typecheck still covers it.
-    expect(jsoncArray(join(dir, 'tsconfig.web.json'), 'include')).toContain(SHARED);
+    // …and typecheck still covers it. The whole view dir is one include entry.
+    expect(jsoncArray(join(dir, 'tsconfig.web.json'), 'include')).toContain('src/ui/**/*');
   });
 
-  it('cli-only drops it, and takes its dangling Node exclude entry with it', () => {
+  it('cli-only KEEPS it — inert, not broken', () => {
+    // The view now lives under `src/ui/` beside the state the TERMINAL view also
+    // folds, so no directory there belongs to the DOM targets alone. A cli-only
+    // project carries the React files unused rather than splitting `src/ui/` in
+    // two to save them — the same trade `research` has always made.
     const dir = freshBlankProject();
     pruneTargets(dir, ['cli'], 'basic');
-    expect(existsSync(join(dir, 'targets/_shared'))).toBe(false);
-    expect(jsoncArray(join(dir, 'tsconfig.json'), 'exclude')).not.toContain('targets/_shared');
+    expect(existsSync(join(dir, SHARED))).toBe(true);
+    expect(existsSync(join(dir, 'src/ui/state.ts'))).toBe(true);
+    // The Node build still excludes the DOM sources, or `tsc` compiles React.
+    expect(jsoncArray(join(dir, 'tsconfig.json'), 'exclude')).toContain('src/ui/App.tsx');
   });
 
   /**
@@ -224,7 +230,7 @@ describe('the shared React view outlives either DOM target alone', () => {
             // `../desktop/x` are judged the same way.
             const rel = relative(root, resolve(dirname(file), spec));
             const [dir] = rel.split(sep);
-            if (rel.startsWith('..') || dir === owner || dir === '_shared') continue;
+            if (rel.startsWith('..') || dir === owner) continue;
             offenders.push(`${owner}/${basename(file)} → ${dir}`);
           }
         });
@@ -255,9 +261,9 @@ describe('the shared React view outlives either DOM target alone', () => {
       // under harness/ or targets/ forecloses a future React Native target.
       // `bin/` is exempt on purpose — those are boot shims, not runtime.
       const offenders: string[] = [];
-      // The harness centre is `harness/` in basic and `src/` in research; both
-      // are runtime, and `bin/` is exempt in either (boot shims, not runtime).
-      const centre = template === 'research' ? 'src' : 'harness';
+      // The harness centre is `src/` in both templates; `bin/` is exempt in
+      // either (boot shims, not runtime).
+      const centre = 'src';
       for (const sub of [centre, 'targets']) {
         walkSources(join(TEMPLATES, template, sub), (file) => {
           if (/\bimport\s*\(/.test(readFileSync(file, 'utf8'))) {
@@ -329,7 +335,6 @@ describe('pruneTargets — cli + web (desktop pruned)', () => {
     const p = pkg(dir);
     expect(p.devDependencies?.electron).toBeUndefined();
     expect(p.devDependencies?.['electron-vite']).toBeUndefined();
-    expect(p.dependencies?.['@lloyal-labs/host']).toBeDefined();
     expect(p.devDependencies?.vite).toBeDefined(); // shared renderer dep kept — web survives
     expect(p.dependencies?.['react-dom']).toBeDefined();
     expect(p.scripts.serve).toBeDefined();

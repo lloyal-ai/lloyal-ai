@@ -1,6 +1,6 @@
 /**
  * The shared React view — BOTH desktop and web mount this ONE component, and it
- * folds the SAME node-free `reduce` (`harness/state.ts`) that the cli's Ink view
+ * folds the SAME node-free `reduce` (`src/ui/state.ts`) that the cli's Ink view
  * does. Two runtimes (Ink · React), one `reduce`.
  *
  * It's styled as a Wikipedia article, because `basic` ships the `lloyal/wikipedia`
@@ -30,19 +30,9 @@ import {
   type AppState,
   type AgentView,
   type WikiSource,
-} from "../../harness/state.js";
-import type { WorkflowEvent, Command } from "../../harness/protocol.js";
+} from "./state.js";
+import type { WorkflowEvent, Command } from "../harness/protocol.js";
 import { Markdown } from "./Markdown.js";
-
-declare global {
-  interface Window {
-    harness: {
-      onEvent(cb: (frame: { seq: number; ev: WorkflowEvent }) => void): () => void;
-      send(command: Command): void;
-      requestSnapshot(): Promise<{ state: AppState; seq: number }>;
-    };
-  }
-}
 
 const scrollTo = (id: string): void =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -132,7 +122,7 @@ function AgentEntry({ a }: { a: AgentView }): ReactElement {
   );
 }
 
-export function HarnessApp(): ReactElement {
+export function HarnessApp({ surface }: { surface: string }): ReactElement {
   const [state, setState] = useState<AppState>(initialState);
   const seqRef = useRef(-1);
   const [query, setQuery] = useState("");
@@ -235,7 +225,7 @@ export function HarnessApp(): ReactElement {
             <span className="wiki-brand-name">__NAME__</span>
             <span className="wiki-brand-sub">
               {state.boot
-                ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${state.boot.surface}`
+                ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${surface}`
                 : state.phase}
               {state.kv.total > 0 && ` · kv ${Math.round((100 * state.kv.used) / state.kv.total)}%`}
             </span>

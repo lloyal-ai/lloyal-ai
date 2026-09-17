@@ -1,7 +1,7 @@
 /**
  * `lloyal new` must emit a project that typechecks and boots — which means
  * the template's default Abilities must be vendored, because each template's
- * `harness/harness.ts` imports them at the top level. The regression this guards
+ * `src/app.ts` imports them at the top level. The regression this guards
  * is 0.7.1's: vendoring was gated on `process.stdout.isTTY`, so every piped /
  * CI / scripted scaffold produced a project failing `tsc` with TS2307 and
  * `npm start` with ERR_MODULE_NOT_FOUND.
@@ -159,11 +159,11 @@ describe('printNextSteps — pending abilities come BEFORE the run commands', ()
 
 describe('DEFAULT_ABILITIES covers what each template actually imports', () => {
   it.each(['basic', 'research'] as const)(
-    '%s: one default ability spec per `*-ability` package harness.ts imports',
+    '%s: one default ability spec per `*-ability` package app.ts imports',
     (template) => {
-      // The file that installs the abilities: `harness/harness.ts` in basic,
+      // The file that installs the abilities: `src/app.ts` in both templates,
       // `src/app.ts` in research, whose whole point is that it names them.
-      const entry = template === 'research' ? ['src', 'app.ts'] : ['harness', 'harness.ts'];
+      const entry = ['src', 'app.ts'];
       const src = readFileSync(join(TEMPLATES, template, ...entry), 'utf8');
       const imported = [...src.matchAll(/from "(@[\w-]+\/[\w-]+-ability)"/g)].map((m) => m[1]);
       expect(imported.length).toBeGreaterThan(0);

@@ -1,25 +1,20 @@
 /**
- * Your harness — the one file that's genuinely yours.
- *
- * It IS the platform contract: a headless generator `harness(ctx, events,
- * commands)`. `ctx` is the resident model; `events` streams your
- * `WorkflowEvent`s to whatever surface is mounted (terminal / Electron /
- * browser); `commands` delivers that surface's `Command`s back. The runtime,
- * the bindings, the targets, and the trust plumbing are conventions handled
- * for you — this file is where you program what your intelligence does.
+ * Your program — the one file that's genuinely yours.
  *
  * `basic` is deliberately the floor: two agents research a query in parallel
  * over a shared spine, a synth agent combines their notes. That's the whole
- * grammar in miniature — topology (`parallel`), a shared spine (`withSpine`),
- * a terminal tool (`report`), a reduce step (the synth). Replace it with your
- * own program; nothing else in the project needs to know what you wrote here.
+ * grammar in miniature — topology (`parallel`), a shared spine (`withSpine`), a
+ * terminal tool (`report`), a reduce step (the synth). Replace it with your own
+ * program; nothing else in the project needs to know what you wrote here.
+ *
+ * What is NOT here is the boot: the agent runtime, the ability registry, the
+ * pool's defaults and the lifecycle signals are `initializeHarness`'s, called
+ * once in `app.ts`. This file is handed a live `Session` and writes to the wire.
  */
-import { spawn, each, call } from "effection";
-import type { Context, Operation, Signal } from "effection";
-import type { EventBus } from "@lloyal-labs/binding";
-import type { Session, SessionContext } from "@lloyal-labs/sdk";
+import { call } from "effection";
+import type { Channel, Operation } from "effection";
+import type { Session } from "@lloyal-labs/sdk";
 import {
-  initAgents,
   agentPool,
   useAgent,
   parallel,
@@ -27,52 +22,11 @@ import {
   renderTemplate,
   DefaultAgentPolicy,
   AbilityRegistryCtx,
-  WindDown,
-  CancelAgent,
 } from "@lloyal-labs/lloyal-agents";
-import type { Ability, AbilityFactory, AgentRenderCtx } from "@lloyal-labs/lloyal-agents";
-import {
-  createAbilityRegistry,
-  createInMemoryConfigStore,
-  reportTool,
-  renderSpine,
-  renderAgentPreamble,
-} from "@lloyal-labs/rig";
-import { buildAbilityDescriptors } from "@lloyal-labs/rig";
-import { RunnerCtx as RigRunnerCtx } from "@lloyal-labs/rig";
-import type { Runner } from "@lloyal-labs/rig";
-import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
-import { reportBody } from "./state.js";
-import type { Command, WorkflowEvent } from "./protocol.js";
-import type { Config, ConfigOrigin } from "./config-types.js";
-
-/** The runner ↔ harness seam, typed to THIS harness's config. The context and
- *  the `Runner` machinery are rig's (`makeEdgeRunner` / `makeServedRunner`);
- *  only the `Config`/`ConfigOrigin` shapes are yours, and this cast marries
- *  them — the boots import it from here. */
-export const RunnerCtx = RigRunnerCtx as Context<Runner<Config, ConfigOrigin>>;
-
-/**
- * The Abilities this harness enables. Before enabling, the boot provisions
- * whatever models each ability declares (wikipedia needs nothing; corpus/web need a
- * reranker) — so add an installed ability's factory here and the model it needs is
- * fetched for you. Install more with `lloyal install <ability>`.
- */
-export const abilities: AbilityFactory[] = [createWikipediaAbility];
-
-/** Ability config values never ride the event bus — the served transport ends
- *  in every tenant's renderer. Redact to key-presence (`key: true`). */
-function redactAbilities(config: Config): Config {
-  return {
-    ...config,
-    abilities: Object.fromEntries(
-      Object.entries(config.abilities).map(([name, cfg]) => [
-        name,
-        Object.fromEntries(Object.keys(cfg).map((k) => [k, true])),
-      ]),
-    ),
-  };
-}
+import type { Ability, AgentRenderCtx } from "@lloyal-labs/lloyal-agents";
+import { reportTool, renderSpine, renderAgentPreamble } from "@lloyal-labs/rig";
+import { reportBody } from "../ui/state.js";
+import type { WorkflowEvent } from "./protocol.js";
 
 const MAX_TURNS = 8;
 
@@ -177,103 +131,6 @@ class SynthPolicy extends DefaultAgentPolicy {
   }
 }
 
-export function* harness(
-  ctx: SessionContext,
-  events: EventBus<WorkflowEvent>,
-  commands: Signal<Command, void>,
-): Operation<void> {
-  // The Runner — your harness's edge substrate (the boot set it on RunnerCtx
-  // before calling us). It carries the live config, the observability trace sink,
-  // and the persistent wind-down / cancel signals. Reading it here is the ONE
-  // platform contract every harness shares — the reference `research` template
-  // reads the exact same shape, so growing into config persistence or tracing
-  // never means migrating to a different seam.
-  const runner = yield* RunnerCtx.expect();
-
-  // Seed every surface's config view — the first event on the bus. Redacted;
-  // `dev` gates the dev pane.
-  events.send({
-    type: "config:loaded",
-    config: redactAbilities(runner.config()),
-    origin: runner.origin(),
-    dev: runner.dev,
-  });
-
-  // Agent runtime over the resident model, threading the Runner's trace sink so
-  // an observability run captures every spawn / token. `agentEvents` is the pool's
-  // own channel — forward it to the surface so every spawn / token / return
-  // streams live into the renderer. The spawned fiber auto-halts when this scope
-  // ends.
-  const { session, events: agentEvents } = yield* initAgents<WorkflowEvent>(ctx, {
-    traceWriter: runner.traceWriter,
-  });
-  yield* spawn(function* () {
-    for (const ev of yield* each(agentEvents)) {
-      events.send(ev as WorkflowEvent);
-      yield* each.next();
-    }
-  });
-
-  // Republish the Runner's persistent lifecycle signals so the framework's
-  // graceful wind-down / per-agent cancel machinery can read them. basic's simple
-  // command loop doesn't trigger them, but the seam is here for a pipeline that
-  // grows a stop/cancel command (`runner.windDown.send()` / `runner.cancelAgent.send()`).
-  yield* WindDown.set(runner.windDown);
-  yield* CancelAgent.set(runner.cancelAgent);
-
-  // Compose your Abilities. Seed the config store from the Runner's live config so
-  // each ability reads its own entry on enable (empty for the default wikipedia — it
-  // needs no reranker, config, or auth). The boot has already provisioned any
-  // model these abilities declare (see `abilities` above); here we just enable each one.
-  const configStore = createInMemoryConfigStore();
-  for (const [name, cfg] of Object.entries(runner.config().abilities)) {
-    yield* configStore.set(name, cfg);
-  }
-  const registry = yield* createAbilityRegistry({ configStore });
-  for (const ability of abilities) yield* registry.enable(ability);
-  // Surface the installed Abilities to every renderer (the dev pane's
-  // Settings reads this) — ONE rig builder, redaction structural inside it.
-  events.send({
-    type: "abilities:state",
-    abilities: yield* buildAbilityDescriptors(registry, configStore, abilities),
-  });
-
-  // Boot done — announce it with MEASURED facts, not hardcoded strings: the
-  // model's id + on-disk size (the boot stat'd the weight into the config), the
-  // surface that mounted, and the abilities actually enabled (read from the registry).
-  // Every surface folds this one event, so the header is identical everywhere.
-  const cfg = runner.config();
-  events.send({
-    type: "ready",
-    facts: {
-      model: { id: cfg.model.id ?? "model", sizeBytes: cfg.model.sizeBytes ?? 0 },
-      surface: cfg.surface ?? "cli",
-      abilities: registry.enabled().map((a) => a.name),
-    },
-  });
-
-  // The command loop. Ends on `quit` (or when the Session closes and the scope
-  // unwinds). Everything the surface can ask for is a member of `Command`.
-  for (const cmd of yield* each(commands)) {
-    if (cmd.type === "quit") return;
-    if (cmd.type === "submit_query") {
-      try {
-        // Announce the turn before any work. A warm trunk means this turn
-        // deepens the article already on the page rather than starting one.
-        events.send({ type: "query", text: cmd.query, warm: !!session.trunk });
-        const answer = yield* runQuery(cmd.query, session, events);
-        events.send({ type: "answer", text: answer });
-      } catch (err) {
-        events.send({
-          type: "error",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-    yield* each.next();
-  }
-}
-
 /** Per-agent system prompt — renders the ability's `skill.eta` with the render ctx. */
 function agentPreamble(ability: Ability, taskIndex: number): string {
   return renderAgentPreamble(ability, {
@@ -285,17 +142,16 @@ function agentPreamble(ability: Ability, taskIndex: number): string {
   } as AgentRenderCtx & Record<string, unknown>);
 }
 
-function* runQuery(
+export function* runQuery(
   query: string,
   session: Session,
-  _events: EventBus<WorkflowEvent>,
+  _wire: Channel<WorkflowEvent, void>,
 ): Operation<string> {
   const registry = yield* AbilityRegistryCtx.expect();
-  const runner = yield* RunnerCtx.expect();
   const abilities = registry.enabled();
   if (abilities.length === 0) {
     throw new Error(
-      "No Ability is enabled — enable one in harness.ts (e.g. `yield* registry.enable(createWikipediaAbility)`).",
+      "No Ability is enabled — add one to `abilities` in app.ts (e.g. `createWikipediaAbility`).",
     );
   }
   // Read BEFORE the turn is committed: a trunk here means an article already
@@ -305,7 +161,9 @@ function* runQuery(
   const spinePrompt = renderSpine({ abilities });
 
   // Two agents, in parallel, over one shared spine. `report` is the terminal
-  // tool; `pruneOnReturn` frees each agent's KV as it finishes.
+  // tool. Per-token epistemics on a dev boot, and a returned agent's branch
+  // freed at once, are `PoolDefaults` — set once by `initializeHarness`, so a
+  // pool never restates them.
   const notes = yield* withSpine<string[]>(
     { parent: session.trunk ?? undefined, systemPrompt: spinePrompt, tools },
     function* (spine) {
@@ -314,14 +172,7 @@ function* runQuery(
         parent: spine,
         terminal: reportTool,
         maxTurns: MAX_TURNS,
-        pruneOnReturn: true,
         policy: new DefaultAgentPolicy({ terminalToolName: "report" }),
-        // Per-token entropy/surprisal on agent:produce + AgentResult.trace —
-        // the dev pane's epistemics. Off outside dev: it costs two metric
-        // computations per produced token. Read from the Runner, never
-        // process.env — this file stays portable across bindings.
-        trace: runner.dev,
-        enableThinking: true,
         // Breadth: independent angles, in parallel, over one shared spine.
         // For sequential DEPTH — each task building on the last via the spine —
         // swap `parallel` for `chain(ANGLES, (angle, i) => ({ task: {...},

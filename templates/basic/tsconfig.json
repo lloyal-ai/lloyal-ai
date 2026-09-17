@@ -21,12 +21,13 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["harness/**/*", "targets/**/*"],
+  "include": ["src/**/*", "targets/**/*", "types/**/*"],
   // Excluded here (built/typechecked by the sibling configs above): the whole
   // Electron target (main/preload are CJS, App/view are DOM-React) and the web
   // browser sources.
   "exclude": [
-    "targets/_shared",
+    "src/ui/App.tsx",
+    "src/ui/Markdown.tsx",
     "targets/desktop",
     "targets/web/main.tsx",
     "targets/web/boot.ts",
