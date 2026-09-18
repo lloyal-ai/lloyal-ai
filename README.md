@@ -10,7 +10,16 @@ own — a laptop today, your own GPU host when you serve it. No API key on the p
 
 Think of a game engine. You program the behaviour; Lloyal handles the physics underneath.
 
-## Thirty seconds to a living brief
+![An app generated from the research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
+
+*An app generated from the research template. What it does is one example of what a harness can do; the
+program underneath is yours to change.*
+
+## An example: thirty seconds to a living brief
+
+`new` starts you from a template. There are two: **basic**, a small Wikipedia app, and **research**, a
+grounded multi-agent investigation. Everything in this section is the research template, because it shows the
+most in the least time.
 
 ```sh
 npx lloyal-ai@alpha new my-app --template research
@@ -33,12 +42,32 @@ reaches for it; and every citation points at a page you can open. Ask about a fi
 
 Every settled brief joins a library the next brief can search, cite and build on.
 
+In this template the journey is four moments, and the same four words name them in its code: **Ask · Frame
+· Write · Settle.**
+
+| Ask | Frame | Write | Settle |
+| --- | --- | --- | --- |
+| ![Ask: one question, and the shape it takes](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/ask.jpg) | ![Frame: the outline, held for your edits](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/frame.jpg) | ![Write: inquiries searching and reading, side by side](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write-searching.jpg) | ![Settle: the brief, its citations and its sources](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/settle.jpg) |
+
+*The research template, from question to settled brief.*
+
 ## The one idea underneath
 
 An agent in Lloyal is a **branch** of the model's live state, not a request. Fork the branch that has already
 read the evidence and every agent forked from it attends the same cells: an image projected once is seen by all
 of them; a shared header is paid for once however many agents run. The runtime decodes every active branch in
 one pass and reclaims the whole working tree when the work that owned it ends.
+
+```text
+ against an endpoint                      inside lloyal
+
+ agent 1  ▐ evidence ▐ task ▌             evidence ──┬── agent 1: task
+ agent 2  ▐ evidence ▐ task ▌                        ├── agent 2: task
+ agent 3  ▐ evidence ▐ task ▌                        └── agent 3: task
+
+ the evidence is sent, and paid for,     the evidence is read once; each agent
+ once per agent                           forks the attention that read it
+```
 
 > Post-training produces a tendency. A harness produces a procedure.
 
@@ -48,9 +77,35 @@ generator: read `function*` as `async function` and `yield*` as `await`, and wha
 whatever a piece of work starts is finished or cleaned up when that work ends, however it ends. That is why a
 Stop works in the middle of anything, and why there is almost no teardown code to write.
 
+```text
+ session                     the model, resident
+ └── harness                 your program; lives exactly as long as the session
+     └── run                 one at a time: Stop reaches whatever is here
+         └── spine           one shared line of attention: the header, the tools, the evidence
+             ├── agent 1     a fork of the spine, with its own task
+             ├── agent 2     …
+             └── agent N     one more fork, reading what the others found
+
+ whatever a line starts is finished or cleaned up when that line ends:
+ the findings leave as data; the branches do not outlive the run
+```
+
 ## Make it yours in three edits
 
-The generated project is source. Three files, one concern each:
+The generated project is source, whichever template it came from. In the research template, three files hold
+one concern each — the rest can wait:
+
+```text
+ src/
+   ui/presentation.ts         ← what it is called
+   research/instructions.ts   ← what it is for
+   research/research.ts       ← how it investigates: `inquire`, one expression
+   ───────────────────────────────────────────────────────────────────
+   app.ts                     the app: what is installed, the parts, the loop
+   brief/                     a brief's life: asked · framed · written · settled
+   research/                  plan · write · answer, and the prompts
+   ui/                        the fold, the selectors, the four moments
+```
 
 **What it is called** — `src/ui/presentation.ts`. Every surface reads it: sidebar, window, tab, terminal, host.
 
@@ -83,7 +138,8 @@ const algorithm: Research = {
 
 A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
 app takes care of the rest. `npm test` runs the app's laws against a scripted model in about two seconds, so a
-change is proved without downloading weights.
+change is proved without downloading weights. The basic template is the same idea at a smaller size: one
+harness file, one procedure, the same three surfaces.
 
 ## What it can become
 
@@ -92,13 +148,20 @@ and keeps the minority lineage alive when its evidence is material. A document a
 diagrams, and keeps working through follow-ups. An analysis that admits a source only when it governs the
 relevant date, so a superseded rule cannot win on relevance alone.
 
-None of these is a mode of the framework. Each is a procedure written in TypeScript over the same primitives
-the research app uses — which is what makes the research app a starting point rather than a ceiling.
+None of these is a mode of the framework, and none is the research template with a different name. Each is a
+procedure written in TypeScript over the same primitives — which is what makes a template a starting point
+rather than a ceiling.
 
 ## One program, three surfaces
 
 The same `harness(ctx, events, commands)` runs unmodified in a terminal, a native window and a browser. One
 fold of state, one binding each, no view holding truth.
+
+```text
+ terminal ─┐
+ window  ──┼──▶ harness(ctx, events, commands) ──▶ the model, in the same process
+ browser ──┘
+```
 
 | Surface | Run | The model runs in |
 | --- | --- | --- |
@@ -106,8 +169,7 @@ fold of state, one binding each, no view holding truth.
 | A browser | `npm run dev:web` | a host you serve; browsers connect to it |
 | Your terminal | `npm start` | the process itself |
 
-`npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template. `--template basic` is
-the smaller Wikipedia starter.
+`npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template.
 
 ## Abilities
 
