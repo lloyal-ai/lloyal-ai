@@ -24,9 +24,10 @@ function parse(raw: string): Prompt {
 
 /** The single sentences. */
 export const WORDS = {
-  /** The report's grammar forces the SHAPE of its `sources`; this nudges their CONTENT toward real URLs and inline citations. */
-  citationNudge:
-    "\n\nWhen you call report(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's `cite` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.",
+  /** The report's grammar forces the SHAPE of its `sources`; this nudges their CONTENT toward real URLs and inline
+   *  citations. Said of whichever tool the inquiry hands its findings through. */
+  citationNudge: (tool: string): string =>
+    `\n\nWhen you call ${tool}(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's \`cite\` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.`,
   /** Said once to an inquiry that reports before it has looked anything up. */
   evidenceFloor: "You must use tools before submitting results.",
   /** How an investigation's next task is put to the spine. */
@@ -35,6 +36,11 @@ export const WORDS = {
   clarifyTurn: (questions: readonly string[]): string =>
     ["I need to clarify a few things before researching:", "", ...questions.map((q, i) => `${i + 1}. ${q}`)].join("\n"),
 } as const;
+
+/** A prompt said of one tool: `it.tool` is this app's and is rendered here, now; `it.budget` is the framework's and
+ *  is rendered when a reaped agent is given the turn, so it stays. */
+export const forTool = (p: Prompt, tool: string): Prompt =>
+  ({ system: p.system.replaceAll("<%= it.tool %>", tool), user: p.user.replaceAll("<%= it.tool %>", tool) });
 
 export const PROMPTS = {
   plan: parse(PLAN_RAW),

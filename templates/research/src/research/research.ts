@@ -22,7 +22,7 @@ import {
 import type { Coverage, Output, PlanResult, ResearchTask } from "@lloyal-labs/rig";
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
-import { PROMPTS, WORDS } from "./prompts.js";
+import { PROMPTS, WORDS, forTool } from "./prompts.js";
 import type { Prompt } from "./prompts.js";
 import { framed } from "./instructions.js";
 import { taskKey } from "../brief/protocol.js";
@@ -83,8 +83,8 @@ const NOTHING_FOUND =
 const today = (): string => new Date().toISOString().slice(0, 10);
 const timer = (): (() => number) => { const t = performance.now(); return () => performance.now() - t; };
 
-/** The per-agent preamble: the source's skill, then the citation nudge. */
-const preamble = (source: Ability, ctx: AgentRenderCtx): string => renderAgentPreamble(source, { ...ctx }) + WORDS.citationNudge;
+/** The per-agent preamble: the source's skill, then the citation nudge, said of the tool findings go through. */
+const preamble = (source: Ability, ctx: AgentRenderCtx, tool: string): string => renderAgentPreamble(source, { ...ctx }) + WORDS.citationNudge(tool);
 
 /** A prompt with the app's own instructions composed into its system half. */
 const withInstructions = (p: Prompt, stage?: { writesTheAnswer: boolean }): Prompt => ({ ...p, system: framed(p.system, stage) });
@@ -242,7 +242,7 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
   const row = BUDGETS.effort[ask.effort];
   const budget: Budget = {
     ...row,
-    recovery: { prompt: withInstructions(PROMPTS.recovery, lone), ...(ask.direct ? BUDGETS.direct : {}) },   // what a reaped agent is told, above the row's floors
+    recovery: { prompt: withInstructions(forTool(PROMPTS.recovery, s.output.tool.name), lone), ...(ask.direct ? BUDGETS.direct : {}) },   // what a reaped agent is told, above the row's floors
     recoveryShape: ask.mode === "deep" ? "staggered" : row.recoveryShape,   // a chain recovers one stage at a time
   };
   const specFor: SpecFor = (task, i, beside) => {
@@ -256,7 +256,7 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
             agentCount: beside ? tasks.length : 1,
             siblingTasks: beside ? tasks.filter((_, j) => j !== i).map((t) => t.description) : [],
             taskIndex: beside ? 0 : i,
-          })
+          }, s.output.tool.name)
         : "", lone),
       ...(source ? { assignedAbility: source.manifest.name } : {}),
       seed: 1000 + i,

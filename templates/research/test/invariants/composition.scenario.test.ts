@@ -29,7 +29,12 @@ import type { Evidence, Inputs, Research, Written } from "../../src/research/res
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";
+import { FRAMING } from "../../src/ui/devtools.js";
+import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
+import type { DevEvent } from "@lloyal-labs/dev-tools";
+import { WebSearchTool } from "../../node_modules/@lloyal-labs/web-ability/dist/tools/web-search.js";
 import { runHarness, docIdOfQuery, accept } from "./harness.js";
+import type { Utterance } from "./harness.js";
 import * as os from "node:os";
 import { FileAttachmentStore } from "@lloyal-labs/media/node";
 import { DOCUMENT_CONFIG_TYPE } from "@lloyal-labs/media";
@@ -310,6 +315,47 @@ test("an output of the developer's own: another terminal, another argument, and 
   assert.match(fs.readFileSync(path.join(dir, "annexure-1.md"), "utf8"), /what was found/);
 });
 
+test("an output of the developer's own is what the inquiry is told to call: in its preamble, and in the recovery turn a reaped one is given", async () => {
+  // The web, at the tool boundary: a search answers with one result, so the agent searches until the pool reaps it.
+  WebSearchTool.prototype.execute = function* (args: { query: string }) {
+    return { results: [{ title: `About ${args.query}`, url: `https://a.io/${args.query}`, snippet: `${args.query}, in brief` }] };
+  } as typeof WebSearchTool.prototype.execute;
+  let recovering = false;
+  let n = 0;
+  const search = (): Utterance => ({
+    text: "", kind: "tool", tool: { name: "web_search", args: { query: `q${++n}` } }, stallTokens: 12,
+    then: () => (recovering ? { text: "what was found", kind: "report" } : search()),
+  });
+  let reached: string[] = [];
+  const run = await runHarness({
+    harness: composed({
+      plan: onePlan,
+      write: (trunk, ask, plan) => research.write(trunk, ask, plan, { output: filed }),
+      reports: { tool: "file_findings", field: "summary" },
+    }),
+    terminal: { tool: "file_findings", field: "summary" },
+    instrument: (c) => { reached = c.formatChatCalls; },   // every prompt that reached the model, the recovery turn's included
+    utterances: [search()],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => { if (ev.type === "agent:done") recovering = true; return ev.type === "agent:done"; } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  assert.equal(run.events.filter((e) => e.type === "agent:recovered").length, 1, "the inquiry was reaped and recovered");
+  // The template's own two sentences that name the tool findings go through. (A source's skill may name the stock
+  // one in its own words; that text is the ability's, not this app's.)
+  const nudged = reached.filter((t) => /When you call \w+\(\):/.test(t));
+  const recovery = reached.filter((t) => /must deliver findings now/.test(t));
+  assert.ok(nudged.length >= 1 && recovery.length >= 1, "the preamble and the recovery turn both reached the model");
+  for (const t of nudged) assert.match(t, /When you call file_findings\(\):/, "the nudge names the inquiry's own output");
+  for (const t of recovery) {
+    assert.match(t, /Call the file_findings tool/, "the recovery turn names the inquiry's own output");
+    assert.doesNotMatch(t, /Call the report tool/, "no recovery names a tool this run does not have");
+  }
+});
+
 /** A store holding one document — a second participating source, so the stock planner probes coverage. */
 function plantDocument(): { store: FileAttachmentStore; doc: Attachment } {
   const store = new FileAttachmentStore(fs.mkdtempSync(path.join(os.tmpdir(), "composition-scn-")));
@@ -367,4 +413,40 @@ test("stock planning with two sources leaves discovery behind: the planner draft
   assert.equal(doc2.phase, "planning", "the canvas is still browsing sources while the planner writes the outline");
   assert.deepEqual(doc2.reconAgentIds, [], "the probe agents still hold the timeline the planner is about to draw into");
   assert.equal(doc2.roster.agents.size, 0, "the planner is not A0: the probes' roster survived into planning");
+});
+
+test("the dev tools see that same run as one run, in the order the wire says it: the probes are recon, the planner a planner", async () => {
+  // The framing is data the app declares about its own wire, and nothing but this checks it against the wire.
+  // Declared out of order, the pane reads a later marker as a NEW submission and wipes the run mid-flight.
+  const { store, doc } = plantDocument();
+  const run = await runHarness({
+    attachmentStore: store,
+    utterances: [
+      { text: "this source covers the question", kind: "text" },
+      { text: "this source covers it too", kind: "text" },
+      { text: TWO_TASKS, kind: "text" },
+      { text: "first finding", kind: "report" },
+      { text: "second finding", kind: "report" },
+      { text: "the settled brief", kind: "text" },
+    ],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat", attachments: [doc] } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  assert.equal(run.events.filter((e) => e.type === "preflight:start").length, 1, "this fixture no longer draws a coverage probe");
+  const m = createPaneModel();
+  foldEvent(m, { type: "config:loaded", dev: true, config: {}, origin: {} } as DevEvent, 0, FRAMING);
+  const starts = new Set<number>();
+  run.events.forEach((ev, i) => {
+    foldEvent(m, ev as unknown as DevEvent, i + 1, FRAMING);
+    if (m.runStartAt !== null) starts.add(m.runStartAt);
+  });
+  assert.equal(starts.size, 1, `the pane started ${starts.size} runs for one submission`);
+  assert.equal(m.spine?.query, "Q?", "the question survived the whole run");
+  const roles = [...m.lanes.values()].map((l) => l.role);
+  assert.deepEqual(roles.slice(0, 2), ["recon", "recon"], "the two probes wear recon");
+  assert.equal(roles[2], "planner", "the planner that follows the probes wears planner, not recon");
+  assert.deepEqual(roles.slice(3, 5), ["research", "research"], "the inquiries wear research");
 });
