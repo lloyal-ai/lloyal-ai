@@ -1,0 +1,7 @@
+# `files` in package.json overrides .gitignore, so without this a checkout that
+# has run the templates would pack their installs and builds. Never copied into a
+# scaffold: the scaffolder copies templates/<name>, not this directory.
+node_modules
+dist
+dist-web
+out
