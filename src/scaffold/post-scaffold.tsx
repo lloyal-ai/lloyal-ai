@@ -111,10 +111,14 @@ export function writeReadmeRunSteps(dir: string, targets: Target[]): void {
 }
 
 /** Print the "you're set — here's how to run it" panel (ANSI-colored on a TTY). */
+import type { BackendOutcome } from './backend-pack.js';
+
 export function printNextSteps(opts: {
   name: string;
   targets: Target[];
   installed: boolean;
+  /** What was done about the GPU; null when the box has none or CPU was chosen. */
+  backend?: BackendOutcome | null;
   /**
    * Default ability specs that were NOT vendored (`--skip-abilities`, or the fetch
    * failed). The harness imports these, so until they are added the project
@@ -153,6 +157,15 @@ export function printNextSteps(opts: {
     lines.push(`  ${dim('Until then the project will not typecheck or start.')}`);
   } else if (!opts.installed) {
     lines.push(`  ${dim('npm install')}`);
+  }
+  if (opts.backend) {
+    const b = opts.backend;
+    lines.push(
+      '',
+      b.kind === 'pack' ? `  ${dim(`GPU: CUDA backend pack installed → ${b.dir}; harness.yml says gpu: cuda`)}`
+      : b.kind === 'npm' ? `  ${dim('GPU: the npm package serves it natively; harness.yml says gpu: cuda')}`
+      : `  ${dim(`CPU for now — ${b.why}`)}`,
+    );
   }
   lines.push('', `  ${c(`${ACCENT_SGR};1`, 'Run it')}`);
   for (const t of opts.targets) {

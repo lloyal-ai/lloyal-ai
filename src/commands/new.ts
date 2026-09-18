@@ -12,6 +12,9 @@ import {
 } from '../scaffold/copy-tree.js';
 import { writeProjectMarker } from '../scaffold/write-marker.js';
 import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/post-scaffold.js';
+import { createInterface } from 'node:readline/promises';
+import { describeSnapshot, detectNvidiaGpu, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
+import type { BackendOutcome } from '../scaffold/backend-pack.js';
 import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
 
@@ -38,6 +41,12 @@ const USAGE = [
   '                Trunk model — a catalog id (fetched + digest-verified) or a path',
   '                to a local .gguf you already have. Default: the catalog default.',
   '  --dir <path>  Parent directory to create the harness in (default: cwd)',
+  '  --backend-pack <download|skip>',
+  '                A box with an NVIDIA GPU runs on it: after install, harness.yml',
+  '                gets model.llm.gpu: cuda and, where the GPU needs it, the signed',
+  '                CUDA backend pack is fetched once per box. Nothing is fetched',
+  '                without a yes: the wizard\'s, -y, or download (which also',
+  '                installs, so a script gets the whole path). skip = CPU.',
   '  --skip-install',
   '                Do not run `npm install` after scaffolding (it runs by',
   '                default in an interactive terminal).',
@@ -83,6 +92,11 @@ interface ScaffoldPlan {
   targets: Target[];
   /** Catalog id OR a BYO `.gguf` path (see `applyModelChoice`). */
   llm: string;
+  /** Run on this box's NVIDIA GPU (pack installed after `npm install`, `gpu: cuda` written) or on CPU. */
+  backend: 'gpu' | 'cpu';
+  /** Who said GPU: the wizard, `--backend-pack download`, `-y` — or nobody yet (a named `new` in a terminal is asked
+   *  before anything is fetched). CPU carries why, for the panel. */
+  backendBy: 'wizard' | 'flag' | 'yes' | 'ask' | 'chosen-cpu' | 'no-gpu';
 }
 
 /** Flags shared by both paths — undefined means "not provided" (ask / default). */
@@ -102,6 +116,7 @@ export const newCommand: Command = {
         targets: { type: 'string' },
         model: { type: 'string' },
         'skip-install': { type: 'boolean' },
+        'backend-pack': { type: 'string' },
         'skip-abilities': { type: 'boolean' },
         yes: { type: 'boolean', short: 'y' },
       },
@@ -131,14 +146,29 @@ export const newCommand: Command = {
     // flags already given pre-seed the picker so it asks only for the rest.
     const interactive =
       !name && !values.yes && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+    // The box answers the backend question: an NVIDIA GPU on linux-x64 means the GPU, unless told CPU.
+    // --backend-pack download|skip settles it for a script; -y takes the default, which is the GPU.
+    const backendPack = values['backend-pack'];
+    if (backendPack !== undefined && backendPack !== 'download' && backendPack !== 'skip') {
+      process.stderr.write(`lloyal: --backend-pack expects download or skip, got "${backendPack}".\n`);
+      return 1;
+    }
+    const nvidiaGpu = detectNvidiaGpu();
+    if (backendPack === 'download' && !packPlatform()) {
+      // An explicit ask that nothing here can honour is said, not swallowed.
+      process.stderr.write(`lloyal: --backend-pack download — no backend pack is published for ${process.platform}-${process.arch}; the npm packages cover it. Continuing without.\n`);
+    }
+    const backend: 'gpu' | 'cpu' | undefined = backendPack === 'skip' ? 'cpu' : backendPack === 'download' ? 'gpu' : undefined;
     let plan: ScaffoldPlan;
     if (interactive) {
-      const result = await runNewWizard(flags);
+      const result = await runNewWizard({ ...flags, nvidiaGpu, backend });
       if (!result) {
         process.stderr.write('cancelled.\n');
         return 1;
       }
-      plan = result;
+      // One decision for both fields: no GPU means CPU whatever the flag or the wizard's prefill said.
+      const by: ScaffoldPlan['backendBy'] = !nvidiaGpu ? 'no-gpu' : backend === 'gpu' ? 'flag' : result.backend === 'gpu' ? 'wizard' : 'chosen-cpu';
+      plan = { ...result, backend: by === 'no-gpu' || by === 'chosen-cpu' ? 'cpu' : 'gpu', backendBy: by };
     } else {
       const built = planFromFlags(name, flags);
       if ('error' in built) {
@@ -146,13 +176,16 @@ export const newCommand: Command = {
         if (built.usage) process.stderr.write(`\n${USAGE}\n`);
         return 1;
       }
-      plan = built;
+      // A GPU with nobody's yes yet: `-y` is one; a named `new` in a terminal is asked after install; a pipe is not.
+      const by: ScaffoldPlan['backendBy'] = !nvidiaGpu ? 'no-gpu' : backend === 'cpu' ? 'chosen-cpu' : backend === 'gpu' ? 'flag' : values.yes ? 'yes' : 'ask';
+      plan = { ...built, backend: by === 'no-gpu' || by === 'chosen-cpu' ? 'cpu' : 'gpu', backendBy: by };
     }
 
     // Auto-install by default in a real terminal (the batteries-included flow):
     // scaffolding a project the user can't run yet is a dead-end. Skipped in
     // non-TTY (CI installs itself) or with --skip-install.
-    const install = Boolean(process.stdout.isTTY) && !values['skip-install'];
+    // --backend-pack download is itself a request to install: a script that names it means the whole path.
+    const install = (Boolean(process.stdout.isTTY) || values['backend-pack'] === 'download') && !values['skip-install'];
     // Vendoring the template's default abilities is a SEPARATE decision from running
     // `npm install`. The template's harness.ts imports them at the top level, so
     // skipping them emits a project that cannot typecheck or boot — that must
@@ -195,7 +228,7 @@ function validateFlags(values: {
 function planFromFlags(
   name: string | undefined,
   flags: Flags,
-): ScaffoldPlan | { error: string; usage?: boolean } {
+): Omit<ScaffoldPlan, 'backend' | 'backendBy'> | { error: string; usage?: boolean } {
   if (!name) {
     return { error: 'lloyal: missing harness <name>', usage: true };
   }
@@ -312,7 +345,34 @@ async function performScaffold(
   }
 
   const installed = opts.install ? await runInstall(dest) : false;
-  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities });
+  // The GPU decision is carried out after install, through the project's own lloyal.node: the pack is
+  // fetched (the wizard's or the flag's yes was the consent) and `gpu: cuda` written when it is then true.
+  let backend: BackendOutcome | null = null;
+  if (plan.backendBy === 'chosen-cpu') backend = { kind: 'cpu', why: 'as chosen; later: npx lloyal-ai backends:install' };
+  else if (plan.backend === 'gpu') {
+    if (!installed) backend = { kind: 'cpu', why: 'not installed yet — after `npm install`: npx lloyal-ai backends:install' };
+    else {
+      const snap = await snapshotPack(dest);
+      if ('kind' in snap) backend = snap;
+      else {
+        process.stdout.write(`\n${describeSnapshot(snap)}\n`);
+        // Nobody has said yes yet: a terminal is asked, here, with the probe's words above; a pipe is told.
+        let fetch = plan.backendBy !== 'ask';
+        if (plan.backendBy === 'ask' && snap.probe.recommended) {
+          if (process.stdin.isTTY) {
+            const rl = createInterface({ input: process.stdin, output: process.stdout });
+            const answer = (await rl.question('install it now? [y/N] ')).trim().toLowerCase();
+            rl.close();
+            fetch = answer === 'y' || answer === 'yes';
+          } else fetch = false;
+        }
+        backend = await provisionCuda(dest, snap, { fetch, onProgress: progressLine((s) => process.stderr.write(s)) });
+        if (backend.kind === 'pack') process.stderr.write('\n');
+      }
+    }
+  }
+  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities, backend });
   return 0;
 }
+
 

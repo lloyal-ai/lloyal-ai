@@ -197,6 +197,11 @@ npx lloyal-ai@alpha models:add <path.gguf> # a local weight you already have
 The model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host; the
 program does not change. The default set runs on a 16 GB laptop.
 
+On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
+every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
+and shared by every harness on the box. For a project you cloned, `npx lloyal-ai@alpha backends:install` does
+the same and writes `model.llm.gpu: cuda` for it.
+
 ## Requirements
 
 Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
