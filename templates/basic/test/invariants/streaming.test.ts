@@ -38,30 +38,51 @@ test("the tail never starts inside an open fence, and a finished document splits
   // A fence inside a list item is indented; it still owns its blank lines.
   const nested = "- item\n\n  ```\n  code\n\n  more";
   assert.deepEqual(splitStreaming(nested), { head: "- item\n\n", tail: "  ```\n  code\n\n  more" });
+  // A fence closes only on the same character, at least as long: a shorter run inside it is content.
+  const longer = "before\n\n````md\ncode\n\n```\nstill code\n\nmore";
+  assert.deepEqual(splitStreaming(longer), { head: "before\n\n", tail: "````md\ncode\n\n```\nstill code\n\nmore" });
+  const tilde = "before\n\n~~~\ncode\n\n```\nstill code";
+  assert.deepEqual(splitStreaming(tilde), { head: "before\n\n", tail: "~~~\ncode\n\n```\nstill code" });
 });
 
-test("replayed token by token, the head is parsed once per block and the bytes parsed stay linear", () => {
-  const DELTA = 4;
-  const blanks = (document.match(/\n\n/g) ?? []).length;
+/** Replay `text` in `DELTA`-char deltas and account for what a memoized renderer parses: the head only
+ *  when it changes, the tail every time. Returns the per-token maximum and the totals. */
+const replay = (text: string, DELTA: number) => {
   let headParses = 0;
   let lastHead = "";
   let bytesSplit = 0;
   let bytesWhole = 0;
-  for (let n = DELTA; n <= document.length + DELTA; n += DELTA) {
-    const buffer = document.slice(0, n);
+  let worstToken = 0;
+  let worstTail = 0;
+  for (let n = DELTA; n <= text.length + DELTA; n += DELTA) {
+    const buffer = text.slice(0, n);
     const { head, tail } = splitStreaming(buffer);
     assert.equal(head + tail, buffer, "the split loses nothing");
-    if (head !== lastHead) { headParses++; bytesSplit += head.length; lastHead = head; }
-    bytesSplit += tail.length;
+    let cost = tail.length;
+    if (head !== lastHead) { headParses++; cost += head.length; lastHead = head; }
+    bytesSplit += cost;
     bytesWhole += buffer.length;
+    worstToken = Math.max(worstToken, cost);
+    worstTail = Math.max(worstTail, tail.length);
   }
-  assert.ok(headParses <= blanks + 1, `head parsed ${headParses} times for ${blanks} blank lines`);
-  // The bound that holds at any length: the tail costs at most the longest block per token, the head at most
-  // the document per block. Whole-buffer parsing is quadratic in the stream and has no such bound.
+  return { headParses, bytesSplit, bytesWhole, worstToken, worstTail };
+};
+
+test("replayed token by token, a token costs one block — the head once per block, never per token", () => {
+  const DELTA = 4;
+  const blanks = (document.match(/\n\n/g) ?? []).length;
   const longestBlock = Math.max(...document.split("\n\n").map((b) => b.length + 2));
-  const steps = Math.ceil(document.length / DELTA) + 1;
-  assert.ok(bytesSplit <= steps * longestBlock + headParses * document.length,
-    `split parsed ${bytesSplit} bytes; bound ${steps * longestBlock + headParses * document.length}`);
-  // Measured on this fixture: 575 KB against 10.3 MB, 18×; the ratio grows with the document.
-  assert.ok(bytesSplit * 10 < bytesWhole, `split parsed ${bytesSplit} bytes vs whole ${bytesWhole}`);
+  const r = replay(document, DELTA);
+  // What the freeze was: every token parsed the whole buffer. What holds now, per token: the block under
+  // the caret, plus the whole head once when a block completes. The head is one cumulative memo, so the
+  // total is still quadratic in the number of blocks (each completed block re-parses those before it) —
+  // a parse per ~75 tokens, not per token — and the per-token bound is what keeps the main thread free.
+  assert.ok(r.headParses <= blanks + 1, `head parsed ${r.headParses} times for ${blanks} blank lines`);
+  assert.ok(r.worstTail <= longestBlock, `a tail of ${r.worstTail} exceeds the longest block ${longestBlock}`);
+  assert.ok(r.worstToken <= longestBlock + document.length, "a token never costs more than the head and one block");
+  // Measured on this fixture: 575 KB against 10.3 MB, 18×. The ratio rises with the document toward a
+  // quarter of the block length, then holds — it does not grow without bound.
+  assert.ok(r.bytesSplit * 10 < r.bytesWhole, `split parsed ${r.bytesSplit} bytes vs whole ${r.bytesWhole}`);
+  const half = replay(document.slice(0, Math.floor(document.length / 2)), DELTA);
+  assert.ok(half.bytesWhole / half.bytesSplit < r.bytesWhole / r.bytesSplit, "the saving grows with the document");
 });

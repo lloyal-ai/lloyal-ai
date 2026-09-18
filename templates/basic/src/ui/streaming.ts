@@ -3,18 +3,18 @@
  *  written, parsed per token. Not a parser: a boundary this misjudges (a loose list, say) costs one extra
  *  parse of one block, never a wrong document. */
 export function splitStreaming(markdown: string): { head: string; tail: string } {
-  // A fence toggles at each line that opens one — indented up to three spaces at the top level, further
-  // inside a list item; an odd count leaves one open, and the tail must begin at or before its opening line
-  // so the fence is parsed whole. Fence lengths are not matched: a shorter fence inside a longer one
-  // toggles here, at the cost of one wrong split until settle.
-  let open = false;
-  let openedAt = 0;
-  const fence = /^[ \t]*(?:```|~~~)/gm;
+  // A fence opens at a line of three or more backticks or tildes (indented up to three spaces at the top
+  // level, further inside a list item) and closes only at a line of the same character at least as long,
+  // as CommonMark has it. If one is open, the tail must begin at or before its opening line so the fence is
+  // parsed whole.
+  let open: { char: string; length: number; at: number } | null = null;
+  const fence = /^[ \t]*(`{3,}|~{3,})/gm;
   for (let m = fence.exec(markdown); m !== null; m = fence.exec(markdown)) {
-    open = !open;
-    if (open) openedAt = m.index;
+    const run = m[1];
+    if (open === null) open = { char: run[0], length: run.length, at: m.index };
+    else if (run[0] === open.char && run.length >= open.length) open = null;
   }
-  const cut = markdown.lastIndexOf("\n\n", open ? openedAt - 2 : markdown.length);
+  const cut = markdown.lastIndexOf("\n\n", open ? open.at - 2 : markdown.length);
   if (cut < 0) return { head: "", tail: markdown };
   return { head: markdown.slice(0, cut + 2), tail: markdown.slice(cut + 2) };
 }
