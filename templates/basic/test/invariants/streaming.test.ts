@@ -43,6 +43,13 @@ test("the tail never starts inside an open fence, and a finished document splits
   assert.deepEqual(splitStreaming(longer), { head: "before\n\n", tail: "````md\ncode\n\n```\nstill code\n\nmore" });
   const tilde = "before\n\n~~~\ncode\n\n```\nstill code";
   assert.deepEqual(splitStreaming(tilde), { head: "before\n\n", tail: "~~~\ncode\n\n```\nstill code" });
+  // A closer is followed by nothing but whitespace; an opener may carry an info string.
+  const trailing = "before\n\n```\ncode\n```not-a-close\nstill code\n\nmore";
+  assert.deepEqual(splitStreaming(trailing), { head: "before\n\n", tail: "```\ncode\n```not-a-close\nstill code\n\nmore" });
+  // A blank line may hold spaces or tabs, or end in CRLF; the head keeps its bytes.
+  assert.deepEqual(splitStreaming("first\n  \nsecond\n\t\nthird"), { head: "first\n  \nsecond\n\t\n", tail: "third" });
+  assert.deepEqual(splitStreaming("first\r\n\r\nsecond"), { head: "first\r\n\r\n", tail: "second" });
+  assert.deepEqual(splitStreaming("a\r\n\r\n```\r\ncode\r\n\r\nmore"), { head: "a\r\n\r\n", tail: "```\r\ncode\r\n\r\nmore" });
 });
 
 /** Replay `text` in `DELTA`-char deltas and account for what a memoized renderer parses: the head only
