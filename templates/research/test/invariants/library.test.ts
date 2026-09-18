@@ -20,13 +20,17 @@ import { createAbilityRegistry, createInMemoryConfigStore } from "@lloyal-labs/r
 import { openLibrary, provenanceOf } from "../../src/brief/library.js";
 import type { Library } from "../../src/brief/library.js";
 import type { WorkflowEvent } from "../../src/brief/protocol.js";
-import type { Inputs } from "../../src/research/research.js";
+import type { Inputs, Written } from "../../src/research/research.js";
 
 const REPORT = "# Q?\n\n> 2026-01-01T00:00:00.000Z · flat · 1.0s\n\nThe body.\n";
 const EXCHANGE = "# Follow-up?\n\n> 2026-01-01T00:01:00.000Z · flat · 1.0s\n\nThe follow-up body.\n";
 const ev = (e: Record<string, unknown>): WorkflowEvent => e as unknown as WorkflowEvent;
 const ask = (docId: string, attachments: { digest: string }[] = []): Inputs =>
   ({ docId, text: "Q?", mode: "flat", direct: false, effort: "low", attachments, excluded: [], sources: [] }) as unknown as Inputs;
+
+/** What a writer hands back: the answer, and what each inquiry found, in plan order. */
+const wrote = (inquiries: { task: string; findings: string }[], answer = "the answer"): Written =>
+  ({ answer, inquiries, stats: { timings: [], ctxPct: 0, ctxPos: 0, ctxTotal: 1 }, complete: {} });
 
 /** One session's library over `dir`, with the bus it reads. */
 function* opened(dir: string): Operation<{ lib: Library; bus: EventBus<WorkflowEvent> }> {
@@ -65,11 +69,9 @@ test("two sessions' records on one brief reserve distinct annexure names", async
     const b = yield* opened(lib);
     a.lib.begin(id, ask(id), { warm: true });
     b.lib.begin(id, ask(id), { warm: true });   // the same brief, the same moment
-    for (const s of [a, b]) s.bus.send(ev({ type: "research:start" }));
-    a.bus.send(ev({ type: "agent:spawn", agentId: 11 }));
-    b.bus.send(ev({ type: "agent:spawn", agentId: 22 }));
-    a.bus.send(ev({ type: "agent:return", agentId: 11, result: "A's evidence" }));
-    b.bus.send(ev({ type: "agent:return", agentId: 22, result: "B's evidence" }));
+    a.lib.written(id, wrote([{ task: "a's task", findings: "A's evidence" }]));
+    b.lib.written(id, wrote([{ task: "b's task", findings: "B's evidence" }]));
+    for (const s of [a, b]) s.bus.send(ev({ type: "complete", data: {} }));
   });
   const written = fs.readdirSync(path.join(lib, id)).filter((n) => /^annexure-\d+\.md$/.test(n)).sort();
   assert.deepEqual(written, ["annexure-1.md", "annexure-2.md", "annexure-3.md"]);
@@ -77,17 +79,14 @@ test("two sessions' records on one brief reserve distinct annexure names", async
   assert.ok(bodies.some((t) => /A's evidence/.test(t)) && bodies.some((t) => /B's evidence/.test(t)));
 });
 
-/** One run's evidence, written into a fresh library: the wire a flat fan-out carries, `send` by `send`. */
-async function recorded(tasks: string[], wire: (bus: EventBus<WorkflowEvent>) => void): Promise<{ dir: string; files: string[]; report: string }> {
+/** One run's evidence, written into a fresh library from what its writer returned. */
+async function recorded(inquiries: { task: string; findings: string }[], complete: Written["complete"] = {}): Promise<{ dir: string; files: string[]; report: string }> {
   const lib = fs.mkdtempSync(path.join(os.tmpdir(), "lib-"));
   const id = await run(function* () {
     const { lib: library, bus } = yield* opened(lib);
     const docId = library.reserve();
     library.begin(docId, ask(docId), { warm: false });
-    bus.send(ev({ type: "research:start", agentCount: tasks.length, mode: "flat" }));
-    bus.send(ev({ type: "fanout:tasks", tasks: tasks.map((description) => ({ description })) }));
-    wire(bus);
-    bus.send(ev({ type: "answer", text: "the answer" }));
+    library.written(docId, { ...wrote(inquiries), complete });
     bus.send(ev({ type: "complete", data: {} }));   // the report lands as `complete` is said
     yield* library.settled(docId);
     return docId;
@@ -107,34 +106,34 @@ const annexureWith = (r: { dir: string; files: string[] }, findings: string): st
   return hit[0];
 };
 
-test("an inquiry's findings are filed under the task its key names, whatever order the agents were admitted in", async () => {
-  // The pool seats what the context can hold: a wide plan's later task can be admitted FIRST. The key
-  // (`task:<i>`) is the logical identity; arrival order is not.
-  const r = await recorded(["the near half", "the far half"], (bus) => {
-    bus.send(ev({ type: "agent:spawn", agentId: 21, key: "task:1" }));
-    bus.send(ev({ type: "agent:spawn", agentId: 20, key: "task:0" }));
-    bus.send(ev({ type: "agent:return", agentId: 21, result: "far findings" }));
-    bus.send(ev({ type: "agent:return", agentId: 20, result: "near findings" }));
-  });
+test("the meta line carries only what the writer measured: tokens without a perplexity say nothing about perplexity", async () => {
+  const counted = await recorded([{ task: "t", findings: "f" }], { synthTokens: 41 });
+  assert.match(counted.report, /41 synth tokens/);
+  assert.doesNotMatch(counted.report, /ppl/);
+  const measured = await recorded([{ task: "t", findings: "f" }], { synthTokens: 41, synthPpl: 1.234 });
+  assert.match(measured.report, /41 synth tokens · ppl 1\.23/);
+});
+
+test("each inquiry's findings are filed as an annexure under its own task, in plan order, and indexed by the report", async () => {
+  const r = await recorded([
+    { task: "the near half", findings: "near findings" },
+    { task: "the far half", findings: "far findings" },
+  ]);
   assert.deepEqual(r.files, ["annexure-1.md", "annexure-2.md"]);
   assert.match(annexureWith(r, "near findings"), /\*\*Task:\*\* the near half/);
   assert.match(annexureWith(r, "far findings"), /\*\*Task:\*\* the far half/);
-  // And the index the report ends with names each annexure by its own task.
   assert.match(r.report, /- \[Annexure 1\]\(\.\/annexure-1\.md\) — the near half/);
   assert.match(r.report, /- \[Annexure 2\]\(\.\/annexure-2\.md\) — the far half/);
 });
 
-test("a healed inquiry files its findings as its task's annexure — no second file, no hole in the numbering", async () => {
-  // A heal is a NEW agent under the SAME key: the evidence it brings back is that task's, not a third task's.
-  const r = await recorded(["the only task"], (bus) => {
-    bus.send(ev({ type: "agent:spawn", agentId: 30, key: "task:0" }));
-    bus.send(ev({ type: "agent:failed", agentId: 30, reason: "decode_error" }));
-    bus.send(ev({ type: "agent:spawn", agentId: 31, key: "task:0" }));   // the replacement
-    bus.send(ev({ type: "agent:return", agentId: 31, result: "the healed findings" }));
-  });
-  assert.deepEqual(r.files, ["annexure-1.md"]);
-  assert.match(annexureWith(r, "the healed findings"), /\*\*Task:\*\* the only task/);
-  assert.match(r.report, /- \[Annexure 1\]\(\.\/annexure-1\.md\) — the only task/);
+test("an inquiry that found nothing leaves no annexure, and the ones beside it keep their own numbers", async () => {
+  const r = await recorded([
+    { task: "the near half", findings: "" },
+    { task: "the far half", findings: "far findings" },
+  ]);
+  assert.deepEqual(r.files, ["annexure-2.md"]);
+  assert.match(r.report, /- \[Annexure 2\]\(\.\/annexure-2\.md\) — the far half/);
+  assert.doesNotMatch(r.report, /Annexure 1/);
 });
 
 test("roots a tool result admitted ride the meta line beside the ask's own, once each", async () => {
@@ -147,7 +146,7 @@ test("roots a tool result admitted ride the meta line beside the ask's own, once
     const docId = library.reserve();
     library.begin(docId, ask(docId, [root(own)]), { warm: false });
     bus.send(ev({ type: "agent:prefilled", agentId: 3, cells: 1629, role: "toolResult", attachments: [root(admitted), root(own)] }));
-    bus.send(ev({ type: "answer", text: "the answer" }));
+    library.written(docId, wrote([]));
     bus.send(ev({ type: "complete", data: {} }));   // the report lands as `complete` is said
     yield* library.settled(docId);
     return docId;

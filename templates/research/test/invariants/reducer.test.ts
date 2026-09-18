@@ -5,11 +5,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduce, initialState, DOC_PHASES, type AppState } from '../../src/ui/state.js';
+import { reduce, initialState, type AppState } from '../../src/ui/state.js';
 import type { WorkflowEvent } from '../../src/brief/protocol.js';
 import {
-  selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
-  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle,
+  DOC_PHASES, selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
+  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle, selectProbes,
 } from '../../src/ui/select.js';
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
@@ -241,6 +241,21 @@ test('selectRunDepth: the run keeps its own effort across preflight', () => {
   assert.equal(s.documents.get(A)!.runEffort, 'low');
 });
 
+test('a probe wears the name of the source it probes, read off its spawn key — never its place in the byline', () => {
+  // The byline lists every installed source, corpus first and off by default; the pool forks one probe per
+  // PARTICIPATING source, in its own order. Aligning the two by position labels the web probe "corpus".
+  const ability = (name: string, enabled: boolean) => ({ name, enabled, config: {}, configSchema: undefined, iconUrl: null });
+  let s = fold([
+    { type: 'abilities:state', abilities: [ability('corpus', false), ability('web', true), ability('documents', true)] } as unknown as WorkflowEvent,
+    { type: 'query', docId: A, query: 'Q', warm: false, effort: 'low' } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q', mode: 'flat' } as WorkflowEvent,
+    { type: 'preflight:start', query: 'Q', abilityCount: 2 } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 1, parentAgentId: null, key: 'source:web' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 2, parentAgentId: null, key: 'source:documents' } as WorkflowEvent,
+  ]);
+  assert.deepEqual(selectProbes(s).map((p) => p.title), ['web', 'documents']);
+});
+
 // ── Admissions grow the thread live ────────────────────────────
 // A tool result that admitted roots reaches the fold on the bus as
 // `agent:prefilled`; the roots join the ask (or the brief) as they land, so the
@@ -311,6 +326,36 @@ test('a healed inquiry is the section the reader reads, and the brief is not mar
   assert.deepEqual(selectMarks(s), [], 'nothing closed unsettled: every task has a settled attempt');
   // The attempt that died is still there for the dev pane — only the section stopped reading it.
   assert.equal(s.documents.get(A)!.roster.agents.get(20)!.failReason, 'decode_error');
+});
+
+test("an ordinary tool that shares the findings' argument name is a step of the work, never the findings", () => {
+  // The inquiries hand in with `finish(body)`; `write_file(body)` is just a tool they may call. The argument's
+  // name cannot tell the two apart — only the tool's can.
+  const base = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent,
+    { type: 'plan', intent: 'research', tasks: [{ description: 'the only task' }], clarifyQuestions: [], tokenCount: 1, timeMs: 1 } as WorkflowEvent,
+    { type: 'research:start', agentCount: 1, mode: 'flat', reports: { tool: 'finish', field: 'body' } } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 20, key: 'task:0' } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: 'planning</think>', tokenCount: 1 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: '<tool_call>\n<function=write_file>\n<parameter=body>\nFILE CONTENTS', tokenCount: 9 } as WorkflowEvent,
+  ]);
+  const [writingAFile] = selectSections(base);
+  assert.equal(writingAFile.prose, null, "a file's contents were shown as the section's findings");
+  assert.notEqual(writingAFile.inquiry?.verb.kind, 'writing', 'the inquiry was said to be writing its section while it wrote a file');
+
+  const called = fold([{ type: 'agent:tool_call', agentId: 20, tool: 'write_file', args: '{"path":"notes.md"}' } as WorkflowEvent], base);
+  const steps = called.documents.get(A)!.roster.agents.get(20)!.timeline.filter((t) => t.kind === 'tool_call');
+  assert.equal(steps.length, 1, 'the write_file call vanished from the work the reader can open');
+
+  const finishing = fold([
+    { type: 'agent:tool_result', agentId: 20, tool: 'write_file', result: '{}' } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: 'done</think>', tokenCount: 12 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 20, text: '<tool_call>\n<function=finish>\n<parameter=body>\nTHE FINDINGS', tokenCount: 20 } as WorkflowEvent,
+  ], called);
+  const [handingIn] = selectSections(finishing);
+  assert.equal(handingIn.prose, 'THE FINDINGS');
+  assert.equal(handingIn.streaming, true);
 });
 
 test("the run bar commands the RUNNING document while the canvas shows another", () => {

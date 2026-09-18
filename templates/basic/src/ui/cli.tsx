@@ -34,8 +34,8 @@ import type {
   WikiSource,
 } from "./state.js";
 import type { Command, WorkflowEvent } from "../harness/protocol.js";
-import { DevOverlay } from "@lloyal-labs/dev-tools/ink";
-import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
+import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
+import { FRAMING } from "./devtools.js";
 
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
   bootstrap.reduce(reduce, initialState);
@@ -156,37 +156,17 @@ function View({
   const [state, apply] = useReducer(reduce, bootstrap, seed);
   const app = useApp();
 
-  // The dev overlay's model + a SHORT formatted tail — folded alongside the
-  // view's own reduce from the same subscription. The overlay renders nothing
-  // unless config:loaded carried dev: true (LLOYAL_DEV).
-  // Lazy init: an inline initializer would allocate a fresh model every
-  // render only to be discarded after the first.
-  const devModelRef = useRef<ReturnType<typeof createPaneModel> | null>(null);
-  devModelRef.current ??= createPaneModel();
-  const devModel = devModelRef.current;
-  const devTail = useRef<string[]>([]);
-  const [devOpen, setDevOpen] = useState(false);
+  // The dev overlay: nothing unless the wire said dev (LLOYAL_DEV), ctrl+g to show it. The hook owns the rest.
+  const dev = useDevOverlay(bus, { framing: FRAMING });
 
-  useEffect(() => bus.subscribe((ev) => {
-    // Truly wire-gated: only config:loaded can flip the gate, so until it
-    // says dev, the ONLY event folded is config:loaded itself — a non-dev
-    // run never pays the per-token fold.
-    if (devModel.dev || ev.type === "config:loaded") {
-      foldEvent(devModel, ev as unknown as Record<string, unknown> & { type: string }, Date.now());
-      if (devModel.dev && ev.type !== "agent:produce" && ev.type !== "agent:tick") {
-        devTail.current.push(ev.type);
-        if (devTail.current.length > 24) devTail.current.shift();
-      }
-    }
-    apply(ev);
-  }), [bus]);
+  useEffect(() => bus.subscribe(apply), [bus]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       dispatch({ type: "quit" });
       app.exit();
     }
-    if (key.ctrl && input === "g") setDevOpen((v) => !v);
+    if (key.ctrl && input === "g") dev.toggle();
   });
 
   // Move finished work into Static so it's painted to scrollback ONCE and never
@@ -271,7 +251,7 @@ function View({
 
         {state.error && <Text color="red">error: {state.error}</Text>}
 
-        {devOpen && <DevOverlay model={devModel} tail={devTail.current} />}
+        {dev.overlay}
 
         {!working && (
           <Box>
@@ -294,8 +274,11 @@ export function renderCli(
   dispatch: (c: Command) => void,
   bootstrap: readonly WorkflowEvent[],
 ): () => void {
+  // ctrl+c is the app's to handle — it says `quit` on the wire so the harness ends and the process with it. Left
+  // to Ink, ctrl+c unmounts the view and nothing tells the harness, which waits for a command that never comes.
   const instance = render(
     <View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />,
+    { exitOnCtrlC: false },
   );
   return () => instance.unmount();
 }

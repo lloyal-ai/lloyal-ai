@@ -11,6 +11,7 @@ import { createEngine, createWindow, registerContentScheme, serveContentScheme, 
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
+import { APP } from "../../src/ui/presentation.js";
 
 // Before app ready, or it is ignored silently.
 registerContentScheme();
@@ -43,7 +44,7 @@ app.whenReady().then(() => {
       // electron-vite names the preload bundle after its entry and emits ESM as .mjs.
       preload: join(__dirname, "../preload/preload.mjs"),
       page: join(__dirname, "../renderer/index.html"),
-      title: "Fieldnote",
+      title: APP.name,
       window: { backgroundColor: "#0b0d12" },
     });
     win.on("closed", () => { win = null; });

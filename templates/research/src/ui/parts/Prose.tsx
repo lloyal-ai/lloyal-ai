@@ -1,5 +1,5 @@
-/** The brief's prose — markdown from the harness (already inline-cited by
- *  the weave), set in the document's one face; links open outward. Carries
+/** The brief's prose — markdown from the harness, its citations already
+ *  inline (rig weaves each report's sources into its text as it is captured), set in the document's one face; links open outward. Carries
  *  the document's whole type system: the model's own headings step DOWN
  *  from the document title (size and spacing make the hierarchy; weight
  *  never exceeds 600 — emphasis included, so a bold-happy model can't

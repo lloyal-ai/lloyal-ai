@@ -1,17 +1,11 @@
 /**
- * The shared React view — desktop and web both mount this ONE component, and
- * it folds the SAME node-free `reduce` (`state.ts`) the cli's Ink
- * view does: one harness, one fold, one brief.
- *
- * The view is a renderer of the harness's events and a dispatcher of its
- * commands — the fold lives in `state.ts`, every derivation in `select.ts`,
- * the register in `theme.ts`, and each moment of the journey in `moments/`.
- * This file only maps the current moment onto the shell. It is YOURS: grow
- * it into your product's UI; the harness never changes.
+ * The view, shared by the desktop window and the browser: it shows what the harness says and sends what the
+ * reader does. It holds no truth of its own — everything on screen is derived from the one fold every surface
+ * shares — and this file only puts the current moment of a brief's life into the shell. It is yours: grow it
+ * into your product's interface. The harness does not change when you do.
  */
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
-import type { DevControl, RunFraming } from "@lloyal-labs/dev-tools";
 import { useHarness, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../brief/protocol.js";
 import type { AppState } from "./state.js";
@@ -21,6 +15,9 @@ import {
   type Shape,
 } from "./select.js";
 import { recordPace } from "./pace.js";
+import { APP } from "./presentation.js";
+import { FRAMING } from "./devtools.js";
+import { config } from "../config.js";
 import { Shell } from "./parts/Shell.js";
 import { Composer } from "./parts/Composer.js";
 import { Library } from "./parts/Library.js";
@@ -28,83 +25,6 @@ import { Ask } from "./moments/Ask.js";
 import { Frame } from "./moments/Frame.js";
 import { Write } from "./moments/Write.js";
 import { Settle } from "./moments/Settle.js";
-
-/** The pipeline's run framing, as data the dev pane reads — which of OUR
- *  events open and close a run, and which mark the phases whose labels the
- *  agent lanes wear. Add or rename a stage in the pipeline? Extend this
- *  beside it and the pane follows; it knows no event names of its own. */
-const FRAMING: RunFraming = {
-  phases: {
-    "preflight:start": "recon",
-    "plan:start": "planner",
-    "research:start": "research",
-    "synthesize:start": "synth",
-  },
-  // Wire order: the harness echoes `query` FIRST on every path, then the
-  // pipeline's preflight/plan markers follow. The declared order must match
-  // the wire's or the supersede heuristic double-resets.
-  open: ["query", "preflight:start", "plan:start"],
-  close: ["complete", "run:aborted"],
-  // Where the user's instruction lives on THIS wire — the pane shows it on
-  // the spine row only because we declare it here; it never guesses.
-  instruction: { event: "query", field: "query", attachments: "attachments" },
-};
-
-/** Per-image token budget steps. `auto` first, because handing the choice
- *  back to the model's metadata is the default and has to stay reachable. */
-const IMAGE_TOKEN_STEPS = ["auto", "256", "512", "1024", "2048", "4096"] as const;
-
-type ImageTokenModel = { imageMinTokens?: number; imageMaxTokens?: number };
-
-/** Config value → the step that represents it. 0 and undefined are the same
- *  state (the binding applies the value only when > 0), and both read `auto`.
- *  A value set in harness.yml that is not one of the steps shows as itself
- *  rather than snapping to a neighbour — the slider then sits at `auto`,
- *  which is honest: the UI cannot represent it. */
-const imageTokenStep = (v: number | undefined): string =>
-  !v ? "auto" : String(v);
-
-/** The dev pane's Settings contribution — pure data, dev-gated by the wire. */
-const DEV_CONTROLS: readonly DevControl[] = [
-  {
-    key: "defaults.effort",
-    values: ["low", "medium", "high", "ultra"],
-    command: "set_effort",
-    field: "effort",
-    note: "applies next run",
-    read: (c) => (c.defaults as { effort?: string } | undefined)?.effort,
-  },
-  {
-    key: "defaults.reasoningMode",
-    originKey: "reasoningMode",
-    values: ["flat", "deep"],
-    command: "change_mode",
-    field: "mode",
-    note: "applies next run",
-    read: (c) => (c.defaults as { reasoningMode?: string } | undefined)?.reasoningMode,
-  },
-  // Sliders, not button rows: these are scales, so the ordering carries the
-  // meaning. 'auto' is a real step — it hands the choice back to the model's
-  // own metadata, which is the right default and must stay reachable.
-  {
-    key: "model.imageMaxTokens",
-    values: IMAGE_TOKEN_STEPS,
-    render: "slider",
-    command: "set_image_max_tokens",
-    field: "value",
-    note: "reloads the runtime",
-    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMaxTokens),
-  },
-  {
-    key: "model.imageMinTokens",
-    values: IMAGE_TOKEN_STEPS,
-    render: "slider",
-    command: "set_image_min_tokens",
-    field: "value",
-    note: "reloads the runtime",
-    read: (c) => imageTokenStep((c.model as ImageTokenModel | undefined)?.imageMinTokens),
-  },
-];
 
 const COMPOSER_HINT: Record<ReturnType<typeof selectMoment>, string> = {
   ask: "Ask a question worth a brief…",
@@ -125,7 +45,7 @@ export function HarnessApp(): ReactElement {
   const shape = chosenShape ?? configuredShape;
 
   useEffect(() => {
-    document.title = live ? "● Fieldnote" : "Fieldnote";
+    document.title = live ? `● ${APP.name}` : APP.name;
   }, [live]);
 
   // The library lists on arrival (the bridge queues until connected).
@@ -155,9 +75,9 @@ export function HarnessApp(): ReactElement {
   return (
     <DevPane
       bridge={bridge}
+      config={config}
       framing={FRAMING}
-      controls={DEV_CONTROLS}
-      title="Fieldnote"
+      title={APP.name}
       runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }}
     >
       <Shell

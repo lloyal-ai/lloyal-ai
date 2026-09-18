@@ -25,7 +25,7 @@ import type { EventBus } from "@lloyal-labs/binding";
 import { abilityToc } from "@lloyal-labs/rig";
 import type { Execution, Handlers } from "@lloyal-labs/rig";
 import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs/rig/node";
-import type { Inputs } from "../research/research.js";
+import type { Inputs, Written } from "../research/research.js";
 import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "./protocol.js";
 import { errorMessage } from "./protocol.js";
 
@@ -44,19 +44,11 @@ interface RunRecord {
   attachments: string[];
   /** An ask into a settled brief: the answer lands as an exchange beside the report. */
   appending: boolean;
-  /** Annexure numbers the folder already held when this run began — the first name each of this run's tries. */
+  /** Annexure numbers the folder already held when this run began: this run's annexures are numbered after them. */
   ordinalBase: number;
-  inResearch: boolean;
-  /** The highest task ordinal this run has named — what a spawn that names no task takes next. */
-  lastOrdinal: number;
-  /** Each attempt's task, by the ordinal its spawn key named: a heal maps to the SAME task as the attempt it
-   *  replaces, so its findings land in that task's annexure. Keys are this run's; the record dies with it. */
-  agentToOrdinal: Map<number, number>;
-  taskByOrdinal: Map<number, string>;
-  fileOf: Map<number, number>;
   startedAt: number;
-  synthStats: { tokens: number; ppl: number; timeMs: number } | null;
-  lastAnswer: string | null;
+  /** What the writer returned, held until the run says `complete`. */
+  written: Written | null;
 }
 
 /** Create `<dir>/<prefix>-<n>.md` for the first free n ≥ `from`, exclusively. */
@@ -119,6 +111,8 @@ export interface Library {
   release(id: DocId): void;
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
+  /** What the writer returned for the brief being written. The report is made from it when the run says `complete`. */
+  written(id: DocId, written: Written): void;
   /** A settled brief, its pictures checked against the store; null when there is none. */
   read(id: DocId): Thread | null;
   unfinished(id: DocId): boolean;
@@ -136,9 +130,11 @@ export function* openLibrary(
   deps: { events: EventBus<WorkflowEvent>; registry: AbilityRegistry; wire: Channel<WorkflowEvent, void>; run: Execution; abilities: readonly AbilityFactory[] },
 ): Operation<Library> {
   const { events, registry, wire, run, abilities } = deps;
-  /** The unfinished reservations this session owns; whatever is still here at teardown is released. */
+  /** The unfinished reservations this session owns. */
   const reserved = new Set<DocId>();
   let record: RunRecord | null = null;
+  // `ensure` registers cleanup with whoever called `openLibrary` — here the session. It runs when the session
+  // ends, however it ends, so a folder reserved for a brief that never settled does not outlive it.
   yield* ensure(() => { for (const id of [...reserved]) release(id); });
 
   const reportPath = (id: DocId): string | null => confined(dir(), path.join(dir(), id, "report.md"));
@@ -214,70 +210,46 @@ export function* openLibrary(
     }
   }
 
-  /** The answer, its meta line and the annexure index, written as the run's `complete` is said: a report, or an
-   *  exchange beside a settled one. Synchronous, on the bus, so the file exists before any reader of `complete` acts. */
+  /** The report, written as the run's `complete` is said, from what the writer returned: one annexure per inquiry
+   *  that found something, then the answer with its meta line and the index of those annexures — as `report.md`,
+   *  or as an exchange beside a settled one. Synchronous, on the bus, so the files exist before any reader of
+   *  `complete` acts. An annexure's name is reserved, never assumed: another session may be writing beside this one. */
   function finish(r: RunRecord): void {
-    if (!r.lastAnswer) return;
-    const refs = [...r.fileOf.entries()].sort((a, b) => a[1] - b[1])
-      .map(([ord, n]) => { const desc = r.taskByOrdinal.get(ord); return `- [Annexure ${n}](./annexure-${n}.md)${desc ? ` — ${desc}` : ""}`; })
-      .join("\n");
-    const annexures = refs ? `\n---\n\n## Annexures\n\n${refs}\n` : "";
-    const stats = r.synthStats ? ` · ${r.synthStats.tokens} synth tokens · ppl ${r.synthStats.ppl.toFixed(2)}` : "";
+    const w = r.written;
+    if (!w?.answer) return;
+    const refs: string[] = [];
+    w.inquiries.forEach(({ task, findings }, i) => {
+      if (!findings.trim()) return;
+      const n = reserveName(r.dir, "annexure", r.ordinalBase + i + 1);
+      fs.writeFileSync(path.join(r.dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${task ? `**Task:** ${task}\n\n` : ""}---\n\n${findings.trimEnd()}\n`, "utf8");
+      refs.push(`- [Annexure ${n}](./annexure-${n}.md)${task ? ` — ${task}` : ""}`);
+    });
+    const annexures = refs.length ? `\n---\n\n## Annexures\n\n${refs.join("\n")}\n` : "";
+    const { synthTokens, synthPpl } = w.complete;
+    const stats = `${synthTokens ? ` · ${synthTokens} synth tokens` : ""}${synthPpl !== undefined ? ` · ppl ${synthPpl.toFixed(2)}` : ""}`;
     const media = r.attachments.length > 0 ? ` · media ${r.attachments.join(" ")}` : "";
     const meta = `> ${new Date().toISOString()} · ${r.mode} · ${r.effort}${r.direct ? " · ask" : ""}${stats} · ${((Date.now() - r.startedAt) / 1000).toFixed(1)}s${media}`;
-    const doc = `# ${r.query}\n\n${meta}\n\n${stripThink(r.lastAnswer).trim()}\n${annexures}`;
+    const doc = `# ${r.query}\n\n${meta}\n\n${stripThink(w.answer).trim()}\n${annexures}`;
     if (r.appending) fs.writeFileSync(path.join(r.dir, `exchange-${reserveName(r.dir, "exchange", 1)}.md`), doc, "utf8");
     else fs.writeFileSync(path.join(r.dir, "report.md"), doc, "utf8");
   }
 
-  /** A task's evidence, under a name reserved once for that task: a later attempt at it (a heal) writes over
-   *  the earlier one's findings rather than opening a file of its own. */
-  function writeAnnexure(r: RunRecord, ord: number, body: string): void {
-    let n = r.fileOf.get(ord);
-    if (n === undefined) { n = reserveName(r.dir, "annexure", r.ordinalBase + ord); r.fileOf.set(ord, n); }
-    const desc = r.taskByOrdinal.get(ord) ?? "";
-    fs.writeFileSync(path.join(r.dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${desc ? `**Task:** ${desc}\n\n` : ""}---\n\n${body.trimEnd()}\n`, "utf8");
-  }
-
-  /** What the inquiries say lands as it is said; the record reads the wire behind the handlers. */
+  /** The two things the library takes from the bus, because no value carries them: the roots a tool admitted
+   *  while the run worked, and the moment the run says it is over. `events` is the bus itself, and a subscriber
+   *  is a plain callback that runs as each event is said — which is why the report can be on disk before anyone
+   *  else hears `complete`. (`wire.send` is the way to SAY something from inside an operation.) */
   const unsubscribe = events.subscribe((ev) => {
     const r = record;
     if (!r) return;
-    switch (ev.type) {
-      case "research:start": r.inResearch = true; break;
-      case "research:done": r.inResearch = false; break;
-      case "fanout:tasks": ev.tasks.forEach((t, i) => r.taskByOrdinal.set(i + 1, t.description)); break;
-      case "spine:task": r.taskByOrdinal.set(ev.taskIndex + 1, ev.description); break;
-      case "agent:spawn": {
-        // The spawn's key (`task:<i>`) is the task it works — the one thing arrival order is not, since the
-        // pool seats what the context can hold and a heal re-spawns a task under the same key. A spawn that
-        // names no task takes the next free ordinal.
-        if (!r.inResearch || r.agentToOrdinal.has(ev.agentId)) break;
-        const named = /^task:(\d+)$/.exec(ev.key ?? "");
-        const ord = named ? Number(named[1]) + 1 : r.lastOrdinal + 1;
-        r.lastOrdinal = Math.max(r.lastOrdinal, ord);
-        r.agentToOrdinal.set(ev.agentId, ord);
-        break;
-      }
-      case "agent:return":
-      case "agent:recovered": {
-        const ord = r.agentToOrdinal.get(ev.agentId);
-        if (ord !== undefined) writeAnnexure(r, ord, ev.result);
-        break;
-      }
-      case "agent:prefilled":
-        // A tool result that carried roots admitted them: booked with the run, so the meta line carries them.
-        for (const a of ev.attachments ?? []) if (!r.attachments.includes(a.digest)) r.attachments.push(a.digest);
-        break;
-      case "synthesize:done": r.synthStats = { tokens: ev.tokenCount, ppl: ev.ppl, timeMs: ev.timeMs }; break;
-      case "answer": r.lastAnswer = ev.text; break;
-      case "complete":
-        // The run announced its own end: the report lands now, and a settle is a library change, said unasked —
-        // on the bus directly, in the same breath as `complete`, so no reader of it finds the shelf stale.
-        finish(r);
-        record = null;
-        events.send({ type: "library:list", entries: list() });
-        break;
+    if (ev.type === "agent:prefilled") {
+      // A tool result that carried roots admitted them: booked with the run, so the meta line carries them.
+      for (const a of ev.attachments ?? []) if (!r.attachments.includes(a.digest)) r.attachments.push(a.digest);
+    } else if (ev.type === "complete") {
+      // A settle is a library change, said unasked — on the bus directly, in the same breath as `complete`,
+      // so no reader of it finds the shelf stale.
+      finish(r);
+      record = null;
+      events.send({ type: "library:list", entries: list() });
     }
   });
   yield* ensure(() => unsubscribe());
@@ -333,10 +305,10 @@ export function* openLibrary(
       record = {
         docId: id, dir: folder, query: ask.text, mode: ask.mode, effort: ask.effort, direct: ask.direct,
         attachments: ask.attachments.map((a) => a.digest),
-        appending: settledAlready, ordinalBase: taken, inResearch: false, lastOrdinal: 0,
-        agentToOrdinal: new Map(), taskByOrdinal: new Map(), fileOf: new Map(), startedAt: Date.now(), synthStats: null, lastAnswer: null,
+        appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), written: null,
       };
     },
+    written(id, w) { if (record?.docId === id) record.written = w; },
     read,
     unfinished: (id) => reserved.has(id),
     *roots(id, own) {

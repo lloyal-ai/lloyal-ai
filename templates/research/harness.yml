@@ -3,9 +3,9 @@
 #
 #   cli      a terminal app       (npm start)
 #   desktop  a native window      (npm run dev:desktop)
-#   web      a browser app + host (npm run serve · npm run dev:web)
+#   web      a browser app + host (npm run dev:web starts both; npm run serve is the host alone)
 #
-# One harness over a binding, folding the one reduce in src/ui/state.ts.
+# One harness over a binding; every surface folds the same reduce.
 targets: [cli, desktop, web]
 
 model:
@@ -35,12 +35,13 @@ sources:
   outputDir: reports         # settled briefs land here — the sidebar's Completed reports
 
 # abilities:                 # per-ability config committed with the deploy
-#   corpus:
-#     corpusPath: reports    # your own settled briefs become searchable ground
+#   corpus:                  # installed, but OFF until it has a path to read. Uncomment
+#     corpusPath: reports    # these to turn it on: pointed at `reports`, your own settled
+#                            # briefs become searchable ground for the next one.
 #                            # (secrets go in env, e.g. TAVILY_API_KEY, not here)
 
-# Local overrides the harness saves (set_effort, set_output_dir) live in
-# harness.json — gitignored, layered over this file.
+# Settings changed while the app runs are saved to harness.json — gitignored,
+# layered over this file.
 
 defaults:
   effort: low                # the two-agent level: the quickest way to watch a whole
@@ -50,6 +51,4 @@ defaults:
   guards:                    # the abilities' gates, by name. Sibling agents feed one
     url_dedup:   { scope: cohort }    # synthesis here, so a URL or query any of them
     query_dedup: { scope: cohort }    # attended is not fetched again; `false` switches a gate off
-#   effort: high             # low · medium · high · ultra
-#   reasoningMode: flat      # flat · deep
-#   maxTurns: 10
+#   reasoningMode: flat      # flat · deep — the shape a new brief starts in

@@ -46,7 +46,7 @@ import { bufferedCommandSignal, makeServedRunner, RunnerCtx } from "@lloyal-labs
 import { runnerConfig } from "@lloyal-labs/rig/node";
 import type { AttachmentStore } from "@lloyal-labs/media";
 import { harness, config } from "../../src/app.js";
-import type { Config, Origin } from "../../src/app.js";
+import type { Config, Origin } from "../../src/config.js";
 import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
 
 const STOP = 999;
@@ -117,6 +117,9 @@ export interface HarnessSpec {
   oneshot?: string;
   /** The mock context's sequence budget — how many branches may be alive at once. Unbounded by default. */
   nSeqMax?: number;
+  /** The terminal tool a `kind: 'report'` utterance is presented as a call of, and the argument that carries its
+   *  text. Defaults to research's own `report` and `result`. */
+  terminal?: { tool: string; field: string };
 }
 
 export interface HarnessRun {
@@ -261,8 +264,8 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
         toolCalls: [
           {
             id: "c1",
-            name: "report",
-            arguments: JSON.stringify({ result: u.text, sources: u.sources ?? [] }),
+            name: spec.terminal?.tool ?? "report",
+            arguments: JSON.stringify(spec.terminal ? { [spec.terminal.field]: u.text } : { result: u.text, sources: u.sources ?? [] }),
           },
         ],
       };

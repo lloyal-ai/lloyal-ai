@@ -42,6 +42,10 @@ test("a voluntary report's sources are woven into its findings: on the wire, and
   const returns = run.events.filter((e) => e.type === "agent:return") as { result: string }[];
   assert.equal(returns.length, 1);
   assert.equal(returns[0].result, WOVEN);
+  // The report takes a `sources` argument, so the inquiry was told how to fill it.
+  const prompts = (run.trace as { type: string; role?: string; promptText?: string }[])
+    .filter((t) => t.type === "prompt:format" && t.role === "agentSuffix").map((t) => t.promptText ?? "");
+  assert.ok(prompts.some((t) => t.includes("When you call report(): cite each claim inline")), "the citation nudge was not said to the stock report");
   const dir = path.join(run.outputDir, docIdOfQuery(run.events));
   const annexures = fs.readdirSync(dir).filter((f) => /^annexure-\d+\.md$/.test(f));
   assert.equal(annexures.length, 1, "one annexure per research agent");

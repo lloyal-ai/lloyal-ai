@@ -16,6 +16,7 @@
 import "./app.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
+import { FRAMING } from "./devtools.js";
 import {
   reduce,
   initialState,
@@ -214,12 +215,11 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   // every surface); the local one only covers the instant before `query` lands.
   const title = state.topic || topic || "__NAME__";
 
-  // The dev shell: the wiki view lives in the shell's scroll container and
-  // the pane docks below it (dev-gated by config:loaded dev: true). basic
-  // has no config commands yet, so its Settings tab is the read-only
-  // inspector — controls arrive with the command protocol.
+  // The dev shell: the wiki view lives in the shell's scroll container and the pane docks below it, only when
+  // the wire said dev. This app serves no settings commands, so the pane is handed no config table and its
+  // Settings tab is a read-only inspector.
   return (
-    <DevPane bridge={window.harness} controls={[]} title="__NAME__">
+    <DevPane bridge={window.harness} framing={FRAMING} title="__NAME__">
       <div className="wiki">
         <header className="wiki-top">
           <div className="wiki-brand">

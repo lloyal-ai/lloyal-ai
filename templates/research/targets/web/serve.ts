@@ -5,5 +5,6 @@
  */
 import { bootServed } from "@lloyal-labs/rig/node";
 import { harness, abilities, config } from "../../src/app.js";
+import { APP } from "../../src/ui/presentation.js";
 
-bootServed({ harness, abilities, config }, { name: "Fieldnote" });
+bootServed({ harness, abilities, config }, { name: APP.name });

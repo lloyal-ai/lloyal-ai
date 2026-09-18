@@ -3,7 +3,7 @@
  *  planner asked; otherwise it opens a brief in the chosen shape. Over a
  *  settled brief it carries the Ask/Extend choice: Ask answers from the
  *  warm context (skipPlanner — instant); Extend reframes fully as a new
- *  run. Depth applies on selection (`set_effort` — next run). */
+ *  run. A depth chosen here applies from the next run. */
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
@@ -13,7 +13,7 @@ import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, estimateLabel, fmtElapsed, selectActiveDocId, selectBanked,
-  selectDepth, selectEtaTasks, selectLibraries, selectLive, selectMoment, selectResumedAt, selectRevision,
+  selectDepth, selectEtaTasks, selectSources, selectLive, selectMoment, selectResumedAt, selectRevision,
   type Shape,
 } from "../select.js";
 import { paceFor } from "../pace.js";
@@ -46,15 +46,6 @@ type Attached =
   | { id: number; name: string; status: "uploading" }
   | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document"; thumb: string | null; title: string | null }
   | { id: number; name: string; status: "failed"; error: string };
-
-/** A picked image, before submit.
- *
- *  `url` is a LOCAL object URL — an optimistic preview of the file the user
- *  chose, not of what the model will see. The two differ: normalization may
- *  re-encode, and the preview cannot be joined to the admitted representation
- *  by digest because the browser holds the source's hash while the fold holds
- *  the MANIFEST's. After submit the view resolves through the content plane
- *  instead, which shows the exact pixels the projector encoded. */
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
  *  inline background always beats the hover class, so selection never dims. */
@@ -110,10 +101,10 @@ export function Composer({ shape, placeholder }: {
   // What submit() will actually send — the render gates below share the
   // same truth instead of re-deriving it.
   const willSkipPlanner = settled ? true : shape === "ask";
-  const libraries = useProjection(selectLibraries);
+  const sources = useProjection(selectSources);
   const [configFor, setConfigFor] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
-  const configPanel = libraries.find((l) => l.name === configFor) ?? null;
+  const configPanel = sources.find((l) => l.name === configFor) ?? null;
   const askNow = useProjection(selectActiveAsk);
 
   // Acknowledgment: a document was born or activated (the echo lands in
@@ -135,10 +126,10 @@ export function Composer({ shape, placeholder }: {
     return () => clearTimeout(t);
   }, [pending]);
   useEffect(() => {
-    if (enabling !== null && libraries.find((l) => l.name === enabling)?.enabled) {
+    if (enabling !== null && sources.find((l) => l.name === enabling)?.enabled) {
       setEnabling(null);
     }
-  }, [enabling, libraries]);
+  }, [enabling, sources]);
 
   const closeConfig = (): void => {
     setConfigFor(null);
@@ -165,11 +156,8 @@ export function Composer({ shape, placeholder }: {
     closeConfig();
   };
 
-  // No size cap here any more. It existed because base64 inflated the wire by
-  // 4/3 and the socket carried the bytes; the bytes now go over HTTP, where
-  // the HOST bounds them — in size AND in time, which a client-side check
-  // never did. Refusing here would only be a second, weaker opinion that
-  // drifts from the one that counts.
+  // No size check here: the host bounds an upload in size and in time, and a second opinion in the view
+  // would only drift from the one that counts.
   /** Takes anything File-shaped so the picker and the clipboard feed ONE path
    *  — a second attach path is how the two drift. */
   const attach = (files: ArrayLike<File> | null): void => {
@@ -409,7 +397,7 @@ export function Composer({ shape, placeholder }: {
           moment rather than only the first. */}
       <div style={S.controlRow}>
         <div style={S.libs}>
-          {libraries.map((l) => {
+          {sources.map((l) => {
             // An ability that has never been configured is not "excluded" — it
             // CANNOT run yet, so its chip opens its settings rather than
             // offering a toggle that could not do anything.
