@@ -190,9 +190,9 @@ export function orderTargets(values: string[]): Target[] {
 }
 
 /** The screens the wizard walks, minus any the flags already answered. */
-type StepId = 'name' | 'targets' | 'model' | 'byo' | 'backend' | 'template';
+export type StepId = 'name' | 'targets' | 'model' | 'byo' | 'backend' | 'template';
 
-function initialQueue(prefill: WizardPrefill): StepId[] {
+export function initialQueue(prefill: WizardPrefill): StepId[] {
   const q: StepId[] = ['name']; // the wizard only mounts when the name is missing
   if (!prefill.targets) q.push('targets');
   if (!prefill.llm) q.push('model');

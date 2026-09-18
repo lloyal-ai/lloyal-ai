@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { backendsInstallCommand } from '../src/commands/backends.js';
 import { describeOffer, projectPackHost, provisionCuda, writeGpuField, cudaIsServed } from '../src/scaffold/backend-pack.js';
+import { B200, H100_OLD_DRIVER, L4 } from './backend-pack-fixtures.js';
 
 /** The template's model block, hint line included — what the gpu writer meets in a fresh scaffold. */
 const YML = [
@@ -42,8 +43,8 @@ function project(probe: Record<string, unknown>, withAddon = true): { root: stri
   }
   return { root, log };
 }
-const RECOMMENDED = { gpu: { name: 'NVIDIA B200' }, recommended: true, needsRuntimeArchive: true, sizeBytes: 2.1e9, runtimeSizeBytes: 0.9e9, reasons: ['NVIDIA B200: pack provides native sm_100 kernels'] };
-const NOT = { gpu: { name: 'NVIDIA L4' }, recommended: false, needsRuntimeArchive: false, sizeBytes: 2.1e9, runtimeSizeBytes: 0, reasons: ['GPU NVIDIA L4 (sm_89) is served natively by the standard npm package'] };
+const RECOMMENDED = B200;
+const NOT = L4;
 
 const cwd = process.cwd();
 let out = '';
@@ -99,7 +100,7 @@ describe('backends:install', () => {
   });
 
   it('gpu: cuda is written only when it is true — never for a box nothing serves', async () => {
-    const unserved = { ...RECOMMENDED, recommended: false, reasons: ['GPU NVIDIA H100 (sm_90): driver cannot JIT the pack\'s PTX'] };
+    const unserved = H100_OLD_DRIVER;
     const { root, log } = project(unserved);
     const { readFileSync: read, existsSync } = await import('node:fs');
     const outcome = await provisionCuda(root, { fetch: true });
@@ -132,7 +133,10 @@ describe('backends:install', () => {
   });
 
   it('the offer names the download, runtime included only when the box needs it', () => {
-    expect(describeOffer(RECOMMENDED).join('\n')).toContain('backend pack 2.1 GB + CUDA runtime 0.9 GB');
-    expect(describeOffer({ ...RECOMMENDED, needsRuntimeArchive: false }).join('\n')).not.toContain('CUDA runtime');
+    expect(describeOffer(RECOMMENDED).join('\n')).toContain('backend pack 0.8 GB + CUDA runtime 0.3 GB');
+    // The same B200 with cudart 12.9 already on disk: no runtime gate line, no runtime in the download.
+    const runtimeFine = { ...B200, needsRuntimeArchive: false, runtimeSizeBytes: 0, reasons: [B200.reasons[1]] };
+    expect(describeOffer(runtimeFine).join('\n')).toContain('download: backend pack 0.8 GB, once per box');
+    expect(describeOffer(runtimeFine).join('\n')).not.toContain('+ CUDA runtime');
   });
 });
