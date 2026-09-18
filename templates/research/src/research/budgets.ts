@@ -55,8 +55,9 @@ export const BUDGETS = {
     time: { softLimit: 120_000, hardLimit: 180_000 },
     recovery: { minToolCalls: 1 },
   },
-  /** The settling pass: a turn cap and nothing else, so it writes for as long as the answer needs. */
-  settle: { maxTurns: 10 },
+  /** The settling pass: a turn cap, and a clock no answer reaches — a synthesis that is still thinking after fifteen
+   *  minutes is going in circles, and is reaped into one bounded recovery turn instead of running the context out. */
+  settle: { maxTurns: 10, time: { hardLimit: 900_000 } },
   /** The passthrough: one turn on a fork of the trunk. */
   answer: { maxTurns: 1 },
   /** A direct ask keeps whatever it has: a reaped one is recovered below the research floors. */

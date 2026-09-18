@@ -29,6 +29,9 @@ import { reportBody } from "../ui/state.js";
 import type { WorkflowEvent } from "./protocol.js";
 
 const MAX_TURNS = 8;
+/** The synth's clock: no answer takes this long; a synthesis still thinking after ten minutes is going in circles,
+ *  and is reaped into one bounded recovery turn instead of running the context out. */
+export const SYNTH_TIME_LIMIT_MS = 600_000;
 
 /** The whole "plan": two fixed research angles. A real harness would *compute*
  *  these (an LLM planner, a routing rule, a workflow); basic keeps them static
@@ -206,7 +209,7 @@ export function* runQuery(
       notes: notes.map((n, i) => `[${i + 1}] ${n}`).join("\n\n"),
     }),
     parent: session.trunk ?? undefined,
-    policy: new SynthPolicy(),
+    policy: new SynthPolicy({ budget: { time: { hardLimit: SYNTH_TIME_LIMIT_MS } } }),
     maxTurns: MAX_TURNS,
   });
 
