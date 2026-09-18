@@ -73,3 +73,12 @@ for (const tpl of ['templates/research', 'templates/basic']) {
     return changed;
   });
 }
+
+// The lockfile records this package's own version; a bump without it makes
+// `npm ci` refuse (cuts 2–6 shipped that way, unseen because CI never ran on
+// the arc). Nothing here resolves against the set — the templates are not
+// workspaces — so this needs no publish to have happened first.
+if (own && !DRY) {
+  execSync('npm install --package-lock-only --ignore-scripts --no-audit --no-fund', { stdio: 'inherit' });
+  console.log('  package-lock.json: version follows');
+}
