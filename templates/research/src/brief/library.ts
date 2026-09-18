@@ -226,7 +226,7 @@ export function* openLibrary(
     });
     const annexures = refs.length ? `\n---\n\n## Annexures\n\n${refs.join("\n")}\n` : "";
     const { synthTokens, synthPpl } = w.complete;
-    const stats = synthTokens ? ` · ${synthTokens} synth tokens · ppl ${(synthPpl ?? 0).toFixed(2)}` : "";
+    const stats = `${synthTokens ? ` · ${synthTokens} synth tokens` : ""}${synthPpl !== undefined ? ` · ppl ${synthPpl.toFixed(2)}` : ""}`;
     const media = r.attachments.length > 0 ? ` · media ${r.attachments.join(" ")}` : "";
     const meta = `> ${new Date().toISOString()} · ${r.mode} · ${r.effort}${r.direct ? " · ask" : ""}${stats} · ${((Date.now() - r.startedAt) / 1000).toFixed(1)}s${media}`;
     const doc = `# ${r.query}\n\n${meta}\n\n${stripThink(w.answer).trim()}\n${annexures}`;

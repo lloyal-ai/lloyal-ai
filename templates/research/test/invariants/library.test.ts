@@ -80,13 +80,13 @@ test("two sessions' records on one brief reserve distinct annexure names", async
 });
 
 /** One run's evidence, written into a fresh library from what its writer returned. */
-async function recorded(inquiries: { task: string; findings: string }[]): Promise<{ dir: string; files: string[]; report: string }> {
+async function recorded(inquiries: { task: string; findings: string }[], complete: Written["complete"] = {}): Promise<{ dir: string; files: string[]; report: string }> {
   const lib = fs.mkdtempSync(path.join(os.tmpdir(), "lib-"));
   const id = await run(function* () {
     const { lib: library, bus } = yield* opened(lib);
     const docId = library.reserve();
     library.begin(docId, ask(docId), { warm: false });
-    library.written(docId, wrote(inquiries));
+    library.written(docId, { ...wrote(inquiries), complete });
     bus.send(ev({ type: "complete", data: {} }));   // the report lands as `complete` is said
     yield* library.settled(docId);
     return docId;
@@ -105,6 +105,14 @@ const annexureWith = (r: { dir: string; files: string[] }, findings: string): st
   assert.equal(hit.length, 1, `exactly one annexure holds "${findings}" (of ${r.files.join(", ")})`);
   return hit[0];
 };
+
+test("the meta line carries only what the writer measured: tokens without a perplexity say nothing about perplexity", async () => {
+  const counted = await recorded([{ task: "t", findings: "f" }], { synthTokens: 41 });
+  assert.match(counted.report, /41 synth tokens/);
+  assert.doesNotMatch(counted.report, /ppl/);
+  const measured = await recorded([{ task: "t", findings: "f" }], { synthTokens: 41, synthPpl: 1.234 });
+  assert.match(measured.report, /41 synth tokens · ppl 1\.23/);
+});
 
 test("each inquiry's findings are filed as an annexure under its own task, in plan order, and indexed by the report", async () => {
   const r = await recorded([

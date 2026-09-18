@@ -127,13 +127,14 @@ one after another on a growing shared context, a fan-out, a dependency graph, or
 
 ```ts
 // src/app.ts — hand the brief another strategy; everything else stands
-const algorithm: Research = {
+const sideBySide: Research = {
   ...research,
   write: (trunk, ask, plan) =>
     research.write(trunk, ask, plan, {
       inquire: (ask, tasks, spec) => parallel(tasks.map((task, i) => spec(task, i, true))),
     }),
 };
+const brief = briefs({ session, library, run, wire, config: runner.config, research: sideBySide });
 ```
 
 A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
