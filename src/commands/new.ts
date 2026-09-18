@@ -12,6 +12,10 @@ import {
 } from '../scaffold/copy-tree.js';
 import { writeProjectMarker } from '../scaffold/write-marker.js';
 import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/post-scaffold.js';
+import type { BackendPackNote } from '../scaffold/post-scaffold.js';
+import { createInterface } from 'node:readline/promises';
+import { describeOffer, packPlatform, progressLine, projectPackHost } from '../scaffold/backend-pack.js';
+import type { PackProbe } from '../scaffold/backend-pack.js';
 import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
 
@@ -38,6 +42,11 @@ const USAGE = [
   '                Trunk model — a catalog id (fetched + digest-verified) or a path',
   '                to a local .gguf you already have. Default: the catalog default.',
   '  --dir <path>  Parent directory to create the harness in (default: cwd)',
+  '  --backend-pack <download|skip>',
+  '                On linux-x64 with an NVIDIA GPU, after install: fetch the',
+  '                signed CUDA backend pack without asking, or never offer it.',
+  '                Without the flag a terminal is asked; a pipe or -y is not,',
+  '                and `lloyal backends:install` does it later.',
   '  --skip-install',
   '                Do not run `npm install` after scaffolding (it runs by',
   '                default in an interactive terminal).',
@@ -102,6 +111,7 @@ export const newCommand: Command = {
         targets: { type: 'string' },
         model: { type: 'string' },
         'skip-install': { type: 'boolean' },
+        'backend-pack': { type: 'string' },
         'skip-abilities': { type: 'boolean' },
         yes: { type: 'boolean', short: 'y' },
       },
@@ -159,7 +169,16 @@ export const newCommand: Command = {
     // never be an implicit consequence of a pipe, of CI, or of --skip-install.
     // Only the explicit --skip-abilities opts out.
     const vendorAbilities = !values['skip-abilities'];
-    return performScaffold(plan, parentDir, { install, vendorAbilities });
+    // The CUDA backend pack: asked about in a terminal after install, never on a pipe or -y unless
+    // the flag says download, so a script's `new` fetches nothing it did not name.
+    const backendPack = values['backend-pack'];
+    if (backendPack !== undefined && backendPack !== 'download' && backendPack !== 'skip') {
+      process.stderr.write(`lloyal: --backend-pack expects download or skip, got "${backendPack}".\n`);
+      return 1;
+    }
+    const offerPack: 'download' | 'skip' | 'ask' =
+      backendPack ?? (Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY) && !values.yes ? 'ask' : 'skip');
+    return performScaffold(plan, parentDir, { install, vendorAbilities, offerPack });
   },
 };
 
@@ -228,7 +247,7 @@ function parseTargets(csv: string | undefined): { targets: Target[] } | { error:
 async function performScaffold(
   plan: ScaffoldPlan,
   parentDir: string,
-  opts: { install: boolean; vendorAbilities: boolean },
+  opts: { install: boolean; vendorAbilities: boolean; offerPack: 'download' | 'skip' | 'ask' },
 ): Promise<number> {
   const dest = join(parentDir, plan.name);
 
@@ -312,7 +331,40 @@ async function performScaffold(
   }
 
   const installed = opts.install ? await runInstall(dest) : false;
-  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities });
+  const pack = installed && opts.offerPack !== 'skip' ? await offerBackendPack(dest, opts.offerPack) : null;
+  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities, backendPack: pack });
   return 0;
+}
+
+/**
+ * After a real install on linux-x64: probe through the project's own lloyal.node and, when the pack
+ * would serve this GPU, fetch it — asking first unless told to download. Returns what the next-steps
+ * panel should say: the cache dir once installed, the reasons when declined, nothing when the box
+ * has no use for it. A probe failure (offline, no nvidia-smi) is said and never blocks the scaffold.
+ */
+export async function offerBackendPack(dest: string, mode: 'download' | 'ask'): Promise<BackendPackNote | null> {
+  if (!packPlatform()) return null;
+  const host = await projectPackHost(dest);
+  if (!host) return null;
+  let probe: PackProbe;
+  try {
+    probe = await host.probe();
+  } catch (err) {
+    process.stderr.write(`lloyal: backend pack probe skipped — ${err instanceof Error ? err.message : String(err)}\n`);
+    return null;
+  }
+  if (!probe.recommended) return null;
+  process.stdout.write(`\n${probe.gpu?.name ?? 'CUDA GPU'} — the signed CUDA backend pack would serve it:\n${describeOffer(probe).join('\n')}\n`);
+  let accepted = mode === 'download';
+  if (!accepted) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await rl.question('install it now? [y/N] ')).trim().toLowerCase();
+    rl.close();
+    accepted = answer === 'y' || answer === 'yes';
+  }
+  if (!accepted) return { installed: false };
+  const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: progressLine((s) => process.stderr.write(s)) });
+  process.stderr.write('\n');
+  return { installed: true, dir };
 }
 

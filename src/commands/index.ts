@@ -7,6 +7,7 @@ import { publishersCommand } from './publishers.js';
 import { reviewCommand } from './review.js';
 import { modelsCommands } from './models.js';
 import { targetsCommands } from './targets.js';
+import { backendsInstallCommand } from './backends.js';
 import { linkLocalCommand, unlinkLocalCommand } from './link-local.js';
 
 /** Named subcommands, in help-listing order. */
@@ -14,6 +15,7 @@ export const SUBCOMMANDS: readonly Command[] = [
   appCommand,
   ...modelsCommands,
   ...targetsCommands,
+  backendsInstallCommand,
   installCommand,
   linkLocalCommand,
   unlinkLocalCommand,
