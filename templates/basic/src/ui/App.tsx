@@ -37,7 +37,7 @@ import {
 import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
 import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
 import type { WorkflowEvent, Command } from "../harness/protocol.js";
-import { Markdown } from "./Markdown.js";
+import { Markdown, StreamingMarkdown } from "./Markdown.js";
 
 const scrollTo = (id: string): void =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -150,7 +150,7 @@ function AgentEntry({ a }: { a: AgentView }): ReactElement {
             <div className="wiki-log-report">
               <div className="wiki-log-report-label">Findings</div>
               <div className="md">
-                <Markdown text={report} />
+                {live ? <StreamingMarkdown text={report} /> : <Markdown text={report} />}
               </div>
               {live && <span className="wiki-caret">▍</span>}
             </div>
@@ -345,7 +345,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
 
             {report ? (
               <div className="wiki-prose md">
-                <Markdown text={report} />
+                {state.answer ? <Markdown text={report} /> : <StreamingMarkdown text={report} />}
               </div>
             ) : synth ? (
               <div>

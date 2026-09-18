@@ -11,6 +11,7 @@ import { isValidElement, memo, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { slugify } from "./state.js";
+import { splitStreaming } from "./streaming.js";
 
 /** Flatten a heading's children to text, for the anchor slug — recursing into
  *  inline elements (`**bold**`, `` `code` ``, links) so a heading with markup
@@ -42,3 +43,15 @@ function MarkdownInner({ text }: { text: string }): ReactElement {
 
 /** Memoized so streaming re-renders elsewhere don't re-parse a long report. */
 export const Markdown = memo(MarkdownInner);
+
+/** A report still being written: the finished blocks keep their parse (the head only changes when a block
+ *  completes, so its `Markdown` is skipped by the memo); only the block under the caret is parsed per token. */
+export function StreamingMarkdown({ text }: { text: string }): ReactElement {
+  const { head, tail } = splitStreaming(text);
+  return (
+    <>
+      {head && <Markdown text={head} />}
+      <Markdown text={tail} />
+    </>
+  );
+}

@@ -8,12 +8,13 @@
  *  derives — the same pure list the outline rail reads, indexed in render
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
-import { memo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Lightbox, Markdown, useAssets } from "@lloyal-labs/ui";
 import { color, font, radius } from "../theme.js";
-import { anchorsOf, selectThreadDigests } from "../select.js";
+import { anchorsOf, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
 import { parseAttachmentHref, resolvePrefix } from "../content-urls.js";
+import { splitStreaming } from "../streaming.js";
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node
@@ -28,22 +29,30 @@ const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
   h4: { font: `600 14px/1.4 ${font.ui}`, margin: "16px 0 5px" },
 };
 
-/** Memoized on its props: settled sections keep their parse while a
- *  sibling streams — only the growing block re-renders per token. */
-export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citations }: {
+type Anchor = ReturnType<typeof anchorsOf>[number];
+
+/** Models sometimes wrap a woven link in literal brackets — shed them. */
+const shed = (raw: string): string => raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
+
+/** Memoized on its props: a section keeps its parse while a sibling streams.
+ *  Headings take their ids from `anchors` when given, else from `anchorPrefix`
+ *  over this text alone. */
+export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors: given, citations }: {
   markdown: string;
   anchorPrefix?: string;
+  anchors?: Anchor[];
   citations?: Map<string, number>;
 }): ReactElement {
   // A cited page opens where it is cited. The thread's roots are what an
   // `attachment://` prefix may resolve to; the sidecar says which page root
-  // stands for the page.
-  const digests = useProjection(selectThreadDigests);
+  // stands for the page. Subscribed as a KEY: the memo above only holds if
+  // nothing inside re-renders this on folds that changed no prop of its own.
+  const digestKey = useProjection(selectThreadDigestKey);
+  const digests = useMemo(() => (digestKey ? digestKey.split("\n") : []), [digestKey]);
   const assets = useAssets(digests);
   const [openPage, setOpenPage] = useState<{ digest: string; label: string } | null>(null);
-  // Models sometimes wrap a woven link in literal brackets — shed them.
-  const markdown = raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
-  const anchors = anchorPrefix ? anchorsOf(markdown, anchorPrefix) : [];
+  const markdown = shed(raw);
+  const anchors = given ?? (anchorPrefix ? anchorsOf(markdown, anchorPrefix) : []);
   let next = 0;
   const anchored = (Tag: "h1" | "h2" | "h3" | "h4") =>
     ({ children }: { children?: ReactNode }): ReactElement =>
@@ -123,6 +132,30 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, citation
     </>
   );
 });
+
+/** Prose still being written. The finished blocks keep their parse — the
+ *  head only changes when a block completes, so its `Prose` is skipped by
+ *  the memo — and only the block under the caret is parsed per token.
+ *  Heading ids are counted over the whole text: the tail's anchors are the
+ *  document's minus the head's, which agree left to right. */
+export function StreamingProse({ markdown: raw, anchorPrefix, citations }: {
+  markdown: string;
+  anchorPrefix?: string;
+  citations?: Map<string, number>;
+}): ReactElement {
+  const { head, tail } = splitStreaming(shed(raw));
+  const headAnchors = useMemo(
+    () => (anchorPrefix ? anchorsOf(head, anchorPrefix) : []),
+    [head, anchorPrefix],
+  );
+  const tailAnchors = anchorPrefix ? anchorsOf(head + tail, anchorPrefix).slice(headAnchors.length) : [];
+  return (
+    <>
+      {head && <Prose markdown={head} anchors={headAnchors} citations={citations} />}
+      <Prose markdown={tail} anchors={tailAnchors} citations={citations} />
+    </>
+  );
+}
 
 /** The enlarged view in this document's register. */
 export const LIGHTBOX = {
