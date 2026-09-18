@@ -54,7 +54,13 @@ const NOT = L4;
 const cwd = process.cwd();
 let out = '';
 let err = '';
-afterEach(() => { process.chdir(cwd); vi.restoreAllMocks(); out = ''; err = ''; });
+const own = (o: object, k: string) => Object.getOwnPropertyDescriptor(o, k);
+const saved = { platform: own(process, 'platform'), arch: own(process, 'arch'), stdinTTY: own(process.stdin, 'isTTY') };
+const restore = (o: object, k: string, d: PropertyDescriptor | undefined): void => { if (d) Object.defineProperty(o, k, d); else delete (o as Record<string, unknown>)[k]; };
+afterEach(() => {
+  process.chdir(cwd); vi.restoreAllMocks(); out = ''; err = '';
+  restore(process, 'platform', saved.platform); restore(process, 'arch', saved.arch); restore(process.stdin, 'isTTY', saved.stdinTTY);
+});
 function capture(): void {
   vi.spyOn(process.stdout, 'write').mockImplementation((s) => { out += String(s); return true; });
   vi.spyOn(process.stderr, 'write').mockImplementation((s) => { err += String(s); return true; });
@@ -144,6 +150,12 @@ describe('backends:install', () => {
     write(yml, 'version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\nsources:\n  outputDir: r\n');
     writeGpuField(root, 'cuda');                                  // no hint: inserted after id
     expect(read(yml, 'utf8')).toBe('version: 1\nmodel:\n  llm:\n    id: "x"\n    gpu: cuda\n    context: 1\nsources:\n  outputDir: r\n');
+    // model.llm, not any llm: a hand-edited yml with another `llm:` block first is written under model.
+    write(yml, 'version: 1\nsomething:\n  llm:\n    id: "decoy"\nmodel:\n  llm:\n    id: "x"\nsources:\n  outputDir: r\n');
+    writeGpuField(root, 'cuda');
+    expect(read(yml, 'utf8')).toBe('version: 1\nsomething:\n  llm:\n    id: "decoy"\nmodel:\n  llm:\n    id: "x"\n    gpu: cuda\nsources:\n  outputDir: r\n');
+    write(yml, 'version: 1\nmodel:\n  # llm:\n  #   id: "x"\nsources:\n  outputDir: r\n');
+    expect(() => writeGpuField(root, 'cuda')).toThrow(/no live `model.llm:` block/);
   });
 
   it('a project without the addon says to install first', async () => {

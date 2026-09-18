@@ -26,6 +26,7 @@ vi.mock('../src/scaffold/post-scaffold.js', async (importOriginal) => {
     writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@lloyal-labs/lloyal.node', version: '9.9.9', main: 'index.js' }));
     writeFileSync(join(pkg, 'index.js'), `
       const fs = require('node:fs');
+      if (process.env.FAKE_ADDON_WONT_LOAD) throw new Error('lloyal.node: no binary for linux-x64 (dlopen failed)');
       exports.probeBackendPack = async () => { if (process.env.FAKE_BREAK_YML) fs.writeFileSync(${JSON.stringify(join(dest, 'harness.yml'))}, 'version: 1\\nmodel:\\n  # llm:\\nsources:\\n  outputDir: r\\n'); return (${JSON.stringify(probe)}); };
       exports.ensureBackendPack = async (opts) => {
         if (process.env.FAKE_PACK_FAIL) throw new Error('sha256 mismatch for backend-pack');
@@ -43,6 +44,10 @@ const { initialQueue } = await import('../src/commands/new-wizard.js');
 
 const created: string[] = [];
 let out = '';
+/** What this file changes about the process, put back after each test — `restoreAllMocks` does not know these. */
+const own = (o: object, k: string) => Object.getOwnPropertyDescriptor(o, k);
+const saved = { platform: own(process, 'platform'), arch: own(process, 'arch'), stdoutTTY: own(process.stdout, 'isTTY'), stdinTTY: own(process.stdin, 'isTTY') };
+const restore = (o: object, k: string, d: PropertyDescriptor | undefined): void => { if (d) Object.defineProperty(o, k, d); else delete (o as Record<string, unknown>)[k]; };
 beforeEach(() => {
   out = '';
   vi.spyOn(process.stdout, 'write').mockImplementation((c) => { out += String(c); return true; });
@@ -51,7 +56,12 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
 });
-afterEach(() => { vi.restoreAllMocks(); for (const d of created.splice(0)) rmSync(d, { recursive: true, force: true }); });
+afterEach(() => {
+  vi.restoreAllMocks();
+  restore(process, 'platform', saved.platform); restore(process, 'arch', saved.arch);
+  restore(process.stdout, 'isTTY', saved.stdoutTTY); restore(process.stdin, 'isTTY', saved.stdinTTY);
+  for (const d of created.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 
 async function scaffold(extra: string[], base: string[] = ['-y']): Promise<{ yml: string; ensured: boolean; code: number }> {
   const parent = mkdtempSync(join(tmpdir(), 'new-backend-'));
@@ -142,6 +152,14 @@ describe('new -y on a box with a B200', () => {
     expect(out).toContain('CPU for now — the pack is installed → /cache/9.9.9-linux-x64, but harness.yml could not be written');
     expect(out).toContain('Run it');
   });
+  it('--backend-pack download on a linux box with no NVIDIA GPU: CPU, nothing probed, the panel says so', async () => {
+    gpuOnBox = null;
+    const r = await scaffold(['--backend-pack', 'download']);
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(false);
+    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(out).not.toMatch(/lloyal\.node 9\.9\.9/);   // the addon was never asked
+  });
   it('--backend-pack download on a Mac: an ask nothing here can honour is said, and new continues', async () => {
     gpuOnBox = null;
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
@@ -152,6 +170,16 @@ describe('new -y on a box with a B200', () => {
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
     expect(said).toContain('no backend pack is published for darwin-arm64');
+  });
+  it('the project\'s addon will not load: a CPU outcome with the load error, the scaffold stands, the panel prints', async () => {
+    gpuOnBox = 'NVIDIA B200';
+    process.env.FAKE_ADDON_WONT_LOAD = '1';
+    let r;
+    try { r = await scaffold([]); } finally { delete process.env.FAKE_ADDON_WONT_LOAD; }
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(false);
+    expect(out).toContain("CPU for now — the project's lloyal.node could not be loaded — lloyal.node: no binary");
+    expect(out).toContain('Run it');
   });
   it('a box with no GPU: the question never arises', async () => {
     gpuOnBox = null;

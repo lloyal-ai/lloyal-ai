@@ -166,7 +166,9 @@ export const newCommand: Command = {
         process.stderr.write('cancelled.\n');
         return 1;
       }
-      plan = { ...result, backendBy: !nvidiaGpu ? 'no-gpu' : backend === 'gpu' ? 'flag' : result.backend === 'gpu' ? 'wizard' : 'chosen-cpu' };
+      // One decision for both fields: no GPU means CPU whatever the flag or the wizard's prefill said.
+      const by: ScaffoldPlan['backendBy'] = !nvidiaGpu ? 'no-gpu' : backend === 'gpu' ? 'flag' : result.backend === 'gpu' ? 'wizard' : 'chosen-cpu';
+      plan = { ...result, backend: by === 'no-gpu' || by === 'chosen-cpu' ? 'cpu' : 'gpu', backendBy: by };
     } else {
       const built = planFromFlags(name, flags);
       if ('error' in built) {

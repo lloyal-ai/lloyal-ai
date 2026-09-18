@@ -104,11 +104,16 @@ export function cudaIsServed(probe: PackProbe, packInstalled: boolean): boolean 
 export function writeGpuField(projectDir: string, gpu: 'cuda'): void {
   const ymlPath = join(projectDir, 'harness.yml');
   const lines = readFileSync(ymlPath, 'utf8').split('\n');
-  const llmIdx = lines.findIndex((l) => /^\s+llm:\s*$/.test(l));
-  if (llmIdx === -1) throw new Error(`writeGpuField: no live \`llm:\` block in ${ymlPath}`);
+  // `model.llm`, not any `llm:`: the top-level `model:` block, then its live direct child.
+  const modelIdx = lines.findIndex((l) => /^model:\s*$/.test(l));
+  if (modelIdx === -1) throw new Error(`writeGpuField: no \`model:\` block in ${ymlPath}`);
+  let modelEnd = modelIdx + 1;
+  while (modelEnd < lines.length && (lines[modelEnd].trim() === '' || /^\s/.test(lines[modelEnd]))) modelEnd++;
+  const llmIdx = lines.findIndex((l, i) => i > modelIdx && i < modelEnd && /^\s+llm:\s*$/.test(l));
+  if (llmIdx === -1) throw new Error(`writeGpuField: no live \`model.llm:\` block in ${ymlPath}`);
   const indent = (lines[llmIdx].match(/^(\s+)/)?.[1] ?? '  ') + '  ';
   let end = llmIdx + 1;
-  while (end < lines.length && (lines[end].trim() === '' || lines[end].startsWith(indent) || /^\s*#/.test(lines[end]) && lines[end].search(/\S/) >= indent.length)) end++;
+  while (end < modelEnd && (lines[end].trim() === '' || lines[end].startsWith(indent) || /^\s*#/.test(lines[end]) && lines[end].search(/\S/) >= indent.length)) end++;
   const live = lines.findIndex((l, i) => i > llmIdx && i < end && new RegExp(`^${indent}gpu:`).test(l));
   if (live !== -1) { lines[live] = `${indent}gpu: ${gpu}`; }
   else {
@@ -133,7 +138,12 @@ export interface PackSnapshot { host: PackHost; probe: PackProbe }
 
 /** Resolve the addon and probe once; a CPU outcome when the project cannot, or the probe cannot. */
 export async function snapshotPack(root: string): Promise<PackSnapshot | { kind: 'cpu'; why: string }> {
-  const host = await projectPackHost(root);
+  let host: PackHost | null;
+  try {
+    host = await projectPackHost(root);   // loading the project's addon can throw too (a native binding that will not load)
+  } catch (err) {
+    return { kind: 'cpu', why: `the project's lloyal.node could not be loaded — ${err instanceof Error ? err.message : String(err)}` };
+  }
   if (!host) return { kind: 'cpu', why: 'this project has no @lloyal-labs/lloyal.node that knows the backend pack — run `npm install` first' };
   try {
     return { host, probe: await host.probe() };

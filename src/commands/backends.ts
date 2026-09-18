@@ -17,8 +17,8 @@ const USAGE = [
   '',
   'Probes the GPU, driver and CUDA runtime through the project\'s own lloyal.node, says what it found,',
   'and downloads the pack (plus the CUDA runtime when the box needs it) into ~/.cache/lloyal/backends/,',
-  'once per lloyal.node version, shared by every harness on the box. Nothing is fetched without a yes;',
-  '--yes answers it (deploy scripts). Only linux-x64 has a published pack.',
+  'once per lloyal.node version; a harness on the same version reuses it. Nothing is fetched without a',
+  'yes; --yes answers it (deploy scripts). Only linux-x64 has a published pack.',
   '',
   'After it, harness.yml says `model.llm.gpu: cuda` and the harness starts on the GPU.',
 ].join('\n');
@@ -56,7 +56,7 @@ export const backendsInstallCommand: Command = {
       if (outcome.kind === 'pack') process.stderr.write('\n');
       if (outcome.kind === 'cpu' && outcome.failed) throw new Error(outcome.why);
       process.stdout.write(
-        outcome.kind === 'pack' ? `installed → ${outcome.dir}\n  harness.yml: model.llm.gpu: cuda — every harness on this box using lloyal.node ${snap.host.version} loads it.\n`
+        outcome.kind === 'pack' ? `installed → ${outcome.dir}\n  harness.yml: model.llm.gpu: cuda. The cache is shared: another harness here on lloyal.node ${snap.host.version} uses it once its own harness.yml says gpu: cuda.\n`
         : outcome.kind === 'npm' ? 'nothing to install: the npm package serves this GPU natively.\n  harness.yml: model.llm.gpu: cuda\n'
         : `nothing installed — ${outcome.why}.\n`,
       );
