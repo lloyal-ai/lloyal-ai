@@ -41,7 +41,7 @@ export const abilities = [createWikipediaAbility];
  */
 export const config = defineConfig({
   ...modelSettings,
-  "sources.outputDir": { yml: "sources.outputDir", cli: "outputDir", path: true, default: "." },
+  "sources.outputDir": { yml: "sources.outputDir", cli: "outputDir", path: true, default: ".", describe: "Where the session trace is written." },
 });
 export type Config = ConfigOf<typeof config>;
 export type Origin = OriginOf<typeof config>;

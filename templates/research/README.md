@@ -162,7 +162,7 @@ what YOUR machine actually does.
 ## The library learning loop
 
 Every settled brief is written to `reports/` — `report.md` (the woven
-answer) plus one annexure per inquiry, references included. Point the
+answer) plus one annexure per inquiry that found something, references included. Point the
 corpus ability at that same directory and the system reads what it has
 written. The corpus ships installed but off, because it needs a path
 before it can run: uncomment `abilities.corpus.corpusPath: reports` in
