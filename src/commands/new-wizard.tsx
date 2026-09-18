@@ -426,11 +426,11 @@ export function Wizard({
         {step === 'backend' && (
           <Box flexDirection="column">
             <Field label="Backend" hint={`${prefill.nvidiaGpu} detected`} />
-            <Text dimColor>{'  The GPU needs the signed CUDA backend pack once per box, fetched after install and shared by every harness here.'}</Text>
+            <Text dimColor>{'  Runs on the GPU. Where this GPU needs the signed CUDA backend pack, it is fetched once per box after install and shared by every harness here; where the standard package already serves it, nothing is fetched.'}</Text>
             <Select
               options={[
-                { label: 'Recommended — run on the GPU (install the pack)', value: 'gpu' },
-                { label: 'CPU only — no download', value: 'cpu' },
+                { label: 'Recommended — run on the GPU', value: 'gpu' },
+                { label: 'CPU only — nothing fetched', value: 'cpu' },
               ]}
               onChange={submitBackend}
             />

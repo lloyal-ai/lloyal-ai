@@ -124,37 +124,53 @@ export function writeGpuField(projectDir: string, gpu: 'cuda'): void {
 
 /** What `new` and `backends:install` did about the GPU, for the panel and the log. */
 export type BackendOutcome =
-  | { kind: 'pack'; dir: string }          // pack installed, gpu: cuda written
-  | { kind: 'npm' }                        // the npm package serves this GPU natively, gpu: cuda written
-  | { kind: 'cpu'; why: string };          // gpu left unset — declined, offline, or unserved
+  | { kind: 'pack'; dir: string }                    // pack installed, gpu: cuda written
+  | { kind: 'npm' }                                  // the npm package serves this GPU natively, gpu: cuda written
+  | { kind: 'cpu'; why: string; failed?: true };     // gpu left unset — chosen, unserved, or (failed) a download that broke
 
-/**
- * The one decision, shared by `new` and `backends:install`: probe through the project's addon; fetch the
- * pack when it would serve the GPU and the caller said yes; write `gpu: cuda` when that is then true.
- */
-export async function provisionCuda(
-  root: string,
-  opts: { fetch: boolean; onProgress?: (got: number, total: number, file: string) => void; say?: (s: string) => void },
-): Promise<BackendOutcome> {
-  const say = opts.say ?? (() => {});
+/** The project's addon and what its probe said, taken once: what the reader approved is what runs. */
+export interface PackSnapshot { host: PackHost; probe: PackProbe }
+
+/** Resolve the addon and probe once; a CPU outcome when the project cannot, or the probe cannot. */
+export async function snapshotPack(root: string): Promise<PackSnapshot | { kind: 'cpu'; why: string }> {
   const host = await projectPackHost(root);
   if (!host) return { kind: 'cpu', why: 'this project has no @lloyal-labs/lloyal.node that knows the backend pack — run `npm install` first' };
-  let probe: PackProbe;
   try {
-    probe = await host.probe();
+    return { host, probe: await host.probe() };
   } catch (err) {
     return { kind: 'cpu', why: `backend pack probe failed — ${err instanceof Error ? err.message : String(err)}` };
   }
-  say(`lloyal.node ${host.version}${probe.gpu ? ` · ${probe.gpu.name}` : ''}\n${describeOffer(probe).join('\n')}`);
+}
+
+/**
+ * The one decision, shared by `new` and `backends:install`, over ONE snapshot: fetch the pack when it would
+ * serve the GPU and the caller said yes; write `gpu: cuda` when that is then true. A download that breaks is
+ * a CPU outcome marked failed, never a throw — the scaffold around it is already made and stays usable.
+ */
+export async function provisionCuda(
+  root: string,
+  snap: PackSnapshot,
+  opts: { fetch: boolean; onProgress?: (got: number, total: number, file: string) => void },
+): Promise<BackendOutcome> {
+  const { host, probe } = snap;
   if (probe.recommended && opts.fetch) {
-    const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: opts.onProgress });
-    writeGpuField(root, 'cuda');
-    return { kind: 'pack', dir };
+    try {
+      const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: opts.onProgress });
+      writeGpuField(root, 'cuda');
+      return { kind: 'pack', dir };
+    } catch (err) {
+      return { kind: 'cpu', why: `the pack download failed — ${err instanceof Error ? err.message : String(err)}; later: npx lloyal-ai backends:install`, failed: true };
+    }
   }
   if (cudaIsServed(probe, false)) {
     writeGpuField(root, 'cuda');
     return { kind: 'npm' };
   }
-  return { kind: 'cpu', why: probe.recommended ? 'the pack was not installed' : (probe.reasons[probe.reasons.length - 1] ?? 'no CUDA backend serves this box') };
+  return { kind: 'cpu', why: probe.recommended ? 'the pack was not installed; later: npx lloyal-ai backends:install' : (probe.reasons[probe.reasons.length - 1] ?? 'no CUDA backend serves this box') };
+}
+
+/** The offer as `new` and `backends:install` print it: the addon, the GPU, the probe's reasons, the download. */
+export function describeSnapshot(snap: PackSnapshot): string {
+  return `lloyal.node ${snap.host.version}${snap.probe.gpu ? ` · ${snap.probe.gpu.name}` : ''}\n${describeOffer(snap.probe).join('\n')}`;
 }
 

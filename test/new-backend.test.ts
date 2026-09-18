@@ -27,7 +27,10 @@ vi.mock('../src/scaffold/post-scaffold.js', async (importOriginal) => {
     writeFileSync(join(pkg, 'index.js'), `
       const fs = require('node:fs');
       exports.probeBackendPack = async () => (${JSON.stringify(probe)});
-      exports.ensureBackendPack = async (opts) => { fs.writeFileSync(${JSON.stringify(join(dest, 'ensure-called.json'))}, JSON.stringify(opts)); return '/cache/9.9.9-linux-x64'; };
+      exports.ensureBackendPack = async (opts) => {
+        if (process.env.FAKE_PACK_FAIL) throw new Error('sha256 mismatch for backend-pack');
+        fs.writeFileSync(${JSON.stringify(join(dest, 'ensure-called.json'))}, JSON.stringify(opts)); return '/cache/9.9.9-linux-x64';
+      };
     `);
     return true;
   };
@@ -50,10 +53,10 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); for (const d of created.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
-async function scaffold(extra: string[]): Promise<{ yml: string; ensured: boolean; code: number }> {
+async function scaffold(extra: string[], base: string[] = ['-y']): Promise<{ yml: string; ensured: boolean; code: number }> {
   const parent = mkdtempSync(join(tmpdir(), 'new-backend-'));
   created.push(parent);
-  const code = await newCommand.run(['pod', '--dir', parent, '--targets', 'cli', '--template', 'basic', '-y', '--skip-abilities', ...extra]);
+  const code = await newCommand.run(['pod', '--dir', parent, '--targets', 'cli', '--template', 'basic', '--skip-abilities', ...base, ...extra]);
   const dest = join(parent, 'pod');
   return { code, yml: readFileSync(join(dest, 'harness.yml'), 'utf8'), ensured: existsSync(join(dest, 'ensure-called.json')) };
 }
@@ -91,13 +94,41 @@ describe('new -y on a box with a B200', () => {
     expect(r.yml).not.toMatch(/# gpu: cuda/);
     expect(out).toContain('GPU: CUDA backend pack installed → /cache/9.9.9-linux-x64');
   });
-  it('--backend-pack skip: CPU, nothing fetched, nothing written, nothing said', async () => {
+  it('--backend-pack skip: CPU as chosen — nothing fetched, nothing written, and the panel says so', async () => {
     gpuOnBox = 'NVIDIA B200';
     const r = await scaffold(['--backend-pack', 'skip']);
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
     expect(r.yml).toMatch(/# gpu: cuda/);
-    expect(out).not.toContain('GPU:');
+    expect(out).toContain('CPU for now — as chosen');
+  });
+  it('--backend-pack download in a script: the flag is the yes AND the install, so a Dockerfile gets the whole path', async () => {
+    gpuOnBox = 'NVIDIA B200';
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true });   // a pipe
+    const r = await scaffold(['--backend-pack', 'download']);
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(true);
+    expect(r.yml).toMatch(/^    gpu: cuda$/m);
+  });
+  it('a named new with no yes of any kind: a pipe is not asked and fetches nothing; the panel says how later', async () => {
+    gpuOnBox = 'NVIDIA B200';
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    const r = await scaffold([], []);   // no -y, no flag, no wizard: the GPU is detected, nobody has said yes
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(false);
+    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(out).toContain('CPU for now — the pack was not installed; later: npx lloyal-ai backends:install');
+  });
+  it('a download that breaks leaves a usable scaffold: the panel prints, CPU with the reason, exit 0', async () => {
+    gpuOnBox = 'NVIDIA B200';
+    process.env.FAKE_PACK_FAIL = '1';
+    let r;
+    try { r = await scaffold([]); } finally { delete process.env.FAKE_PACK_FAIL; }
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(false);
+    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(out).toContain('CPU for now — the pack download failed — sha256 mismatch');
+    expect(out).toContain('Run it');   // the next-steps panel still came
   });
   it('a box with no GPU: the question never arises', async () => {
     gpuOnBox = null;

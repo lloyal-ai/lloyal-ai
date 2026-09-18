@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
 import type { Command } from '../command.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
-import { describeOffer, packPlatform, progressLine, projectPackHost, provisionCuda } from '../scaffold/backend-pack.js';
+import { describeSnapshot, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
 
 const USAGE = [
   'lloyal backends:install — install the signed CUDA backend pack for this box',
@@ -42,23 +42,21 @@ export const backendsInstallCommand: Command = {
         process.stdout.write(`no backend pack is published for ${process.platform}-${process.arch}; the npm packages cover it.\n`);
         return 0;
       }
-      const host = await projectPackHost(root);
-      if (!host) {
-        throw new Error('this project has no @lloyal-labs/lloyal.node that knows the backend pack — run `npm install` first.');
-      }
-      const probe = await host.probe();
-      process.stdout.write(`lloyal.node ${host.version}${probe.gpu ? ` · ${probe.gpu.name}` : ''}\n${describeOffer(probe).join('\n')}\n`);
-      if (probe.recommended && !values.yes) {
+      const snap = await snapshotPack(root);
+      if ('kind' in snap) throw new Error(snap.why);
+      process.stdout.write(`${describeSnapshot(snap)}\n`);
+      if (snap.probe.recommended && !values.yes) {
         if (!process.stdin.isTTY) throw new Error('not a terminal and no --yes: nothing is fetched without a yes.');
         const rl = createInterface({ input: process.stdin, output: process.stdout });
         const answer = (await rl.question('install it? [y/N] ')).trim().toLowerCase();
         rl.close();
         if (answer !== 'y' && answer !== 'yes') { process.stdout.write('left as is.\n'); return 0; }
       }
-      const outcome = await provisionCuda(root, { fetch: probe.recommended, onProgress: progressLine((s) => process.stderr.write(s)) });
+      const outcome = await provisionCuda(root, snap, { fetch: snap.probe.recommended, onProgress: progressLine((s) => process.stderr.write(s)) });
       if (outcome.kind === 'pack') process.stderr.write('\n');
+      if (outcome.kind === 'cpu' && outcome.failed) throw new Error(outcome.why);
       process.stdout.write(
-        outcome.kind === 'pack' ? `installed → ${outcome.dir}\n  harness.yml: model.llm.gpu: cuda — every harness on this box using lloyal.node ${host.version} loads it.\n`
+        outcome.kind === 'pack' ? `installed → ${outcome.dir}\n  harness.yml: model.llm.gpu: cuda — every harness on this box using lloyal.node ${snap.host.version} loads it.\n`
         : outcome.kind === 'npm' ? 'nothing to install: the npm package serves this GPU natively.\n  harness.yml: model.llm.gpu: cuda\n'
         : `nothing installed — ${outcome.why}.\n`,
       );

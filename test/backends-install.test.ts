@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { backendsInstallCommand } from '../src/commands/backends.js';
-import { describeOffer, projectPackHost, provisionCuda, writeGpuField, cudaIsServed } from '../src/scaffold/backend-pack.js';
+import { describeOffer, projectPackHost, provisionCuda, snapshotPack, writeGpuField, cudaIsServed } from '../src/scaffold/backend-pack.js';
 import { B200, H100_OLD_DRIVER, L4 } from './backend-pack-fixtures.js';
 
 /** The template's model block, hint line included — what the gpu writer meets in a fresh scaffold. */
@@ -37,8 +37,12 @@ function project(probe: Record<string, unknown>, withAddon = true): { root: stri
     writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@lloyal-labs/lloyal.node', version: '9.9.9', main: 'index.js' }));
     writeFileSync(join(pkg, 'index.js'), `
       const fs = require('node:fs');
-      exports.probeBackendPack = async () => (${JSON.stringify(probe)});
-      exports.ensureBackendPack = async (opts) => { fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify(opts)); opts.onProgress?.(5, 10, 'backend-pack'); return '/cache/9.9.9-linux-x64'; };
+      let probes = 0;
+      exports.probeBackendPack = async () => { fs.writeFileSync(${JSON.stringify(log + '.probes')}, String(++probes)); return (${JSON.stringify(probe)}); };
+      exports.ensureBackendPack = async (opts) => {
+        if (process.env.FAKE_PACK_FAIL) throw new Error('sha256 mismatch for backend-pack');
+        fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify(opts)); opts.onProgress?.(5, 10, 'backend-pack'); return '/cache/9.9.9-linux-x64';
+      };
     `);
   }
   return { root, log };
@@ -75,6 +79,20 @@ describe('backends:install', () => {
     expect(out).toContain('installed → /cache/9.9.9-linux-x64');
     expect(err).toContain('fetching backend-pack — 50%');
     expect(readFileSync(join(root, 'harness.yml'), 'utf8')).toMatch(/^    gpu: cuda$/m);   // the hint became the line
+    expect(readFileSync(log + '.probes', 'utf8')).toBe('1');   // one snapshot: what was shown is what ran
+  });
+
+  it('a download that breaks is an error here — the operator asked for the pack and did not get it', async () => {
+    const { root, log } = project(RECOMMENDED);
+    process.chdir(root); capture();
+    process.env.FAKE_PACK_FAIL = '1';
+    try {
+      expect(await backendsInstallCommand.run(['--yes'])).toBe(1);
+    } finally { delete process.env.FAKE_PACK_FAIL; }
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(log)).toBe(false);
+    expect(err).toContain('the pack download failed — sha256 mismatch');
+    expect(readFileSync(join(root, 'harness.yml'), 'utf8')).not.toMatch(/^    gpu: cuda$/m);
   });
 
   it('without --yes off a terminal: fetches nothing and says why', async () => {
@@ -103,7 +121,9 @@ describe('backends:install', () => {
     const unserved = H100_OLD_DRIVER;
     const { root, log } = project(unserved);
     const { readFileSync: read, existsSync } = await import('node:fs');
-    const outcome = await provisionCuda(root, { fetch: true });
+    const snap = await snapshotPack(root);
+    if ('kind' in snap) throw new Error(snap.why);
+    const outcome = await provisionCuda(root, snap, { fetch: true });
     expect(outcome.kind).toBe('cpu');
     expect(existsSync(log)).toBe(false);
     expect(read(join(root, 'harness.yml'), 'utf8')).not.toMatch(/^    gpu: cuda$/m);
