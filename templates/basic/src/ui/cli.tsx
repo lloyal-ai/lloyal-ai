@@ -35,6 +35,7 @@ import type {
 } from "./state.js";
 import type { Command, WorkflowEvent } from "../harness/protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
+import { APP } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
 
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
@@ -223,7 +224,7 @@ function View({
 
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
-          <Text bold>{"__NAME__"}</Text>
+          <Text bold>{APP.name}</Text>
           {/* Measured facts from the `ready` event — the model's real size + the
               abilities actually enabled, never a hardcoded string. */}
           {state.boot ? (

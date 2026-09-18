@@ -24,7 +24,7 @@ import {
   AbilityRegistryCtx,
 } from "@lloyal-labs/lloyal-agents";
 import type { Ability, AgentRenderCtx } from "@lloyal-labs/lloyal-agents";
-import { reportTool, renderSpine, renderAgentPreamble } from "@lloyal-labs/rig";
+import { citedReport, renderSpine, renderAgentPreamble } from "@lloyal-labs/rig";
 import { reportBody } from "../ui/state.js";
 import type { WorkflowEvent } from "./protocol.js";
 
@@ -157,7 +157,9 @@ export function* runQuery(
   // Read BEFORE the turn is committed: a trunk here means an article already
   // exists, so this run deepens it instead of opening a new one.
   const mode = session.trunk ? "deepen" : "fresh";
-  const tools = [...abilities.flatMap((a) => [...a.tools]), reportTool];
+  // The terminal: `report`, with its `sources` forced by the grammar and woven into the findings at capture, so
+  // every note carries its citations inline and a `Sources:` list — the synth cites what is there, not what it finds.
+  const tools = [...abilities.flatMap((a) => [...a.tools]), citedReport.tool];
   const spinePrompt = renderSpine({ abilities });
 
   // Two agents, in parallel, over one shared spine. `report` is the terminal
@@ -170,9 +172,9 @@ export function* runQuery(
       const pool = yield* agentPool({
         tools,
         parent: spine,
-        terminal: reportTool,
+        terminal: citedReport.tool,
         maxTurns: MAX_TURNS,
-        policy: new DefaultAgentPolicy({ terminalToolName: "report" }),
+        policy: new DefaultAgentPolicy({ terminalToolName: citedReport.tool.name }),
         // Breadth: independent angles, in parallel, over one shared spine.
         // For sequential DEPTH — each task building on the last via the spine —
         // swap `parallel` for `chain(ANGLES, (angle, i) => ({ task: {...},

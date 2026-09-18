@@ -19,6 +19,7 @@
   },
   "include": [
     "src/harness/protocol.ts",
+    "src/config.ts",
     "src/ui/**/*",
     "types/**/*",
     "targets/desktop/view.tsx",

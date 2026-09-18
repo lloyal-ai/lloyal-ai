@@ -12,6 +12,7 @@
  * (re)load, so a reload seeds from a consistent cut.
  */
 import { app, BrowserWindow, ipcMain } from "electron";
+import { APP } from "../../src/ui/presentation.js";
 import { join } from "node:path";
 import { createEngine, createWindow, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
@@ -42,7 +43,7 @@ app.whenReady().then(() => {
       // electron-vite names the preload bundle after its entry and emits ESM as .mjs.
       preload: join(__dirname, "../preload/preload.mjs"),
       page: join(__dirname, "../renderer/index.html"),
-      title: "__NAME__",
+      title: APP.name,
       window: { backgroundColor: "#ffffff" },
     });
     win.on("closed", () => { win = null; });
