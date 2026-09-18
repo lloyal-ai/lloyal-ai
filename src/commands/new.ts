@@ -13,7 +13,7 @@ import {
 import { writeProjectMarker } from '../scaffold/write-marker.js';
 import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/post-scaffold.js';
 import { createInterface } from 'node:readline/promises';
-import { describeSnapshot, detectNvidiaGpu, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
+import { describeSnapshot, detectNvidiaGpu, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
 import type { BackendOutcome } from '../scaffold/backend-pack.js';
 import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
@@ -154,6 +154,10 @@ export const newCommand: Command = {
       return 1;
     }
     const nvidiaGpu = detectNvidiaGpu();
+    if (backendPack === 'download' && !packPlatform()) {
+      // An explicit ask that nothing here can honour is said, not swallowed.
+      process.stderr.write(`lloyal: --backend-pack download — no backend pack is published for ${process.platform}-${process.arch}; the npm packages cover it. Continuing without.\n`);
+    }
     const backend: 'gpu' | 'cpu' | undefined = backendPack === 'skip' ? 'cpu' : backendPack === 'download' ? 'gpu' : undefined;
     let plan: ScaffoldPlan;
     if (interactive) {

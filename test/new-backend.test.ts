@@ -26,7 +26,7 @@ vi.mock('../src/scaffold/post-scaffold.js', async (importOriginal) => {
     writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@lloyal-labs/lloyal.node', version: '9.9.9', main: 'index.js' }));
     writeFileSync(join(pkg, 'index.js'), `
       const fs = require('node:fs');
-      exports.probeBackendPack = async () => (${JSON.stringify(probe)});
+      exports.probeBackendPack = async () => { if (process.env.FAKE_BREAK_YML) fs.writeFileSync(${JSON.stringify(join(dest, 'harness.yml'))}, 'version: 1\\nmodel:\\n  # llm:\\nsources:\\n  outputDir: r\\n'); return (${JSON.stringify(probe)}); };
       exports.ensureBackendPack = async (opts) => {
         if (process.env.FAKE_PACK_FAIL) throw new Error('sha256 mismatch for backend-pack');
         fs.writeFileSync(${JSON.stringify(join(dest, 'ensure-called.json'))}, JSON.stringify(opts)); return '/cache/9.9.9-linux-x64';
@@ -129,6 +129,29 @@ describe('new -y on a box with a B200', () => {
     expect(r.yml).toMatch(/# gpu: cuda/);
     expect(out).toContain('CPU for now — the pack download failed — sha256 mismatch');
     expect(out).toContain('Run it');   // the next-steps panel still came
+  });
+  it('the pack downloads but harness.yml cannot take the key: the scaffold stands, the panel says where the pack is and what to add', async () => {
+    gpuOnBox = 'NVIDIA B200';
+    // `new` copies the template itself, so a harness.yml with no live llm: block cannot be handed in; the fake addon
+    // replaces the scaffold's yml at probe time instead — after install, before provisioning — which is the same moment.
+    process.env.FAKE_BREAK_YML = '1';
+    let r;
+    try { r = await scaffold([]); } finally { delete process.env.FAKE_BREAK_YML; }
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(true);
+    expect(out).toContain('CPU for now — the pack is installed → /cache/9.9.9-linux-x64, but harness.yml could not be written');
+    expect(out).toContain('Run it');
+  });
+  it('--backend-pack download on a Mac: an ask nothing here can honour is said, and new continues', async () => {
+    gpuOnBox = null;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    Object.defineProperty(process, 'arch', { value: 'arm64', configurable: true });
+    let said = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((c) => { said += String(c); return true; });
+    const r = await scaffold(['--backend-pack', 'download']);
+    expect(r.code).toBe(0);
+    expect(r.ensured).toBe(false);
+    expect(said).toContain('no backend pack is published for darwin-arm64');
   });
   it('a box with no GPU: the question never arises', async () => {
     gpuOnBox = null;

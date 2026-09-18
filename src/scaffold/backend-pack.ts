@@ -153,18 +153,26 @@ export async function provisionCuda(
   opts: { fetch: boolean; onProgress?: (got: number, total: number, file: string) => void },
 ): Promise<BackendOutcome> {
   const { host, probe } = snap;
+  const msg = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+  // The key is the record of what runs; a harness.yml this writer cannot read (no live `llm:` block — a
+  // hand-edited or third-party template) is said, not thrown: what was fetched stays fetched and usable.
+  const wrote = (): string | null => {
+    try { writeGpuField(root, 'cuda'); return null; }
+    catch (err) { return `harness.yml could not be written (${msg(err)}) — add \`gpu: cuda\` under model.llm yourself`; }
+  };
   if (probe.recommended && opts.fetch) {
+    let dir: string;
     try {
-      const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: opts.onProgress });
-      writeGpuField(root, 'cuda');
-      return { kind: 'pack', dir };
+      dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: opts.onProgress });
     } catch (err) {
-      return { kind: 'cpu', why: `the pack download failed — ${err instanceof Error ? err.message : String(err)}; later: npx lloyal-ai backends:install`, failed: true };
+      return { kind: 'cpu', why: `the pack download failed — ${msg(err)}; later: npx lloyal-ai backends:install`, failed: true };
     }
+    const unwritten = wrote();
+    return unwritten ? { kind: 'cpu', why: `the pack is installed → ${dir}, but ${unwritten}`, failed: true } : { kind: 'pack', dir };
   }
   if (cudaIsServed(probe, false)) {
-    writeGpuField(root, 'cuda');
-    return { kind: 'npm' };
+    const unwritten = wrote();
+    return unwritten ? { kind: 'cpu', why: unwritten, failed: true } : { kind: 'npm' };
   }
   return { kind: 'cpu', why: probe.recommended ? 'the pack was not installed; later: npx lloyal-ai backends:install' : (probe.reasons[probe.reasons.length - 1] ?? 'no CUDA backend serves this box') };
 }

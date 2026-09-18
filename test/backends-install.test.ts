@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { backendsInstallCommand } from '../src/commands/backends.js';
 import { describeOffer, projectPackHost, provisionCuda, snapshotPack, writeGpuField, cudaIsServed } from '../src/scaffold/backend-pack.js';
 import { B200, H100_OLD_DRIVER, L4 } from './backend-pack-fixtures.js';
+import { writeFileSync as writeFile } from 'node:fs';
 
 /** The template's model block, hint line included — what the gpu writer meets in a fresh scaffold. */
 const YML = [
@@ -38,7 +39,7 @@ function project(probe: Record<string, unknown>, withAddon = true): { root: stri
     writeFileSync(join(pkg, 'index.js'), `
       const fs = require('node:fs');
       let probes = 0;
-      exports.probeBackendPack = async () => { fs.writeFileSync(${JSON.stringify(log + '.probes')}, String(++probes)); return (${JSON.stringify(probe)}); };
+      exports.probeBackendPack = async () => { fs.writeFileSync(${JSON.stringify(log + '.probes')}, String(++probes)); if (process.env.FAKE_PROBE_FAIL) throw new Error('Backend pack manifest not available for 9.9.9/linux-x64-dl (404/404)'); return (${JSON.stringify(probe)}); };
       exports.ensureBackendPack = async (opts) => {
         if (process.env.FAKE_PACK_FAIL) throw new Error('sha256 mismatch for backend-pack');
         fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify(opts)); opts.onProgress?.(5, 10, 'backend-pack'); return '/cache/9.9.9-linux-x64';
@@ -150,6 +151,38 @@ describe('backends:install', () => {
     process.chdir(root); capture();
     expect(await backendsInstallCommand.run(['--yes'])).toBe(1);
     expect(err).toContain('run `npm install` first');
+  });
+
+  it('an unserved GPU (H100, old driver): the command installs nothing, writes nothing, says the reason, exit 0', async () => {
+    const { root, log } = project(H100_OLD_DRIVER);
+    process.chdir(root); capture();
+    expect(await backendsInstallCommand.run(['--yes'])).toBe(0);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(log)).toBe(false);
+    expect(out).toContain("driver 535.129 (CUDA 12.2) cannot JIT the pack's 12.9 PTX");
+    expect(out).toContain('nothing installed —');
+    expect(readFileSync(join(root, 'harness.yml'), 'utf8')).not.toMatch(/^    gpu: cuda$/m);
+  });
+
+  it('the probe cannot run (offline: no manifest): the command says so and fetches nothing, exit 1', async () => {
+    const { root, log } = project(RECOMMENDED);
+    process.chdir(root); capture();
+    process.env.FAKE_PROBE_FAIL = '1';
+    try { expect(await backendsInstallCommand.run(['--yes'])).toBe(1); } finally { delete process.env.FAKE_PROBE_FAIL; }
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(log)).toBe(false);
+    expect(err).toContain('backend pack probe failed — Backend pack manifest not available');
+  });
+
+  it('the pack downloads but harness.yml cannot take the key: said as a failure, with where the pack went', async () => {
+    const { root, log } = project(RECOMMENDED);
+    writeFile(join(root, 'harness.yml'), 'version: 1\nmodel:\n  # llm:\n  #   id: "x"\nsources:\n  outputDir: r\n');   // no live llm: block
+    process.chdir(root); capture();
+    expect(await backendsInstallCommand.run(['--yes'])).toBe(1);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(log)).toBe(true);   // the download happened and stays
+    expect(err).toContain('the pack is installed → /cache/9.9.9-linux-x64, but harness.yml could not be written');
+    expect(err).toContain('add `gpu: cuda` under model.llm yourself');
   });
 
   it('the offer names the download, runtime included only when the box needs it', () => {
