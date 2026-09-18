@@ -35,6 +35,9 @@ test("the tail never starts inside an open fence, and a finished document splits
   const closed = "before\n\n```\ncode\n\nmore\n```\n\nafter";
   assert.deepEqual(splitStreaming(closed), { head: "before\n\n```\ncode\n\nmore\n```\n\n", tail: "after" });
   assert.equal(splitStreaming("").tail, "");
+  // A fence inside a list item is indented; it still owns its blank lines.
+  const nested = "- item\n\n  ```\n  code\n\n  more";
+  assert.deepEqual(splitStreaming(nested), { head: "- item\n\n", tail: "  ```\n  code\n\n  more" });
 });
 
 test("replayed token by token, the head is parsed once per block and the bytes parsed stay linear", () => {
