@@ -3,7 +3,6 @@
 import { type AppState } from "../state.js";
 import { activeDoc } from "./canvas.js";
 import { type Inquiry, doing, handingIn, resultMeta, verbOf } from "./inquiry.js";
-import { selectSources } from "./ask.js";
 
 /** The outline as the planner drafts it, live — complete `"description"`
  *  strings lifted from the grammar-forced JSON stream, plus the trailing
@@ -63,12 +62,10 @@ export interface Probe {
   peek: string | null;
 }
 
-/** The pre-flight probes — one recon agent per included library, aligned by
- *  spawn order (the pool forks them in the byline's own order). The Frame
- *  stacks them full-width like every other section; each carries the full
- *  disclosure stream research rows have. */
+/** The pre-flight probes — one agent per source that takes part, each wearing the name of the source its spawn
+ *  named (the byline's order says nothing: the pool seats probes as the context allows). The Frame stacks them
+ *  full-width like every other section; each carries the full disclosure stream research rows have. */
 export const selectProbes = (app: AppState): Probe[] => {
-  const included = selectSources(app).filter((l) => l.included);
   const out: Probe[] = [];
   activeDoc(app).reconAgentIds.forEach((id, i) => {
     const a = activeDoc(app).roster.agents.get(id);
@@ -89,7 +86,7 @@ export const selectProbes = (app: AppState): Probe[] => {
       : last.kind === "tool_result" ? resultMeta(last)
       : null;
     out.push({
-      title: included[i]?.title ?? "a source",
+      title: a.taskDescription ?? "a source",
       inquiry: { id: a.id, index: i, verb: verbOf(a, handingIn(activeDoc(app))), startedAt: a.startedAt, endedAt: a.endedAt },
       searches,
       found,

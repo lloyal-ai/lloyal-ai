@@ -9,7 +9,7 @@ import { reduce, initialState, type AppState } from '../../src/ui/state.js';
 import type { WorkflowEvent } from '../../src/brief/protocol.js';
 import {
   DOC_PHASES, selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
-  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle,
+  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle, selectProbes,
 } from '../../src/ui/select.js';
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
@@ -239,6 +239,21 @@ test('selectRunDepth: the run keeps its own effort across preflight', () => {
   assert.equal(selectRunDepth(s), 'low');
   s = fold([{ type: 'preflight:start', query: 'Q', abilityCount: 2 } as WorkflowEvent], s);
   assert.equal(s.documents.get(A)!.runEffort, 'low');
+});
+
+test('a probe wears the name of the source it probes, read off its spawn key — never its place in the byline', () => {
+  // The byline lists every installed source, corpus first and off by default; the pool forks one probe per
+  // PARTICIPATING source, in its own order. Aligning the two by position labels the web probe "corpus".
+  const ability = (name: string, enabled: boolean) => ({ name, enabled, config: {}, configSchema: undefined, iconUrl: null });
+  let s = fold([
+    { type: 'abilities:state', abilities: [ability('corpus', false), ability('web', true), ability('documents', true)] } as unknown as WorkflowEvent,
+    { type: 'query', docId: A, query: 'Q', warm: false, effort: 'low' } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q', mode: 'flat' } as WorkflowEvent,
+    { type: 'preflight:start', query: 'Q', abilityCount: 2 } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 1, parentAgentId: null, key: 'source:web' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 2, parentAgentId: null, key: 'source:documents' } as WorkflowEvent,
+  ]);
+  assert.deepEqual(selectProbes(s).map((p) => p.title), ['web', 'documents']);
 });
 
 // ── Admissions grow the thread live ────────────────────────────

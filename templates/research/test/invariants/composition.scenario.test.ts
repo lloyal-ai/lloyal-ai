@@ -15,7 +15,7 @@ import { sleep } from "effection";
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
 import { Tool, parallel } from "@lloyal-labs/lloyal-agents";
-import type { JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Agent, JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Output } from "@lloyal-labs/rig";
 import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
 import type { PlanResult } from "@lloyal-labs/rig";
@@ -25,6 +25,7 @@ import { briefs } from "../../src/brief/brief.js";
 import { openLibrary } from "../../src/brief/library.js";
 import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
 import * as research from "../../src/research/research.js";
+import { WORDS } from "../../src/research/prompts.js";
 import type { Evidence, Inputs, Research, Written } from "../../src/research/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
@@ -272,6 +273,34 @@ test("only the strategy replaced: an investigation run side by side still settle
   assert.ok(saw.prompt.includes("FIRST-FINDING") && saw.prompt.includes("SECOND-FINDING"), "the settling agent was given nothing to settle");
 });
 
+test("a strategy that commits one of two identical findings has not attended both: the settling pass is still handed them", async () => {
+  // Whether a finding is on the spine is a fact about THAT inquiry's finding, not about its text: two inquiries
+  // can say the same words, and only the committed one is there to read.
+  const firstOnly: Research["write"] = (trunk, ask, plan) =>
+    research.write(trunk, ask, plan, {
+      inquire: (_ask, tasks, specFor) => function* (ctx) {
+        const agents: Agent[] = [];
+        for (const [i, task] of tasks.entries()) agents.push(yield* ctx.spawn(specFor(task, i, true)));
+        const first = yield* ctx.waitFor(agents[0]);
+        if (first.result) yield* ctx.extendSpine(WORDS.researchTask(tasks[0].description), first.result);
+        yield* ctx.waitFor(agents[1]);
+      },
+    });
+  const run = await runHarness({
+    harness: composed({ ...research, write: firstOnly }),
+    utterances: [
+      { text: TWO_TASKS, kind: "text" },
+      { text: "THE-SAME-FINDING", kind: "report" },
+      { text: "THE-SAME-FINDING", kind: "report" },
+      { text: "the settled brief", kind: "text" },
+    ],
+    script: planned("flat"),
+  });
+  const saw = settlingSaw(run);
+  assert.equal(saw.spineGrew, 1, "exactly one finding joined the spine");
+  assert.ok(saw.prompt.includes("THE-SAME-FINDING"), "the finding the spine does not hold was not handed to the settling pass");
+});
+
 test("the stock strategies hand their findings over once: on the spine for an investigation, in the prompt for a survey", async () => {
   const deep = settlingSaw(await runHarness({ utterances: twoFindings, script: planned("deep") }));
   assert.equal(deep.spineGrew, 2, "each inquiry's findings joined the spine");
@@ -344,12 +373,13 @@ test("an output of the developer's own is what the inquiry is told to call: in i
     ],
   });
   assert.equal(run.events.filter((e) => e.type === "agent:recovered").length, 1, "the inquiry was reaped and recovered");
-  // The template's own two sentences that name the tool findings go through. (A source's skill may name the stock
-  // one in its own words; that text is the ability's, not this app's.)
+  // The template's own sentences: the recovery turn names the tool findings go through; the citation nudge is
+  // about a `sources` argument this tool does not take, so it is not said at all. (A source's skill may name the
+  // stock tool in its own words; that text is the ability's, not this app's.)
   const nudged = reached.filter((t) => /When you call \w+\(\):/.test(t));
   const recovery = reached.filter((t) => /must deliver findings now/.test(t));
-  assert.ok(nudged.length >= 1 && recovery.length >= 1, "the preamble and the recovery turn both reached the model");
-  for (const t of nudged) assert.match(t, /When you call file_findings\(\):/, "the nudge names the inquiry's own output");
+  assert.equal(nudged.length, 0, "a tool that takes no sources was told how to fill them");
+  assert.ok(recovery.length >= 1, "the recovery turn reached the model");
   for (const t of recovery) {
     assert.match(t, /Call the file_findings tool/, "the recovery turn names the inquiry's own output");
     assert.doesNotMatch(t, /Call the report tool/, "no recovery names a tool this run does not have");

@@ -83,8 +83,12 @@ const NOTHING_FOUND =
 const today = (): string => new Date().toISOString().slice(0, 10);
 const timer = (): (() => number) => { const t = performance.now(); return () => performance.now() - t; };
 
-/** The per-agent preamble: the source's skill, then the citation nudge, said of the tool findings go through. */
-const preamble = (source: Ability, ctx: AgentRenderCtx, tool: string): string => renderAgentPreamble(source, { ...ctx }) + WORDS.citationNudge(tool);
+/** The per-agent preamble: the source's skill, then the citation nudge — said only of an output that takes
+ *  `sources`, because that is what the nudge says how to fill. */
+const preamble = (source: Ability, ctx: AgentRenderCtx, output: Output<string>): string => {
+  const takesSources = "sources" in (output.tool.parameters.properties ?? {});
+  return renderAgentPreamble(source, { ...ctx }) + (takesSources ? WORDS.citationNudge(output.tool.name) : "");
+};
 
 /** A prompt with the app's own instructions composed into its system half. */
 const withInstructions = (p: Prompt, stage?: { writesTheAnswer: boolean }): Prompt => ({ ...p, system: framed(p.system, stage) });
@@ -202,8 +206,8 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: 
 
 /** A strategy, run as it is, with a note kept of what it commits to the spine. Nothing else can say whether the
  *  settling agent already attends a finding: a strategy is free to commit every finding, some, or none. */
-function watchingTheSpine(orchestrate: Orchestrator): { orchestrate: Orchestrator; committed: Set<string> } {
-  const committed = new Set<string>();
+function watchingTheSpine(orchestrate: Orchestrator): { orchestrate: Orchestrator; committed: Map<string, number> } {
+  const committed = new Map<string, number>();   // how many times each text was committed: two inquiries can say the same words
   const watched = (ctx: PoolContext): PoolContext => ({
     get spine() { return ctx.spine; },
     spawn: (spec) => ctx.spawn(spec),
@@ -211,7 +215,7 @@ function watchingTheSpine(orchestrate: Orchestrator): { orchestrate: Orchestrato
     canFit: (tokens) => ctx.canFit(tokens),
     *extendSpine(userContent, assistantContent) {
       const grew = yield* ctx.extendSpine(userContent, assistantContent);
-      if (grew > 0) committed.add(assistantContent);
+      if (grew > 0) committed.set(assistantContent, (committed.get(assistantContent) ?? 0) + 1);
       return grew;
     },
   });
@@ -256,7 +260,7 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
             agentCount: beside ? tasks.length : 1,
             siblingTasks: beside ? tasks.filter((_, j) => j !== i).map((t) => t.description) : [],
             taskIndex: beside ? 0 : i,
-          }, s.output.tool.name)
+          }, s.output)
         : "", lone),
       ...(source ? { assignedAbility: source.manifest.name } : {}),
       seed: 1000 + i,
@@ -285,10 +289,11 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       if (tasks.length === 1) text = found[0].trim();                 // one inquiry is its own answer
       else if (found.every((f) => !f.trim())) text = NOTHING_FOUND;   // nothing to settle: say so, never invent
       else {
-        // Attended only if EVERY finding there is was committed: one that was not would be lost to a prompt that
-        // supplies none, so anything short of all of them is handed over in the prompt, whole.
+        // Attended only if EVERY finding there is was committed — each one, not each distinct text: one that was
+        // not would be lost to a prompt that supplies none, so anything short of all of them is handed over whole.
         const said = found.filter((f) => f.trim());
-        const r = yield* s.settle(spine, ask, plan, { findings: found, attended: said.every((f) => strategy.committed.has(f)) });
+        const attended = said.every((f) => (strategy.committed.get(f) ?? 0) >= said.filter((g) => g === f).length);
+        const r = yield* s.settle(spine, ask, plan, { findings: found, attended });
         text = r.answer; settled = r;
       }
 

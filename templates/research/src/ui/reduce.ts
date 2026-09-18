@@ -16,6 +16,7 @@
 import { emptyRoster, foldAgents } from '@lloyal-labs/ui/fold';
 import type { AgentRoster, AgentEvent as FoldableAgentEvent } from '@lloyal-labs/ui/fold';
 import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState } from './state.js';
+import { sourceOf } from '@lloyal-labs/rig';
 import { RIG_REPORT, taskIndexOf } from '../brief/protocol.js';
 import type { Reports, WorkflowEvent } from '../brief/protocol.js';
 
@@ -477,11 +478,11 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       return { ...doc, closing: true, closedEarly: true };
 
     case 'agent:spawn': {
-      // Pre-flight recon agent: streamed through the same timeline machinery as research (task 0), tracked
-      // in reconAgentIds so the research column never picks it up.
+      // A pre-flight probe: streamed through the same timeline machinery as research (task 0), tracked in
+      // reconAgentIds so the research column never picks it up. Its key names the source it reads.
       if (doc.phase === 'discovering') {
         return { ...doc, reconAgentIds: [...doc.reconAgentIds, ev.agentId],
-          roster: foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: 0, taskDescription: 'Probing sources' }), ...PROBE }) };
+          roster: foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: 0, taskDescription: sourceOf(ev.key) }), ...PROBE }) };
       }
       // Outside research, an agent is tracked without a timeline. An in-flight ask researches while the doc stays 'done'.
       if (doc.phase !== 'research' && !asking) {
