@@ -111,15 +111,14 @@ export function writeReadmeRunSteps(dir: string, targets: Target[]): void {
 }
 
 /** Print the "you're set — here's how to run it" panel (ANSI-colored on a TTY). */
-/** What `new` did about the CUDA backend pack, for the panel: installed where, or declined. */
-export type BackendPackNote = { installed: true; dir: string } | { installed: false };
+import type { BackendOutcome } from './backend-pack.js';
 
 export function printNextSteps(opts: {
   name: string;
   targets: Target[];
   installed: boolean;
-  /** Null when the box had no use for the pack, or nothing was asked. */
-  backendPack?: BackendPackNote | null;
+  /** What was done about the GPU; null when the box has none or CPU was chosen. */
+  backend?: BackendOutcome | null;
   /**
    * Default ability specs that were NOT vendored (`--skip-abilities`, or the fetch
    * failed). The harness imports these, so until they are added the project
@@ -159,12 +158,13 @@ export function printNextSteps(opts: {
   } else if (!opts.installed) {
     lines.push(`  ${dim('npm install')}`);
   }
-  if (opts.backendPack) {
+  if (opts.backend) {
+    const b = opts.backend;
     lines.push(
       '',
-      opts.backendPack.installed
-        ? `  ${dim(`CUDA backend pack installed → ${opts.backendPack.dir}; set model.llm.gpu: cuda in harness.yml`)}`
-        : `  ${dim('CUDA backend pack not installed — later: npx lloyal-ai backends:install')}`,
+      b.kind === 'pack' ? `  ${dim(`GPU: CUDA backend pack installed → ${b.dir}; harness.yml says gpu: cuda`)}`
+      : b.kind === 'npm' ? `  ${dim('GPU: the npm package serves it natively; harness.yml says gpu: cuda')}`
+      : `  ${dim(`CPU for now — ${b.why}`)}`,
     );
   }
   lines.push('', `  ${c(`${ACCENT_SGR};1`, 'Run it')}`);

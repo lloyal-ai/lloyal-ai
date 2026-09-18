@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
 import type { Command } from '../command.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
-import { describeOffer, packPlatform, progressLine, projectPackHost } from '../scaffold/backend-pack.js';
+import { describeOffer, packPlatform, progressLine, projectPackHost, provisionCuda } from '../scaffold/backend-pack.js';
 
 const USAGE = [
   'lloyal backends:install — install the signed CUDA backend pack for this box',
@@ -20,7 +20,7 @@ const USAGE = [
   'once per lloyal.node version, shared by every harness on the box. Nothing is fetched without a yes;',
   '--yes answers it (deploy scripts). Only linux-x64 has a published pack.',
   '',
-  'After it: set `model.llm.gpu: cuda` in harness.yml and start the harness.',
+  'After it, harness.yml says `model.llm.gpu: cuda` and the harness starts on the GPU.',
 ].join('\n');
 
 const asMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -48,20 +48,20 @@ export const backendsInstallCommand: Command = {
       }
       const probe = await host.probe();
       process.stdout.write(`lloyal.node ${host.version}${probe.gpu ? ` · ${probe.gpu.name}` : ''}\n${describeOffer(probe).join('\n')}\n`);
-      if (!probe.recommended) {
-        process.stdout.write('nothing to install.\n');
-        return 0;
-      }
-      if (!values.yes) {
+      if (probe.recommended && !values.yes) {
         if (!process.stdin.isTTY) throw new Error('not a terminal and no --yes: nothing is fetched without a yes.');
         const rl = createInterface({ input: process.stdin, output: process.stdout });
         const answer = (await rl.question('install it? [y/N] ')).trim().toLowerCase();
         rl.close();
         if (answer !== 'y' && answer !== 'yes') { process.stdout.write('left as is.\n'); return 0; }
       }
-      const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: progressLine((s) => process.stderr.write(s)) });
-      process.stderr.write('\n');
-      process.stdout.write(`installed → ${dir}\n  every harness on this box using lloyal.node ${host.version} loads it; set model.llm.gpu: cuda in harness.yml.\n`);
+      const outcome = await provisionCuda(root, { fetch: probe.recommended, onProgress: progressLine((s) => process.stderr.write(s)) });
+      if (outcome.kind === 'pack') process.stderr.write('\n');
+      process.stdout.write(
+        outcome.kind === 'pack' ? `installed → ${outcome.dir}\n  harness.yml: model.llm.gpu: cuda — every harness on this box using lloyal.node ${host.version} loads it.\n`
+        : outcome.kind === 'npm' ? 'nothing to install: the npm package serves this GPU natively.\n  harness.yml: model.llm.gpu: cuda\n'
+        : `nothing installed — ${outcome.why}.\n`,
+      );
       return 0;
     } catch (err) {
       process.stderr.write(`lloyal backends:install: ${asMessage(err)}\n`);

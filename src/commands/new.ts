@@ -12,10 +12,8 @@ import {
 } from '../scaffold/copy-tree.js';
 import { writeProjectMarker } from '../scaffold/write-marker.js';
 import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/post-scaffold.js';
-import type { BackendPackNote } from '../scaffold/post-scaffold.js';
-import { createInterface } from 'node:readline/promises';
-import { describeOffer, packPlatform, progressLine, projectPackHost } from '../scaffold/backend-pack.js';
-import type { PackProbe } from '../scaffold/backend-pack.js';
+import { detectNvidiaGpu, progressLine, provisionCuda } from '../scaffold/backend-pack.js';
+import type { BackendOutcome } from '../scaffold/backend-pack.js';
 import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
 
@@ -43,10 +41,10 @@ const USAGE = [
   '                to a local .gguf you already have. Default: the catalog default.',
   '  --dir <path>  Parent directory to create the harness in (default: cwd)',
   '  --backend-pack <download|skip>',
-  '                On linux-x64 with an NVIDIA GPU, after install: fetch the',
-  '                signed CUDA backend pack without asking, or never offer it.',
-  '                Without the flag a terminal is asked; a pipe or -y is not,',
-  '                and `lloyal backends:install` does it later.',
+  '                A box with an NVIDIA GPU runs on it: after install the signed',
+  '                CUDA backend pack is fetched once per box and harness.yml gets',
+  '                model.llm.gpu: cuda. The wizard asks; -y takes the GPU; the flag',
+  '                settles it for a script. skip = CPU, nothing fetched.',
   '  --skip-install',
   '                Do not run `npm install` after scaffolding (it runs by',
   '                default in an interactive terminal).',
@@ -92,6 +90,8 @@ interface ScaffoldPlan {
   targets: Target[];
   /** Catalog id OR a BYO `.gguf` path (see `applyModelChoice`). */
   llm: string;
+  /** Run on this box's NVIDIA GPU (pack installed after `npm install`, `gpu: cuda` written) or on CPU. */
+  backend: 'gpu' | 'cpu';
 }
 
 /** Flags shared by both paths — undefined means "not provided" (ask / default). */
@@ -141,9 +141,18 @@ export const newCommand: Command = {
     // flags already given pre-seed the picker so it asks only for the rest.
     const interactive =
       !name && !values.yes && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+    // The box answers the backend question: an NVIDIA GPU on linux-x64 means the GPU, unless told CPU.
+    // --backend-pack download|skip settles it for a script; -y takes the default, which is the GPU.
+    const backendPack = values['backend-pack'];
+    if (backendPack !== undefined && backendPack !== 'download' && backendPack !== 'skip') {
+      process.stderr.write(`lloyal: --backend-pack expects download or skip, got "${backendPack}".\n`);
+      return 1;
+    }
+    const nvidiaGpu = backendPack === 'skip' ? null : detectNvidiaGpu();
+    const backend: 'gpu' | 'cpu' | undefined = backendPack === 'skip' ? 'cpu' : backendPack === 'download' ? 'gpu' : undefined;
     let plan: ScaffoldPlan;
     if (interactive) {
-      const result = await runNewWizard(flags);
+      const result = await runNewWizard({ ...flags, nvidiaGpu, backend });
       if (!result) {
         process.stderr.write('cancelled.\n');
         return 1;
@@ -156,7 +165,7 @@ export const newCommand: Command = {
         if (built.usage) process.stderr.write(`\n${USAGE}\n`);
         return 1;
       }
-      plan = built;
+      plan = { ...built, backend: backend ?? (nvidiaGpu ? 'gpu' : 'cpu') };
     }
 
     // Auto-install by default in a real terminal (the batteries-included flow):
@@ -169,16 +178,7 @@ export const newCommand: Command = {
     // never be an implicit consequence of a pipe, of CI, or of --skip-install.
     // Only the explicit --skip-abilities opts out.
     const vendorAbilities = !values['skip-abilities'];
-    // The CUDA backend pack: asked about in a terminal after install, never on a pipe or -y unless
-    // the flag says download, so a script's `new` fetches nothing it did not name.
-    const backendPack = values['backend-pack'];
-    if (backendPack !== undefined && backendPack !== 'download' && backendPack !== 'skip') {
-      process.stderr.write(`lloyal: --backend-pack expects download or skip, got "${backendPack}".\n`);
-      return 1;
-    }
-    const offerPack: 'download' | 'skip' | 'ask' =
-      backendPack ?? (Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY) && !values.yes ? 'ask' : 'skip');
-    return performScaffold(plan, parentDir, { install, vendorAbilities, offerPack });
+    return performScaffold(plan, parentDir, { install, vendorAbilities });
   },
 };
 
@@ -214,7 +214,7 @@ function validateFlags(values: {
 function planFromFlags(
   name: string | undefined,
   flags: Flags,
-): ScaffoldPlan | { error: string; usage?: boolean } {
+): Omit<ScaffoldPlan, 'backend'> | { error: string; usage?: boolean } {
   if (!name) {
     return { error: 'lloyal: missing harness <name>', usage: true };
   }
@@ -247,7 +247,7 @@ function parseTargets(csv: string | undefined): { targets: Target[] } | { error:
 async function performScaffold(
   plan: ScaffoldPlan,
   parentDir: string,
-  opts: { install: boolean; vendorAbilities: boolean; offerPack: 'download' | 'skip' | 'ask' },
+  opts: { install: boolean; vendorAbilities: boolean },
 ): Promise<number> {
   const dest = join(parentDir, plan.name);
 
@@ -331,40 +331,18 @@ async function performScaffold(
   }
 
   const installed = opts.install ? await runInstall(dest) : false;
-  const pack = installed && opts.offerPack !== 'skip' ? await offerBackendPack(dest, opts.offerPack) : null;
-  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities, backendPack: pack });
+  // The GPU decision is carried out after install, through the project's own lloyal.node: the pack is
+  // fetched (the wizard's or the flag's yes was the consent) and `gpu: cuda` written when it is then true.
+  let backend: BackendOutcome | null = null;
+  if (plan.backend === 'gpu') {
+    if (!installed) backend = { kind: 'cpu', why: 'not installed yet — after `npm install`: npx lloyal-ai backends:install' };
+    else {
+      backend = await provisionCuda(dest, { fetch: true, onProgress: progressLine((s) => process.stderr.write(s)), say: (s) => process.stdout.write(`\n${s}\n`) });
+      if (backend.kind === 'pack') process.stderr.write('\n');
+    }
+  }
+  printNextSteps({ name: plan.name, targets: plan.targets, installed, pendingAbilities, backend });
   return 0;
 }
 
-/**
- * After a real install on linux-x64: probe through the project's own lloyal.node and, when the pack
- * would serve this GPU, fetch it — asking first unless told to download. Returns what the next-steps
- * panel should say: the cache dir once installed, the reasons when declined, nothing when the box
- * has no use for it. A probe failure (offline, no nvidia-smi) is said and never blocks the scaffold.
- */
-export async function offerBackendPack(dest: string, mode: 'download' | 'ask'): Promise<BackendPackNote | null> {
-  if (!packPlatform()) return null;
-  const host = await projectPackHost(dest);
-  if (!host) return null;
-  let probe: PackProbe;
-  try {
-    probe = await host.probe();
-  } catch (err) {
-    process.stderr.write(`lloyal: backend pack probe skipped — ${err instanceof Error ? err.message : String(err)}\n`);
-    return null;
-  }
-  if (!probe.recommended) return null;
-  process.stdout.write(`\n${probe.gpu?.name ?? 'CUDA GPU'} — the signed CUDA backend pack would serve it:\n${describeOffer(probe).join('\n')}\n`);
-  let accepted = mode === 'download';
-  if (!accepted) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = (await rl.question('install it now? [y/N] ')).trim().toLowerCase();
-    rl.close();
-    accepted = answer === 'y' || answer === 'yes';
-  }
-  if (!accepted) return { installed: false };
-  const dir = await host.ensure({ includeRuntime: probe.needsRuntimeArchive, onProgress: progressLine((s) => process.stderr.write(s)) });
-  process.stderr.write('\n');
-  return { installed: true, dir };
-}
 

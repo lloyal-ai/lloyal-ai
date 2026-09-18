@@ -3,16 +3,31 @@
  * project's node_modules, never carried by this CLI — and fetches nothing without a yes.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { backendsInstallCommand } from '../src/commands/backends.js';
-import { describeOffer, projectPackHost } from '../src/scaffold/backend-pack.js';
+import { describeOffer, projectPackHost, provisionCuda, writeGpuField, cudaIsServed } from '../src/scaffold/backend-pack.js';
+
+/** The template's model block, hint line included — what the gpu writer meets in a fresh scaffold. */
+const YML = [
+  'version: 1',
+  'model:',
+  '  llm:',
+  '    id: "qwen3.5-4b"          # add `kvCache:` or `gpu:` below to override',
+  '    context: 32768',
+  '    # gpu: cuda              # backend (default · cuda · vulkan); boot fails if unavailable',
+  '  # reranker:',
+  '  #   id: "qwen3-reranker-0.6b"',
+  'sources:',
+  '  outputDir: reports',
+  '',
+].join('\n');
 
 /** A project whose lloyal.node is a fake that records what the CLI asked of it. */
 function project(probe: Record<string, unknown>, withAddon = true): { root: string; log: string } {
   const root = mkdtempSync(join(tmpdir(), 'backends-'));
-  writeFileSync(join(root, 'harness.yml'), 'version: 1\n');
+  writeFileSync(join(root, 'harness.yml'), YML);
   writeFileSync(join(root, 'package.json'), '{"name":"p","version":"0.0.0"}');
   const log = join(root, 'calls.json');
   if (withAddon) {
@@ -58,6 +73,7 @@ describe('backends:install', () => {
     expect(out).toContain('NVIDIA B200');
     expect(out).toContain('installed → /cache/9.9.9-linux-x64');
     expect(err).toContain('fetching backend-pack — 50%');
+    expect(readFileSync(join(root, 'harness.yml'), 'utf8')).toMatch(/^    gpu: cuda$/m);   // the hint became the line
   });
 
   it('without --yes off a terminal: fetches nothing and says why', async () => {
@@ -78,6 +94,34 @@ describe('backends:install', () => {
     expect(existsSync(log)).toBe(false);
     expect(out).toContain('served natively by the standard npm package');
     expect(out).toContain('nothing to install');
+    const { readFileSync: read } = await import('node:fs');
+    expect(read(join(root, 'harness.yml'), 'utf8')).toMatch(/^    gpu: cuda$/m);   // true without the pack: npm serves it
+  });
+
+  it('gpu: cuda is written only when it is true — never for a box nothing serves', async () => {
+    const unserved = { ...RECOMMENDED, recommended: false, reasons: ['GPU NVIDIA H100 (sm_90): driver cannot JIT the pack\'s PTX'] };
+    const { root, log } = project(unserved);
+    const { readFileSync: read, existsSync } = await import('node:fs');
+    const outcome = await provisionCuda(root, { fetch: true });
+    expect(outcome.kind).toBe('cpu');
+    expect(existsSync(log)).toBe(false);
+    expect(read(join(root, 'harness.yml'), 'utf8')).not.toMatch(/^    gpu: cuda$/m);
+    expect(cudaIsServed(unserved, true)).toBe(true);     // …but once the pack is there, it is
+    expect(cudaIsServed(unserved, false)).toBe(false);
+  });
+
+  it('the gpu writer: rewrites a live line, promotes the hint, or inserts after the model id', () => {
+    const { readFileSync: read, writeFileSync: write } = require('node:fs') as typeof import('node:fs');
+    const { root } = project(RECOMMENDED);
+    const yml = join(root, 'harness.yml');
+    writeGpuField(root, 'cuda');
+    expect(read(yml, 'utf8')).toMatch(/^    gpu: cuda$/m);
+    expect(read(yml, 'utf8')).not.toMatch(/# gpu: cuda/);
+    writeGpuField(root, 'cuda');                                  // idempotent on the live line
+    expect(read(yml, 'utf8').match(/^    gpu: cuda$/mg)).toHaveLength(1);
+    write(yml, 'version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\nsources:\n  outputDir: r\n');
+    writeGpuField(root, 'cuda');                                  // no hint: inserted after id
+    expect(read(yml, 'utf8')).toBe('version: 1\nmodel:\n  llm:\n    id: "x"\n    gpu: cuda\n    context: 1\nsources:\n  outputDir: r\n');
   });
 
   it('a project without the addon says to install first', async () => {
