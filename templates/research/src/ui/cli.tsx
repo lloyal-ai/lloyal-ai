@@ -187,7 +187,10 @@ export function renderCli(
   bus: EventBus<WorkflowEvent>,
   dispatch: (c: Command) => void,
   bootstrap: readonly WorkflowEvent[],
+  streams: { stdin?: NodeJS.ReadStream; stdout?: NodeJS.WriteStream } = {},   // the terminal's, unless a test brings its own
 ): () => void {
-  const instance = render(<View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />);
+  // ctrl+c is the app's to handle — it says `quit` on the wire so the harness ends and the process with it. Left
+  // to Ink, ctrl+c unmounts the view and nothing tells the harness, which waits for a command that never comes.
+  const instance = render(<View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />, { ...streams, exitOnCtrlC: false });
   return () => instance.unmount();
 }

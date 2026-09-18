@@ -274,8 +274,11 @@ export function renderCli(
   dispatch: (c: Command) => void,
   bootstrap: readonly WorkflowEvent[],
 ): () => void {
+  // ctrl+c is the app's to handle — it says `quit` on the wire so the harness ends and the process with it. Left
+  // to Ink, ctrl+c unmounts the view and nothing tells the harness, which waits for a command that never comes.
   const instance = render(
     <View bus={bus} dispatch={dispatch} bootstrap={bootstrap} />,
+    { exitOnCtrlC: false },
   );
   return () => instance.unmount();
 }
