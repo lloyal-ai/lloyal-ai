@@ -15,8 +15,8 @@ import { each } from "effection";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { defineConfig, modelSettings, initializeHarness } from "@lloyal-labs/rig";
-import type { ConfigOf, OriginOf } from "@lloyal-labs/rig";
+import { initializeHarness } from "@lloyal-labs/rig";
+import { config } from "./config.js";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
 import { runQuery } from "./harness/harness.js";
 import type { Command, WorkflowEvent } from "./harness/protocol.js";
@@ -29,22 +29,9 @@ import type { Command, WorkflowEvent } from "./harness/protocol.js";
  */
 export const abilities = [createWikipediaAbility];
 
-/**
- * This harness's config surface. `modelSettings` is the model block with its yml
- * paths and env names, layered for every app and never restated. `version` and
- * the `abilities` family are rig's and are not declared here.
- *
- * Add a knob by adding a line: the key is the path in the resolved config, and
- * the entry says where each layer reads it from. The MECHANICS — precedence,
- * atomic writes, provenance, `~` expansion — are rig's and are not yours to
- * maintain.
- */
-export const config = defineConfig({
-  ...modelSettings,
-  "sources.outputDir": { yml: "sources.outputDir", cli: "outputDir", path: true, default: ".", describe: "Where the session trace is written." },
-});
-export type Config = ConfigOf<typeof config>;
-export type Origin = OriginOf<typeof config>;
+// The config table is its own node-free module, so the view can read it too.
+export { config } from "./config.js";
+export type { Config, Origin } from "./config.js";
 
 /**
  * What to CALL the model in the header: whichever selection actually won.

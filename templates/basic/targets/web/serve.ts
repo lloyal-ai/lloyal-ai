@@ -10,6 +10,7 @@
  * from the environment, because they describe the machine and not the harness.
  */
 import { bootServed } from "@lloyal-labs/rig/node";
+import { APP } from "../../src/ui/presentation.js";
 import { harness, abilities, config } from "../../src/app.js";
 
-bootServed({ harness, abilities, config }, { name: "basic" });
+bootServed({ harness, abilities, config }, { name: APP.name });

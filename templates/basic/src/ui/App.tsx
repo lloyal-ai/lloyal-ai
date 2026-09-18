@@ -16,6 +16,8 @@
 import "./app.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
+import { config } from "../config.js";
+import { APP } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
 import {
   reduce,
@@ -60,6 +62,40 @@ function SourceFigure({ s }: { s: WikiSource }): ReactElement {
         {s.snippet && ` — ${s.snippet}`}
       </figcaption>
     </figure>
+  );
+}
+
+/** The model's reasoning while it streams — a ticker, not the page. Collapsed by default: the newest line and
+ *  how much has been thought, so a mind going in circles is visible as circles, not as an article. Expanded,
+ *  the whole stream in a bounded box pinned to the newest line. The `<think>` block ends when the model closes
+ *  it; only then does the report begin (`reportBody`). */
+function Thinking({ text }: { text: string }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const lines = text.split("\n").filter((l) => l.trim());
+  const last = lines[lines.length - 1] ?? "";
+  const words = text.split(/\s+/).filter(Boolean).length;
+  useEffect(() => {
+    if (open && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [text, open]);
+  return (
+    <div className="wiki-log-entry wiki-thinking">
+      <div className="wiki-log-head">
+        <span className="wiki-dot wiki-dot--active" />
+        <span className="wiki-log-title">Thinking</span>
+        <span className="wiki-log-status">{words} words · {lines.length} lines</span>
+        <button type="button" className="wiki-toggle" onClick={() => setOpen((o) => !o)}>
+          [{open ? "hide" : "show"}]
+        </button>
+      </div>
+      {!open ? (
+        <div className="wiki-log-preview">{last || "thinking…"}<span className="wiki-caret">▍</span></div>
+      ) : (
+        <div className="wiki-log-body" ref={bodyRef}>
+          <p className="wiki-log-think">{text}<span className="wiki-caret">▍</span></p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -201,7 +237,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   const working = state.phase === "working";
   // The browser tab mirrors run state — a dot while working, like an unread badge.
   useEffect(() => {
-    document.title = working ? "● __NAME__" : "__NAME__";
+    document.title = working ? `● ${APP.name}` : APP.name;
   }, [working]);
   // The article prose = the final answer, or the synth's report streaming in
   // (the synth writes free text: `reportBody` strips its `<think>` reasoning).
@@ -213,17 +249,17 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   const headings = report ? reportHeadings(report) : [];
   // `state.topic` is authoritative (it survives a reload and is the same on
   // every surface); the local one only covers the instant before `query` lands.
-  const title = state.topic || topic || "__NAME__";
+  const title = state.topic || topic || APP.name;
 
   // The dev shell: the wiki view lives in the shell's scroll container and the pane docks below it, only when
-  // the wire said dev. This app serves no settings commands, so the pane is handed no config table and its
-  // Settings tab is a read-only inspector.
+  // the wire said dev. The config table gives the Settings tab its tiers and each key's words; no key of this
+  // app's offers a choice below boot, so nothing there sends a command — when one does, the loop serves it.
   return (
-    <DevPane bridge={window.harness} framing={FRAMING} title="__NAME__">
+    <DevPane bridge={window.harness} config={config} framing={FRAMING} title={APP.name}>
       <div className="wiki">
         <header className="wiki-top">
           <div className="wiki-brand">
-            <span className="wiki-brand-name">__NAME__</span>
+            <span className="wiki-brand-name">{APP.name}</span>
             <span className="wiki-brand-sub">
               {state.boot
                 ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${surface}`
@@ -314,12 +350,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
             ) : synth ? (
               <div>
                 <p className="wiki-lead">Writing the report…</p>
-                {synthThinking && (
-                  <p className="wiki-synth-think">
-                    {synthThinking}
-                    <span className="wiki-caret">▍</span>
-                  </p>
-                )}
+                {synthThinking && <Thinking text={synthThinking} />}
               </div>
             ) : working ? (
               <p className="wiki-lead">Researching Wikipedia… The report will appear here.</p>
