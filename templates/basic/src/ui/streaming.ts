@@ -1,27 +1,15 @@
-/** Where streaming prose stops being finished. Everything before the last blank line outside an open code
- *  fence is complete blocks, parsed once and kept while they stand; what follows is the block still being
- *  written, parsed per token. Not a parser: a boundary this misjudges (a loose list, say) costs one extra
- *  parse of one block, never a wrong document. */
+/** Where streaming prose stops being finished. Everything up to the last block CommonMark recognises is
+ *  complete, parsed once and kept while it stands; the last block is the one still being written, parsed per
+ *  token. The boundaries are marked's — a spec-tested block tokenizer, used here only to find where the last
+ *  block starts: a loose list is one block, a fence owns its blank lines, a reference definition stands alone.
+ *  A block boundary this misjudges would cost one extra parse of one block, never a wrong document. */
+import { lexer } from "marked";
+
 export function splitStreaming(markdown: string): { head: string; tail: string } {
-  // A fence opens at a line of three or more backticks or tildes (indented up to three spaces at the top
-  // level, further inside a list item; an info string may follow) and closes only at a line of the same
-  // character at least as long with nothing but whitespace after it, as CommonMark has it. If one is open,
-  // the tail must begin at or before its opening line so the fence is parsed whole.
-  let open: { char: string; length: number; at: number } | null = null;
-  const fence = /^[ \t]*(`{3,}|~{3,})(.*?)\r?$/gm;
-  for (let m = fence.exec(markdown); m !== null; m = fence.exec(markdown)) {
-    const run = m[1];
-    if (open === null) open = { char: run[0], length: run.length, at: m.index };
-    else if (run[0] === open.char && run.length >= open.length && m[2].trim() === "") open = null;
-  }
-  // A blank line is a line of nothing but whitespace, however it ends; the last one before the limit is
-  // the cut, and the head keeps its exact bytes.
-  const limit = open ? open.at : markdown.length;
-  const blank = /\r?\n[ \t]*\r?\n/g;
-  let cut = -1;
-  for (let m = blank.exec(markdown); m !== null && m.index + m[0].length <= limit; m = blank.exec(markdown)) {
-    cut = m.index + m[0].length;
-  }
-  if (cut < 0) return { head: "", tail: markdown };
-  return { head: markdown.slice(0, cut), tail: markdown.slice(cut) };
+  // marked reports raw text with line endings normalised; normalise first so head + tail is the text parsed.
+  const text = markdown.replace(/\r\n?/g, "\n");
+  const tokens = lexer(text);
+  if (tokens.length < 2) return { head: "", tail: text };
+  const cut = text.length - tokens[tokens.length - 1].raw.length;
+  return { head: text.slice(0, cut), tail: text.slice(cut) };
 }
