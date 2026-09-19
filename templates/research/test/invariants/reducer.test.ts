@@ -95,6 +95,20 @@ test('warm ask: streams under the settled doc, settles as an exchange', () => {
   assert.equal(s.runDocId, null);
 });
 
+test('warm ask that found nothing: the ask ends, the question stands as an exchange with no body, the root answer is untouched', () => {
+  const s = fold([
+    { type: 'query', docId: A, query: 'follow-up?', warm: true } as WorkflowEvent,
+    { type: 'research:start', agentCount: 1, mode: 'flat' } as WorkflowEvent,
+    { type: 'answer', text: null } as WorkflowEvent,
+    COMPLETE,
+  ], settled());
+  const doc = s.documents.get(A)!;
+  assert.equal(doc.ask, null);
+  assert.deepEqual(doc.exchanges, [{ question: 'follow-up?', body: null, attachments: [] }]);
+  assert.equal(doc.answer, 'the settled answer');
+  assert.equal(doc.phase, 'done');
+});
+
 test('doc-switch isolation: the run streams into A while B is viewed, untouched', () => {
   let s = settled();
   // A settled doc B arrives from disk and is activated (view-only).

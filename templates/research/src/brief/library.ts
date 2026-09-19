@@ -151,8 +151,9 @@ export interface Library {
   unfinished(id: DocId): boolean;
   /** The assets available to a run: the thread's recorded roots plus this ask's own. Roots only. */
   roots(id: DocId, own: readonly Descriptor[]): Operation<Attachment[]>;
-  /** The brief settled: off the reserved set, and the sources that read the shelf re-index. The report itself was
-   *  written the moment `complete` was said — before anyone could act on it — and the list announced with it. */
+  /** The run is over. A folder that holds a record is settled: off the reserved set, and the sources that read the
+   *  shelf re-index (the record was written the moment `complete` was said — before anyone could act on it — and
+   *  the list announced with it). One that holds none was never settled — the run found nothing — and is released. */
   settled(id: DocId): Operation<void>;
   /** The roots a settled brief holds in the store, as descriptors for the wire. */
   restored(thread: Thread): Operation<Descriptor[]>;
@@ -342,6 +343,7 @@ export function* openLibrary(
       return heldRoots(store, thread.attachments);
     },
     *settled(id) {
+      if (recordPath(id) === null) return release(id);   // nothing was written: a folder no brief settled in
       reserved.delete(id);
       yield* reindex();
     },

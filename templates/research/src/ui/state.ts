@@ -137,8 +137,9 @@ export interface DocState {
 
   synth: SynthState;
   answer: string | null;
-  /** Warm-ask exchanges appended beneath the settled brief. */
-  exchanges: { question: string; body: string; attachments: string[] }[];
+  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask that found nothing: the reader
+   *  asked, nothing was kept, and the view says so where the answer would be. */
+  exchanges: { question: string; body: string | null; attachments: string[] }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
   /** The in-flight ask's media digests, landed on the settled exchange. */

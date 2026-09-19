@@ -53,7 +53,7 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
       // full outline stands under its question, an Ask's short answer adds
       // nothing.
       entries.push({ anchor: `e${i}`, text: x.question, level: 0, index: i + 1 });
-      anchorsOf(x.body, `e${i}`).forEach((h) => {
+      anchorsOf(x.body ?? "", `e${i}`).forEach((h) => {
         entries.push({
           anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: i + 1,
         });

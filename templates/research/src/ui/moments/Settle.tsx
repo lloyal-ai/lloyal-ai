@@ -20,6 +20,10 @@ import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
 
+/** Said where an answer would be, for a brief or a follow-up that ran to its end and found nothing: no report was
+ *  written, nothing was invented. */
+const NOTHING_KEPT = "The sources turned up nothing to settle this on — nothing was kept.";
+
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);
   const answer = useProjection(selectAnswer);
@@ -118,20 +122,21 @@ export function Settle(): ReactElement {
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
-      {answer === null && !ask && (
-        // A brief that ran to its end and found nothing: no report was written, nothing was invented.
-        <p style={S.mark}>The sources turned up nothing to settle this on — nothing was kept.</p>
-      )}
+      {answer === null && !ask && <p style={S.mark}>{NOTHING_KEPT}</p>}
       <Sources citations={citations} notes={notes} />
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
           <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
           <FigureStrip digests={x.attachments} />
-          <p style={S.exchangeActions}>
-            <button type="button" style={S.action} onClick={() => copy(x.body, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
-            <button type="button" style={S.action} onClick={() => download(x.body, x.question)}>Download</button>
-          </p>
-          <Prose markdown={x.body} anchorPrefix={`e${i}`} />
+          {x.body === null ? <p style={S.mark}>{NOTHING_KEPT}</p> : (
+            <>
+              <p style={S.exchangeActions}>
+                <button type="button" style={S.action} onClick={() => copy(x.body!, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
+                <button type="button" style={S.action} onClick={() => download(x.body!, x.question)}>Download</button>
+              </p>
+              <Prose markdown={x.body} anchorPrefix={`e${i}`} />
+            </>
+          )}
         </section>
       ))}
       {ask && (

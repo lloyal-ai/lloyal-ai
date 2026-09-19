@@ -437,13 +437,13 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       };
 
     case 'answer':
-      // A warm ask's answer lands as a new exchange beneath the document —
-      // the root answer is never overwritten.
-      // A null answer is an ask that found nothing: it ends the ask (the view says so) and settles nothing.
+      // A warm ask's answer lands as a new exchange beneath the document — the root answer is never overwritten.
+      // A null answer is an ask that found nothing: the exchange records the question with no body, so the view
+      // can say so where the answer would be; nothing else is kept.
       if (doc.ask !== null) {
         return {
           ...doc,
-          exchanges: ev.text === null ? doc.exchanges : [...doc.exchanges, { question: doc.ask, body: ev.text, attachments: doc.askAttachments }],
+          exchanges: [...doc.exchanges, { question: doc.ask, body: ev.text, attachments: doc.askAttachments }],
           ask: null,
           askAttachments: [],
         };

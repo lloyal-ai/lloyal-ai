@@ -29,7 +29,7 @@ const ask = (docId: string, attachments: { digest: string }[] = []): Inputs =>
   ({ docId, text: "Q?", mode: "flat", direct: false, effort: "low", attachments, excluded: [], sources: [] }) as unknown as Inputs;
 
 /** What a writer hands back: the answer, and what each inquiry found, in plan order. */
-const wrote = (inquiries: { task: string; findings: string }[], answer = "the answer"): Written =>
+const wrote = (inquiries: { task: string; findings: string }[], answer: string | null = "the answer"): Written =>
   ({ answer, inquiries, stats: { ctxPct: 0, ctxPos: 0, ctxTotal: 1 }, complete: {} });
 
 /** A settled brief's record, as planted. */
@@ -136,6 +136,30 @@ test("a folder without a record was never settled: it is not listed, a read find
   assert.equal(asBriefRecord('{"version":2,"query":"x"}'), null);
   assert.equal(asBriefRecord(JSON.stringify({ ...settled("Q", "A"), effort: undefined })), null, "a missing field is not a record");
   assert.equal(asBriefRecord("not json"), null);
+});
+
+test("a run that found nothing settles nothing: its folder is released when the run is over, and a settled brief it asked into keeps its record", async () => {
+  const lib = fresh();
+  const saved = "2026-01-01T00-00-00-000";
+  fs.mkdirSync(path.join(lib, saved));
+  writeBrief(path.join(lib, saved), settled("Saved?", "The saved body."), { exchange: false, annexuresFrom: 0 });
+  const cold = await run(function* () {
+    const { lib: library, bus } = yield* opened(lib);
+    // Cold: a reserved folder, a writer that returned no answer, the run over.
+    const docId = library.reserve();
+    library.begin(docId, ask(docId), { warm: false });
+    library.written(docId, wrote([{ task: "t", findings: "" }], null));
+    bus.send(ev({ type: "complete", data: {} }));
+    yield* library.settled(docId);
+    // Warm: an ask into the saved brief that found nothing.
+    library.begin(saved, ask(saved), { warm: true });
+    library.written(saved, wrote([], null));
+    bus.send(ev({ type: "complete", data: {} }));
+    yield* library.settled(saved);
+    return docId;
+  });
+  assert.equal(fs.existsSync(path.join(lib, cold)), false, "the cold folder went with the run: nothing settled in it");
+  assert.deepEqual(fs.readdirSync(path.join(lib, saved)).sort(), ["report.json", "report.md"], "the saved brief is as it was: no exchange for nothing");
 });
 
 test("read ignores an exchange whose real path lies outside the brief's folder", async () => {

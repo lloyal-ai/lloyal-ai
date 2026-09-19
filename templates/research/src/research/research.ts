@@ -144,7 +144,7 @@ export function* answer(trunk: Branch, ask: Inputs, plan: PlanResult): Operation
   const a = yield* useAgent({ parent: trunk, systemPrompt: render("answer.system"), content: ask.text, budget: BUDGETS.answer, acceptFreeText: true });
   const timeMs = at();
   return {
-    answer: a.result ?? "",
+    answer: a.result?.trim() ? a.result : null,   // an answer with no text is no answer
     inquiries: [],
     stats: yield* contextUse(),
     complete: { intent: plan.intent, planTokens: plan.tokenCount, passthroughTokens: a.tokenCount, planMs: Math.round(plan.timeMs), passthroughMs: Math.round(timeMs) },
@@ -269,15 +269,16 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       const found = tasks.map((_, i) => { const o = pool.byKey(taskKey(i)); return o ? (s.output.read(o) ?? "") : ""; });
       let text: string | null;
       let settled: { tokens: number; timeMs: number; ppl?: number } = { tokens: 0, timeMs: 0 };
-      if (tasks.length === 1) text = found[0].trim();          // one inquiry is its own answer
-      else if (found.every((f) => !f.trim())) text = null;     // nothing to settle: the view says so; nothing is invented
+      // An answer with no text is no answer, whichever path produced it: the view says so; nothing is invented.
+      if (tasks.length === 1) text = found[0].trim() || null;  // one inquiry is its own answer
+      else if (found.every((f) => !f.trim())) text = null;     // nothing to settle
       else {
         // Attended only if EVERY finding there is was committed — each one, not each distinct text: one that was
         // not would be lost to a prompt that supplies none, so anything short of all of them is handed over whole.
         const said = found.filter((f) => f.trim());
         const attended = said.every((f) => (strategy.committed.get(f) ?? 0) >= said.filter((g) => g === f).length);
         const r = yield* s.settle(spine, ask, plan, { findings: found, attended });
-        text = r.answer; settled = r;
+        text = r.answer.trim() ? r.answer : null; settled = r;
       }
 
       return {
