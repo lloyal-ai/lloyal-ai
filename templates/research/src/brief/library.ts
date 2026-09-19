@@ -140,7 +140,7 @@ export interface Library {
   handlers: Handlers<Command>;
   /** A fresh, exclusive folder — the brief's identity from now on. */
   reserve(): DocId;
-  /** The folder goes, unless a report settled in it; the record stops writing for it. */
+  /** The folder goes, unless a brief settled in it (its record reads); the record stops writing for it. */
   release(id: DocId): void;
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
@@ -172,6 +172,9 @@ export function* openLibrary(
   yield* ensure(() => { for (const id of [...reserved]) release(id); });
 
   const recordPath = (id: DocId): string | null => confined(dir(), path.join(dir(), id, RECORD));
+  /** Whether a brief settled in its folder: it holds a record that READS. A file that exists but does not (a write
+   *  cut short) settles nothing — the folder is as unsettled as one with no record, and is treated the same. */
+  const settledIn = (id: DocId): boolean => { const file = recordPath(id); return file !== null && readRecord(file) !== null; };
 
   /** Every settled brief's record, newest first — a folder without one, or with one of another shape, is not listed. */
   function records(): { path: string; docId: DocId; record: BriefRecord }[] {
@@ -191,7 +194,7 @@ export function* openLibrary(
   function release(id: DocId): void {
     if (record?.docId === id) record = null;
     const folder = path.join(dir(), id);
-    if (fs.existsSync(folder) && !fs.existsSync(path.join(folder, RECORD))) removeFolder(folder);
+    if (fs.existsSync(folder) && !settledIn(id)) removeFolder(folder);
     reserved.delete(id);
   }
 
@@ -316,7 +319,7 @@ export function* openLibrary(
       // A brief whose run was stopped before its report lost its folder with the stop but not its place on the
       // canvas: an ask into it writes its first report, so the folder is back and reserved again.
       fs.mkdirSync(folder, { recursive: true });
-      const settledAlready = warm && fs.existsSync(path.join(folder, RECORD));
+      const settledAlready = warm && settledIn(id);
       if (!settledAlready) reserved.add(id);
       let taken = 0;
       if (settledAlready) for (const name of fs.readdirSync(folder)) { const m = /^annexure-(\d+)\.md$/.exec(name); if (m) taken = Math.max(taken, Number(m[1])); }
@@ -343,7 +346,7 @@ export function* openLibrary(
       return heldRoots(store, thread.attachments);
     },
     *settled(id) {
-      if (recordPath(id) === null) return release(id);   // nothing was written: a folder no brief settled in
+      if (!settledIn(id)) return release(id);   // nothing settled in it: the run found nothing, or its record never landed
       reserved.delete(id);
       yield* reindex();
     },

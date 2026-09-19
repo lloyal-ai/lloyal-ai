@@ -19,10 +19,7 @@ import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
-
-/** Said where an answer would be, for a brief or a follow-up that ran to its end and found nothing: no report was
- *  written, nothing was invented. */
-const NOTHING_KEPT = "The sources turned up nothing to settle this on — nothing was kept.";
+import { NOTHING_KEPT } from "../presentation.js";
 
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);

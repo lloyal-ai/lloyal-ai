@@ -16,7 +16,7 @@ import type { AgentRuntime, AppState } from "./state.js";
 import { selectAnswer } from "./select.js";
 import type { Command, WorkflowEvent } from "../brief/protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
-import { APP } from "./presentation.js";
+import { APP, NOTHING_KEPT } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
 
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
@@ -89,14 +89,16 @@ function View({
   // keeps a timeline for.
   const agents = doc ? [...doc.roster.agents.values()].filter((a) => a.timeline !== null) : [];
 
-  // The answer: as the settling pass writes it, else the latest exchange's body, else the settled answer. The
-  // doc is the memory.
+  // The answer: as the settling pass writes it; else the latest exchange, once the ask is over; else the settled
+  // answer. A follow-up or a brief that found nothing says so, the same words as every other view. The doc is
+  // the memory.
   const answer = selectAnswer(state);
+  const latest = doc && doc.ask === null ? doc.exchanges[doc.exchanges.length - 1] : undefined;
   const streaming =
-    (answer?.streaming ? answer.body : "") ||
-    (doc && doc.ask === null && doc.exchanges.length > 0 ? doc.exchanges[doc.exchanges.length - 1].body : "") ||
-    answer?.body ||
-    "";
+    answer?.streaming ? answer.body
+    : latest ? latest.body ?? NOTHING_KEPT
+    : doc && doc.phase === "done" && doc.answer === null ? NOTHING_KEPT
+    : answer?.body ?? "";
 
   // Input is offered when nothing is mid-flight: no doc, a settled doc, or
   // the planner waiting on a clarification.

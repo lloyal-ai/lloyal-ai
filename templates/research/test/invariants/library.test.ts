@@ -138,6 +138,23 @@ test("a folder without a record was never settled: it is not listed, a read find
   assert.equal(asBriefRecord("not json"), null);
 });
 
+test("a record that does not read settles nothing: the folder is released like one with no record, and a warm ask into it writes a first report", async () => {
+  const lib = fresh();
+  const cut = "2026-01-01T00-00-00-000";
+  fs.mkdirSync(path.join(lib, cut));
+  fs.writeFileSync(path.join(lib, cut, "report.md"), "# Q?\n\nThe body.\n");
+  fs.writeFileSync(path.join(lib, cut, "report.json"), '{"version":1,"query":"Q?","sav');   // the write was cut short
+  const seen = await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    library.begin(cut, ask(cut), { warm: true });
+    const firstReport = library.unfinished(cut);   // a warm ask into it found nothing settled: it reserves the folder for a first report
+    library.release(cut);
+    return { firstReport };
+  });
+  assert.equal(seen.firstReport, true, "a truncated record is no record: the ask writes the first report");
+  assert.equal(fs.existsSync(path.join(lib, cut)), false, "and a release removes the folder — nothing settled in it");
+});
+
 test("a run that found nothing settles nothing: its folder is released when the run is over, and a settled brief it asked into keeps its record", async () => {
   const lib = fresh();
   const saved = "2026-01-01T00-00-00-000";
