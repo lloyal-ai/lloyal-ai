@@ -259,8 +259,8 @@ src/
     research.ts        plan · write · answer, and the stages of write
     instructions.ts    what this app is for, in the model's hearing
     budgets.ts         every number it obeys, effort as the one knob
-    prompts.ts         the prompts, and the few single sentences
-    prompts/           the tuned .eta prompt files
+    prompts.ts         renders the prompt files; ~30 lines
+    prompts/           every prompt, one Eta file per text — see "The prompts are files"
   ui/                  what it looks like
     presentation.ts    what it is called
     reduce.ts          reduce(state, event): the ONE fold every surface shares
@@ -283,13 +283,14 @@ harness.yml            models, output dir, ability config, gate scope
 
 ## Where to begin
 
-**Seeing an edit take effect.** Two halves of this project reload
-differently. The view (`src/ui/`) hot-reloads under `npm run dev:web` and
-`npm run dev:desktop`. The engine — `src/app.ts`, `src/brief/`,
-`src/research/` and the prompts — is bundled once when the dev command
-starts, so after editing it, stop the dev command, start it again, and
-ask a fresh question. A running session keeps the instructions it was
-started with.
+**Seeing an edit take effect.** Three kinds of file reload differently.
+The view (`src/ui/`) hot-reloads under `npm run dev:web` and
+`npm run dev:desktop`. The prompts (`src/research/prompts/`) are read
+when a prompt is rendered, so an edit is live at the next question. The
+engine — `src/app.ts`, `src/brief/`, `src/research/*.ts`, the
+instructions included — is bundled once when the dev command starts, so
+after editing it, stop the dev command, start it again, and ask a fresh
+question.
 
 Ordered by ambition — each step is one file:
 
@@ -298,10 +299,11 @@ Ordered by ambition — each step is one file:
    said on every path an answer can take — a direct question, a follow-up,
    a planned investigation — so this is the one edit that makes it your app.
 2. **What it is called** — `src/ui/presentation.ts`, read by every surface.
-3. **A prompt** — the files in `src/research/prompts/` are yours to edit.
-   Their worked examples (immunotherapy trials, voice-agent latency) come
-   from the domains this pipeline was tuned on: replace them with examples
-   from yours first. `prompts.ts` beside them holds the few single sentences.
+3. **A prompt** — the files in `src/research/prompts/` are yours to edit,
+   and an edit is live at the next question. Their worked examples
+   (immunotherapy trials, voice-agent latency) come from the domains this
+   pipeline was tuned on: replace them with examples from yours first.
+   What each file is, and what it is handed, is the next section.
 4. **A number** — `src/research/budgets.ts` holds every limit the writing
    obeys, with effort as the single knob each row fans out from.
 5. **The register** — `src/ui/theme.ts` is the whole look as data.
@@ -314,8 +316,84 @@ Ordered by ambition — each step is one file:
    intelligence does, written in the framework's grammar: a spine to fork
    from, a pool that runs agents together, a terminal that ends a turn, a
    settling pass. Hand `app.ts` a different one and everything else stands.
-9. **A capability** — `npx lloyal-ai install <publisher>/<name>`, then add
-   its factory to `abilities` in `src/app.ts`.
+9. **A source** — `npx lloyal-ai install <publisher>/<name>`, then add
+   its factory to `abilities` in `src/app.ts`. Which ones ship, and what
+   installing does, is under "The sources are installed".
+
+## The prompts are files
+
+Everything the model is told in this app's own words is in
+`src/research/prompts/`, one Eta file per text. A stage is a pair —
+`plan.system.eta` beside `plan.user.eta` — and the app renders both with
+the same input. A single file is a single turn (`clarify.eta`). Two files
+are partials every prompt shares: `framed.eta`, the frame, and
+`cite.eta`, the citation rule.
+
+**The frame.** Every system file opens with one line:
+
+```
+<% layout("./framed", { writesTheAnswer: true }) %>
+```
+
+That line is what carries your `src/research/instructions.ts` into every
+stage: the frame says your `purpose` first, then the file's own text,
+and — only where `writesTheAnswer` is true — your `answers` last. The
+planner never hears `answers` (its output is a plan); a lone inquiry, the
+settling pass and a direct answer do. A test holds that no system file
+ships without the frame.
+
+**What a template is handed.** `it` is the input, and each value has one
+owner — the app, the framework, or the tool whose grammar it belongs to:
+
+| stage | `it.*` | who supplies it |
+| --- | --- | --- |
+| every system file | `purpose`, `answers` | `instructions.ts` — yours |
+| `plan`, `plan-flat` | `query`, `count`, `routingKey`, `context` | the planner (rig): the question, how many tasks its grammar allows, the key a task's source is written under, and any clarification text (the shipped templates leave it unused — the round is on the trunk) |
+| | `date`, `sources[{name, useWhen, toc}]`, `coverage` | this app, in `research.ts`: the day, each source the plan may route to, what the probes found each covers |
+| `preflight` | `query`, `ability` | the coverage probe (rig), one per source |
+| `inquiry` | `preamble`, `tool`, `takesSources`, `writesTheAnswer` | this app: the source's own preamble, the report tool's name, whether it takes `sources`, whether this inquiry is the answer |
+| `recovery`, `preflight-recover` | `budget` | the framework, when it cuts an agent short: the words it may still write |
+| `synthesize`, `synthesize-flat` | `query`, `findings[{task, body}]` | this app: the question, and the findings the spine does not already hold |
+| `clarify` | `questions` | the planner's questions, said as the assistant's turn |
+
+Eta here is three things: `<%= it.query %>` prints a value, `<% … %>`
+runs plain JavaScript (an `if`, a `forEach`), and `<%~ include("./cite") %>`
+inlines a partial. One rule of thumb: a line break right after a tag is
+eaten, so a blank line after a tag is the newline that stands.
+
+**Edit one.** Change any `.eta` and ask the next question — the folder is
+read when the prompt is rendered.
+
+**Add one.** A new stage is three steps. Write the pair of files, the
+system one opening with the frame. Render them where the stage runs:
+`prompt("my-stage", { query, … })` in `src/research/research.ts` returns
+`{ systemPrompt, content }`, ready to hand to an agent. Whatever the stage
+knows goes in that object — a template sees exactly what you pass and
+nothing else. `npm test` runs `test/invariants/prompts.test.ts`, which
+refuses a system file that forgot the frame.
+
+## The sources are installed
+
+An **Ability** is a signed package: tools, the instructions to use them,
+its configuration, and any model it needs. Three ship with this app, and
+`src/app.ts` is the list:
+
+```ts
+export const abilities = [createCorpusAbility, createWebAbility, createDocumentsAbility];
+```
+
+`web` searches and reads pages (keyed with `TAVILY_API_KEY` in the
+environment; keyless without). `documents` searches, reads and looks at
+the PDFs you attach. `corpus` searches a folder of markdown, and ships
+off until you give it a path — `abilities.corpus.corpusPath: reports` in
+`harness.yml` turns the library into memory. The composer's chips switch
+a source off for one question; a source's tools join every inquiry's
+spine, and the planner routes tasks to it by name.
+
+**Install one:** `npx lloyal-ai install <publisher>/<name>` verifies the
+package against the catalogue, vendors its tarball into `vendor/`, and
+you add its factory to the list above. **Write one:**
+`npx lloyal-ai ability:new my-ability` starts one of your own.
 
 ## Documents, routes, and the laws
 
