@@ -59,19 +59,72 @@ Set `LLOYAL_DEV=1` to dock the dev pane under the web or desktop view: an
 agent timeline with per-token epistemics, the retrieval funnel, compiled
 prompts, and live context, cpu and memory charts.
 
-## Attach something
+## What it does
+
+A brief is the one thing this app makes, and it lives through four
+moments. The same four words name them in the code.
+
+**Ask.** One question, and two choices beside it. The *shape*: **Ask**
+puts one agent over every source for a straight answer; **Survey** plans
+independent lenses and runs them side by side; **Investigate** runs them
+one after another, each reading what the last one found. The *depth*:
+**Quick**, **Standard** or **Thorough** — two, four or six lines of
+inquiry, with the turns and time to match (every number is in
+`src/research/budgets.ts`). The chips under the composer switch a source
+off for this question; attach a photo or a PDF by dropping it on.
+
+**Frame.** When more than one source takes part, each is first asked what
+it holds on the question; then the outline drafts itself line by line
+from the planner's own stream. The outline IS the plan: rewrite a line,
+strike one, add one, reorder them, switch the shape — and only then say
+yes. If
+the question is genuinely ambiguous, the planner asks first, and your
+answer joins the conversation it plans from.
+
+**Write.** Each line of the outline becomes a section, filled in place by
+its own agent: searching, reading, waiting honestly through a rate limit,
+writing its findings with their citations inline. Open any section's
+inquiry to watch it think, step by step. **Hold** pauses the run with
+everything in place; **Close the brief** settles with what it has; a
+single line can be dropped from its row. A line that runs out of time or
+room is asked for what it found rather than abandoned. Then one agent
+reads every section and writes the brief in one voice (a plan of one line
+is its own answer).
+
+**Settle.** The document takes the room: the brief, a chip on every
+citation, a sources grid the chips resolve into, margin marks for the
+facts of the run (closed early, rests on one source, a line that did not
+settle), and **How it got here** for the deliberation behind it. Ask a
+follow-up and it is answered beneath the brief, from a context that
+already holds the brief and everything asked of it so far. When the
+sources turn up nothing, the brief says so where the answer would be, and
+nothing is kept or invented.
+
+Every settled brief joins the library in the sidebar — see "Memory".
+
+## The media store
+
+Everything you attach lives in `media/` at the project root: a
+content-addressed store in the **OCI Image Layout**, the format a
+container registry uses. Every blob is named by the `sha256:` digest of
+its bytes, so an asset's identity IS its content — the same bytes are
+stored once, and a citation that names a digest can only ever mean them. The store is the project's, not a brief's: it outlives every
+session, a reopened brief finds its pictures and documents there again,
+and because it is a published layout, anything that reads OCI can read it.
+It sits beside `models/` and apart from `reports/`, because it is what the
+app was given, not what it wrote.
+
+### Attach something
 
 Drop a photo or a PDF on the composer and ask about it. What happens next
 is the part worth understanding, because **a picture and a document are
 not treated the same way, and neither one rides the event wire.**
 
-**Bytes go to a store, not to the model.** An attachment is posted to the
-content plane, which sniffs its type, normalises an image or reads a PDF
-into pages, and commits the bytes as blobs under `media/` — an **OCI
-Image Layout**, the same on-disk format a container registry uses. Every
-blob is named by its own `sha256:` digest, so the asset's identity IS its
-content. Nothing after that moment moves bytes: commands, events and the
-library all carry the digest.
+**Bytes go to the store, not to the model.** An attachment is posted to
+the content plane, which sniffs its type, normalises an image or reads a
+PDF into pages, and commits the bytes to `media/`. Nothing after that
+moment moves bytes: commands, events and the library all carry the
+digest.
 
 **Three things can enter the model's attention, and each is paid for
 differently.**
@@ -159,23 +212,37 @@ voice, citations woven inline. Every number it obeys is in one file,
 `src/research/budgets.ts`; the minutes the pickers quote are learned from
 what YOUR machine actually does.
 
-## The library learning loop
+## Memory: every brief is ground for the next
 
-Every settled brief is written to `reports/` — its record (`report.json`, what the run
-was and what it found), `report.md` (the woven answer) plus one annexure per inquiry
-that found something, references included. Point the
-corpus ability at that same directory and the system reads what it has
-written. The corpus ships installed but off, because it needs a path
-before it can run: uncomment `abilities.corpus.corpusPath: reports` in
-`harness.yml`, or set it from the corpus chip's settings in the composer.
-Then:
+Every settled brief is a folder under `reports/`, named by its id:
+
+```
+reports/<docId>/
+  report.json     the record: the question, the shape and depth that wrote it,
+                  the media it carried, the answer, what every inquiry found
+  report.md       the brief as a reader opens it, with its annexure index
+  annexure-N.md   one per line of inquiry that found something, sources included
+  exchange-N.json each follow-up's own record, and its exchange-N.md beside it
+```
+
+The record is what the app reads back — the sidebar, a reopen, library
+search — and it is written last, so a folder without one never settled.
+The markdown is for you, and for the corpus.
+
+**Semantic recall.** Point the corpus ability at that same directory and
+the app reads what it has written. The corpus ships installed but off,
+because it needs a path before it can run: uncomment
+`abilities.corpus.corpusPath: reports` in `harness.yml`, or set it from
+the corpus chip's settings in the composer. Then:
 
 1. A brief settles → its folder lands in `reports/` → the corpus
    re-indexes.
 2. The next question's recon probes the corpus and finds it; the planner
    routes tasks at past briefs *by name*; agents search and read them
    like any source; the new brief cites the old one.
-3. Clicking a report in the sidebar RESTORES it as the session document —
+3. Searching the sidebar ranks the library against your words with the
+   same reranker the agents use.
+4. Clicking a report in the sidebar RESTORES it as the session document —
    asking over it prefills the report into the model's context, so
    follow-ups are warm, and the images it carried are staged again. The
    trash deletes a brief's whole folder and re-indexes: the system
