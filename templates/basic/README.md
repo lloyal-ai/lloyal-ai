@@ -19,21 +19,27 @@ The **web** surface is two processes — a resident-model **host** and a browser
 ## The shape
 
 ```
-harness/
-  harness.ts     ← the one file that's yours: your program, as code
-  protocol.ts    the events (↓) and commands (↑) your harness speaks
-  state.ts       node-free reduce(events) → AppState (every view folds it)
+src/
+  app.ts         what this app IS: its abilities, its config, its harness
+  harness/
+    harness.ts   ← the one file that's yours: your program, as code
+    protocol.ts  the events (↓) and commands (↑) your harness speaks
+  ui/
+    state.ts     node-free reduce(events) → AppState (every view folds it)
+    App.tsx      the React view (desktop + web)
+    cli.tsx      the Ink view (terminal)
 targets/
-  <surface>/     one dir per surface — cli · desktop · web
-    index.ts     boot: resolve the model, mount a view, run your harness
-    view.tsx     the view (Ink for cli, React for desktop/web) — or bring a whole app
+  <surface>/     one thin entry per surface — cli · desktop · web
+                 each is one call to the boot that owns it
+test/
+  invariants/    the fold's behaviour, over the real reduce
 models/
   llm/           the resident model (fetched on first run; gitignored)
 vendor/          signed Abilities — Ed25519-verified tarballs, committed
 harness.yml      targets + model
 ```
 
-Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The center — `harness/harness.ts` — is where you program what your intelligence does: which agents exist, how they collaborate, what they trust, when work is done. `basic` runs a `parallel` pool + synth; `chain` is a one-line swap.
+Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The center — `src/harness/harness.ts` — is where you program what your intelligence does: which agents exist, how they collaborate, what they trust, when work is done. `basic` runs a `parallel` pool + synth; `chain` is a one-line swap.
 
 ## Add capabilities
 
@@ -41,7 +47,7 @@ Everything under `targets/` is convention handled for you — the boot mounts a 
 npx lloyal-ai install <publisher>/<name>   # a signed Ability from apps.lloyal.ai
 ```
 
-Enable it in `harness/harness.ts` alongside `createWikipediaAbility`.
+Enable it in `src/app.ts`, in the `abilities` array alongside `createWikipediaAbility`.
 
 Abilities are **Ed25519-verified and vendored locally** — `lloyal` fetches the
 signed tarball, checks its signature, and writes it to `vendor/` with a `file:`

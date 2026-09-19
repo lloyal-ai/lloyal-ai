@@ -1,14 +1,10 @@
 {
-  // The Node build (`tsc --noEmit` typechecks; esbuild bundles): the harness
-  // center under `harness/` + the Node entrypoints under `targets/` — the cli
-  // boot + the web serve host — as NodeNext ESM. The cli + serve builds DIVERGE
-  // from `blank`: the harness imports the 7 tuned `.eta` prompt sources, so those
-  // bundles are produced by esbuild (`--loader:.eta=text`), not plain `tsc` —
-  // `types/eta.d.ts` is the type-only shim that lets tsc accept those imports.
-  // The tree is partitioned by runtime across THREE configs: the DOM sources
-  // (browser + Electron renderer React) typecheck via tsconfig.web.json; the
-  // Electron main + preload (CommonJS context, `__dirname`) via
-  // tsconfig.electron.json — so no `.ts` is left unchecked.
+  // The Node half: the engine (`src/app.ts`, `src/brief/`, `src/research/`), the terminal view, and the boot
+  // entries under `targets/` that run in Node. `tsc` only typechecks here; esbuild makes the bundles, because
+  // the prompts are `.eta` files inlined as text and `types/eta.d.ts` is only the type for that import.
+  // The tree is split by where code RUNS, across three configs: the browser and Electron renderer sources are
+  // checked by tsconfig.web.json, the Electron main and preload by tsconfig.electron.json. `npm run typecheck`
+  // runs all three; a bare `tsc` runs only this one.
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
@@ -24,12 +20,17 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["harness/**/*", "targets/**/*", "types/**/*"],
-  // Excluded here (built/typechecked by the sibling configs above): the whole
-  // Electron target (main/preload are CJS, App/view are DOM-React) and the web
-  // browser sources.
+  "include": ["src/**/*", "targets/**/*", "types/**/*"],
+  // Excluded: what needs a DOM (tsconfig.web.json checks it) and the Electron entries. What stays under
+  // `src/ui/` is node-free and shared by every surface: the fold, the selectors, the pace record, and the
+  // terminal view, which is Ink and so runs in Node. A new file that touches the DOM belongs in this list.
   "exclude": [
-    "targets/_shared",
+    "src/ui/App.tsx",
+    "src/ui/moments",
+    "src/ui/parts",
+    "src/ui/content-urls.ts",
+    "src/ui/history.ts",
+    "src/ui/theme.ts",
     "targets/desktop",
     "targets/web/main.tsx",
     "targets/web/boot.ts",

@@ -1,129 +1,64 @@
 /**
- * The desktop target — your harness in a native window (Electron).
+ * The desktop target — your harness in a native window. Electron's main process
+ * is a thin host over `@lloyal-labs/desktop`: it owns the window and forks THIS
+ * project's own cli bin as the engine (with `RR_BRIDGE=1`, so the cli boot mounts
+ * the `ipc` binding instead of the terminal view). Heavy work — native inference,
+ * the Effection harness — lives in that forked process, so the UI never blocks.
  *
- * Electron's MAIN process is a thin host: it owns the window and forks THIS
- * project's OWN cli bin (`bin/run.js`) as the engine, with `RR_BRIDGE=1` set —
- * which makes the cli boot mount the `ipc` binding instead of Ink (see
- * `targets/cli/index.ts`). Heavy work (native inference, the Effection harness)
- * lives in that forked engine process, so the UI thread never blocks.
- *
- * Streaming model (identical to cli/web): the engine emits raw `WorkflowEvent`s;
- * main FORWARDS each one (+ a monotonic `seq`) to the renderer, which folds it
- * through the SAME pure `reduce` — so only the small event crosses IPC, never
- * the growing transcript. Main also mirrors state into `appState` purely to
- * answer ONE snapshot per (re)load: the renderer seeds from it and applies only
- * events with `seq > snapshot.seq` (a consistent cut — no gap, no double-apply).
+ * Streaming model (identical to cli/web): the engine emits raw `WorkflowEvent`s
+ * and the package forwards each one (+ a monotonic `seq`) to the renderer, which
+ * folds it through the SAME pure `reduce`. Only the small event crosses IPC,
+ * never the growing transcript; the engine's own fold answers ONE snapshot per
+ * (re)load, so a reload seeds from a consistent cut.
  */
-import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
+import { APP } from "../../src/ui/presentation.js";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
-import { reduce, initialState, type AppState } from "../../harness/state.js";
-import type { WorkflowEvent, Command } from "../../harness/protocol.js";
-
-/** Only http(s) links may leave the app. */
-function isExternalUrl(url: string): boolean {
-  try {
-    const p = new URL(url).protocol;
-    return p === "http:" || p === "https:";
-  } catch {
-    return false;
-  }
-}
+import { createEngine, createWindow, CHANNELS } from "@lloyal-labs/desktop";
+import type { Engine } from "@lloyal-labs/desktop";
+import { reduce, initialState, type AppState } from "../../src/ui/state.js";
+import type { WorkflowEvent, Command } from "../../src/harness/protocol.js";
 
 let win: BrowserWindow | null = null;
-let engine: UtilityProcess | null = null;
-let appState: AppState = initialState;
-let seq = 0;
+let engine: Engine<Command, AppState> | null = null;
 
-/** Send to the renderer only if the window is still alive (`win?.` is not
- *  enough — on close `win` is non-null but DESTROYED and `.send` throws). */
+/** Send to the renderer only if the window is still alive (a destroyed window's `send` throws). */
 function safeSend(channel: string, payload: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
-function spawnEngine(): void {
-  // The engine is THIS project's compiled cli boot (`bin/run.js` →
-  // `dist/targets/cli/index.js`), forked with RR_BRIDGE so it streams over
-  // parentPort. Build the cli first (`tsc`) — `npm run dev:desktop` does. cwd
-  // stays the project root so the forked cli reads `harness.yml` + `models/`.
-  const enginePath = join(process.cwd(), "bin", "run.js");
-  if (!existsSync(enginePath)) {
-    throw new Error(
-      `engine not built: ${enginePath} not found — run \`tsc\` (or \`npm run dev:desktop\`) first.`,
-    );
-  }
-  const env = { ...process.env, RR_BRIDGE: "1" };
-  engine = utilityProcess.fork(enginePath, [], {
-    serviceName: "harness-engine",
-    stdio: "pipe",
-    env,
-  });
-  engine.stdout?.on("data", (d) => console.log("[engine]", d.toString().trimEnd()));
-  engine.stderr?.on("data", (d) => console.error("[engine]", d.toString().trimEnd()));
-  engine.on("message", (msg: { t?: string; payload?: WorkflowEvent }) => {
-    if (msg?.t === "event" && msg.payload) {
-      seq++;
-      appState = reduce(appState, msg.payload);
-      safeSend("harness:event", { seq, ev: msg.payload });
-    }
-  });
-  engine.on("exit", (code) => console.log("[engine] exited", code));
-}
-
-function createWindow(): void {
-  win = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 800,
-    minHeight: 520,
-    show: false,
-    backgroundColor: "#ffffff",
-    title: "__NAME__",
-    webPreferences: {
-      // electron-vite names the preload bundle after its entry (preload.ts) and
-      // emits ESM as .mjs — `out/preload/preload.mjs`, NOT `index.js`. A wrong
-      // path here fails SILENTLY: the bridge never loads, `window.harness` is
-      // undefined, and the renderer dies on first paint leaving a blank window.
-      preload: join(__dirname, "../preload/preload.mjs"),
-      contextIsolation: true,
-      sandbox: false,
-    },
-  });
-  win.once("ready-to-show", () => win?.show());
-  win.on("closed", () => {
-    win = null;
-  });
-  // Links open in the system browser; never navigate the renderer away.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternalUrl(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  // Same for in-place navigations (a bare <a href> with no target): keep the
-  // renderer pinned to the app, and hand http(s) links to the system browser.
-  win.webContents.on("will-navigate", (e, url) => {
-    if (url !== win?.webContents.getURL()) {
-      e.preventDefault();
-      if (isExternalUrl(url)) void shell.openExternal(url);
-    }
-  });
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    win.loadFile(join(__dirname, "../renderer/index.html"));
-  }
-}
-
 app.whenReady().then(() => {
-  spawnEngine();
-  createWindow();
-  // renderer → engine (Command)
-  ipcMain.on("harness:command", (_e, command: Command) => {
-    engine?.postMessage({ t: "command", payload: command });
+  // The engine is THIS project's compiled cli boot; the package forks it, sets the
+  // bridge flag and pipes its output. cwd stays the project root so the forked cli
+  // reads `harness.yml` and `models/`.
+  engine = createEngine<WorkflowEvent, Command, AppState>({
+    bin: join(process.cwd(), "bin", "run.js"),
+    initialState,
+    reduce,
+    forward: (frame) => safeSend(CHANNELS.event, frame),
+    log: (stream, text) => (stream === "stderr" ? console.error : console.log)(`[engine] ${text}`),
   });
-  // renderer (re)load → consistent cut: reduced state + the seq it reflects.
-  ipcMain.handle("harness:snapshot", () => ({ state: appState, seq }));
+  const open = (): void => {
+    win = createWindow({
+      // electron-vite names the preload bundle after its entry and emits ESM as .mjs.
+      preload: join(__dirname, "../preload/preload.mjs"),
+      page: join(__dirname, "../renderer/index.html"),
+      title: APP.name,
+      window: { backgroundColor: "#ffffff" },
+    });
+    win.on("closed", () => { win = null; });
+  };
+  open();
+  // The session's life, relayed to whichever renderer is alive. The engine owns it; main carries it.
+  engine.onSession((state) => safeSend(CHANNELS.session, state));
+  ipcMain.on(CHANNELS.command, (_e, command: Command) => { engine?.send(command); });
+  ipcMain.handle(CHANNELS.snapshot, () => engine!.snapshot());
+  ipcMain.handle(CHANNELS.sessionNow, () => engine!.session());
+  // A reader asking for a working harness. Here that is a new engine process — the
+  // renderer's own IPC link never dropped, which is why this is not a reload.
+  ipcMain.handle(CHANNELS.recover, () => engine!.restart());
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) open();
   });
 });
 

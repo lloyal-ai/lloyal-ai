@@ -32,7 +32,7 @@ afterEach(() => {
 describe('pruneTargets — cli-only', () => {
   it('removes desktop + web dirs, bin shim, and both extra tsconfigs', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
+    pruneTargets(dir, ['cli'], 'basic');
     expect(existsSync(join(dir, 'targets/cli'))).toBe(true);
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(false);
     expect(existsSync(join(dir, 'targets/web'))).toBe(false);
@@ -44,7 +44,7 @@ describe('pruneTargets — cli-only', () => {
 
   it('drops every per-target dep incl. the shared renderer deps', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
+    pruneTargets(dir, ['cli'], 'basic');
     const p = pkg(dir);
     for (const dep of ['@lloyal-labs/host', 'ws', 'react-dom']) {
       expect(p.dependencies?.[dep]).toBeUndefined();
@@ -59,7 +59,7 @@ describe('pruneTargets — cli-only', () => {
 
   it('collapses scripts + typecheck to the cli set', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
+    pruneTargets(dir, ['cli'], 'basic');
     const p = pkg(dir);
     for (const s of ['dev:desktop', 'build:desktop', 'serve', 'dev:web', 'build:web']) {
       expect(p.scripts[s]).toBeUndefined();
@@ -113,7 +113,7 @@ describe('desktop target — the three things electron-vite needs', () => {
 
   it('cli-only prunes `main`, the guard script, and both pre* hooks', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
+    pruneTargets(dir, ['cli'], 'basic');
     const p = pkg(dir) as { main?: string; scripts: Record<string, string> };
     expect(p.main).toBeUndefined(); // out/ is desktop-only — a dangling entry point
     expect(p.scripts['predev:desktop']).toBeUndefined();
@@ -123,7 +123,7 @@ describe('desktop target — the three things electron-vite needs', () => {
 
   it('keeping desktop keeps all three', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli', 'desktop']);
+    pruneTargets(dir, ['cli', 'desktop'], 'basic');
     const p = pkg(dir) as { main?: string; scripts: Record<string, string> };
     expect(p.main).toBe('out/main/main.js');
     expect(p.scripts['prebuild:desktop']).toContain('node bin/ensure-electron.js');
@@ -152,7 +152,7 @@ describe('preflight-abilities — the ability guard runs before the compiler', (
     // Unlike ensure-electron.js it must NOT be in TARGET_FILES — `prestart`
     // belongs to the cli target, which is never pruned.
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
+    pruneTargets(dir, ['cli'], 'basic');
     const p = pkg(dir) as { scripts: Record<string, string> };
     expect(existsSync(join(dir, 'bin/preflight-abilities.js'))).toBe(true);
     expect(p.scripts.prestart).toContain('node bin/preflight-abilities.js');
@@ -161,7 +161,7 @@ describe('preflight-abilities — the ability guard runs before the compiler', (
 
 describe('the shared React view outlives either DOM target alone', () => {
   const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
-  const SHARED = 'targets/_shared/App.tsx';
+  const SHARED = 'src/ui/App.tsx';
 
   /** Entries of a JSONC array field, comments stripped. */
   function jsoncArray(file: string, key: string): string[] {
@@ -174,17 +174,23 @@ describe('the shared React view outlives either DOM target alone', () => {
     ['cli,desktop (web pruned)', ['cli', 'desktop']],
   ] as const)('%s keeps it — the surviving target still mounts it', (_label, keep) => {
     const dir = freshBlankProject();
-    pruneTargets(dir, keep as unknown as Target[]);
+    pruneTargets(dir, keep as unknown as Target[], 'basic');
     expect(existsSync(join(dir, SHARED))).toBe(true);
-    // …and typecheck still covers it.
-    expect(jsoncArray(join(dir, 'tsconfig.web.json'), 'include')).toContain(SHARED);
+    // …and typecheck still covers it. The whole view dir is one include entry.
+    expect(jsoncArray(join(dir, 'tsconfig.web.json'), 'include')).toContain('src/ui/**/*');
   });
 
-  it('cli-only drops it, and takes its dangling Node exclude entry with it', () => {
+  it('cli-only KEEPS it — inert, not broken', () => {
+    // The view now lives under `src/ui/` beside the state the TERMINAL view also
+    // folds, so no directory there belongs to the DOM targets alone. A cli-only
+    // project carries the React files unused rather than splitting `src/ui/` in
+    // two to save them — the same trade `research` has always made.
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli']);
-    expect(existsSync(join(dir, 'targets/_shared'))).toBe(false);
-    expect(jsoncArray(join(dir, 'tsconfig.json'), 'exclude')).not.toContain('targets/_shared');
+    pruneTargets(dir, ['cli'], 'basic');
+    expect(existsSync(join(dir, SHARED))).toBe(true);
+    expect(existsSync(join(dir, 'src/ui/state.ts'))).toBe(true);
+    // The Node build still excludes the DOM sources, or `tsc` compiles React.
+    expect(jsoncArray(join(dir, 'tsconfig.json'), 'exclude')).toContain('src/ui/App.tsx');
   });
 
   /**
@@ -224,7 +230,7 @@ describe('the shared React view outlives either DOM target alone', () => {
             // `../desktop/x` are judged the same way.
             const rel = relative(root, resolve(dirname(file), spec));
             const [dir] = rel.split(sep);
-            if (rel.startsWith('..') || dir === owner || dir === '_shared') continue;
+            if (rel.startsWith('..') || dir === owner) continue;
             offenders.push(`${owner}/${basename(file)} → ${dir}`);
           }
         });
@@ -255,7 +261,10 @@ describe('the shared React view outlives either DOM target alone', () => {
       // under harness/ or targets/ forecloses a future React Native target.
       // `bin/` is exempt on purpose — those are boot shims, not runtime.
       const offenders: string[] = [];
-      for (const sub of ['harness', 'targets']) {
+      // The harness centre is `src/` in both templates; `bin/` is exempt in
+      // either (boot shims, not runtime).
+      const centre = 'src';
+      for (const sub of [centre, 'targets']) {
         walkSources(join(TEMPLATES, template, sub), (file) => {
           if (/\bimport\s*\(/.test(readFileSync(file, 'utf8'))) {
             offenders.push(relative(join(TEMPLATES, template), file));
@@ -267,10 +276,56 @@ describe('the shared React view outlives either DOM target alone', () => {
   );
 });
 
+describe('pruneTargets — research: the view stays, its DOM deps do not', () => {
+  const RESEARCH_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'research');
+
+  function freshResearchProject(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-scaffold-r-'));
+    cpSync(RESEARCH_TEMPLATE, dir, { recursive: true });
+    created.push(dir);
+    return dir;
+  }
+
+  it('cli-only keeps every src/ui file and the whole suite, and drops the DOM deps', () => {
+    // research keeps its view beside the fold, so a cli-only scaffold carries DOM
+    // files no tsconfig covers and whose `react-dom` is gone. That is the accepted
+    // trade: inert, not broken, and the alternative was splitting `src/ui/` in two.
+    const dir = freshResearchProject();
+    pruneTargets(dir, ['cli'], 'research');
+    for (const rel of ['src/ui/App.tsx', 'src/ui/parts/Shell.tsx', 'src/ui/moments/Ask.tsx', 'src/ui/theme.ts', 'src/ui/history.ts']) {
+      expect(existsSync(join(dir, rel)), `${rel} must survive: src/ui is not pruned`).toBe(true);
+    }
+    // The suite is the developer's and none of it rides a target: it survives whole.
+    for (const rel of ['test/invariants/reducer.test.ts', 'test/invariants/history.test.ts', 'test/invariants/harness.ts', 'test/invariants/kv-law.scenario.test.ts']) {
+      expect(existsSync(join(dir, rel)), `${rel} must survive a cli-only prune`).toBe(true);
+    }
+    const p = pkg(dir);
+    for (const dep of ['react-dom', '@fontsource-variable/geist', '@fontsource-variable/geist-mono']) {
+      expect(p.dependencies?.[dep], `${dep} is a DOM dep and should go`).toBeUndefined();
+    }
+    // The shell package the desktop main + preload import goes with its target…
+    expect(p.dependencies?.['@lloyal-labs/desktop']).toBeUndefined();
+    // …while `@lloyal-labs/ui` stays: the fold and the reducer import `foldAgents`
+    // from it, and the terminal view folds through those.
+    expect(p.dependencies?.['@lloyal-labs/ui'], 'ui is a cli dependency, not a renderer one').toBeDefined();
+    expect(existsSync(join(dir, 'targets/_shared'))).toBe(false); // research never had one
+  });
+
+  it('a surviving DOM target keeps the DOM deps, and desktop still takes its own', () => {
+    const dir = freshResearchProject();
+    pruneTargets(dir, ['cli', 'web'], 'research');
+    const p = pkg(dir);
+    expect(p.dependencies?.['react-dom']).toBeDefined();
+    expect(p.dependencies?.['@fontsource-variable/geist']).toBeDefined();
+    expect(p.dependencies?.['@lloyal-labs/desktop']).toBeUndefined();
+    expect(p.dependencies?.['@lloyal-labs/ui']).toBeDefined();
+  });
+});
+
 describe('pruneTargets — cli + web (desktop pruned)', () => {
   it('keeps web deps/scripts, drops only desktop, trims tsconfig.web include', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli', 'web']);
+    pruneTargets(dir, ['cli', 'web'], 'basic');
     expect(existsSync(join(dir, 'targets/web'))).toBe(true);
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(false);
     expect(existsSync(join(dir, 'electron.vite.config.ts'))).toBe(false);
@@ -280,7 +335,6 @@ describe('pruneTargets — cli + web (desktop pruned)', () => {
     const p = pkg(dir);
     expect(p.devDependencies?.electron).toBeUndefined();
     expect(p.devDependencies?.['electron-vite']).toBeUndefined();
-    expect(p.dependencies?.['@lloyal-labs/host']).toBeDefined();
     expect(p.devDependencies?.vite).toBeDefined(); // shared renderer dep kept — web survives
     expect(p.dependencies?.['react-dom']).toBeDefined();
     expect(p.scripts.serve).toBeDefined();
@@ -297,12 +351,12 @@ describe('pruneTargets — cli + web (desktop pruned)', () => {
 describe('pruneTargets — guards', () => {
   it('throws when cli is not kept', () => {
     const dir = freshBlankProject();
-    expect(() => pruneTargets(dir, ['desktop', 'web'])).toThrow(/cli.*mandatory/i);
+    expect(() => pruneTargets(dir, ['desktop', 'web'], 'basic')).toThrow(/cli.*mandatory/i);
   });
 
   it('all three kept is a no-op for the target dirs', () => {
     const dir = freshBlankProject();
-    pruneTargets(dir, ['cli', 'desktop', 'web']);
+    pruneTargets(dir, ['cli', 'desktop', 'web'], 'basic');
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
     expect(existsSync(join(dir, 'targets/web'))).toBe(true);
   });

@@ -10,7 +10,7 @@ child.on("message", (m) => {
   const ev = m?.payload;
   if (ev?.type === "config:loaded") {
     console.log(`loaded: origins=${JSON.stringify(ev.origin)} defaults=${JSON.stringify(ev.config.defaults)} outputDir=${JSON.stringify(ev.config.sources.outputDir)}`);
-  } else if (ev?.type === "ui:composer" && step === 0) {
+  } else if (ev?.type === "weights:done" && step === 0) {
     step = 1;
     child.send({ t: "command", payload: { type: "set_output_dir", path: "out" } });
   } else if (ev?.type === "config:updated" && step === 1) {

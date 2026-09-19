@@ -83,9 +83,15 @@ describe('templates cannot drift from the runtime they pin', () => {
   });
 
   it('every default ability is on the post-rename side', () => {
+    // The abilities that existed before the rename — the only names a 1.x
+    // `*-app` tarball was ever published under. An ability born after it
+    // (documents, 0.1.0) has no pre-rename tarball to pin by mistake.
+    const RENAMED = ['corpus', 'web', 'wikipedia'];
     const specs = Object.values(DEFAULT_ABILITIES).flat();
     expect(specs.length).toBeGreaterThan(0);
     for (const spec of specs) {
+      const name = spec.slice(spec.indexOf('/') + 1, spec.lastIndexOf('@'));
+      if (!RENAMED.includes(name)) continue;
       const version = spec.split('@').pop()!;
       const major = Number(version.split('.')[0]);
       expect(

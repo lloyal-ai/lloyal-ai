@@ -1,187 +1,223 @@
 # lloyal
 
-**`rails new` for agentic AI apps — the model lives inside, no API key.**
+**What becomes possible when the model and the program live in the same process?**
 
-`lloyal` is the CLI for the [HDK](https://github.com/lloyal-ai/hdk). It scaffolds a **harness** — a runnable vertical-inference app in ordinary TypeScript — and runs it on a model **you own**: resident in your process on a laptop, or served from your own GPU host. Every agent scaffold starts with `API_KEY=`; a harness starts with a model.
+Most AI code is a client: it sends a request to a model somewhere and waits. Lloyal puts the model *inside* the
+application, so your code has control *through* inference, not only around it. It can fork the model's live
+attention into several agents at once, hand each different evidence, decide what the next stage inherits, and
+commit only what it accepts. Every one of those decisions is ordinary TypeScript, and it runs on hardware you
+own — a laptop today, your own GPU host when you serve it. No API key on the path that thinks.
 
-```bash
-npx lloyal-ai new              # interactive: name → surfaces → model → template
-cd my-harness && npm install && npm start
-```
+Think of a game engine. You program the behaviour; Lloyal handles the physics underneath.
 
-```text
-first run:
-  scaffolded acme (basic) · targets: cli, desktop, web · model: qwen3.5-4b
-  ...
-  Model      qwen3.5-4b                   ● resident
-  Inference  local · no provider endpoint   ● offline
-  ready — type to begin, ctrl-c to stop
-```
+![An app generated from the research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
 
-The recommended model is downloaded + digest-verified into `models/llm/` on first run.
+*An app generated from the research template. What it does is one example of what a harness can do; the
+program underneath is yours to change.*
 
-## One harness, many surfaces
+## An example: thirty seconds to a living brief
 
-A harness is **one program** that ships as many apps. `harness.yml` lists its **targets** — each scaffolded into a full-stack app (a frontend *and* the deploy that runs it) — and the model it thinks with:
-
-```yaml
-# harness.yml
-targets: [cli, desktop, web]                    # each scaffolds a full-stack app
-model:
-  llm: { id: "qwen3.5-4b", context: 32768 }   # the resident model it thinks with
-```
-
-| target    | you get                    | run                                 |
-| --------- | -------------------------- | ----------------------------------- |
-| `cli`     | a terminal app             | `npm start`                         |
-| `desktop` | a native Mac / Windows app | `npm run dev:desktop`               |
-| `web`     | a browser app (served)     | `npm run serve` → `npm run dev:web` |
-
-You write the program once, under `harness/`; the CLI generates the full stack per target under `targets/` — each a thin wiring layer over your shared `harness.ts`:
-
-```text
-my-harness/
-├── harness.yml          targets + model
-├── harness/             YOUR program
-│   ├── harness.ts         the controller — agents, tools, when work is done
-│   ├── protocol.ts        the commands (↑) and events (↓) it speaks
-│   └── state.ts           reduce(state, event) — the state every surface folds
-├── models/              resident, digest-verified weights (gitignored)
-└── targets/             one full-stack app per target — cli · desktop · web
-```
-
-`lloyal targets:add web` adds a browser app **without touching `harness.ts`** — it's MVC with a live model as the Model: your harness is the Controller, surfaces are Views. [You already know this architecture — it shipped in Rails in 2007.](https://lloyal.ai/blog/you-already-know-this-architecture/)
-
-## Commands
-
-Grammar: one bare verb for the primary artifact (`new`); `<noun>:<verb>` namespaces to manage a project (`models:`, `targets:`, `app:new`). The signed-channel commands (`install` / `publish` / `publishers` / `review`) use subcommands.
-
-**Scaffold**
-
-```bash
-npx lloyal-ai new [name]                       # scaffold a harness (interactive if no name)
-npx lloyal-ai new my-app --template research   # a production research harness: recon, planning,
-                                                 #   parallel investigation, evidence admission, synthesis
-npx lloyal-ai app:new <name>                   # scaffold an App (a portable capability package)
-```
-
-`new` flags (any also pre-seed the picker): `--targets cli,desktop,web` · `--model <id|path>` · `--template <basic|research>` · `--yes` (CI) · `--dir <path>`.
-
-Two more, for controlling what `new` does after it writes the tree: `--skip-install` (don't run `npm install`) and `--skip-apps` (don't fetch the template's default AgentApp). They are independent — the harness imports its apps at the top level, so a scaffold made with `--skip-apps` neither typechecks nor starts until you add them with `lloyal install`. Use it only for an offline or hermetic scaffold.
-
-**Manage a scaffolded project** (run from its root)
-
-```bash
-npx lloyal-ai models:use <id>                  # pin a catalog model (downloaded + verified next run)
-npx lloyal-ai models:add <path>                # register a local .gguf you already have
-npx lloyal-ai models:download <url> [--sha256 <hex>]  # stream a .gguf into models/<role>/
-npx lloyal-ai models:list                      # catalog ids · active pins · installed files
-
-npx lloyal-ai targets:add <desktop|web>        # bind the same harness to another surface
-npx lloyal-ai targets:remove <desktop|web>     # drop a surface
-npx lloyal-ai targets:list                     # show the surfaces present
-```
-
-The `models:` verbs own the write to `harness.yml`'s `model.<role>.{id|path}`, so the manifest is never hand-edited. A catalog `id` is downloaded + digest-verified fail-closed; a `path` is a local weight you point at, trusted explicitly.
-
-**Apps + the signed channel**
-
-An **AgentApp** — an **App** in commands and code — is a portable capability package: a protocol, tools, skills, config and grants a harness can enable.
-
-```bash
-npx lloyal-ai install <publisher>/<name>       # install a signed App from apps.lloyal.ai
-```
-
-Every install is verified before it runs:
-
-- Ed25519-signed catalog and bundle
-- integrity-audited lockfile
-- install scripts disabled by default
-- the app's *attention surface* — protocol · tools (some `[needs grant]`) · config keys · skill lines — shown from the verified bytes first
-
-**What you install is what was reviewed.**
-
-**Publishers**
-
-```bash
-npx lloyal-ai publishers register              # claim your publisher handle
-npx lloyal-ai publish                          # build, sign, and submit your App
-npx lloyal-ai publish status <id>              # check a submission
-npx lloyal-ai review                           # (reviewers) inspect + approve submissions
-```
-
-## Where it sits
-
-> **Most "AI for TypeScript" is a *client to an inference endpoint*. Lloyal *embeds the model* — the way your app embeds SQLite, not a database server.**
-
-|                    | Endpoint SDK · Vercel AI / LangGraph / Ollama      | **Lloyal HDK**                                                            |
-| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------- |
-| The model is       | a service behind an HTTP boundary                  | resident in the process you run — laptop or your own GPU host             |
-| Each sub-agent     | a fresh request that re-ships its context          | a zero-copy `fork()` of the parent's live attention                       |
-| Ten agents cost    | 10× context · 10× dispatches · per-token billing   | one GPU dispatch per tick — cost tracks KV *fullness*, not agent count    |
-| Prefix sharing     | a token-keyed KV cache, LRU-evicted, over an API   | a structural back-reference, pruned by *your* policy when the reasoning is done |
-| API key            | required, billed per token                         | none on the reasoning path                                                |
-
-Endpoint tools run agents like **VMs** — each a full context you stand up and re-feed. Lloyal runs them like **containers on one kernel**: every agent is a branch of one resident model state, forked for free and decoded in the same pass.
-
-And the model is a **dial** — the *same* harness runs across compute tiers, key-free at each:
-
-| tier      | runs on                       | model                                           | sessions                       |
-| --------- | ----------------------------- | ----------------------------------------------- | ------------------------------ |
-| **Edge**  | a laptop / the user's machine | a 4B, resident in-process                       | one, local                     |
-| **Host**  | your own GPU box              | a frontier model (GLM-5.2), sharded across GPUs | many, over wss — FIFO-admitted |
-| **Fleet** | a host per GPU cluster        | frontier, per host                              | each host admits its own       |
-
-- **Apps reach the network only for their own capabilities** — a search token, an OAuth grant — never the reasoning path itself.
-- **Apps arrive signed.** First- and third-party ride the same Ed25519-verified path from a curated, reviewed catalog — an App's *attention surface* (protocol · tools · config · skills) shown from the verified bytes before install.
-
-**[Docs →](https://docs.lloyal.ai/cli)** · **[Build an App →](https://docs.lloyal.ai/build-an-app/what-is-an-app)** · **[The HDK →](https://github.com/lloyal-ai/hdk)**
-
-## Troubleshooting
-
-### Windows: `spawn EINVAL` during `lloyal new`
-
-**Fixed in 1.0.3.** On earlier versions the scaffold completes and then throws
-while running `npm install` for you:
-
-```
-vendored lloyal/wikipedia@2.0.0 → vendor/lloyal__wikipedia-2.0.0.tgz
-ERROR  spawn EINVAL
-```
-
-Since the CVE-2024-27980 fix, Node (18.20.2 / 20.12.2 / 22 / 24) refuses to
-spawn a `.cmd` or `.bat` without a shell — and on Windows npm **is** `npm.cmd`.
-
-**Your project is fine.** Only the automatic install failed:
+`new` starts you from a template. There are two: **basic**, a small Wikipedia app, and **research**, a
+grounded multi-agent investigation. Everything in this section is the research template, because it shows the
+most in the least time.
 
 ```sh
-cd <project>
-npm install
-npm start
+npx lloyal-ai@alpha new my-app --template research
+cd my-app
+npm run dev:desktop
 ```
 
-To avoid it entirely, upgrade: `npx lloyal-ai@latest new`.
+The first launch fetches and verifies three weights: a 4B reasoning model, a 0.6B reranker that scores what the
+agents read, and a vision projector so the model can see. Then ask it something worth investigating.
 
-### Windows: how npm is invoked, and the one case where `%` matters
+Watch what appears. The outline drafts itself, line by line, from the planner's own stream — and editing a line
+*is* editing the plan. Sections fill in place, each carrying its line of inquiry: searching, reading, waiting
+honestly through a rate limit, writing. Click any inquiry open to watch the model think. Hold the run, drop a
+line, or close the brief early and keep what it has. When it settles, the document takes the room: citation
+chips, a sources grid, the deliberation on request. Ask a follow-up and it answers from a context that is still
+warm.
 
-The CLI runs npm four ways, in order of preference:
+Drop a PDF on it. The text is searched and read; a page the model needs to *look at* is projected only when it
+reaches for it; and every citation points at a page you can open. Ask about a figure.
 
-1. npm's own JS entry from `npm_execpath` — set by `npm` and `npx`
-2. `npm-cli.js` found beside your `node` executable
-3. plain `npm` on macOS and Linux
-4. `npm.cmd` through a shell — Windows only, and only if 1 and 2 both fail
+Every settled brief joins a library the next brief can search, cite and build on.
 
-The first two run npm's JavaScript directly with your `node`, so arguments reach
-npm exactly as written. That is deliberate: **cmd.exe expands `%VAR%` even inside
-double quotes**, and an argument passed through `cmd /c` cannot escape it. Since
-`lloyal install <publisher>/<name>` carries text you supply, keeping Windows off
-cmd.exe is what makes a name containing `%` behave.
+In this template the journey is four moments, and the same four words name them in its code: **Ask · Frame
+· Write · Settle.**
 
-Step 4 exists only for an installation where npm's JS entry is missing. If you
-are on that path and an argument contains `%`, cmd may substitute an environment
-variable before npm sees it. Reinstalling Node from nodejs.org restores the
-normal layout and step 2 takes over.
+| Ask | Frame | Write | Settle |
+| --- | --- | --- | --- |
+| ![Ask: one question, and the shape it takes](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/ask.jpg) | ![Frame: the outline, held for your edits](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/frame.jpg) | ![Write: inquiries searching and reading, side by side](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write-searching.jpg) | ![Settle: the brief, its citations and its sources](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/settle.jpg) |
 
-## License
+*The research template, from question to settled brief.*
 
-Apache-2.0 — the CLI is fully open. (The HDK runtime packages are FSL-1.1-Apache-2.0; see each package's LICENSE.)
+## The one idea underneath
+
+An agent in Lloyal is a **branch** of the model's live state, not a request. Fork the branch that has already
+read the evidence and every agent forked from it attends the same cells: an image projected once is seen by all
+of them; a shared header is paid for once however many agents run. The runtime decodes every active branch in
+one pass and reclaims the whole working tree when the work that owned it ends.
+
+```text
+ against an endpoint                      inside lloyal
+
+ agent 1  ▐ evidence ▐ task ▌             evidence ──┬── agent 1: task
+ agent 2  ▐ evidence ▐ task ▌                        ├── agent 2: task
+ agent 3  ▐ evidence ▐ task ▌                        └── agent 3: task
+
+ the evidence is sent, and paid for,     the evidence is read once; each agent
+ once per agent                           forks the attention that read it
+```
+
+> Post-training produces a tendency. A harness produces a procedure.
+
+The model supplies language, judgement and learned competence. Your program supplies what exists, what evidence
+enters it, when work changes course, what counts as done, and what becomes durable. That program is a
+generator: read `function*` as `async function` and `yield*` as `await`, and what you gain is ownership —
+whatever a piece of work starts is finished or cleaned up when that work ends, however it ends. That is why a
+Stop works in the middle of anything, and why there is almost no teardown code to write.
+
+```text
+ session                     the model, resident
+ └── harness                 your program; lives exactly as long as the session
+     └── run                 one at a time: Stop reaches whatever is here
+         └── spine           one shared line of attention: the header, the tools, the evidence
+             ├── agent 1     a fork of the spine, with its own task
+             ├── agent 2     …
+             └── agent N     one more fork, reading what the others found
+
+ whatever a line starts is finished or cleaned up when that line ends:
+ the findings leave as data; the branches do not outlive the run
+```
+
+## Make it yours in three edits
+
+The generated project is source, whichever template it came from. In the research template, three files hold
+one concern each — the rest can wait:
+
+```text
+ src/
+   ui/presentation.ts         ← what it is called
+   research/instructions.ts   ← what it is for
+   research/research.ts       ← how it investigates: `inquire`, one expression
+   ───────────────────────────────────────────────────────────────────
+   app.ts                     the app: what is installed, the parts, the loop
+   brief/                     a brief's life: asked · framed · written · settled
+   research/                  plan · write · answer, and the prompts
+   ui/                        the fold, the selectors, the four moments
+```
+
+**What it is called** — `src/ui/presentation.ts`. Every surface reads it: sidebar, window, tab, terminal, host.
+
+```ts
+export const APP = { name: "Fieldnote", storage: "fieldnote" } as const;
+```
+
+**What it is for** — `src/research/instructions.ts`. Two sentences, said on every path an answer can take.
+
+```ts
+export const INSTRUCTIONS = {
+  purpose: "You help maintenance engineers investigate equipment failures.",
+  answers: "Lead with the likely cause. Always name the part number.",
+};
+```
+
+**How it investigates** — `src/research/research.ts`. The strategy is one stage, `inquire`. Side by side,
+one after another on a growing shared context, a fan-out, a dependency graph, or an orchestrator of your own:
+
+```ts
+// src/app.ts — hand the brief another strategy; everything else stands
+const sideBySide: Research = {
+  ...research,
+  write: (trunk, ask, plan) =>
+    research.write(trunk, ask, plan, {
+      inquire: (ask, tasks, spec) => parallel(tasks.map((task, i) => spec(task, i, true))),
+    }),
+};
+const brief = briefs({ session, library, run, wire, config: runner.config, research: sideBySide });
+```
+
+A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
+app takes care of the rest. `npm test` runs the app's laws against a scripted model in about two seconds, so a
+change is proved without downloading weights. The basic template is the same idea at a smaller size: one
+harness file, one procedure, the same three surfaces.
+
+## What it can become
+
+A spreadsheet that researches each row. A maintenance app that investigates competing explanations for a fault
+and keeps the minority lineage alive when its evidence is material. A document app that reads, inspects the
+diagrams, and keeps working through follow-ups. An analysis that admits a source only when it governs the
+relevant date, so a superseded rule cannot win on relevance alone.
+
+None of these is a mode of the framework, and none is the research template with a different name. Each is a
+procedure written in TypeScript over the same primitives — which is what makes a template a starting point
+rather than a ceiling.
+
+## One program, three surfaces
+
+The same `harness(ctx, events, commands)` runs unmodified in a terminal, a native window and a browser. One
+fold of state, one binding each, no view holding truth.
+
+```text
+ terminal ─┐
+ window  ──┼──▶ harness(ctx, events, commands) ──▶ the model, in the same process
+ browser ──┘
+```
+
+| Surface | Run | The model runs in |
+| --- | --- | --- |
+| A native desktop app | `npm run dev:desktop` | an engine process the window talks to |
+| A browser | `npm run dev:web` | a host you serve; browsers connect to it |
+| Your terminal | `npm start` | the process itself |
+
+`npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template.
+
+## Abilities
+
+An **Ability** is an installed capability: tools, the instructions to use them, configuration, and any models
+it needs. It runs inside the harness and can work with the calling agent's live context. Research ships with
+web, corpus and documents.
+
+```sh
+npx lloyal-ai@alpha install <publisher>/<name>   # verified and vendored into the project
+npx lloyal-ai@alpha ability:new my-ability        # start one of your own
+```
+
+Every install is Ed25519-verified against a reviewed catalogue: what you install is what was reviewed. Point the
+corpus at `reports` in `harness.yml` and the app reads what it has written.
+
+## Models
+
+```sh
+npx lloyal-ai@alpha models:list            # the catalogue, your pins, what is on disk
+npx lloyal-ai@alpha models:use <id>        # a catalogue model, fetched and verified on the next launch
+npx lloyal-ai@alpha models:add <path.gguf> # a local weight you already have
+```
+
+The model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host; the
+program does not change. The default set runs on a 16 GB laptop.
+
+On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
+every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
+and shared by every harness on the box. For a project you cloned, `npx lloyal-ai@alpha backends:install` does
+the same and writes `model.llm.gpu: cuda` for it.
+
+## Requirements
+
+Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
+offline once the weights are on disk. This is an alpha: `npx lloyal-ai@alpha` pins you to it. Outside an
+interactive terminal, run `npm install` in the project yourself.
+
+## Go deeper
+
+- [Thinking in Lloyal](https://docs.lloyal.ai/thinking-in-lloyal) — the execution model: ownership, live state, control at explicit boundaries
+- [Vertical Inference](https://verticalinference.lloyal.ai/) — the architecture, from the model up
+- [The HDK](https://github.com/lloyal-ai/hdk) — the runtime packages
+- [Issues](https://github.com/lloyal-ai/lloyal-ai/issues)
+
+## Licence
+
+The CLI is MIT. The application you generate is yours to license as you choose. The HDK runtime packages carry
+their own licence and the [Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
+under which building, distributing, selling and hosting a harness or an ability is always permitted. Model
+weights carry their respective licences.

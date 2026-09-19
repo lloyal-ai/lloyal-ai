@@ -9,7 +9,12 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # An arc branch takes PRs for weeks before it reaches main. Left to `main`
+    # alone, none of them ran here: #33, #34 and #35 merged with no checks.
+    branches: [main, 'feat/**']
+  # After an alpha publishes, the arc branch is what the registry now serves;
+  # pressing this on the arc is the run that proves it.
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,19 +27,9 @@ jobs:
       - run: npm install
       - run: npm run build
       - run: npm run typecheck
+      # That the tarball ships exactly the templates git tracks is
+      # test/tarball.test.ts, part of this run.
       - run: npm test
-
-      # The templates are shipped as DATA, and `files` is what keeps them in the
-      # tarball. Assert the count so a stray ignore rule or a `files` edit can't
-      # silently publish a CLI that scaffolds an incomplete project.
-      - name: Verify templates ship
-        run: |
-          COUNT=$(npm pack --dry-run --json | node -e "
-            const p=JSON.parse(require('fs').readFileSync(0,'utf8'))[0];
-            console.log(p.files.filter(f=>f.path.startsWith('templates/')).length);
-          ")
-          echo "template files in tarball: $COUNT"
-          test "$COUNT" -eq 114
 
   # The front door, on every platform a developer actually uses.
   #

@@ -21,8 +21,8 @@ import {
   TARGET_FILES,
   TARGET_PKG_FIELDS,
   SHARED_RENDERER_DEPS,
-  SHARED_RENDERER_DIR,
   SHARED_RENDERER_DEV_DEPS,
+  SHARED_VIEW_DIR,
   rewriteTargetsLine,
 } from './prune-targets.js';
 import {
@@ -76,23 +76,22 @@ export function addTarget(projectDir: string, target: PrunableTarget, template: 
   const domBefore = before.has('web') || before.has('desktop');
   const hasDesktopAfter = target === 'desktop' || before.has('desktop');
 
-  // 2b. The shared React view, which a cli-only prune removed. It comes back
-  // with the FIRST DOM target, exactly as SHARED_RENDERER_DEPS do below — if one
-  // is already present the dir is there and must not be overwritten (the user
-  // owns that file; it is their view).
-  if (!domBefore) {
-    copyTreeWithSubstitutions(
-      join(templateDir, SHARED_RENDERER_DIR),
-      join(projectDir, SHARED_RENDERER_DIR),
-      subs,
-    );
+  // 2b. The template's own view dir, when it has one and a cli-only prune
+  // removed it. It comes back with the FIRST DOM target, exactly as
+  // SHARED_RENDERER_DEPS do below — if one is already present the dir is there
+  // and must not be overwritten (the user owns that file; it is their view).
+  // A template whose view lives beside the fold declares none: nothing was
+  // pruned, so there is nothing to restore.
+  const viewDir = SHARED_VIEW_DIR[template];
+  if (!domBefore && viewDir) {
+    copyTreeWithSubstitutions(join(templateDir, viewDir), join(projectDir, viewDir), subs);
   }
 
   // 3. package.json — restore scripts + deps (add-if-absent, versions from template).
   restorePackageJson(projectDir, templateDir, target, { domBefore, hasDesktopAfter });
 
   // 4. tsconfig split.
-  restoreTsconfig(projectDir, templateDir, target, domBefore);
+  restoreTsconfig(projectDir, templateDir, target, template, domBefore);
 
   // 5. harness.yml `targets:` line.
   const after = ALL_TARGETS.filter((t) => before.has(t) || t === target);
@@ -160,14 +159,16 @@ function restoreTsconfig(
   projectDir: string,
   templateDir: string,
   target: PrunableTarget,
+  template: string,
   domBefore: boolean,
 ): void {
   const underTarget = (entry: string): boolean => entry.startsWith(`targets/${target}`);
-  // The shared view's entries belong to whichever DOM target arrives FIRST — it
-  // is not under `targets/<target>/`, so `underTarget` alone would leave it out
-  // and the Node build would then try to compile the React view.
+  // A template's view-dir entries belong to whichever DOM target arrives FIRST —
+  // they are not under `targets/<target>/`, so `underTarget` alone would leave
+  // them out and the Node build would then try to compile the React view.
+  const viewDir = SHARED_VIEW_DIR[template];
   const wanted = (entry: string): boolean =>
-    underTarget(entry) || (!domBefore && entry.startsWith(SHARED_RENDERER_DIR));
+    underTarget(entry) || (!domBefore && viewDir !== undefined && entry.startsWith(viewDir));
 
   // Root tsconfig.json: merge this target's EXCLUDE entries (it always exists;
   // its `include` is a glob that already covers the new dir).
@@ -184,9 +185,9 @@ function restoreTsconfig(
     const includeToAdd = readJsoncArray(join(templateDir, 'tsconfig.web.json'), 'include').filter(underTarget);
     mergeJsoncArray(webCfg, 'include', includeToAdd);
   } else {
-    // cli-only → prune deleted tsconfig.web.json; restore from the template, then
-    // keep harness/* + THIS target's entries + the shared view (dropping only
-    // the other DOM target's). Without the `wanted` widening the shared view's
+    // cli-only → prune deleted tsconfig.web.json; restore from the template,
+    // then keep the non-target entries + THIS target's + the view dir (dropping
+    // only the other DOM target's). Without the `wanted` widening a view-dir
     // entry is silently dropped and typecheck stops covering the file both
     // surviving targets mount.
     copyFileWithSubstitutions(join(templateDir, 'tsconfig.web.json'), webCfg, {});
