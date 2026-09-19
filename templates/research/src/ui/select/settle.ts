@@ -37,8 +37,21 @@ const hostOf = (url: string): string => {
  *  appearance order, one ordinal per url, repeats collapsed into `cited`.
  *  A bare "[1]"-style link keeps its slot but takes a real title from any
  *  later appearance. Never re-weaves. */
+/** One answer body, one citations array: a view that hands `Prose` a Map built
+ *  from this list must get the SAME list while the answer stands, or the settled
+ *  prose re-parses on every token of a warm ask beneath it. A projection keeps a
+ *  result per state; this keeps it per body. */
+let lastCitations: { body: string; citations: Citation[] } | null = null;
+
 export const selectCitations = (app: AppState): Citation[] => {
   const body = selectAnswer(app)?.body ?? "";
+  if (lastCitations !== null && lastCitations.body === body) return lastCitations.citations;
+  const citations = citationsOf(body);
+  lastCitations = { body, citations };
+  return citations;
+};
+
+const citationsOf = (body: string): Citation[] => {
   const byUrl = new Map<string, Citation>();
   for (const m of body.matchAll(MD_LINK)) {
     const [, title, url] = m;

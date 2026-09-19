@@ -122,6 +122,12 @@ export const selectThreadDigests = (app: AppState): string[] => {
   ])];
 };
 
+/** The same digests as one string, for a view that must not re-render on
+ *  every fold: a projection compares snapshots by identity, and a fresh array
+ *  is a new identity each time the state moves — which, while prose streams,
+ *  is every token. A string is equal when its digests are. */
+export const selectThreadDigestKey = (app: AppState): string => selectThreadDigests(app).join("\n");
+
 /** The run bar's one status word — a total table over the active document's
  *  phase; the picker reads the session's readiness. An in-flight ask means
  *  writing is happening UNDER the settled document. */

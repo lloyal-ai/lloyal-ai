@@ -14,7 +14,7 @@ import { Thinking, doc, spread } from "../parts/Shell.js";
 import { Figures } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
-import { Prose } from "../parts/Prose.js";
+import { Prose, StreamingProse } from "../parts/Prose.js";
 
 export function Write(): ReactElement {
   const title = useProjection(selectTitle);
@@ -49,12 +49,14 @@ export function Write(): ReactElement {
           {s.inquiry && s.inquiry.verb.kind !== "settled" && (
             <InquiryRow inquiry={s.inquiry} closing={closing} />
           )}
-          {s.prose && (
+          {s.prose && (s.streaming ? (
             <>
-              <Prose markdown={s.prose} anchorPrefix={`s${s.index}`} />
-              {s.streaming && <span className="fn-caret" />}
+              <StreamingProse markdown={s.prose} anchorPrefix={`s${s.index}`} />
+              <span className="fn-caret" />
             </>
-          )}
+          ) : (
+            <Prose markdown={s.prose} anchorPrefix={`s${s.index}`} />
+          ))}
         </section>
       ))}
 
@@ -65,7 +67,7 @@ export function Write(): ReactElement {
           </h2>
           {settling.body ? (
             <>
-              <Prose markdown={settling.body} />
+              <StreamingProse markdown={settling.body} />
               <span className="fn-caret" />
             </>
           ) : (

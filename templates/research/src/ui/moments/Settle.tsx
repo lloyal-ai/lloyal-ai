@@ -17,7 +17,7 @@ import { Thinking, doc, spread } from "../parts/Shell.js";
 import { Figures, FigureStrip } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
-import { Prose } from "../parts/Prose.js";
+import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
 
 export function Settle(): ReactElement {
@@ -153,7 +153,7 @@ export function Settle(): ReactElement {
           )}
           {ask.body && (
             <>
-              <Prose markdown={ask.body} />
+              <StreamingProse markdown={ask.body} />
               <span className="fn-caret" />
             </>
           )}
