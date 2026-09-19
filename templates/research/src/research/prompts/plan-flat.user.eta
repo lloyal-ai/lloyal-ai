@@ -1,5 +1,3 @@
-You're a research planner. You analyze a user query and pick ONE of three dispositions, producing a JSON plan. Output JSON only.
----
 The query: "<%= it.query %>"
 
 Your output must commit to a single `intent`:
@@ -82,7 +80,24 @@ BAD — individual task issues (for research intent):
 - "Research cancer immunotherapy." (too broad, no vocabulary)
 - "Find the exact 5-year overall survival number for pembrolizumab in NSCLC." (too narrow, single fact)
 - "Investigate the best modalities found by other tasks." (cross-task reference — forbidden in parallel)
-<% if (it.context) { -%>
 
-<%= it.context %>
-<% } -%>
+Today's date: <%= it.date %>
+
+<% if (it.sources.length) { %>
+
+Knowledge sources available for this research. Assign each task's `<%= it.routingKey %>` to the source that holds it, using its EXACT name below; the pre-flight `Source coverage` probe (when present) is the primary signal for which source covers what.
+<% for (const source of it.sources) { %>
+
+### <%= source.name %>
+
+<%= source.useWhen %>
+
+<% if (source.toc) { %>Files and top-level topics available in this source:
+<%= source.toc %>
+
+<% } %><% } %><% } %><% if (it.coverage) { %>
+
+Source coverage (from a pre-flight probe of each source for this query — use it as the primary signal when assigning each task's `<%= it.routingKey %>`):
+<%= it.coverage %>
+
+<% } %>

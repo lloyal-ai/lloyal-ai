@@ -47,7 +47,6 @@ export function Settle(): ReactElement {
     prevAskQ.current = askQ;
   }, [askQ]);
   const [copied, setCopied] = useState<string | null>(null);
-  const [thinkOpen, setThinkOpen] = useState<string | null>(null);
 
   const ordinals = useMemo(
     () => new Map(citations.map((c) => [c.url, c.ordinal])),
@@ -119,6 +118,10 @@ export function Settle(): ReactElement {
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
+      {answer === null && !ask && (
+        // A brief that ran to its end and found nothing: no report was written, nothing was invented.
+        <p style={S.mark}>The sources turned up nothing to settle this on — nothing was kept.</p>
+      )}
       <Sources citations={citations} notes={notes} />
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
@@ -127,17 +130,7 @@ export function Settle(): ReactElement {
           <p style={S.exchangeActions}>
             <button type="button" style={S.action} onClick={() => copy(x.body, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>
             <button type="button" style={S.action} onClick={() => download(x.body, x.question)}>Download</button>
-            {x.thinking && (
-              <button
-                type="button"
-                style={S.action}
-                onClick={() => setThinkOpen(thinkOpen === `e${i}` ? null : `e${i}`)}
-              >
-                {thinkOpen === `e${i}` ? "Hide the deliberation" : "How it got here"}
-              </button>
-            )}
           </p>
-          {thinkOpen === `e${i}` && x.thinking && <p style={S.thinking}>{x.thinking}</p>}
           <Prose markdown={x.body} anchorPrefix={`e${i}`} />
         </section>
       ))}

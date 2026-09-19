@@ -17,6 +17,7 @@ import {
   runHarness, accept,
 } from "./harness.js";
 import type { WorkflowEvent } from "../../src/brief/protocol.js";
+import { writeBrief } from "../../src/brief/library.js";
 import type { TraceEvent } from "@lloyal-labs/lloyal-agents";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
@@ -62,8 +63,9 @@ const rootPrefills = (trace: readonly TraceEvent[]): { role: string; attachments
     .filter((e) => (e.attachments?.length ?? 0) > 0)
     .map((e) => ({ role: e.role, attachments: e.attachments! }));
 
-const metaLine = (outputDir: string, docId: string): string =>
-  fs.readFileSync(path.join(outputDir, docId, "report.md"), "utf8").split("\n")[2] ?? "";
+/** The roots a settled brief's record carries. */
+const recorded = (outputDir: string, docId: string): string[] =>
+  (JSON.parse(fs.readFileSync(path.join(outputDir, docId, "report.json"), "utf8")) as { attachments: string[] }).attachments;
 
 test("a document on the question: listed on the spine, recorded on the meta line, never projected", async () => {
   const { store, doc } = plant();
@@ -91,7 +93,7 @@ test("a document on the question: listed on the spine, recorded on the meta line
   assert.equal(ctx.multimodalPrefills.length, 0);
   assert.deepEqual(rootPrefills(run.trace), []);
 
-  assert.ok(metaLine(run.outputDir, query.docId).includes(doc.digest), "the meta line carries the root");
+  assert.deepEqual(recorded(run.outputDir, query.docId), [doc.digest], "the record carries the root");
 });
 
 test("reopen restores the document; a warm ask stages it again; a cold submit does not", async () => {
@@ -101,10 +103,10 @@ test("reopen restores the document; a warm ask stages it again; a cold submit do
     attachmentStore: store,
     setup: (dir) => {
       fs.mkdirSync(path.join(dir, saved), { recursive: true });
-      fs.writeFileSync(
-        path.join(dir, saved, "report.md"),
-        [`# Saved brief`, "", `> ${saved} · flat · 1s · media ${doc.digest}`, "The saved body."].join("\n"),
-      );
+      writeBrief(path.join(dir, saved), {
+        version: 1, query: "Saved brief", savedAt: saved, mode: "flat", effort: "low", direct: false,
+        attachments: [doc.digest], answer: "The saved body.", inquiries: [], elapsedMs: 1000,
+      }, { exchange: false, annexuresFrom: 0 });
     },
     utterances: [report, report],
     script: [
@@ -169,6 +171,5 @@ test("an image beside a document is projected exactly once, on the trunk — a w
   assert.equal(spines.length, 2);
   assert.ok(spines.every((p) => p.includes(TITLE)), "both asks list the paper");
   const query = run.events.find((e) => e.type === "query") as { docId: string };
-  const meta = metaLine(run.outputDir, query.docId);
-  assert.ok(meta.includes(image.digest) && meta.includes(doc.digest));
+  assert.deepEqual(recorded(run.outputDir, query.docId), [image.digest, doc.digest], "the record carries both roots");
 });

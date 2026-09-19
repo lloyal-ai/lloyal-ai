@@ -13,6 +13,7 @@ import { TextInput } from "@inkjs/ui";
 import type { EventBus } from "@lloyal-labs/binding";
 import { initialState, reduce } from "./state.js";
 import type { AgentRuntime, AppState } from "./state.js";
+import { selectAnswer } from "./select.js";
 import type { Command, WorkflowEvent } from "../brief/protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
 import { APP } from "./presentation.js";
@@ -84,19 +85,18 @@ function View({
     if (key.ctrl && input === "g") dev.toggle();
   });
 
-  // Recon + research agents (skip the tool-less synth agent — taskIndex null).
-  const agents = doc ? [...doc.roster.agents.values()].filter((a) => a.taskIndex !== null) : [];
+  // The agents at work on the reader's behalf: probes, inquiries and the settling pass — every agent the fold
+  // keeps a timeline for.
+  const agents = doc ? [...doc.roster.agents.values()].filter((a) => a.timeline !== null) : [];
 
-  // The streaming answer: the live synth buffer, else the finalized answer,
-  // else the latest exchange's body. The doc is the memory.
-  const streaming = doc
-    ? (doc.synth.open && doc.synth.buffer) ||
-      (doc.ask === null && doc.exchanges.length > 0
-        ? doc.exchanges[doc.exchanges.length - 1].body
-        : "") ||
-      doc.answer ||
-      ""
-    : "";
+  // The answer: as the settling pass writes it, else the latest exchange's body, else the settled answer. The
+  // doc is the memory.
+  const answer = selectAnswer(state);
+  const streaming =
+    (answer?.streaming ? answer.body : "") ||
+    (doc && doc.ask === null && doc.exchanges.length > 0 ? doc.exchanges[doc.exchanges.length - 1].body : "") ||
+    answer?.body ||
+    "";
 
   // Input is offered when nothing is mid-flight: no doc, a settled doc, or
   // the planner waiting on a clarification.

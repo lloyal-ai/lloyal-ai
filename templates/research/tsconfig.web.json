@@ -21,7 +21,6 @@
   "include": [
     "src/brief/protocol.ts",
     "src/research/budgets.ts",
-    "src/research/prompts.ts",
     "src/ui/**/*",
     "types/**/*",
     "targets/desktop/view.tsx",

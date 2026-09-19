@@ -99,7 +99,7 @@ test('doc-switch isolation: the run streams into A while B is viewed, untouched'
   let s = settled();
   // A settled doc B arrives from disk and is activated (view-only).
   s = fold([
-    { type: 'doc', docId: B, title: 'B doc', mode: null, answer: 'b body', exchanges: [] } as WorkflowEvent,
+    { type: 'doc', docId: B, title: 'B doc', mode: 'flat', effort: 'low', direct: false, answer: 'b body', exchanges: [] } as WorkflowEvent,
     { type: 'doc:active', docId: B } as WorkflowEvent,
   ], s);
   // A warm ask starts on A (the run), while the canvas stays on B.
@@ -120,7 +120,7 @@ test('doc-switch isolation: the run streams into A while B is viewed, untouched'
 
 test('doc upsert does not activate; activation is its own event', () => {
   let s = settled();
-  s = fold([{ type: 'doc', docId: B, title: 'B doc', mode: 'flat', answer: 'b body', exchanges: [{ question: 'q', body: 'a', attachments: [] }] } as WorkflowEvent], s);
+  s = fold([{ type: 'doc', docId: B, title: 'B doc', mode: 'flat', effort: 'low', direct: false, answer: 'b body', exchanges: [{ question: 'q', body: 'a', attachments: [] }] } as WorkflowEvent], s);
   assert.equal(s.activeDocId, A);
   const b = s.documents.get(B)!;
   assert.equal(b.phase, 'done');
@@ -137,7 +137,7 @@ test('disk never overwrites a running document', () => {
   let s = fold([{ type: 'query', docId: A, query: 'ask?', warm: true } as WorkflowEvent], settled());
   const live = s.documents.get(A)!;
   s = fold([
-    { type: 'doc', docId: A, title: 'Q1', mode: null, answer: 'stale disk copy', exchanges: [] } as WorkflowEvent,
+    { type: 'doc', docId: A, title: 'Q1', mode: 'flat', effort: 'low', direct: false, answer: 'stale disk copy', exchanges: [] } as WorkflowEvent,
     { type: 'doc:active', docId: A } as WorkflowEvent,
   ], s);
   assert.equal(s.documents.get(A), live); // reference-identical — untouched
@@ -212,7 +212,7 @@ test('a cold planned query reaches plan_review (the CLI contract)', () => {
 
 test('a library restore settles with its exchanges via doc + doc:active', () => {
   const s = fold([
-    { type: 'doc', docId: A, title: 'Reopened', mode: 'flat', answer: 'restored body', exchanges: [{ question: 'old q', body: 'old a', attachments: [] }] } as WorkflowEvent,
+    { type: 'doc', docId: A, title: 'Reopened', mode: 'flat', effort: 'low', direct: false, answer: 'restored body', exchanges: [{ question: 'old q', body: 'old a', attachments: [] }] } as WorkflowEvent,
     { type: 'doc:active', docId: A } as WorkflowEvent,
   ]);
   assert.equal(selectMoment(s), 'settle');
@@ -345,7 +345,7 @@ test("an ordinary tool that shares the findings' argument name is a step of the 
   assert.notEqual(writingAFile.inquiry?.verb.kind, 'writing', 'the inquiry was said to be writing its section while it wrote a file');
 
   const called = fold([{ type: 'agent:tool_call', agentId: 20, tool: 'write_file', args: '{"path":"notes.md"}' } as WorkflowEvent], base);
-  const steps = called.documents.get(A)!.roster.agents.get(20)!.timeline.filter((t) => t.kind === 'tool_call');
+  const steps = called.documents.get(A)!.roster.agents.get(20)!.timeline!.filter((t) => t.kind === 'tool_call');
   assert.equal(steps.length, 1, 'the write_file call vanished from the work the reader can open');
 
   const finishing = fold([

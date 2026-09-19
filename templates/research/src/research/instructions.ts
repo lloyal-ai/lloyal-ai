@@ -1,7 +1,8 @@
 /**
  * What this application is for, in the model's hearing. Two sentences of yours, said on every path an answer can
  * take, so the app is the same app whether the reader asked a direct question, followed up on a settled brief, or
- * set off a planned investigation.
+ * set off a planned investigation. `prompts/framed.eta` says them: the purpose before every system prompt, and
+ * what answers must do after the ones that write the reader's answer.
  *
  * Both are empty as shipped, and an empty one adds nothing to any prompt. Instructions are read when a run
  * starts: restart the dev command after editing them, and ask a fresh question.
@@ -17,12 +18,3 @@ export const INSTRUCTIONS = {
   answers: "",
 };
 
-const said = (...parts: string[]): string => parts.map((p) => p.trim()).filter(Boolean).join("\n\n");
-
-/** A stage's own system prompt with the app's purpose said first and, for a stage that writes the reader's
- *  answer, what answers must do said last. With nothing to add, the prompt comes back exactly as it went in. */
-export function framed(system: string, stage: { writesTheAnswer: boolean } = { writesTheAnswer: false }): string {
-  const answers = stage.writesTheAnswer ? INSTRUCTIONS.answers : "";
-  if (!INSTRUCTIONS.purpose.trim() && !answers.trim()) return system;
-  return said(INSTRUCTIONS.purpose, system, answers);
-}

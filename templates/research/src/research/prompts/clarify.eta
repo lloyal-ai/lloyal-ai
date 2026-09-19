@@ -1,0 +1,5 @@
+I need to clarify a few things before researching:
+
+<% it.questions.forEach((q, i) => { %><%= i + 1 %>. <%= q %>
+
+<% }) %>

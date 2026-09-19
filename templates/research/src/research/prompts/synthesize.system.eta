@@ -1,3 +1,4 @@
+<% layout("./framed", { writesTheAnswer: true }) %>
 You are writing an analytical research report that answers the user's question below.
 
 Above this message is the research that has been done: a series of conversation turns where each user turn asks a sub-question and the assistant turn that follows contains the findings for that sub-question.
@@ -107,7 +108,3 @@ HOW TO WRITE THE REPORT
 7. End with ## Conclusion (restating thesis + prescription, + ### Limitations naming specific gaps) and ## Sources — a convenience index of URLs ALREADY cited inline above. The Sources list does NOT satisfy the citation requirement: a URL that appears only in Sources, not inline at its claim, is an uncited claim.
 
 OUTPUT FORMAT: emit the markdown report directly as your reply. Do NOT wrap it in any tool call, JSON envelope, or `<tool_call>...</tool_call>` tags. Every factual claim in the body MUST carry its citation INLINE, in `[short source title](url)` form, right at the claim — e.g. `...grew 12% year over year ([Annual Report](https://example.com/report))` — not only in the Sources list. End naturally when the report is complete.
----
-Research question: "<%= it.query %>"
-
-Write the markdown report now.

@@ -8,7 +8,7 @@
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
+import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
 import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
 import { createWebAbility } from "@lloyal-labs/web-ability";
@@ -51,9 +51,11 @@ export function* harness(ctx: SessionContext, events: EventBus<WorkflowEvent>, c
 
   // The loop. Each part brings the commands it handles; one command is handled at a time, and no handler waits
   // for the model — it hands the work to `run` and returns — so a Stop is never stuck behind a long answer.
+  // What happens when a handler throws, a command has no handler, or the run can no longer be trusted is rig's
+  // (`serveDefaults`); what this app gives up on a failed handler is its own: the run in flight.
   if (runner.initialQuery) yield* brief.submit(runner.initialQuery);
   yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })],
-    { onError: brief.fail, onUnhandled: brief.unhandled, until: brief.fatal() });   // `until`: a run whose cleanup failed ends the session; no command carries that
+    serveDefaults({ wire, run, abandon: brief.abortRun }));
 }
 
 /** A terminal with nobody at it: one question, no plan review, and the brief's outcome is the exit code. */

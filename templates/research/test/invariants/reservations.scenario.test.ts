@@ -50,7 +50,7 @@ test("a collision on mint retries with a fresh identity: the planted document is
     const minted = docIdOfQuery(run.events);
     assert.equal(minted, `${STAMP}-${FRESH}`, "the second identity was taken");
     assert.equal(fs.readFileSync(path.join(run.outputDir, planted, "report.md"), "utf8").includes("The planted body."), true);
-    assert.deepEqual(files(run.outputDir, planted), ["report.md"], "nothing threaded onto the planted document");
+    assert.deepEqual(files(run.outputDir, planted), ["report.json", "report.md"], "nothing threaded onto the planted document");
     assert.ok(fs.existsSync(path.join(run.outputDir, minted, "report.md")), "the new document settled in its own reservation");
     assert.equal(run.events.filter((e) => e.type === "ui:error").length, 0);
   } finally {
@@ -121,7 +121,7 @@ test("a follow-up on a settled document threads beside its report", async () => 
     ],
   });
   const written = files(run.outputDir, saved);
-  assert.deepEqual(written.filter((f) => !f.startsWith("annexure-")), ["exchange-1.md", "report.md"], "one exchange beside the one report");
+  assert.deepEqual(written.filter((f) => !f.startsWith("annexure-")), ["exchange-1.json", "exchange-1.md", "report.json", "report.md"], "one exchange beside the one report");
   assert.equal(fs.readFileSync(path.join(run.outputDir, saved, "report.md"), "utf8").includes("The saved body."), true, "the report is untouched");
 });
 

@@ -1,19 +1,35 @@
 /** The Settle moment: the answer, the sources it cites, the marks in its margin, and the follow-ups threaded
  *  beneath it. */
-import { type AppState, type AgentRuntime } from "../state.js";
-import { type Answer, activeDoc, splitThink } from "./canvas.js";
-import { type Inquiry, currentAttempts, handingIn, liveProse, verbOf } from "./inquiry.js";
+import { type AppState, type AgentRuntime, type DocState } from "../state.js";
+import { hostOf } from "@lloyal-labs/ui/fold";
+import { linksOf } from "@lloyal-labs/ui/prose";
+import { type Answer, activeDoc } from "./canvas.js";
+import { type Inquiry, currentAttempts, handingIn, liveProse, timelineOf, verbOf } from "./inquiry.js";
 
-/** The answer as it exists right now: the live synth stream, else the
- *  finalized text. Deliberately NOT scrollback — the session scrollback
- *  outlives the document, and reading it here would let one brief's prose
+/** What the settling agent has deliberated and written, read off its timeline: its think block, then the
+ *  answer — filed as its report once it has returned, streaming in its content buffer until then. Null before
+ *  it has spawned, and for a document whose roster no longer holds it. */
+export const settlingOf = (d: DocState): Answer | null => {
+  const a = d.synth.agentId !== null ? d.roster.agents.get(d.synth.agentId) : undefined;
+  if (!a) return null;
+  const thought = timelineOf(a).find((t) => t.kind === "think");
+  const report = timelineOf(a).find((t) => t.kind === "report");
+  return {
+    thinking: thought?.kind === "think" && thought.body ? thought.body : null,
+    body: report?.kind === "report" ? report.body : a.contentBuffer,
+    streaming: report === undefined,
+  };
+};
+
+/** The answer as it exists right now: the settling pass as it writes, else the settled text — with the
+ *  deliberation behind it for as long as the roster holds the agent that wrote it. Deliberately NOT
+ *  scrollback — the session scrollback outlives the document, and reading it here would let one brief's prose
  *  render under another's title. */
 export const selectAnswer = (app: AppState): Answer | null => {
   const d = activeDoc(app);
-  if (d.synth.open && d.synth.buffer) {
-    return { ...splitThink(d.synth.buffer, true), streaming: true };
-  }
-  return d.answer !== null ? { ...splitThink(d.answer, false), streaming: false } : null;
+  const settling = settlingOf(d);
+  if (d.synth.open && settling) return settling;
+  return d.answer !== null ? { thinking: settling?.thinking ?? null, body: d.answer, streaming: false } : null;
 };
 
 export interface Citation {
@@ -24,19 +40,16 @@ export interface Citation {
   cited: number;
 }
 
-// Any link target counts as a citation — a report's woven sources cite web urls and
-// corpus file paths alike; a non-url target IS a corpus file.
-const MD_LINK = /\[([^\]]+)\]\(([^\s)]+)\)/g;
-const BARE_ORDINAL = /^\[?\d+\]?$/;
+/** A link whose whole text is its number — "[1]", "1" — the weave's bare citation, which shows as the chip alone. */
+export const isBareOrdinal = (text: string): boolean => /^\[?\d+\]?$/.test(text.trim());
 
-const hostOf = (url: string): string => {
-  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "your corpus"; }
-};
+/** A target that is not a url is a corpus file's path: the chip says where it came from. */
+const hostOrCorpus = (url: string): string => (URL.canParse(url) ? hostOf(url) : "your corpus");
 
-/** Numbered chips, derived from the woven answer alone — links in first-
- *  appearance order, one ordinal per url, repeats collapsed into `cited`.
- *  A bare "[1]"-style link keeps its slot but takes a real title from any
- *  later appearance. Never re-weaves. */
+/** Numbered chips, derived from the woven answer alone — every link the renderer draws, in first-appearance
+ *  order, one ordinal per target, repeats collapsed into `cited`; web urls and corpus file paths alike. A bare
+ *  "[1]"-style link keeps its slot but takes a real title from any later appearance. A link the renderer
+ *  strips (an unsafe scheme) is no citation. Never re-weaves. */
 /** One answer body, one citations array: a view that hands `Prose` a Map built
  *  from this list must get the SAME list while the answer stands, or the settled
  *  prose re-parses on every token of a warm ask beneath it. A projection keeps a
@@ -53,15 +66,15 @@ export const selectCitations = (app: AppState): Citation[] => {
 
 const citationsOf = (body: string): Citation[] => {
   const byUrl = new Map<string, Citation>();
-  for (const m of body.matchAll(MD_LINK)) {
-    const [, title, url] = m;
+  for (const { href: url, text: title } of linksOf(body)) {
+    if (!url) continue;
     const seen = byUrl.get(url);
     if (seen) {
       seen.cited += 1;
-      if (BARE_ORDINAL.test(seen.title) && !BARE_ORDINAL.test(title)) seen.title = title;
+      if (isBareOrdinal(seen.title) && !isBareOrdinal(title)) seen.title = title;
       continue;
     }
-    byUrl.set(url, { ordinal: byUrl.size + 1, title, url, host: hostOf(url), cited: 1 });
+    byUrl.set(url, { ordinal: byUrl.size + 1, title, url, host: hostOrCorpus(url), cited: 1 });
   }
   return [...byUrl.values()];
 };
@@ -115,13 +128,7 @@ export const selectMarks = (app: AppState): string[] => {
 };
 
 /** The document's warm-ask exchanges, settled beneath it. */
-/** Exchanges parsed the way the root answer is: deliberation split out behind
- *  its own disclosure, prose alone in the document. The fold keeps the RAW
- *  stream (the host is the author); the split is a view concern. */
-export const selectExchanges = (
-  app: AppState,
-): { question: string; body: string; thinking: string | null; attachments: string[] }[] =>
-  activeDoc(app).exchanges.map((x) => ({ question: x.question, attachments: x.attachments, ...splitThink(x.body, false) }));
+export const selectExchanges = (app: AppState): DocState["exchanges"] => activeDoc(app).exchanges;
 
 /** The warm ask in flight: its question, whatever of its answer has
  *  streamed, and its worker as a full inquiry — verbs, park honesty, and
@@ -137,9 +144,7 @@ export const selectAsk = (
       return {
         question: d.ask,
         attachments: d.askAttachments,
-        // While the think block is open the text is deliberation, never answer
-        // prose — the row's verb already says "thinking it through".
-        body: splitThink(liveProse(a, handingIn(d)) ?? "", true).body,
+        body: liveProse(a, handingIn(d)) ?? "",
         inquiry: { id: a.id, index, verb: verbOf(a, handingIn(d)), startedAt: a.startedAt, endedAt: a.endedAt },
       };
     }
@@ -152,7 +157,7 @@ export const selectAsk = (
 export const selectSourceNotes = (app: AppState): Map<string, string> => {
   const notes = new Map<string, string>();
   const harvest = (a: AgentRuntime): void => {
-    for (const t of a.timeline) {
+    for (const t of timelineOf(a)) {
       if (t.kind !== "tool_result" || !t.sources) continue;
       for (const s of t.sources) {
         if (s.url && s.snippet && !notes.has(s.url)) notes.set(s.url, s.snippet);

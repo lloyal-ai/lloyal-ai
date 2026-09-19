@@ -17,7 +17,7 @@ import type { Branch } from "@lloyal-labs/sdk";
 import { Tool, parallel } from "@lloyal-labs/lloyal-agents";
 import type { Agent, JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Output } from "@lloyal-labs/rig";
-import { initializeHarness, useExecution, serveCommands } from "@lloyal-labs/rig";
+import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@lloyal-labs/rig";
 import type { PlanResult } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
 import { abilities, config, harness } from "../../src/app.js";
@@ -25,7 +25,7 @@ import { briefs } from "../../src/brief/brief.js";
 import { openLibrary } from "../../src/brief/library.js";
 import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
 import * as research from "../../src/research/research.js";
-import { WORDS } from "../../src/research/prompts.js";
+
 import type { Evidence, Inputs, Research, Written } from "../../src/research/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
@@ -50,7 +50,7 @@ const composed = (algorithm: Research): typeof harness => function* (ctx, events
   const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
   const brief = briefs({ session, library, run, wire, config: runner.config, research: algorithm });
   yield* wire.send({ type: "weights:done" });
-  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], { onError: brief.fail, onUnhandled: brief.unhandled });
+  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], serveDefaults({ wire, run, abandon: brief.abortRun }));
 };
 
 /** What the canvas holds the moment `at` is announced: the real fold over the wire this run carried. */
@@ -202,7 +202,7 @@ const onePlan = function* (_trunk: Branch | null, ask: Inputs): Operation<PlanRe
 const silent = (body: (ask: Inputs) => Operation<void> = function* () {}): Research["write"] =>
   function* (_trunk, ask, plan): Operation<Written> {
     yield* body(ask);
-    return { answer: `WRITTEN BY HAND: ${ask.text}`, inquiries: [], stats: { timings: [], ctxPct: 0, ctxPos: 0, ctxTotal: 1 }, complete: { intent: plan.intent } };
+    return { answer: `WRITTEN BY HAND: ${ask.text}`, inquiries: [], stats: { ctxPct: 0, ctxPos: 0, ctxTotal: 1 }, complete: { intent: plan.intent } };
   };
 
 test("a whole writer that says nothing on the wire still gives a brief its life: writing, saved, and warm for a follow-up", async () => {
@@ -282,7 +282,7 @@ test("a strategy that commits one of two identical findings has not attended bot
         const agents: Agent[] = [];
         for (const [i, task] of tasks.entries()) agents.push(yield* ctx.spawn(specFor(task, i, true)));
         const first = yield* ctx.waitFor(agents[0]);
-        if (first.result) yield* ctx.extendSpine(WORDS.researchTask(tasks[0].description), first.result);
+        if (first.result) yield* ctx.extendSpine(research.nextTask(tasks[0]), first.result);
         yield* ctx.waitFor(agents[1]);
       },
     });
@@ -339,7 +339,7 @@ test("an output of the developer's own: another terminal, another argument, and 
   const [section] = selectSections(s);
   assert.equal(section.prose, "what was found", "the section reads what the inquiry handed in");
   const agent = [...s.documents.get(s.activeDocId!)!.roster.agents.values()].find((a) => a.taskIndex === 0)!;
-  assert.deepEqual(agent.timeline.filter((t) => t.kind === "tool_call"), [], "handing in is the end of the turn, not a step of the work");
+  assert.deepEqual(agent.timeline?.filter((t) => t.kind === "tool_call"), [], "handing in is the end of the turn, not a step of the work");
   const dir = path.join(run.outputDir, docIdOfQuery(run.events));
   assert.match(fs.readFileSync(path.join(dir, "annexure-1.md"), "utf8"), /what was found/);
 });
