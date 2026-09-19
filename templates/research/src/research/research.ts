@@ -12,21 +12,18 @@
  */
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
-import { Ctx, agentPool, useAgent, chain, parallel, renderTemplate, withSpine } from "@lloyal-labs/lloyal-agents";
-import type { Ability, AgentRenderCtx, Budget, GuardOverrides, Orchestrator, PoolContext, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import { Ctx, agentPool, useAgent, chain, parallel, withSpine } from "@lloyal-labs/lloyal-agents";
+import type { Ability, Budget, GuardOverrides, NudgeInput, Orchestrator, PoolContext, PromptOf, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Attachment, Descriptor } from "@lloyal-labs/media";
 import {
-  PlanTool, TASK_ROUTING_KEY, abilityToc, citedReport, coverage as probe, participating,
-  renderAgentPreamble, renderSpine, singleTaskPlan, taskToContent, useWire,
+  PlanTool, abilityToc, citedReport, coverage as probe, participating,
+  renderAgentPreamble, renderSpine, singleTaskPlan, taskKey, taskToContent, useWire,
 } from "@lloyal-labs/rig";
-import type { Coverage, Output, PlanResult, ResearchTask } from "@lloyal-labs/rig";
+import type { Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloyal-labs/rig";
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
-import { PROMPTS, WORDS, forTool } from "./prompts.js";
-import type { Prompt } from "./prompts.js";
-import { framed } from "./instructions.js";
-import { taskKey } from "../brief/protocol.js";
-import type { CompleteData, DocId, Mode, OpTiming, Reports, WorkflowEvent } from "../brief/protocol.js";
+import { prompt, render } from "./prompts.js";
+import type { CompleteData, DocId, Mode, WorkflowEvent } from "../brief/protocol.js";
 
 /** An ask, as the brief hands it over. */
 export type Inputs = {
@@ -46,11 +43,12 @@ export type Inputs = {
   guards?: GuardOverrides;
 };
 
-export type Stats = { timings: OpTiming[]; ctxPct: number; ctxPos: number; ctxTotal: number };
-/** What a writing produced. `answer` is the brief. `inquiries` is what each line of inquiry found, in plan
- *  order: the library keeps one annexure for each that found something, so a writer that ran none returns
+export type Stats = { ctxPct: number; ctxPos: number; ctxTotal: number };
+/** What a writing produced. `answer` is the brief — or null when the inquiries found nothing to settle: the
+ *  view says so; nothing is invented, committed or kept. `inquiries` is what each line of inquiry found, in
+ *  plan order: the library keeps one annexure for each that found something, so a writer that ran none returns
  *  none. `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
-export type Written = { answer: string; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
+export type Written = { answer: string | null; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
 /** What the brief is handed: the planner, the writer, and how the writer's inquiries hand in their findings,
  *  which is what lets the view show them. Replace `write`'s `output` and you replace `reports` with it. */
 export type Research = { plan: typeof plan; write: typeof write; reports?: Reports };
@@ -71,41 +69,29 @@ export type SpecFor = (task: ResearchTask, index: number, beside: boolean) => Sp
 /** How this file's inquiries hand in: rig's cited report, whose findings are its `result`. */
 export const reports: Reports = { tool: citedReport.tool.name, field: "result" };
 
+/** Said once to an inquiry that reports before it has looked anything up. */
+export const EVIDENCE_REJECTION = "You must use tools before submitting results.";
 /** The evidence floor a research agent keeps: a first report short of it is refused once, then stands. */
 const EVIDENCE_FIRST: ToolLifecycleHooks = {
   onReturn: ({ agent }) =>
-    agent.toolCallCount < BUDGETS.evidence ? { type: "reject", message: WORDS.evidenceFloor } : undefined,
+    agent.toolCallCount < BUDGETS.evidence ? { type: "reject", message: EVIDENCE_REJECTION } : undefined,
 };
 
-const NOTHING_FOUND =
-  "Research produced no findings — every agent was cut before completing its task (see trace for drop reasons). No synthesis was attempted.";
+/** What an agent is told when it must wind its work up. The framework says why (`reason`) and how much room
+ *  is left (`words`); the sentence is this app's. Said to an inquiry with a report tool and at least one tool
+ *  call behind it; without these words the framework would drop the result or end the turn instead. */
+const NUDGE = ({ reason, words }: NudgeInput): string =>
+  reason === "result" ? `Tool result too large for the remaining context. Report your findings now within ${words} words.`
+  : reason === "time" ? `Time limit reached — report your findings now within ${words} words.`
+  : reason === "turns" ? `Turn limit reached — report your findings now within ${words} words.`
+  : `Context nearly full — report your findings now within ${words} words.`;
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 const timer = (): (() => number) => { const t = performance.now(); return () => performance.now() - t; };
 
-/** The per-agent preamble: the source's skill, then the citation nudge — said only of an output that takes
- *  `sources`, because that is what the nudge says how to fill. */
-const preamble = (source: Ability, ctx: AgentRenderCtx, output: Output<string>): string => {
-  const takesSources = "sources" in (output.tool.parameters.properties ?? {});
-  return renderAgentPreamble(source, { ...ctx }) + (takesSources ? WORDS.citationNudge(output.tool.name) : "");
-};
-
-/** A prompt with the app's own instructions composed into its system half. */
-const withInstructions = (p: Prompt, stage?: { writesTheAnswer: boolean }): Prompt => ({ ...p, system: framed(p.system, stage) });
-
-/** The source catalog the planner routes against; with ≥2 sources it assigns each task's routing key. */
-function plannerContext(sources: readonly Ability[], attachments: readonly Attachment[]): string {
-  if (sources.length === 0) return "";
-  const lines = [
-    `Knowledge sources available for this research. Assign each task's \`${TASK_ROUTING_KEY}\` to the source that holds it, using its EXACT name below; the pre-flight \`Source coverage\` probe (when present) is the primary signal for which source covers what.`,
-  ];
-  for (const source of sources) {
-    lines.push("", `### ${source.manifest.protocol.name}`, source.manifest.protocol.useWhen);
-    const toc = abilityToc(source, attachments);
-    if (toc) lines.push("Files and top-level topics available in this source:", toc);
-  }
-  return lines.join("\n");
-}
+/** What the planner is told beside the query: each source it may route to, and what a probe found each covers. */
+const sourcesFor = (sources: readonly Ability[], attachments: readonly Attachment[]) =>
+  sources.map((source) => ({ name: source.manifest.protocol.name, useWhen: source.manifest.protocol.useWhen, toc: abilityToc(source, attachments) }));
 
 /** What each source covers for this ask (remembered in `coverage` for the session), then the planner. The plan
  *  is returned; the brief says it on the wire. A planner of your own needs nothing else. This one also probes:
@@ -122,8 +108,8 @@ export function* plan(trunk: Branch | null, ask: Inputs, coverage: Map<string, C
     if (!found) {
       yield* wire.send({ type: "preflight:start", query: ask.text, abilityCount: sources.length });
       found = yield* probe({
-        question: ask.text, sources, parent: trunk ?? undefined, prompt: PROMPTS.preflight,
-        budget: { ...BUDGETS.recon, recovery: { prompt: PROMPTS.preflightRecover, ...BUDGETS.recon.recovery } },
+        query: ask.text, sources, parent: trunk ?? undefined, prompt: (input) => prompt("preflight", input),
+        budget: { ...BUDGETS.recon, recovery: { prompt: (input) => prompt("preflight-recover", input), ...BUDGETS.recon.recovery } },
         guards: ask.guards, hooks: [EVIDENCE_FIRST], reference: ask.sources,
       });
       coverage.set(key, found);
@@ -131,21 +117,16 @@ export function* plan(trunk: Branch | null, ask: Inputs, coverage: Map<string, C
     }
     covered = found.coverage;
   }
-  const context = [
-    `Today's date: ${today()}`,
-    plannerContext(sources, ask.sources),
-    covered
-      ? `Source coverage (from a pre-flight probe of each source for this query — use it as the primary signal when assigning each task's \`${TASK_ROUTING_KEY}\`):\n${covered}`
-      : "",
-  ].filter(Boolean).join("\n\n");
   const planner = new PlanTool({
-    prompt: withInstructions(ask.mode === "flat" ? PROMPTS.planFlat : PROMPTS.plan),
+    // The tool says what it owns (the query, the task cap, the routing key); this app adds the day, the sources
+    // and what the probe found — the template writes those sections.
+    prompt: (input) => prompt(ask.mode === "flat" ? "plan-flat" : "plan", { ...input, date: today(), sources: sourcesFor(sources, ask.sources), coverage: covered }),
     parent: trunk ?? undefined,
     // How many tasks the plan may have. The planner's grammar enforces it, so the model cannot return more.
     maxTasks: BUDGETS.effort[ask.effort].maxTasks,
     availableAbilities: sources.length >= 2 ? sources : undefined,
   });
-  return (yield* planner.execute({ query: ask.text, context })) as PlanResult;
+  return (yield* planner.execute({ query: ask.text })) as PlanResult;
 }
 
 /** How full the one shared context is, for the run's closing stats. `Ctx.expect()` asks for something ambient:
@@ -160,21 +141,18 @@ function* contextUse(): Operation<Pick<Stats, "ctxPct" | "ctxPos" | "ctxTotal">>
 /** From the trunk alone: a fork of it answers the question directly. The trunk is not written; the brief commits the pair. */
 export function* answer(trunk: Branch, ask: Inputs, plan: PlanResult): Operation<Written> {
   const at = timer();
-  const a = yield* useAgent({ parent: trunk, systemPrompt: framed("", { writesTheAnswer: true }), task: ask.text, budget: BUDGETS.answer, acceptFreeText: true });
+  const a = yield* useAgent({ parent: trunk, systemPrompt: render("answer.system"), content: ask.text, budget: BUDGETS.answer, acceptFreeText: true });
   const timeMs = at();
   return {
-    answer: a.result ?? "",
+    answer: a.result?.trim() ? a.result : null,   // an answer with no text is no answer
     inquiries: [],
-    stats: {
-      timings: [
-        { label: "Plan", tokens: plan.tokenCount, detail: plan.intent, timeMs: plan.timeMs },
-        { label: "Passthrough", tokens: a.tokenCount, detail: "trunk fork", timeMs },
-      ],
-      ...(yield* contextUse()),
-    },
+    stats: yield* contextUse(),
     complete: { intent: plan.intent, planTokens: plan.tokenCount, passthroughTokens: a.tokenCount, planMs: Math.round(plan.timeMs), passthroughMs: Math.round(timeMs) },
   };
 }
+
+/** How an investigation's next task is put to the spine, as the user turn the next inquiry attends. */
+export const nextTask = (task: ResearchTask): string => `Research task: ${task.description}`;
 
 /** How the inquiries run. A survey asks for them all at once — the pool seats what the context can hold and
  *  the rest wait their turn; an investigation runs them one after another, each reading what the last one
@@ -183,7 +161,7 @@ export function* answer(trunk: Branch, ask: Inputs, plan: PlanResult): Operation
 export function inquire(ask: Inputs, tasks: readonly ResearchTask[], specFor: SpecFor): Orchestrator {
   return ask.mode === "flat"
     ? parallel(tasks.map((task, i) => specFor(task, i, true)))
-    : chain([...tasks], (task: ResearchTask, i: number) => ({ task: specFor(task, i, false), userContent: WORDS.researchTask(task.description) }));
+    : chain([...tasks], (task: ResearchTask, i: number) => ({ task: specFor(task, i, false), userContent: nextTask(task) }));
 }
 
 /** The settling pass: one agent on the same spine folds the inquiries' findings into the answer. Findings the
@@ -192,12 +170,11 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: 
   const wire = yield* useWire<WorkflowEvent>();
   yield* wire.send({ type: "synthesize:start" });
   const at = timer();
-  const prompt = evidence.attended ? PROMPTS.synthesize : PROMPTS.synthesizeFlat;
-  const ctx = { query: ask.text, findings: evidence.attended ? undefined : assembleFindings(evidence.findings, plan.tasks), agentCount: plan.tasks.length };
-  const agent = yield* useAgent({
-    systemPrompt: framed(renderTemplate(prompt.system, ctx), { writesTheAnswer: true }), task: renderTemplate(prompt.user, ctx),
-    parent: spine, budget: BUDGETS.settle, acceptFreeText: true,
-  });
+  // Findings the spine holds are read from it; findings it does not are given in the prompt, one block per task.
+  const told = evidence.attended
+    ? prompt("synthesize", { query: ask.text })
+    : prompt("synthesize-flat", { query: ask.text, findings: evidence.findings.map((body, i) => ({ task: plan.tasks[i]?.description ?? `task ${i + 1}`, body: body.trim() })) });
+  const agent = yield* useAgent({ ...told, parent: spine, budget: BUDGETS.settle, acceptFreeText: true });
   const timeMs = at();
   const ppl = agent.branch.disposed ? 0 : agent.branch.perplexity;
   yield* wire.send({ type: "synthesize:done", agentId: agent.id, ppl, tokenCount: agent.tokenCount, toolCallCount: agent.toolCallCount, timeMs });
@@ -241,27 +218,33 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
     ask.direct ? undefined : (task.ability ? byProtocol.get(task.ability) : undefined) ?? primary;
   const tools = [...sources.flatMap((x) => [...x.tools]), s.output.tool];
   const tasks = plan.tasks;
-  const lone = { writesTheAnswer: tasks.length === 1 };   // one inquiry is its own answer: nothing settles it afterwards
+  const writesTheAnswer = tasks.length === 1;   // one inquiry is its own answer: nothing settles it afterwards
   const date = today();
   const row = BUDGETS.effort[ask.effort];
+  const tool = s.output.tool.name;
+  const takesSources = "sources" in (s.output.tool.parameters.properties ?? {});   // the citation partial says how to fill them
+  // What a reaped agent is told, above the row's floors: the framework hands the words it may still write.
+  const recovery: PromptOf<{ budget: number }> = ({ budget }) => prompt("recovery", { tool, budget, writesTheAnswer });
   const budget: Budget = {
     ...row,
-    recovery: { prompt: withInstructions(forTool(PROMPTS.recovery, s.output.tool.name), lone), ...(ask.direct ? BUDGETS.direct : {}) },   // what a reaped agent is told, above the row's floors
+    nudge: NUDGE,
+    recovery: { prompt: recovery, ...(ask.direct ? BUDGETS.direct : {}) },
     recoveryShape: ask.mode === "deep" ? "staggered" : row.recoveryShape,   // a chain recovers one stage at a time
   };
   const specFor: SpecFor = (task, i, beside) => {
     const source = sourceFor(task);
+    const preamble = source
+      ? renderAgentPreamble(source, {
+          maxTurns: row.maxTurns, date,
+          agentCount: beside ? tasks.length : 1,
+          siblingTasks: beside ? tasks.filter((_, j) => j !== i).map((t) => t.description) : [],
+          taskIndex: beside ? 0 : i,
+        })
+      : "";
     return {
       key: taskKey(i),
       content: taskToContent(task),
-      systemPrompt: framed(source
-        ? preamble(source, {
-            maxTurns: row.maxTurns, date,
-            agentCount: beside ? tasks.length : 1,
-            siblingTasks: beside ? tasks.filter((_, j) => j !== i).map((t) => t.description) : [],
-            taskIndex: beside ? 0 : i,
-          }, s.output)
-        : "", lone),
+      systemPrompt: render("inquiry.system", { preamble, tool, takesSources: source ? takesSources : false, writesTheAnswer }),
       ...(source ? { assignedAbility: source.manifest.name } : {}),
       seed: 1000 + i,
     };
@@ -284,30 +267,24 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       yield* wire.send({ type: "research:done", totalTokens: pool.totalTokens, totalToolCalls: pool.totalToolCalls, timeMs: researchMs });
       // One final outcome per inquiry, across heals, read through the output it was written with; a refused spawn reads empty.
       const found = tasks.map((_, i) => { const o = pool.byKey(taskKey(i)); return o ? (s.output.read(o) ?? "") : ""; });
-      let text: string;
+      let text: string | null;
       let settled: { tokens: number; timeMs: number; ppl?: number } = { tokens: 0, timeMs: 0 };
-      if (tasks.length === 1) text = found[0].trim();                 // one inquiry is its own answer
-      else if (found.every((f) => !f.trim())) text = NOTHING_FOUND;   // nothing to settle: say so, never invent
+      // An answer with no text is no answer, whichever path produced it: the view says so; nothing is invented.
+      if (tasks.length === 1) text = found[0].trim() || null;  // one inquiry is its own answer
+      else if (found.every((f) => !f.trim())) text = null;     // nothing to settle
       else {
         // Attended only if EVERY finding there is was committed — each one, not each distinct text: one that was
         // not would be lost to a prompt that supplies none, so anything short of all of them is handed over whole.
         const said = found.filter((f) => f.trim());
         const attended = said.every((f) => (strategy.committed.get(f) ?? 0) >= said.filter((g) => g === f).length);
         const r = yield* s.settle(spine, ask, plan, { findings: found, attended });
-        text = r.answer; settled = r;
+        text = r.answer.trim() ? r.answer : null; settled = r;
       }
 
       return {
         answer: text,
         inquiries: tasks.map((task, i) => ({ task: task.description, findings: found[i] })),
-        stats: {
-          timings: [
-            { label: "Plan", tokens: plan.tokenCount, detail: plan.intent, timeMs: plan.timeMs },
-            { label: "Research", tokens: pool.totalTokens, detail: `${pool.totalToolCalls} tools`, timeMs: researchMs },
-            { label: "Synthesize", tokens: settled.tokens, detail: settled.tokens > 0 ? "spine fork" : "skipped (single task)", timeMs: settled.timeMs },
-          ],
-          ...(yield* contextUse()),
-        },
+        stats: yield* contextUse(),
         complete: {
           intent: plan.intent, planTokens: plan.tokenCount, agentTokens: pool.totalTokens, synthTokens: settled.tokens,
           ...(settled.ppl !== undefined ? { synthPpl: settled.ppl } : {}),
@@ -317,15 +294,4 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       };
     },
   );
-}
-
-/** The flat-mode settling input: one `### Agent N` block per inquiry. A dangling `<tool_call>` fragment
- *  is an in-context demonstration that primes the tool-less settling agent to emit tool calls — stripped. */
-function assembleFindings(found: readonly string[], tasks: readonly ResearchTask[]): string {
-  return found
-    .map((f, i) => {
-      const body = f.replace(/<tool_call>(?:(?!<\/tool_call>)[\s\S])*$/, "").trim() || "(no findings)";
-      return `### Agent ${i + 1}: ${tasks[i]?.description ?? `task ${i + 1}`}\n\n${body}`;
-    })
-    .join("\n\n");
 }

@@ -1,0 +1,1 @@
+<%~ [it.purpose, it.body, it.writesTheAnswer ? it.answers : ""].map((part) => (part ?? "").trim()).filter(Boolean).join("\n\n") %>

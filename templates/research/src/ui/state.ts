@@ -15,9 +15,10 @@
 import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../research/budgets.js';
-import type { DocId, Mode, LibraryEntry, OpTiming, Reports } from '../brief/protocol.js';
+import type { Reports } from '@lloyal-labs/rig';
+import type { DocId, Mode, LibraryEntry } from '../brief/protocol.js';
 
-export type { DocId, Mode, LibraryEntry, OpTiming } from '../brief/protocol.js';
+export type { DocId, Mode, LibraryEntry } from '../brief/protocol.js';
 export { reduce } from './reduce.js';
 
 /** The view's transport link to the host — a fact of the wire, not the fold; binding's word. */
@@ -48,9 +49,12 @@ export interface Pressure {
   nCtx: number;
 }
 
+/** The settling pass. Its agent is in the roster like any other, with a timeline: what it deliberated and what
+ *  it wrote are read from there, never held here. */
 export interface SynthState {
   open: boolean;
-  buffer: string;
+  /** The settling agent, once it has spawned; null before, and for a run that never settled. */
+  agentId: number | null;
   done: boolean;
   stats: { tokens: number; toolCalls: number; ppl: number; timeMs: number } | null;
 }
@@ -133,8 +137,9 @@ export interface DocState {
 
   synth: SynthState;
   answer: string | null;
-  /** Warm-ask exchanges appended beneath the settled brief. */
-  exchanges: { question: string; body: string; attachments: string[] }[];
+  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask that found nothing: the reader
+   *  asked, nothing was kept, and the view says so where the answer would be. */
+  exchanges: { question: string; body: string | null; attachments: string[] }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
   /** The in-flight ask's media digests, landed on the settled exchange. */

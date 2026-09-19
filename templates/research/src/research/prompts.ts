@@ -1,53 +1,37 @@
 /**
- * Everything the model is told by this app's own hand: the prompt files beside this one, and the few single
- * sentences that need no file. (What the app is FOR is yours to say, in `instructions.ts`.)
+ * Everything the model is told by this app's own hand lives in `prompts/`, one Eta file per text: a prompt is
+ * `<name>.system.eta` beside `<name>.user.eta`, and a single turn (the clarify turn) is one file. Eta reads
+ * the folder; nothing here inlines a file, so an edit is live at the next run.
  *
- * Each `.eta` file is a system prompt, a `---` line, and a user template rendered with Eta. They are inlined as
- * text when the engine is bundled, so nothing here reads a file — and an edit needs the dev command restarted.
+ * Every system file opens by handing itself to `framed.eta`, the one frame: what the app is FOR is said
+ * first (`instructions.ts`) and, for a stage that writes the reader's answer, what answers must do is said
+ * last. `cite.eta` is the citation partial an inquiry includes when its report takes sources.
+ *
+ * What a prompt is rendered with is what the caller knows: the framework hands the app what only it knows
+ * (a reaped agent's word budget) through `PromptOf`, and the app adds its own.
  */
-import PLAN_RAW from "./prompts/plan.eta";
-import PLAN_FLAT_RAW from "./prompts/plan-flat.eta";
-import PREFLIGHT_RAW from "./prompts/preflight.eta";
-import PREFLIGHT_RECOVER_RAW from "./prompts/preflight-recover.eta";
-import RECOVERY_RAW from "./prompts/recovery.eta";
-import SYNTHESIZE_RAW from "./prompts/synthesize.eta";
-import SYNTHESIZE_FLAT_RAW from "./prompts/synthesize-flat.eta";
+import { join } from "node:path";
+import { Eta } from "eta";
+import type { PromptText } from "@lloyal-labs/lloyal-agents";
+import { INSTRUCTIONS } from "./instructions.js";
 
-export type Prompt = { system: string; user: string };
+/** The prompts folder, under the project root — which is the working directory, as rig defines it. */
+const PROMPTS = join(process.cwd(), "src/research/prompts");
 
-function parse(raw: string): Prompt {
-  const trimmed = raw.trim();
-  const sep = trimmed.indexOf("\n---\n");
-  if (sep === -1) return { system: trimmed, user: "" };
-  return { system: trimmed.slice(0, sep).trim(), user: trimmed.slice(sep + 5).trim() };
-}
+// The framework renders an ability's own templates with the same settings; a prompt rendered here and one
+// rendered there must read the same syntax. Files are compiled once and kept.
+const eta = new Eta({ views: PROMPTS, cache: true, autoEscape: false });
 
-/** The single sentences. */
-export const WORDS = {
-  /** The report's grammar forces the SHAPE of its `sources`; this nudges their CONTENT toward real URLs and inline
-   *  citations. Said of whichever tool the inquiry hands its findings through. */
-  citationNudge: (tool: string): string =>
-    `\n\nWhen you call ${tool}(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's \`cite\` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.`,
-  /** Said once to an inquiry that reports before it has looked anything up. */
-  evidenceFloor: "You must use tools before submitting results.",
-  /** How an investigation's next task is put to the spine. */
-  researchTask: (description: string): string => `Research task: ${description}`,
-  /** The planner's questions as the assistant's turn, so the next planner fork attends the whole dialogue. */
-  clarifyTurn: (questions: readonly string[]): string =>
-    ["I need to clarify a few things before researching:", "", ...questions.map((q, i) => `${i + 1}. ${q}`)].join("\n"),
-} as const;
+type Input = object;
 
-/** A prompt said of one tool: `it.tool` is this app's and is rendered here, now; `it.budget` is the framework's and
- *  is rendered when a reaped agent is given the turn, so it stays. */
-export const forTool = (p: Prompt, tool: string): Prompt =>
-  ({ system: p.system.replaceAll("<%= it.tool %>", tool), user: p.user.replaceAll("<%= it.tool %>", tool) });
+/** One file, rendered with the app's instructions in scope beside `input`. Eta reads the file verbatim, so an
+ *  editor's final newline is trimmed here and never reaches the model. (The extension is spelled out: Eta
+ *  infers one from the last dot, and `plan.system` already has a dot.) */
+export const render = (name: string, input: Input = {}): string =>
+  eta.render(`${name}.eta`, { ...INSTRUCTIONS, ...input }).trim();
 
-export const PROMPTS = {
-  plan: parse(PLAN_RAW),
-  planFlat: parse(PLAN_FLAT_RAW),
-  preflight: parse(PREFLIGHT_RAW),
-  preflightRecover: parse(PREFLIGHT_RECOVER_RAW),
-  recovery: parse(RECOVERY_RAW),
-  synthesize: parse(SYNTHESIZE_RAW),
-  synthesizeFlat: parse(SYNTHESIZE_FLAT_RAW),
-} as const;
+/** A prompt: its system file and its user file, rendered with the same input. */
+export const prompt = (name: string, input: Input = {}): PromptText => ({
+  systemPrompt: render(`${name}.system`, input),
+  content: render(`${name}.user`, input),
+});

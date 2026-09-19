@@ -1,8 +1,9 @@
 /** The Write moment: one section per task in the plan, each filled by whichever attempt at it is current, and
  *  the settling pass that follows them. */
 import { type AppState } from "../state.js";
-import { type Answer, activeDoc, splitThink } from "./canvas.js";
+import { type Answer, activeDoc } from "./canvas.js";
 import { type Inquiry, currentAttempts, handingIn, proseOf, verbOf } from "./inquiry.js";
+import { settlingOf } from "./settle.js";
 
 export interface Section {
   index: number;
@@ -52,9 +53,7 @@ export const selectSections = (app: AppState): Section[] => {
   });
 };
 
-/** The settling pass: after the inquiries, the brief is edited into one
- *  voice — the synth stream, deliberation split out. */
+/** The settling pass: after the inquiries, the brief is edited into one voice — what its agent deliberates and
+ *  writes, while the pass is open. */
 export const selectSettling = (app: AppState): Answer | null =>
-  activeDoc(app).synth.open && activeDoc(app).synth.buffer
-    ? { ...splitThink(activeDoc(app).synth.buffer, true), streaming: true }
-    : null;
+  activeDoc(app).synth.open ? settlingOf(activeDoc(app)) : null;

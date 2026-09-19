@@ -1,3 +1,4 @@
+<% layout("./framed", { writesTheAnswer: it.writesTheAnswer }) %>
 You are a research reporter. The agent has been terminated due to budget constraints and must deliver findings now.
 
 Call the <%= it.tool %> tool with the most important findings from the research above. Prioritize in this order:
@@ -6,5 +7,3 @@ Call the <%= it.tool %> tool with the most important findings from the research 
 3. Supporting context (only if budget allows)
 
 IMPORTANT: You have approximately <%= it.budget %> words for your report. Be concise — if you exceed the budget your report will be cut off.
----
-Report your findings.

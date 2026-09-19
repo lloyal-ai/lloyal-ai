@@ -1,36 +1,40 @@
 /** The Frame moment: the sources being probed, the outline as the planner drafts it, the plan held for the
  *  reader's yes, and the planner's questions. */
+import { Allow, MalformedJSON, parse } from "partial-json";
 import { type AppState } from "../state.js";
 import { activeDoc } from "./canvas.js";
-import { type Inquiry, doing, handingIn, resultMeta, verbOf } from "./inquiry.js";
+import { type Inquiry, doing, handingIn, resultMeta, timelineOf, verbOf } from "./inquiry.js";
 
-/** The outline as the planner drafts it, live — complete `"description"`
- *  strings lifted from the grammar-forced JSON stream, plus the trailing
- *  partial under the caret. The planner is the one agent alive while
- *  `planning`; its tokens accumulate in the live think body (the plan
- *  grammar emits no think markers) and the content buffer. */
+/** The outline as the planner drafts it, live: the tasks whose descriptions are complete, and the one still
+ *  being written under the caret. The planner is the one agent alive while `planning`; its grammar-forced JSON
+ *  accumulates in its content buffer. */
 export interface OutlineDraft {
   settled: string[];
   partial: string | null;
 }
 
-const DESC_COMPLETE = /"description"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
-const DESC_PARTIAL = /"description"\s*:\s*"((?:[^"\\]|\\.)*)$/;
-const unescape = (raw: string): string => {
-  try { return JSON.parse(`"${raw}"`) as string; } catch { return raw; }
+/** The plan so far, read from a JSON document that is still being written. `Allow.ALL` keeps a string cut
+ *  mid-way (the task under the caret); without `STR` that pair is dropped, so the two reads differ by exactly
+ *  the description still being written. A draft that is not JSON yet — or begins with a code fence, which the
+ *  planner's few-shot examples prime — is read from its first brace; nothing readable is an empty outline. */
+const tasksOf = (draft: string, allow: number): string[] => {
+  const from = draft.indexOf("{");
+  if (from === -1) return [];
+  try {
+    const plan = parse(draft.slice(from), allow) as { tasks?: { description?: unknown }[] };
+    return (plan.tasks ?? []).map((t) => t.description).filter((d): d is string => typeof d === "string");
+  } catch (err) {
+    if (err instanceof MalformedJSON) return [];
+    throw err;
+  }
 };
 
 export const selectOutlineDraft = (app: AppState): OutlineDraft | null => {
   if (activeDoc(app).phase !== "planning") return null;
   const planner = [...activeDoc(app).roster.agents.values()].find((a) => a.endedAt === null);
   if (!planner) return { settled: [], partial: null };
-  const think = planner.timeline.find(
-    (t) => t.kind === "think" && t.id === planner.currentThinkId,
-  );
-  const buffer = (think?.kind === "think" ? think.body : "") + planner.contentBuffer;
-  const settled = [...buffer.matchAll(DESC_COMPLETE)].map((m) => unescape(m[1]));
-  const tail = buffer.match(DESC_PARTIAL);
-  const partial = tail && !settled.includes(unescape(tail[1])) ? unescape(tail[1]) : null;
+  const settled = tasksOf(planner.contentBuffer, Allow.ALL & ~Allow.STR);
+  const partial = tasksOf(planner.contentBuffer, Allow.ALL)[settled.length] ?? null;
   return { settled, partial };
 };
 
@@ -72,13 +76,14 @@ export const selectProbes = (app: AppState): Probe[] => {
     if (!a) return;
     let searches = 0;
     let found: number | null = null;
-    for (const t of a.timeline) {
+    const items = timelineOf(a);
+    for (const t of items) {
       if (t.kind === "tool_call") searches += 1;
       if (t.kind === "tool_result" && t.resultCount !== null) {
         found = (found ?? 0) + t.resultCount;
       }
     }
-    const last = a.timeline[a.timeline.length - 1];
+    const last = items[items.length - 1];
     const peek =
       last === undefined ? null
       : last.kind === "think" ? (last.live && last.title === "Thinking…" ? null : last.title)

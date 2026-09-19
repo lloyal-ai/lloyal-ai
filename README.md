@@ -93,13 +93,14 @@ Stop works in the middle of anything, and why there is almost no teardown code t
 ## Make it yours in three edits
 
 The generated project is source, whichever template it came from. In the research template, three files hold
-one concern each — the rest can wait:
+one concern each, and one folder holds the words — the rest can wait:
 
 ```text
  src/
    ui/presentation.ts         ← what it is called
    research/instructions.ts   ← what it is for
    research/research.ts       ← how it investigates: `inquire`, one expression
+   research/prompts/          ← what it says: one Eta file per prompt
    ───────────────────────────────────────────────────────────────────
    app.ts                     the app: what is installed, the parts, the loop
    brief/                     a brief's life: asked · framed · written · settled
@@ -136,6 +137,10 @@ const sideBySide: Research = {
 };
 const brief = briefs({ session, library, run, wire, config: runner.config, research: sideBySide });
 ```
+
+**What it says** — `src/research/prompts/`. Every prompt the app makes is an Eta file there, rendered with
+what the stage knows (`it.query`, the sources, the findings); change one and ask the next question. The
+project's README says what each file is and what it is handed.
 
 A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
 app takes care of the rest. `npm test` runs the app's laws against a scripted model in about two seconds, so a

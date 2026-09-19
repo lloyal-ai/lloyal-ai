@@ -1,0 +1,13 @@
+Research question: "<%= it.query %>"
+
+Findings from <%= it.findings.length %> parallel research agents:
+
+<% it.findings.forEach((finding, i) => { %><% if (i > 0) { %>
+
+
+<% } %>### Agent <%= i + 1 %>: <%= finding.task %>
+
+
+<%= finding.body || "(no findings)" %><% }) %>
+
+Write the markdown report now.

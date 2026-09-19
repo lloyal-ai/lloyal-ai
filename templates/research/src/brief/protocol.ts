@@ -9,10 +9,9 @@
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
-import type { PlanIntent, ResearchTask, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
+import type { PlanIntent, Reports, ResearchTask, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
 import type { Config, Origin } from "../config.js";
 import type { Effort } from "../research/budgets.js";
-import type { Inputs } from "../research/research.js";
 
 /** One brief's identity — the SAME string names the fold's document, the browser route
  *  (`/brief/:docId`) and the folder on disk. ISO stamp then a UUID: sortable, URL-safe. */
@@ -21,17 +20,17 @@ export type DocId = string;
 /** 'deep' is chain-shaped research (each inquiry builds on the last); 'flat' is parallel. */
 export type Mode = "flat" | "deep";
 
-/** One settled brief on disk — a library row. */
+/** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;
   docId: DocId;
   title: string;
   savedAt: string;
-  mode: Mode | null;
-  /** What wrote it, when the record says: a brief reopened months later must not wear the reader's current dial. */
-  effort: Effort | null;
+  mode: Mode;
+  /** What wrote it: a brief reopened months later must not wear the reader's current dial. */
+  effort: Effort;
   direct: boolean;
-  /** The brief carried images — its meta line names their roots. */
+  /** The brief carried images — its record names their roots. */
   hasMedia: boolean;
 }
 
@@ -43,19 +42,12 @@ export interface Thread {
   /** Root manifest digests the report recorded. */
   attachments: string[];
   exchanges: { question: string; body: string; attachments: string[] }[];
-  /** The run's own choices, off the report's meta line; null where the record predates them. */
-  mode: Mode | null;
-  effort: Effort | null;
+  /** The run's own choices, as its record says. */
+  mode: Mode;
+  effort: Effort;
   direct: boolean;
   /** The whole conversation as one text — what a restore commits to the trunk. */
   thread: string;
-}
-
-export interface OpTiming {
-  label: string;
-  tokens: number;
-  detail: string;
-  timeMs: number;
 }
 
 /** The terminal event's stats payload. Everything optional: research fills its
@@ -139,16 +131,19 @@ export type BriefEvent =
   | { type: "ui:plan_review"; revision: number }
   | { type: "preflight:start"; query: string; abilityCount: number }
   | { type: "preflight:done"; coverage: string; tokens: number; toolCalls: number; timeMs: number }
-  /** The writing began. Said by the brief, so it is said whatever writer it was handed. */
+  /** The writing began. Said by the brief, so it is said whatever writer it was handed; `reports` is how its
+   *  inquiries hand in their findings (rig's `Reports`), so the view can read them as they are written. */
   | { type: "research:start"; agentCount: number; mode: Mode; reports: Reports | null }
   | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: "synthesize:start" }
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
-  | { type: "answer"; text: string }
-  | { type: "stats"; timings: OpTiming[]; ctxPct: number; ctxPos: number; ctxTotal: number }
+  /** The answer — or null when the inquiries found nothing to settle: the ask is over, nothing was invented,
+   *  committed or kept, and the view says so. */
+  | { type: "answer"; text: string | null }
+  | { type: "stats"; ctxPct: number; ctxPos: number; ctxTotal: number }
   | { type: "complete"; data: CompleteData }
   /** A settled brief, whole, from disk. Does not activate. */
-  | { type: "doc"; docId: DocId; title: string; mode: Mode | null; effort?: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; exchanges: { question: string; body: string; attachments: string[] }[] }
+  | { type: "doc"; docId: DocId; title: string; mode: Mode; effort: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; exchanges: { question: string; body: string; attachments: string[] }[] }
   /** What the canvas shows. Null is the picker. */
   | { type: "doc:active"; docId: DocId | null }
   /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
@@ -167,46 +162,14 @@ export type LibraryEvent =
 
 export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
 
-// ── How an inquiry hands in its findings ─────────────────────────
-
-/** The tool whose call ends an inquiry's turn, and the argument of that call whose text is the findings. The
- *  view needs both: the call is the end of the work, not a step of it, and the argument is what it can show as
- *  the model writes it. `field: null` shows working state until the findings are in. */
-export interface Reports { tool: string; field: string | null }
-
-/** rig's own report tool, which rig's source probes end on — and what a run that says nothing is read as. */
-export const RIG_REPORT: Reports = { tool: "report", field: "result" };
-
-// ── Which task an agent is working ───────────────────────────────
-
-/** The key a research spawn carries (`agent:spawn.key`). It names the TASK, not the agent: the pool seats tasks
- *  in whatever order the context allows, and a healed task is a new agent under the same key. The view and the
- *  library both file an agent's work by reading this back, so an agent spawned without one belongs to no task. */
-export const taskKey = (taskIndex: number): string => `task:${taskIndex}`;
-
-export const taskIndexOf = (key: string | undefined): number | null => {
-  const named = /^task:(\d+)$/.exec(key ?? "");
-  return named ? Number(named[1]) : null;
-};
-
 // ── The small builders ───────────────────────────────────────────
-
-export const queryEvent = (ask: Inputs, { warm }: { warm: boolean }): Extract<BriefEvent, { type: "query" }> => ({
-  type: "query",
-  docId: ask.docId,
-  query: ask.text,
-  warm,
-  ...(ask.direct ? { direct: true } : {}),
-  effort: ask.effort,
-  ...(ask.attachments.length ? { attachments: [...ask.attachments] } : {}),
-});
 
 export const docEvent = (thread: Thread, restored: Descriptor[]): Extract<BriefEvent, { type: "doc" }> => ({
   type: "doc",
   docId: thread.docId,
   title: thread.title,
   mode: thread.mode,
-  ...(thread.effort ? { effort: thread.effort } : {}),
+  effort: thread.effort,
   direct: thread.direct,
   ...(restored.length > 0 ? { attachments: restored } : {}),
   answer: thread.body,

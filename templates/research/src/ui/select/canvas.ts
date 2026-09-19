@@ -143,24 +143,8 @@ export const selectStatus = (app: AppState): string => {
 /** A follow-up ask is in flight — writing under the settled document. */
 export const selectAskInFlight = (app: AppState): boolean => activeDoc(app).ask !== null;
 
-/** The synth stream leaks its think block into the same buffer — only the
- *  close marker survives. While the think is open the text is deliberation,
- *  never answer prose; finalized answers strip through the last marker. */
-export const splitThink = (
-  text: string,
-  streaming: boolean,
-): { thinking: string | null; body: string } => {
-  const close = text.lastIndexOf("</think>");
-  if (close !== -1) {
-    const thinking = text.slice(0, close).replace(/^<think>\s*/, "").trim();
-    return {
-      thinking: thinking || null,
-      body: text.slice(close + "</think>".length).replace(/^\s+/, ""),
-    };
-  }
-  return streaming ? { thinking: text, body: "" } : { thinking: null, body: text };
-};
-
+/** An answer as the reader meets it: the deliberation behind it, when the agent that wrote it is still in the
+ *  roster, and the prose — streaming while it is written. */
 export interface Answer {
   thinking: string | null;
   body: string;
