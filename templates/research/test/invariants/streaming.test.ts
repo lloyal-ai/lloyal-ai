@@ -52,13 +52,16 @@ test("the tail is the last block CommonMark recognises — a fence owns its blan
   assert.deepEqual(splitStreaming("first\r\n\r\nsecond"), { head: "first\n\n", tail: "second" });
 });
 
-/** Replay `text` in `DELTA`-char deltas and account for what a memoized renderer parses: the head only
- *  when it changes, the tail every time. Returns the per-token maximum and the totals. */
+/** Replay `text` in `DELTA`-char deltas and account for what a memoized renderer PARSES: the head only
+ *  when it changes, the tail every time. The lexer that finds the boundary scans the whole buffer on every
+ *  token — linear per token by design, `bytesLexed` counts it — at roughly 30 ns a byte against the
+ *  parser's microseconds a byte (measured: 0.3 ms per call at 9 KB, 0.76 ms at 27 KB). */
 const replay = (text: string, DELTA: number) => {
   let headParses = 0;
   let lastHead = "";
   let bytesSplit = 0;
   let bytesWhole = 0;
+  let bytesLexed = 0;
   let worstToken = 0;
   let worstTail = 0;
   for (let n = DELTA; n <= text.length + DELTA; n += DELTA) {
@@ -69,27 +72,31 @@ const replay = (text: string, DELTA: number) => {
     if (head !== lastHead) { headParses++; cost += head.length; lastHead = head; }
     bytesSplit += cost;
     bytesWhole += buffer.length;
+    bytesLexed += buffer.length;
     worstToken = Math.max(worstToken, cost);
     worstTail = Math.max(worstTail, tail.length);
   }
-  return { headParses, bytesSplit, bytesWhole, worstToken, worstTail };
+  return { headParses, bytesSplit, bytesWhole, bytesLexed, worstToken, worstTail };
 };
 
-test("replayed token by token, a token costs one block — the head once per block, never per token", () => {
+test("replayed token by token, a token PARSES one block — the head once per block, never per token; the lexer scans all of it", () => {
   const DELTA = 4;
   const blocks = lexer(document);
   const longestBlock = Math.max(...blocks.map((b) => b.raw.length));
   const r = replay(document, DELTA);
-  // What the freeze was: every token parsed the whole buffer. What holds now, per token: the block under
-  // the caret, plus the whole head once when a block completes. The head is one cumulative memo, so the
-  // total is still quadratic in the number of blocks (each completed block re-parses those before it) —
-  // a parse per ~75 tokens, not per token — and the per-token bound is what keeps the main thread free.
+  // What the freeze was: every token PARSED the whole buffer. What holds now, per token: the block under
+  // the caret is parsed, plus the whole head once when a block completes. The head is one cumulative memo,
+  // so parsing is still quadratic in the number of blocks (each completed block re-parses those before it)
+  // — a parse per ~75 tokens, not per token — and the per-token bound is what keeps the main thread free.
+  // The lexer's scan is the whole buffer per token, as `bytesLexed` records; it is two orders cheaper per
+  // byte than the parse and is what the standard streaming renderers do as well.
   assert.ok(r.headParses <= blocks.length, `head parsed ${r.headParses} times for ${blocks.length} blocks`);
   assert.ok(r.worstTail <= longestBlock, `a tail of ${r.worstTail} exceeds the longest block ${longestBlock}`);
   assert.ok(r.worstToken <= longestBlock + document.length, "a token never costs more than the head and one block");
   // Measured on this fixture: 575 KB against 10.3 MB, 18×. The ratio rises with the document toward a
   // quarter of the block length, then holds — it does not grow without bound.
   assert.ok(r.bytesSplit * 10 < r.bytesWhole, `split parsed ${r.bytesSplit} bytes vs whole ${r.bytesWhole}`);
+  assert.equal(r.bytesLexed, r.bytesWhole, "the lexer scans every byte every token — stated, not hidden");
   const half = replay(document.slice(0, Math.floor(document.length / 2)), DELTA);
   assert.ok(half.bytesWhole / half.bytesSplit < r.bytesWhole / r.bytesSplit, "the saving grows with the document");
 });
@@ -111,4 +118,27 @@ test("a synth token changes the digest list's identity but not its key", async (
   const next = reduce(started, { type: "agent:produce", agentId: 9, text: "two " } as Ev);
   assert.notEqual(selectThreadDigests(started), selectThreadDigests(next), "an array is a new identity per fold");
   assert.ok(Object.is(selectThreadDigestKey(started), selectThreadDigestKey(next)), "the key is the same value");
+});
+
+// The same trap at the settled answer: `Settle` hands `Prose` a citations Map built from `selectCitations`.
+// A fresh array per fold means a fresh Map per fold, and the whole settled answer re-parses on every token
+// of a warm ask. The selector answers the same array while the answer body is the same.
+test("a warm-ask token leaves the settled answer's citations identical", async () => {
+  const { reduce, initialState } = await import("../../src/ui/state.js");
+  const { selectCitations } = await import("../../src/ui/select.js");
+  type Ev = Parameters<typeof reduce>[1];
+  const fold = (events: Ev[]) => events.reduce(reduce, initialState);
+  const settled = fold([
+    { type: "query", docId: "d1", query: "Q", warm: false } as Ev,
+    { type: "plan:start", query: "Q", mode: "flat" } as Ev,
+    { type: "plan", intent: "research", tasks: [{ description: "a" }], tokenCount: 1, timeMs: 1 } as Ev,
+    { type: "research:start", agentCount: 1, mode: "flat" } as Ev,
+    { type: "answer", text: "cited [once](https://a.b/1) and [twice](https://a.b/2)." } as Ev,
+    { type: "complete", data: { wallTimeMs: 1, planMs: 0, researchMs: 0, synthMs: 0, passthroughMs: 0 } } as Ev,
+    { type: "query", docId: "d1", query: "follow-up", warm: true } as Ev,
+    { type: "agent:produce", agentId: 9, text: "one " } as Ev,
+  ]);
+  const next = reduce(settled, { type: "agent:produce", agentId: 9, text: "two " } as Ev);
+  assert.equal(selectCitations(settled).length, 2, "the settled answer's two sources");
+  assert.ok(Object.is(selectCitations(settled), selectCitations(next)), "the same array while the answer stands");
 });
