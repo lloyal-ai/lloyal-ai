@@ -1,6 +1,17 @@
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
+import { lstatSync } from "node:fs";
 import { resolve } from "node:path";
+
+/**
+ * True only when the framework is SYMLINKED in rather than installed — a
+ * workspace checkout (`lloyal link-local`), never a generated app. Vite does not
+ * pre-bundle a linked dependency, so the renderer needs it named explicitly. See
+ * the web config for why `resolve.preserveSymlinks` is NOT the answer here.
+ */
+const linked =
+  lstatSync(resolve(__dirname, "node_modules/@lloyal-labs/binding"), { throwIfNoEntry: false })
+    ?.isSymbolicLink() ?? false;
 
 /**
  * The desktop target's 3-process build (`npm run dev:desktop` / `build:desktop`).
@@ -32,6 +43,7 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, "targets/desktop"),
     plugins: [react()],
+    ...(linked ? { optimizeDeps: { include: ["@lloyal-labs/media"] } } : {}),
     build: {
       rollupOptions: { input: resolve(__dirname, "targets/desktop/index.html") },
     },
