@@ -18,9 +18,9 @@ import { INSTRUCTIONS } from "./instructions.js";
 /** The prompts folder, under the project root — which is the working directory, as rig defines it. */
 const PROMPTS = join(process.cwd(), "src/research/prompts");
 
-// The framework renders an ability's own templates with the same settings; a prompt rendered here and one
-// rendered there must read the same syntax. Files are compiled once and kept.
-const eta = new Eta({ views: PROMPTS, cache: true, autoEscape: false });
+// The framework renders an ability's own templates with the same syntax and escaping.
+// Read files again so edits reach the next question.
+const eta = new Eta({ views: PROMPTS, cache: false, autoEscape: false });
 
 type Input = object;
 

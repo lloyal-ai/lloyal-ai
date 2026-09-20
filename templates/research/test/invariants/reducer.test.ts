@@ -109,6 +109,31 @@ test('warm ask that found nothing: the ask ends, the question stands as an excha
   assert.equal(doc.phase, 'done');
 });
 
+test('a new ask into a document with no answer resets its root question and run state', () => {
+  const first = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false, effort: 'low' } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'deep' } as WorkflowEvent,
+    PLAN,
+    { type: 'research:start', agentCount: 2, mode: 'deep' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 3, taskIndex: 0 } as WorkflowEvent,
+    { type: 'run:windingDown' } as WorkflowEvent,
+    { type: 'answer', text: null } as WorkflowEvent,
+    COMPLETE,
+  ]);
+  const s = fold([{ type: 'query', docId: A, query: 'Q2', warm: true, direct: true, effort: 'high' } as WorkflowEvent], first);
+  const doc = s.documents.get(A)!;
+  assert.equal(doc.query, 'Q2');
+  assert.equal(doc.phase, 'planning');
+  assert.equal(doc.direct, true);
+  assert.equal(doc.runEffort, 'high');
+  assert.equal(doc.mode, null);
+  assert.equal(doc.plan, null);
+  assert.equal(doc.closedEarly, false);
+  assert.equal(doc.roster.agents.size, 0);
+  assert.equal(doc.ask, null);
+  assert.equal(s.documents.size, 1);
+});
+
 test('doc-switch isolation: the run streams into A while B is viewed, untouched', () => {
   let s = settled();
   // A settled doc B arrives from disk and is activated (view-only).

@@ -49,3 +49,24 @@ test("a follow-up into a settled brief that finds nothing: the exchange has no b
   assert.deepEqual(selectExchanges(s), [{ question: "And then?", body: null, attachments: [] }], "the reader's question stands, with nothing beneath it");
   assert.equal(s.documents.get(SAVED)!.ask, null, "the ask is over");
 });
+
+test("a direct ask after a no-result brief becomes its first report, with the same question on the canvas and disk", async () => {
+  const run = await runHarness({
+    utterances: [{ text: "", kind: "text" }, { text: "Findings for the new question.", kind: "text" }],
+    script: [
+      { send: { type: "submit_query", query: "Nothing here?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete", send: { type: "submit_query", query: "Try this instead?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const id = docIdOfQuery(run.events, 1);
+  assert.equal(id, docIdOfQuery(run.events), "the ask keeps the document on the canvas");
+  const doc = run.events.reduce(reduce, initialState).documents.get(id)!;
+  const record = JSON.parse(fs.readFileSync(path.join(run.outputDir, id, "report.json"), "utf8"));
+  assert.equal(doc.query, "Try this instead?");
+  assert.equal(doc.query, record.query, "reopening must not change the question above the answer");
+  assert.equal(doc.answer, record.answer);
+  assert.equal(doc.ask, null);
+  assert.deepEqual(doc.exchanges, [], "the first report is not a follow-up exchange");
+  assert.equal(fs.readdirSync(path.join(run.outputDir, id)).some((name) => name.startsWith("exchange-")), false);
+});

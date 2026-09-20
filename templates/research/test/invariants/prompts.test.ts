@@ -58,3 +58,23 @@ test("the citation partial is said of the inquiry's own report tool, and only wh
 test("the clarify turn numbers the planner's questions", () => {
   assert.equal(render("clarify", { questions: ["Which one?", "By when?"] }), "I need to clarify a few things before researching:\n\n1. Which one?\n2. By when?");
 });
+
+test("the next render reads edits to a prompt, its layout, and its partial", () => {
+  const name = `reload-${process.pid}`;
+  const files = [name, `${name}-layout`, `${name}-partial`].map((part) => path.join(DIR, `${part}.eta`));
+  const body = (text: string) => `<% layout("./${name}-layout") %>${text}:<%~ include("./${name}-partial") %>`;
+  try {
+    fs.writeFileSync(files[0], body("first"));
+    fs.writeFileSync(files[1], "layout:[<%~ it.body %>]");
+    fs.writeFileSync(files[2], "partial");
+    assert.equal(render(name), "layout:[first:partial]");
+    fs.writeFileSync(files[0], body("second"));
+    assert.equal(render(name), "layout:[second:partial]");
+    fs.writeFileSync(files[1], "edited:[<%~ it.body %>]");
+    assert.equal(render(name), "edited:[second:partial]");
+    fs.writeFileSync(files[2], "changed");
+    assert.equal(render(name), "edited:[second:changed]");
+  } finally {
+    for (const file of files) fs.rmSync(file, { force: true });
+  }
+});

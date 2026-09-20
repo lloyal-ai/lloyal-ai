@@ -196,9 +196,9 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query': {
       const existing = state.documents.get(ev.docId);
-      if (ev.warm && existing?.answer)
-        // An ask under the settled doc it names.
-        return withDoc(state, ev.docId, askBranch(existing, ev),
+      if (ev.warm)
+        // An ask under a settled answer, or the first report of a document that kept none.
+        return withDoc(state, ev.docId, existing?.answer ? askBranch(existing, ev) : newDoc(ev),
           { activeDocId: ev.docId, runDocId: ev.docId });
       if (existing)
         // A clarify/change_mode round's re-echo — same identity, nothing
