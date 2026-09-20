@@ -1,7 +1,6 @@
 {
   // The Node half: the engine (`src/app.ts`, `src/brief/`, `src/research/`), the terminal view, and the boot
   // entries under `targets/` that run in Node. `tsc` only typechecks here; esbuild makes the bundles, because
-  // the prompts are `.eta` files inlined as text and `types/eta.d.ts` is only the type for that import.
   // The tree is split by where code RUNS, across three configs: the browser and Electron renderer sources are
   // checked by tsconfig.web.json, the Electron main and preload by tsconfig.electron.json. `npm run typecheck`
   // runs all three; a bare `tsc` runs only this one.

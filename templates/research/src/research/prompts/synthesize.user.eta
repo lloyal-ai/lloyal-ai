@@ -1,0 +1,3 @@
+Research question: "<%= it.query %>"
+
+Write the markdown report now.

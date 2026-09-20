@@ -16,7 +16,7 @@ const PLAN_JSON = JSON.stringify({
   tasks: [{ description: "investigate the topic" }],
   clarifyQuestions: [],
 });
-const FLOOR = "You must use tools before submitting results.";
+import { EVIDENCE_REJECTION as FLOOR } from "../../src/research/research.js";
 
 test("a research agent that reports before two tool calls is nudged once with the floor's message, then its report stands", async () => {
   const run = await runHarness({

@@ -1,7 +1,7 @@
 /** One agent's work, in the reader's language: what it is doing right now, the prose it has written so far,
  *  and the whole stream of its work for anyone who opens it. Every moment that shows an agent reads it here. */
 import { extractStreamingReport, type AppState, type DocState, type AgentRuntime, type TimelineItem } from "../state.js";
-import { RIG_REPORT, type Reports } from "../../brief/protocol.js";
+import { RIG_REPORT, type Reports } from "@lloyal-labs/rig";
 import { activeDoc } from "./canvas.js";
 
 /** One step of an inquiry's activity, in the librarian's voice. */
@@ -88,10 +88,13 @@ const FAIL_TEXT: Record<string, string> = {
 const failText = (reason: string): string =>
   FAIL_TEXT[reason] ?? "couldn't finish this line of inquiry";
 
+/** An agent's timeline; an agent tracked by its numbers only has none, and reads as one with nothing in it. */
+export const timelineOf = (a: AgentRuntime): readonly TimelineItem[] => a.timeline ?? [];
+
 export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
   if (a.failReason) return { kind: "failed", text: failText(a.failReason) };
   if (a.phase === "done") {
-    const kept = a.timeline.some((t) => t.kind === "report");
+    const kept = timelineOf(a).some((t) => t.kind === "report");
     return kept
       ? { kind: "settled", text: "wrote its section" }
       : { kind: "kept", text: "kept what it had" };
@@ -106,11 +109,11 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
   if (a.recovering || liveProse(a, reports) !== null) {
     return { kind: "writing", text: "settling the section into the brief" };
   }
-  const lastCall = [...a.timeline].reverse().find((t) => t.kind === "tool_call");
+  const lastCall = [...timelineOf(a)].reverse().find((t) => t.kind === "tool_call");
   if (lastCall?.kind === "tool_call" && a.pendingToolCallId === lastCall.id) {
     return { kind: "working", text: `${doing(lastCall.tool)} — ${lastCall.argsSummary}` };
   }
-  const lastResult = [...a.timeline].reverse().find((t) => t.kind === "tool_result");
+  const lastResult = [...timelineOf(a)].reverse().find((t) => t.kind === "tool_result");
   if (lastResult?.kind === "tool_result") {
     return { kind: "working", text: resultMeta(lastResult) };
   }
@@ -118,7 +121,7 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
 };
 
 export const proseOf = (a: AgentRuntime, reports: Reports): { prose: string | null; streaming: boolean } => {
-  const report = [...a.timeline].reverse().find((t) => t.kind === "report");
+  const report = [...timelineOf(a)].reverse().find((t) => t.kind === "report");
   if (report?.kind === "report") return { prose: reportBody(report.body, reports.field), streaming: false };
   const live = a.phase !== "done" ? liveProse(a, reports) : null;
   return live ? { prose: live, streaming: true } : { prose: null, streaming: false };
@@ -150,7 +153,7 @@ export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
   return (app: AppState): WorkStep[] => {
     const a = activeDoc(app).roster.agents.get(id);
     if (!a) return [];
-    const steps = a.timeline
+    const steps = timelineOf(a)
       .map(stepOf)
       .filter((s): s is WorkStep => s !== null);
     if (a.phase !== "done" && a.contentBuffer && liveProse(a, handingIn(activeDoc(app))) === null) {

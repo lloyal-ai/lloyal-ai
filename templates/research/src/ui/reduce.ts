@@ -2,9 +2,9 @@
  * Pure event → AppState fold: the ONE fold every target shares.
  *
  * Owns what this product decides — where an event lands (a session fact, or
- * the document the run writes into), a document's phases and its birth, the
- * settling buffer, and what a spawn is FOR: a source probe, a task named by
- * its key, or an agent tracked without a timeline. The agent records
+ * the document the run writes into), a document's phases and its birth, and
+ * what a spawn is FOR: a source probe, the settling pass, a task named by its
+ * key, or an agent tracked without a timeline. The agent records
  * themselves belong to the generic fold (`@lloyal-labs/ui/fold`) — think
  * blocks, tool rows, reports and their terminal transitions live there, and
  * this file only hands it a decision.
@@ -16,18 +16,19 @@
 import { emptyRoster, foldAgents } from '@lloyal-labs/ui/fold';
 import type { AgentRoster, AgentEvent as FoldableAgentEvent } from '@lloyal-labs/ui/fold';
 import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState } from './state.js';
-import { sourceOf } from '@lloyal-labs/rig';
-import { RIG_REPORT, taskIndexOf } from '../brief/protocol.js';
-import type { Reports, WorkflowEvent } from '../brief/protocol.js';
+import { RIG_REPORT, sourceOf, taskIndexOf } from '@lloyal-labs/rig';
+import type { Reports } from '@lloyal-labs/rig';
+import type { WorkflowEvent } from '../brief/protocol.js';
 
 /** What the generic fold needs to know of how agents hand in: the call that ends a turn is recognised by its
- *  tool's name and is no timeline row, and its text streams from one argument of that call. */
-const foldsAs = (r: Reports): { terminal: string; terminalField?: string } =>
-  ({ terminal: r.tool, ...(r.field ? { terminalField: r.field } : {}) });
+ *  tool's name and is no timeline row, and its text streams from one argument of that call — or from none,
+ *  when `field` is null, until the findings are filed. */
+const foldsAs = (r: Reports): { terminal: string; terminalField: string | null } =>
+  ({ terminal: r.tool, terminalField: r.field });
 /** rig's source probes end their turn on rig's own report tool. */
 const PROBE = foldsAs(RIG_REPORT);
 /** This run's agents, as `research:start` said they hand in. */
-const handsIn = (doc: DocState): { terminal: string; terminalField?: string } => foldsAs(doc.reports ?? RIG_REPORT);
+const handsIn = (doc: DocState): { terminal: string; terminalField: string | null } => foldsAs(doc.reports ?? RIG_REPORT);
 
 /** Collapse a home-prefixed absolute path for a toast: `~/…`. Hand-written to stay browser-safe — no
  *  `node:os`, no `node:path` — because every target runs this file. Its inverse, `~` expansion for
@@ -53,7 +54,7 @@ function replaceAgent(doc: DocState, id: number, patch: (a: AgentRuntime) => Age
 
 // ── the fold ─────────────────────────────────────────────────────
 
-const EMPTY_SYNTH: SynthState = { open: false, buffer: '', done: false, stats: null };
+const EMPTY_SYNTH: SynthState = { open: false, agentId: null, done: false, stats: null };
 
 /** Where an event lands. 'session' folds into SessionState; 'run' folds into the document the run owns
  *  (`runDocId`); 'own' has a case of its own in `reduce`, because it names its document or touches more than
@@ -147,9 +148,8 @@ function settledDoc(ev: Extract<WorkflowEvent, { type: 'doc' }>): DocState {
     query: ev.title,
     attachments: ev.attachments ?? [],
     mode: ev.mode,
-    // What the run that WROTE it chose. A report that does not say reads null, and the byline then shows the
-    // reader's own dial.
-    runEffort: ev.effort ?? null,
+    // What the run that WROTE it chose, so a reopened brief wears the dial that wrote it.
+    runEffort: ev.effort,
     direct: ev.direct,
     answer: ev.answer,
     exchanges: ev.exchanges,
@@ -196,9 +196,9 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query': {
       const existing = state.documents.get(ev.docId);
-      if (ev.warm && existing?.answer)
-        // An ask under the settled doc it names.
-        return withDoc(state, ev.docId, askBranch(existing, ev),
+      if (ev.warm)
+        // An ask under a settled answer, or the first report of a document that kept none.
+        return withDoc(state, ev.docId, existing?.answer ? askBranch(existing, ev) : newDoc(ev),
           { activeDocId: ev.docId, runDocId: ev.docId });
       if (existing)
         // A clarify/change_mode round's re-echo — same identity, nothing
@@ -417,7 +417,7 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       return {
         ...doc,
         phase: asking ? doc.phase : 'synthesizing',
-        synth: { open: true, buffer: '', done: false, stats: null },
+        synth: { open: true, agentId: null, done: false, stats: null },
       };
 
     case 'synthesize:done':
@@ -437,8 +437,9 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       };
 
     case 'answer':
-      // A warm ask's answer lands as a new exchange beneath the document —
-      // the root answer is never overwritten.
+      // A warm ask's answer lands as a new exchange beneath the document — the root answer is never overwritten.
+      // A null answer is an ask that found nothing: the exchange records the question with no body, so the view
+      // can say so where the answer would be; nothing else is kept.
       if (doc.ask !== null) {
         return {
           ...doc,
@@ -478,43 +479,45 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       return { ...doc, closing: true, closedEarly: true };
 
     case 'agent:spawn': {
-      // A pre-flight probe: streamed through the same timeline machinery as research (task 0), tracked in
-      // reconAgentIds so the research column never picks it up. Its key names the source it reads.
+      // A pre-flight probe: it keeps a timeline and works no task of the plan; tracked in reconAgentIds so the
+      // research column never picks it up. Its key names the source it reads.
       if (doc.phase === 'discovering') {
         return { ...doc, reconAgentIds: [...doc.reconAgentIds, ev.agentId],
-          roster: foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: 0, taskDescription: sourceOf(ev.key) }), ...PROBE }) };
+          roster: foldAgents(doc.roster, ev, { spawn: () => ({ timeline: true, taskIndex: null, taskDescription: sourceOf(ev.key) }), ...PROBE }) };
       }
-      // Outside research, an agent is tracked without a timeline. An in-flight ask researches while the doc stays 'done'.
+      // The settling pass: the one agent spawned while it is open. It keeps a timeline — its deliberation and
+      // the answer as it writes it are read from there — and works no task.
+      if (doc.synth.open) {
+        return { ...doc, synth: { ...doc.synth, agentId: ev.agentId },
+          roster: foldAgents(doc.roster, ev, { spawn: () => ({ timeline: true, taskIndex: null }), ...handsIn(doc) }) };
+      }
+      // Outside research, an agent is tracked by its numbers only. An in-flight ask researches while the doc stays 'done'.
       if (doc.phase !== 'research' && !asking) {
-        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), ...handsIn(doc) }));
+        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ timeline: false, taskIndex: null }), ...handsIn(doc) }));
       }
       // Research: the spawn's key names the task it works. Spawn order says nothing — the pool seats what the
       // context can hold, and a heal is a new agent on the same task — so an agent with no task key is tracked
       // like any other agent outside research: counted, without a timeline.
       const taskIndex = taskIndexOf(ev.key);
       if (taskIndex === null) {
-        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex: null }), ...handsIn(doc) }));
+        return folded(doc, foldAgents(doc.roster, ev, { spawn: () => ({ timeline: false, taskIndex: null }), ...handsIn(doc) }));
       }
       const taskDescription = doc.plan?.tasks[taskIndex]?.description ?? null;
       const dependencyHint = doc.mode === 'deep' && taskIndex > 0 ? `builds on Task ${taskIndex}` : null;
-      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ taskIndex, taskDescription, dependencyHint }), ...handsIn(doc) });
+      const roster = foldAgents(doc.roster, ev, { spawn: () => ({ timeline: true, taskIndex, taskDescription, dependencyHint }), ...handsIn(doc) });
       return { ...doc, roster };
     }
 
     case 'agent:produce': {
-      // Settling pass: accumulate into the synth buffer.
-      if (doc.synth.open) {
-        return { ...doc, synth: { ...doc.synth, buffer: doc.synth.buffer + ev.text } };
-      }
       // Planner stream: the outline drafts itself in the view — the planner's grammar JSON accumulates so a
-      // renderer can lift task descriptions as they complete (the plan grammar opens no think block).
+      // renderer can lift task descriptions as they complete (the planner keeps no timeline: the plan grammar
+      // opens no think block, and its call is its whole output).
       if (doc.phase === 'planning') {
         const planner = doc.roster.agents.get(ev.agentId);
         if (!planner) return doc;
         return replaceAgent(doc, planner.id, (a) => ({ ...a, tokenCount: ev.tokenCount, contentBuffer: a.contentBuffer + ev.text }));
       }
-      // Muted phases. 'discovering' streams like 'research'; an in-flight ask researches under a 'done' doc.
-      if (doc.phase !== 'research' && doc.phase !== 'discovering' && !asking) return doc;
+      // Everything else is the fold's: an agent without a timeline is counted and nothing more.
       return folded(doc, foldAgents(doc.roster, ev, doc.phase === 'discovering' ? PROBE : handsIn(doc)));
     }
 

@@ -10,11 +10,12 @@
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
 import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Lightbox, Markdown, useAssets } from "@lloyal-labs/ui";
+import { splitStreaming } from "@lloyal-labs/ui/prose";
+import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
-import { anchorsOf, selectThreadDigestKey } from "../select.js";
+import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
 import { parseAttachmentHref, resolvePrefix } from "../content-urls.js";
-import { splitStreaming } from "../streaming.js";
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node
@@ -28,8 +29,6 @@ const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
   h3: { font: `600 16px/1.4 ${font.ui}`, letterSpacing: "-.008em", margin: "20px 0 6px" },
   h4: { font: `600 14px/1.4 ${font.ui}`, margin: "16px 0 5px" },
 };
-
-type Anchor = ReturnType<typeof anchorsOf>[number];
 
 /** Models sometimes wrap a woven link in literal brackets — shed them. */
 const shed = (raw: string): string => raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
@@ -95,7 +94,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
                 </a>
               );
             }
-            const bare = /^\[?\d+\]?$/.test(textOf(children).trim());
+            const bare = isBareOrdinal(textOf(children));
             // A corpus citation's target is a local file — chip without a
             // dead hyperlink; the sources grid carries its card.
             if (!/^https?:\/\//.test(href ?? "")) {

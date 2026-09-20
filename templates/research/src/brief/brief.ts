@@ -17,14 +17,25 @@ import type { Descriptor } from "@lloyal-labs/media";
 import type { Inputs, Research } from "../research/research.js";
 import type { Config } from "../config.js";
 import type { Library } from "./library.js";
-import type { Command, DocId, Mode, WorkflowEvent } from "./protocol.js";
-import { queryEvent, docEvent, errorMessage, HarnessExit } from "./protocol.js";
-import { WORDS } from "../research/prompts.js";
+import type { BriefEvent, Command, DocId, Mode, WorkflowEvent } from "./protocol.js";
+import { docEvent, errorMessage, HarnessExit } from "./protocol.js";
+import { render } from "../research/prompts.js";
 
 /** A planner result held for the reader's yes, with the round the interface echoes back. */
 type PendingPlan = { plan: PlanResult; inputs: Inputs; revision: number };
 
 const STALE_PLAN = { type: "ui:error", message: "The plan changed under you; have another look." } as const;
+
+/** THE echo — the first thing said about every accepted ask. */
+const queryEvent = (ask: Inputs, { warm }: { warm: boolean }): Extract<BriefEvent, { type: "query" }> => ({
+  type: "query",
+  docId: ask.docId,
+  query: ask.text,
+  warm,
+  ...(ask.direct ? { direct: true } : {}),
+  effort: ask.effort,
+  ...(ask.attachments.length ? { attachments: [...ask.attachments] } : {}),
+});
 
 export function briefs(deps: {
   session: Session;
@@ -36,9 +47,9 @@ export function briefs(deps: {
 }): {
   handlers: Handlers<Command>;
   submit(text: string, opts?: SubmitOptions): Operation<Operation<void> | null>;
-  fail(err: unknown): Operation<"exit" | void>;
-  unhandled(command: { type: string }): Operation<void>;
-  fatal(): Operation<void>;
+  /** Whatever is in flight — a run, or a plan awaiting its yes — stops, and the canvas is told. What the app gives
+   *  up after a handler threw on a healthy run (`serveDefaults`' `abandon`): the next ask starts clean. */
+  abortRun(): Operation<void>;
 } {
   const { session, library, run, wire, config, research } = deps;
   let activeDocId: DocId | null = null;   // what the canvas shows; null is the picker
@@ -74,7 +85,7 @@ export function briefs(deps: {
         yield* startRun(inputs, function* () {
           // The round joins the trunk as it is answered: the question paired with what was asked, then the answer as the
           // open user side the planner's fork reads. A round the reader walks away from leaves nothing on the trunk.
-          yield* commitAnswer(inputs.text, WORDS.clarifyTurn(plan.clarifyQuestions));
+          yield* commitAnswer(inputs.text, render("clarify", { questions: plan.clarifyQuestions }));   // the planner's questions as the assistant's turn, so the next fork attends the dialogue
           yield* waitUntilSettled(session.prefillUser(answer));
           yield* frame(inputs, true);
         });
@@ -127,25 +138,7 @@ export function briefs(deps: {
       },
     },
     submit,
-    /** A handler threw. A poisoned owner ends the session; otherwise the handler may have stopped half way
-     *  through a change of run, so the run is abandoned and the next ask starts clean. */
-    *fail(err: unknown): Operation<"exit" | void> {
-      yield* wire.send({ type: "ui:error", message: errorMessage(err) });
-      if (run.poisoned) return "exit";   // the model's state cannot be trusted: the host reaps the session, or the process ends
-      yield* abortRun();
-    },
-    /** A command no part of the app handles: a view wired to something that was never offered. That is the
-     *  view's mistake, so it is said and the reader's run is left alone. */
-    *unhandled(command: { type: string }): Operation<void> {
-      yield* wire.send({ type: "ui:error", message: `Nothing in this app handles "${command.type}".` });
-    },
-    /** Settles when the model's state can no longer be trusted — a run's cleanup failed — having said why. The
-     *  command loop races this, so the session ends then and there. The reader is told, and offered a new one,
-     *  which beats leaving them a session that browses but can never answer again. */
-    *fatal(): Operation<void> {
-      const err = yield* run.whenPoisoned;
-      yield* wire.send({ type: "ui:error", message: `The session cannot continue: ${errorMessage(err)}` });
-    },
+    abortRun: () => abortRun(),
   };
 
   // ── Ask ────────────────────────────────────────────────────────────────────
@@ -158,7 +151,7 @@ export function briefs(deps: {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;
     }
-    const warm = direct && activeDocId !== null;
+    const warm = direct && activeDocId !== null;   // into the brief on the canvas; whether that is a first report or an exchange is the library's to say
     let docId: DocId;
     try {
       docId = warm ? activeDocId! : library.reserve();   // a new brief owns its folder before anything is abandoned
@@ -263,7 +256,7 @@ export function briefs(deps: {
   }
 
   /** The answer joins the trunk: it closes the reader's side when one is open, else lands as a pair with its question. */
-  function* commitAnswer(question: string, text: string): Operation<void> {
+  function* commitAnswer(question: string, text: string | null): Operation<void> {
     if (!text) return;
     yield* waitUntilSettled(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
   }
