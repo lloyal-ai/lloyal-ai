@@ -203,7 +203,7 @@ export function* runQuery(
   // it — the page grows turn by turn instead of being replaced by a new one.
   const synth = yield* useAgent({
     systemPrompt: SYNTH[mode].system,
-    task: renderTemplate(SYNTH[mode].user, {
+    content: renderTemplate(SYNTH[mode].user, {
       query,
       notes: notes.map((n, i) => `[${i + 1}] ${n}`).join("\n\n"),
     }),
