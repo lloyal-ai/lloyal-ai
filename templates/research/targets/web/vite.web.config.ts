@@ -62,14 +62,18 @@ export default defineConfig(({ mode }) => {
         // EVERY platform entry the browser can reach, not just the ones this file
         // names: an omission is invisible until the page is blank, because the
         // missing one is served raw from outside the project and its CommonJS
-        // named exports simply are not there.
+        // named exports simply are not there. `test/invariants/linked-view.test.ts` holds this list to the
+        // view's imports.
         optimizeDeps: {
           include: [
             "@lloyal-labs/binding",
             "@lloyal-labs/binding/web",
+            "@lloyal-labs/lloyal-agents",
             "@lloyal-labs/media",
+            "@lloyal-labs/rig",
             "@lloyal-labs/ui",
             "@lloyal-labs/ui/fold",
+            "@lloyal-labs/ui/prose",
             "@lloyal-labs/dev-tools/react",
           ],
         },
