@@ -49,11 +49,27 @@ npx lloyal-ai install <publisher>/<name>   # a signed Ability from apps.lloyal.a
 
 Enable it in `src/app.ts`, in the `abilities` array alongside `createWikipediaAbility`.
 
-Abilities are **Ed25519-verified and vendored locally** — `lloyal` fetches the
-signed tarball, checks its signature, and writes it to `vendor/` with a `file:`
-dependency (never a remote-URL install). Commit `vendor/` so `npm ci` reproduces
-the exact bytes offline. If you scaffolded with `--skip-install`, fetch the
-default ability with `npx lloyal-ai install lloyal/wikipedia` before the first run.
+**Abilities never come from npm.** They are distributed through the signed
+channel: `install` fetches the tarball, checks its Ed25519 signature against the
+trust roots shipped with the framework, writes it to
+`vendor/<publisher>__<name>-<version>.tgz` beside the signed manifest it was
+checked against, and only then points `package.json` at those exact bytes:
+
+```json
+"@lloyal-labs/wikipedia-ability": "file:vendor/lloyal__wikipedia-2.0.4.tgz"
+```
+
+That `file:` line is the whole reason an Ability appears in `package.json` at
+all — it is how npm is told to materialise bytes the CLI has already verified,
+never an instruction to fetch anything. Commit `vendor/` and `npm ci` reproduces
+the same bytes offline, with nothing on the install path reaching the network.
+
+So the version is pinned to a file: upgrading is another `install`, not a range
+that drifts. And `lloyal new` records what it installed under
+`harnessdev.abilities` — that list is what the launcher reads back to name the
+exact `install` commands when a clone is missing an Ability its code imports.
+If you scaffolded with `--skip-install`, fetch the default one with
+`npx lloyal-ai install lloyal/wikipedia` before the first run.
 
 ## Licence
 

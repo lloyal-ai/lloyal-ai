@@ -462,6 +462,29 @@ package against the catalogue, vendors its tarball into `vendor/`, and
 you add its factory to the list above. **Write one:**
 `npx lloyal-ai ability:new my-ability` starts one of your own.
 
+**Abilities never come from npm.** They are distributed through the signed
+channel, so `install` fetches the tarball, checks its Ed25519 signature
+against the trust roots shipped with the framework, writes it to
+`vendor/<publisher>__<name>-<version>.tgz` beside the signed manifest it
+was checked against, and only then points
+`package.json` at those exact bytes:
+
+```json
+"@lloyal-labs/web-ability": "file:vendor/lloyal__web-2.0.3.tgz"
+```
+
+That `file:` line is the whole reason an Ability appears in `package.json`
+at all — it is how npm is told to materialise bytes the CLI has already
+verified, never an instruction to fetch anything. Commit `vendor/` and
+`npm ci` reproduces the same bytes offline, with nothing on the install
+path reaching the network.
+
+Two consequences worth knowing. The version is pinned to a file, so
+upgrading is another `install`, not a range that drifts. And `lloyal new`
+records what it installed under `harnessdev.abilities` in `package.json`
+— that list is what the launcher reads back to name the exact
+`install` commands when a clone is missing an Ability its code imports.
+
 ## Documents, routes, and the laws
 
 Every brief is ONE identity — a `docId` minted when you submit — and that
