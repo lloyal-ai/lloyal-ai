@@ -36,39 +36,32 @@ const ANGLES = [
   "Gather context, significance, and differing viewpoints.",
 ];
 
-/** What an agent is told when it must wind its work up. The framework says why (`reason`) and how much room
- *  is left (`words`); the sentence is this app's. Without these words the framework drops the result or ends
- *  the turn instead of asking for what the agent already has. */
+/** What an agent is told when it must wind up. The framework supplies `reason` and `words`; the sentence is
+ *  this app's, and without one the framework drops the result rather than asking for it. */
 const NUDGE = ({ reason, words }: NudgeInput): string =>
   reason === "result" ? `Tool result too large for the remaining context. Report your findings now within ${words} words.`
   : reason === "time" ? `Time limit reached — report your findings now within ${words} words.`
   : reason === "turns" ? `Turn limit reached — report your findings now within ${words} words.`
   : `Context nearly full — report your findings now within ${words} words.`;
 
-/** Said once to an angle that reports before it has read anything. Exported so the test asserts the words the
- *  model is actually told, rather than a copy of them that can drift. */
+/** Said once to an angle that reports before reading anything. Exported so the test asserts the real words. */
 export const EVIDENCE_REJECTION = "Search or read a Wikipedia article before reporting.";
 
 /**
- * An angle must have read something before it may report — an article built from notes nobody looked up is
- * the one failure this app cannot show honestly.
+ * An angle must have read something before it may report. `onReturn` is the position for it: the terminal
+ * call ends the turn, and a hook here decides whether it may.
  *
- * This is a tool-lifecycle hook, and `onReturn` is the position for it: the terminal call ends the turn, and
- * a contributor here decides whether it may. The pool refuses a return once and nudges the model with this
- * message in the result's place; a second return stands, so an angle that genuinely found nothing can still
- * say so. `toolCallCount` is the evidence count — the terminal call itself is counted only after this
- * decision, so it cannot satisfy its own floor.
+ * The pool refuses once and nudges with this message; a second return stands, so an angle that genuinely
+ * found nothing can still say so. `toolCallCount` excludes the terminal call at this point, so it cannot
+ * satisfy its own floor.
  */
 const EVIDENCE_FIRST: ToolLifecycleHooks = {
   onReturn: ({ agent }) =>
     agent.toolCallCount < 1 ? { type: "reject", message: EVIDENCE_REJECTION } : undefined,
 };
 
-/**
- * The one place this app subclasses a policy. A pool consults ONE policy per role, and the settling agent
- * has no tools — its prose IS the result — so the decision that matters is what happens on a turn that makes
- * no tool call. This overrides that single hook and nothing else; every other decision stays the default's.
- */
+/** The settling agent has no tools — its prose IS the result — so the only decision that matters is what
+ *  happens on a turn with no tool call. This overrides that hook and nothing else. */
 class SynthPolicy extends DefaultAgentPolicy {
   override onProduced(
     ...args: Parameters<DefaultAgentPolicy["onProduced"]>
@@ -105,13 +98,11 @@ export function* write(trunk: Branch | null, query: string): Operation<string | 
   // The terminal: `report`, with its `sources` forced by the grammar and woven into the findings at capture,
   // so every note carries its citations inline and the settling agent cites what is there, not what it finds.
   const tools = [...abilities.flatMap((a) => [...a.tools]), citedReport.tool];
-  // The angles' row. The settling agent takes no budget: it has a policy of its own, and a nudge saying
-  // "report your findings now" is advice only an agent with a terminal tool can act on.
+  // The angles' row. The settling agent takes none: a nudge to report is advice only an agent with a
+  // terminal tool can act on.
   const budget: Budget = { maxTurns: MAX_TURNS, nudge: NUDGE };
 
-  // The spine lives for exactly this callback: the angles fork from it, and it is released when the callback
-  // returns. Per-token epistemics on a dev boot, and a returned agent's branch freed at once, are
-  // `PoolDefaults` — set once by `initializeHarness`, so a pool never restates them.
+  // The spine lives for exactly this callback: the angles fork from it, and it is released on return.
   return yield* withSpine<string | null>(
     { parent: trunk ?? undefined, systemPrompt: renderSpine({ abilities }), tools },
     function* (spine) {
@@ -132,9 +123,8 @@ export function* write(trunk: Branch | null, query: string): Operation<string | 
           })),
         ),
       });
-      // One final outcome per angle, across heals, read through the output it was written with. Keyed, because
-      // `pool.agents` order is the order they finished, and a refused or healed spawn would shift every note
-      // onto the wrong angle.
+      // Keyed, not positional: `pool.agents` is finish order, so a healed spawn would shift notes onto the
+      // wrong angle.
       const found = ANGLES.map((_, i) => {
         const o = pool.byKey(taskKey(i));
         return o ? citedReport.read(o) ?? "" : "";

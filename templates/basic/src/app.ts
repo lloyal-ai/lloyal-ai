@@ -104,14 +104,7 @@ export function* harness(
     root: () => (runner.config() as { sources: { outputDir: string } }).sources.outputDir,
   });
 
-  // Boot done — announce it with MEASURED facts, not hardcoded strings: the
-  // model's id, the weight's size read off the file the boot actually resolved,
-  // and the abilities actually enabled (read from the registry). Every surface
-  // folds this one event, so the header is identical everywhere.
-  //
-  // Which surface is mounted is NOT here. A renderer already knows what it is,
-  // so putting it on the wire made the harness carry a fact only the view reads
-  // — and made the served boot write `surface: "web"` into config to say it.
+  // Boot done. Every surface folds this one event, so the header is identical everywhere.
   const model = runner.config().model as { id?: string; path?: string };
   yield* wire.send({
     type: "ready",
@@ -121,10 +114,8 @@ export function* harness(
     },
   });
 
-  // What survived earlier sessions, before the first question — the landing shows it. The grouping hands
-  // itself to `run` and returns, so the list paints at once and rearranges when the model answers: a landing
-  // that waited on a model call would make the app feel slower, not cleverer. Being under `run` is also what
-  // keeps it out of a question's way — the first thing a question does is take that slot.
+  // What survived earlier sessions. `classify` hands itself to `run` and returns, so the list paints at once
+  // and rearranges when the model answers — and a question evicts it by taking that same slot.
   yield* article.shelf();
   yield* article.classify();
 
