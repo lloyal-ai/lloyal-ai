@@ -16,7 +16,7 @@ import type { PromptText } from "@lloyal-labs/lloyal-agents";
 import { INSTRUCTIONS } from "./instructions.js";
 
 /** The prompts folder, under the project root — which is the working directory, as rig defines it. */
-const PROMPTS = join(process.cwd(), "src/research/prompts");
+export const PROMPTS = join(process.cwd(), "src/harness/prompts");
 
 // The framework renders an ability's own templates with the same syntax and escaping.
 // Read files again so edits reach the next question.

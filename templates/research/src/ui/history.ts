@@ -5,7 +5,7 @@
  *  is derived state — a pure projection of the fold's activeDocId with a
  *  command as its only write path. Lifecycle never rides the URL. */
 import type { Projection } from "@lloyal-labs/binding";
-import type { Command } from "../brief/protocol.js";
+import type { Command } from "../protocol.js";
 import type { AppState, DocId } from "./state.js";
 
 const DOC_ROUTE = /^\/brief\/([^/]+)$/;

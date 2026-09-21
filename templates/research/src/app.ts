@@ -14,11 +14,11 @@ import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { createDocumentsAbility } from "@lloyal-labs/documents-ability";
 import { config } from "./config.js";
-import { briefs } from "./brief/brief.js";
-import { openLibrary } from "./brief/library.js";
-import type { Command, WorkflowEvent } from "./brief/protocol.js";
-import { HarnessExit } from "./brief/protocol.js";
-import * as research from "./research/research.js";
+import { briefs } from "./harness/brief.js";
+import { openLibrary } from "./harness/library.js";
+import type { Command, WorkflowEvent } from "./protocol.js";
+import { HarnessExit } from "./protocol.js";
+import * as research from "./harness/research.js";
 
 /** What is installed: the sources a brief can draw on. Add one with `npx lloyal-ai install`, then list it here. */
 export const abilities = [createCorpusAbility, createWebAbility, createDocumentsAbility];

@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command } from "../../protocol.js";
 import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
 import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";

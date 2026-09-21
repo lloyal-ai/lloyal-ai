@@ -1,7 +1,7 @@
 /** The Ask moment: what a brief can draw on, how deep it goes, which shape it takes, and the library of
  *  settled briefs beside it. */
 import { type AppState, type DocState, type LibraryEntry } from "../state.js";
-import { BUDGETS, type Effort } from "../../research/budgets.js";
+import { BUDGETS, type Effort } from "../../harness/budgets.js";
 import { type Pace } from "../pace.js";
 import { activeDoc, runDoc } from "./canvas.js";
 

@@ -14,12 +14,12 @@ import { waitUntilSettled } from "@lloyal-labs/lloyal-agents";
 import { admitted, singleTaskPlan, OperationFailure } from "@lloyal-labs/rig";
 import type { Execution, Handlers, PlanResult, ResearchTask, Coverage } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
-import type { Inputs, Research } from "../research/research.js";
+import type { Inputs, Research } from "../harness/research.js";
 import type { Config } from "../config.js";
 import type { Library } from "./library.js";
-import type { BriefEvent, Command, DocId, Mode, WorkflowEvent } from "./protocol.js";
-import { docEvent, errorMessage, HarnessExit } from "./protocol.js";
-import { render } from "../research/prompts.js";
+import type { BriefEvent, Command, DocId, Mode, WorkflowEvent } from "../protocol.js";
+import { docEvent, errorMessage, HarnessExit } from "../protocol.js";
+import { render } from "../harness/prompts.js";
 
 /** A planner result held for the reader's yes, with the round the interface echoes back. */
 type PendingPlan = { plan: PlanResult; inputs: Inputs; revision: number };

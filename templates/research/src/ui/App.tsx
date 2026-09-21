@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import { useHarness, useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command, WorkflowEvent } from "../brief/protocol.js";
+import type { Command, WorkflowEvent } from "../protocol.js";
 import type { AppState } from "./state.js";
 import {
   depthOf, selectActiveDocId, selectAskInFlight, selectLive,

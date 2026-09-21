@@ -14,7 +14,7 @@ import type { EventBus } from "@lloyal-labs/binding";
 import { initialState, reduce } from "./state.js";
 import type { AgentRuntime, AppState } from "./state.js";
 import { selectAnswer } from "./select.js";
-import type { Command, WorkflowEvent } from "../brief/protocol.js";
+import type { Command, WorkflowEvent } from "../protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
 import { APP, NOTHING_KEPT } from "./presentation.js";
 import { FRAMING } from "./devtools.js";

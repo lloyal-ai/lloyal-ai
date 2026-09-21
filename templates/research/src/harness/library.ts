@@ -28,9 +28,9 @@ import { abilityToc } from "@lloyal-labs/rig";
 import type { Execution, Handlers } from "@lloyal-labs/rig";
 import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs/rig/node";
 import { config } from "../config.js";
-import type { Inputs, Written } from "../research/research.js";
-import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "./protocol.js";
-import { errorMessage } from "./protocol.js";
+import type { Inputs, Written } from "../harness/research.js";
+import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
+import { errorMessage } from "../protocol.js";
 
 const CORPUS = "corpus";
 const RECORD = "report.json";

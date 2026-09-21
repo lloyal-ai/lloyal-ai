@@ -14,7 +14,7 @@
     "bin/",
     "dist/",
     "harness.yml",
-    "src/research/prompts/",
+    "src/harness/prompts/",
     "LICENSE",
     "README.md"
   ],

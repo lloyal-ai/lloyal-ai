@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { createEngine, createWindow, registerContentScheme, serveContentScheme, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
-import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
+import type { WorkflowEvent, Command } from "../../src/protocol.js";
 import { APP } from "../../src/ui/presentation.js";
 
 // Before app ready, or it is ignored silently.

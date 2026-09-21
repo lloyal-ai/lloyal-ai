@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
 import { useAvailability, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command } from "../../protocol.js";
 import {
   etaOf, selectBanked, selectControls, selectEtaTasks, selectLive, selectMoment,
   selectNotice, selectResumedAt, selectReviewing, selectRunDepth, selectRunShape, selectRunTitle,

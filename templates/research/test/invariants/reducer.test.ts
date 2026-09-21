@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduce, initialState, type AppState } from '../../src/ui/state.js';
-import type { WorkflowEvent } from '../../src/brief/protocol.js';
+import type { WorkflowEvent } from '../../src/protocol.js';
 import {
   DOC_PHASES, selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
   selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle, selectProbes,

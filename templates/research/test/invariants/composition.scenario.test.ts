@@ -21,12 +21,12 @@ import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@
 import type { PlanResult } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
 import { abilities, config, harness } from "../../src/app.js";
-import { briefs } from "../../src/brief/brief.js";
-import { openLibrary } from "../../src/brief/library.js";
-import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
-import * as research from "../../src/research/research.js";
+import { briefs } from "../../src/harness/brief.js";
+import { openLibrary } from "../../src/harness/library.js";
+import type { Command, WorkflowEvent } from "../../src/protocol.js";
+import * as research from "../../src/harness/research.js";
 
-import type { Evidence, Inputs, Research, Written } from "../../src/research/research.js";
+import type { Evidence, Inputs, Research, Written } from "../../src/harness/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";

@@ -21,7 +21,7 @@ import { FileAttachmentStore } from "@lloyal-labs/media/node";
 import type { Attachment } from "@lloyal-labs/media";
 import type { MockSessionContext } from "@lloyal-labs/sdk/testing";
 import { runHarness, warmDeltas, sessionReleasesOf, docIdOfQuery, writeReportFixture, accept } from "./harness.js";
-import type { Command } from "../../src/brief/protocol.js";
+import type { Command } from "../../src/protocol.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });
 const A = "2026-01-01T00-00-00-000";

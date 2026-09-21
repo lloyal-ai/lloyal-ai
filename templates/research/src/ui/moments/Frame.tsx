@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, inquiryColor } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command } from "../../protocol.js";
 import {
   selectClarify, selectDev, selectDiscovering, selectOutline, selectOutlineDraft,
   selectProbes, selectReviewing, selectRevision, selectTitle, type Probe,

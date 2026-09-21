@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, inquiryColor, radius, shadow } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command } from "../../protocol.js";
 import { selectDev, selectWorkFor, type Inquiry, type WorkStep } from "../select.js";
 
 export function InquiryRow({ inquiry, closing, label }: {

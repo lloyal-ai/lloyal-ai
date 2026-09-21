@@ -19,7 +19,7 @@ import * as path from "node:path";
 import {
   runHarness, docIdOfQuery, writeReportFixture, accept, answer, dirs,
 } from "./harness.js";
-import type { WorkflowEvent } from "../../src/brief/protocol.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });
 const CLARIFY_JSON = JSON.stringify({ intent: "clarify", tasks: [], clarifyQuestions: ["Which one?"] });

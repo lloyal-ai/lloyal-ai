@@ -7,7 +7,7 @@ import { PassThrough } from "node:stream";
 import { createBus } from "@lloyal-labs/binding";
 import { renderCli } from "../../src/ui/cli.js";
 import { NOTHING_KEPT } from "../../src/ui/presentation.js";
-import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
+import type { Command, WorkflowEvent } from "../../src/protocol.js";
 
 /** What Ink asks of a terminal: a readable it can put in raw mode, and a writable with a size. */
 function terminal(): { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; keys: (s: string) => void; shown: () => string } {

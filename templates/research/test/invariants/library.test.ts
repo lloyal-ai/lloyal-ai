@@ -19,10 +19,10 @@ import type { EventBus } from "@lloyal-labs/binding";
 import { Attachments } from "@lloyal-labs/lloyal-agents";
 import { NullAttachmentStore } from "@lloyal-labs/media";
 import { createAbilityRegistry, createInMemoryConfigStore } from "@lloyal-labs/rig";
-import { asBriefRecord, openLibrary, writeBrief } from "../../src/brief/library.js";
-import type { BriefRecord, Library } from "../../src/brief/library.js";
-import type { WorkflowEvent } from "../../src/brief/protocol.js";
-import type { Inputs, Written } from "../../src/research/research.js";
+import { asBriefRecord, openLibrary, writeBrief } from "../../src/harness/library.js";
+import type { BriefRecord, Library } from "../../src/harness/library.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
+import type { Inputs, Written } from "../../src/harness/research.js";
 
 const ev = (e: Record<string, unknown>): WorkflowEvent => e as unknown as WorkflowEvent;
 const ask = (docId: string, attachments: { digest: string }[] = []): Inputs =>

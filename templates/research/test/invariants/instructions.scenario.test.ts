@@ -7,7 +7,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { INSTRUCTIONS } from "../../src/research/instructions.js";
+import { INSTRUCTIONS } from "../../src/harness/instructions.js";
 import { runHarness, accept, answer } from "./harness.js";
 import type { HarnessRun, HarnessSpec } from "./harness.js";
 
