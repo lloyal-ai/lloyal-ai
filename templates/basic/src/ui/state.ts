@@ -131,8 +131,10 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
         ...s,
         phase: "working",
         roster: emptyRoster(),
-        sources: [],
-        queries: [],
+        // What supports the article is kept exactly as long as the article is. A follow-up that finds nothing —
+        // or is stopped — leaves the page standing, and a page whose sources vanished states less than it knows.
+        sources: ev.warm ? s.sources : [],
+        queries: ev.warm ? s.queries : [],
         // The page keeps the subject it was opened on. A follow-up deepens that article, so retitling it to
         // the latest question would misname a page that is now about more than the question just asked.
         topic: ev.warm ? s.topic : ev.text,

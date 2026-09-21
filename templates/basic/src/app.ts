@@ -11,7 +11,7 @@
  */
 import { statSync } from "node:fs";
 import { basename } from "node:path";
-import { spawn } from "effection";
+
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
@@ -121,11 +121,12 @@ export function* harness(
     },
   });
 
-  // What survived earlier sessions, before the first question — the landing shows it. The grouping runs
-  // beside the session rather than in front of it: the list paints at once and rearranges when the model
-  // answers, because a landing that waited on a model call would make the app feel slower, not cleverer.
+  // What survived earlier sessions, before the first question — the landing shows it. The grouping hands
+  // itself to `run` and returns, so the list paints at once and rearranges when the model answers: a landing
+  // that waited on a model call would make the app feel slower, not cleverer. Being under `run` is also what
+  // keeps it out of a question's way — the first thing a question does is take that slot.
   yield* article.shelf();
-  yield* spawn(() => article.classify());
+  yield* article.classify();
 
   // A terminal with nobody at it: one question, and the run's outcome is the exit code.
   if (runner.mode === "oneshot") return yield* once(article, runner.initialQuery);

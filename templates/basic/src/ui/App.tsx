@@ -252,9 +252,11 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   useEffect(() => {
     document.title = working ? `● ${APP.name}` : APP.name;
   }, [working]);
-  // The article: the settled answer, or the settling agent's prose as it arrives. The fold has already
-  // separated that prose from its reasoning, so there is no marker to look for here.
-  const report = state.answer || synth?.contentBuffer.trim() || "";
+  // The article: the settled answer, then what the settling agent filed, then its prose as it arrives. The
+  // middle one is not redundant — when the agent returns, the fold moves its prose out of `contentBuffer` and
+  // files it, so reading only the buffer blanks the page for as long as the trunk takes to accept the article.
+  // The fold has already separated prose from reasoning, so there is no marker to look for here.
+  const report = state.answer || (synth && reportOf(synth)) || synth?.contentBuffer.trim() || "";
   // Before it starts writing, show its reasoning streaming so the pane is alive, not a static spinner.
   const synthThinking = synth && !report ? reasoningOf(synth) : "";
   // The Contents, from the SAME rendered heading text the renderer assigns ids from

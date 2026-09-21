@@ -62,7 +62,10 @@ function ToolChip({ item }: { item: TimelineItem }): React.ReactElement | null {
     );
   }
   if (item.kind !== "tool_result") return null;
-  const meta = item.resultCount !== null ? `${item.resultCount} results` : `${item.byteLength}b`;
+  const meta =
+    item.resultCount !== null
+      ? `${item.resultCount} result${item.resultCount === 1 ? "" : "s"}`
+      : `${item.byteLength}b`;
   return (
     <Text wrap="truncate-end">
       <Text color="green">{`  → ${meta}`}</Text>
@@ -182,7 +185,7 @@ function View({
   // clear-on-overflow.
   const [scrollback, setScrollback] = useState<Scrollback[]>([]);
   const committed = useRef<Set<number>>(new Set());
-  const prevPhase = useRef<Phase>("booting");
+  const printed = useRef<string | null>(null);
   useEffect(() => {
     const add: Scrollback[] = [];
     for (const a of state.roster.agents.values()) {
@@ -191,12 +194,13 @@ function View({
         add.push({ kind: "agent", agent: a });
       }
     }
-    // `nothingFound` keeps the previous article in `answer`, so committing on it would print that article
-    // to scrollback a second time for a turn that produced none.
-    if (state.phase === "answered" && prevPhase.current !== "answered" && state.answer && !state.nothingFound) {
+    // What is printed is a new ARTICLE, never a new phase. Several things return the page to `answered`
+    // holding what it already held — a follow-up that found nothing, and a stopped one, both keep the previous
+    // article — and each of those would print it to scrollback a second time.
+    if (state.phase === "answered" && state.answer && state.answer !== printed.current) {
+      printed.current = state.answer;
       add.push({ kind: "answer", text: state.answer, sources: state.sources });
     }
-    prevPhase.current = state.phase;
     if (add.length) setScrollback((s) => [...s, ...add]);
   }, [state]);
 

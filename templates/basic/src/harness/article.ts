@@ -8,7 +8,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ensure, scoped } from "effection";
+import { scoped } from "effection";
 import type { Channel, Operation } from "effection";
 import type { Session } from "@lloyal-labs/sdk";
 import type { Branch } from "@lloyal-labs/sdk";
@@ -98,6 +98,12 @@ export function articles(deps: {
   const { session, run, wire, root } = deps;
   let turnInFlight = false;
   let asked = 0;
+  // Two different facts, and conflating them is what made a stopped turn lose the page. `page` is the record
+  // this session's article IS — what a follow-up extends. `remembered` is the record the model's memory holds
+  // in full, and it is null whenever that cannot be trusted: before the first answer, and after any turn that
+  // stopped or failed, either of which may have left memory holding something nobody was shown.
+  let page: string | null = null;
+  let remembered: string | null = null;
 
   return {
     handlers: {
@@ -126,38 +132,58 @@ export function articles(deps: {
   function* classify(): Operation<void> {
     const kept = saved(root());
     if (kept.length < 2) return;   // one pile is not a grouping
-    try {
-      const groups = yield* classifyTopics(kept, session.trunk);
-      if (groups.length > 0) yield* shelf(groups);
-    } catch {
-      // The shelf stays flat and every record is untouched. Nothing a reader asked for failed, so this is
-      // not worth a toast — and it must never take the session with it, which an uncaught spawn would.
-    }
+    // Through `run` like any other model work, and for the same reason: one owner means a question evicts the
+    // grouping and waits for its cleanup, rather than the two reaching the model at once. Returns as soon as
+    // the run is accepted, so the landing still paints without waiting for it.
+    yield* run.replace("classify", () =>
+      scoped(function* () {
+        try {
+          const groups = yield* classifyTopics(kept, null);
+          if (groups.length > 0) yield* shelf(groups);
+        } catch {
+          // The shelf stays flat and every record is untouched. Nothing a reader asked for failed, so this is
+          // not worth a toast — and it must never take the session with it.
+        }
+      }),
+    );
   }
 
   function* submit(query: string): Operation<Operation<void>> {
     yield* abortRun();
-    const trunk = session.trunk;
-    yield* wire.send({ type: "query", text: query, warm: trunk !== null });
+    // What the READER is told — is there an article on the page to extend. Whether the model still remembers
+    // that page is a different question with a different answer, asked inside the run once the previous one's
+    // cleanup is done; asking it here would read a trunk that is still being torn down.
+    yield* wire.send({ type: "query", text: query, warm: page !== null });
     turnInFlight = true;
     return yield* run.replace(`ask-${++asked}`, () =>
       // `scoped` is the boundary: whatever the program starts — agents, forks of the model's state — is
       // finished and cleaned up before this run counts as over, so the next one never meets its leftovers.
       scoped(function* () {
         try {
-          const article = yield* write(trunk, query);
-          if (article) {
-            yield* rebaseTrunk(session, query, article);
-            keep(root(), query, article);
+          const article = yield* write(yield* recalled(), query);
+          if (!article) {
+            turnInFlight = false;
+            return yield* wire.send({ type: "answer", text: null });
           }
-          turnInFlight = false;
+          // Disk first: the record is what memory is rebuilt from, so it has to exist before memory changes.
+          const id = keep(root(), query, article);
+          page = id;
+          remembered = null;
+          // The reader has it before anything else can fail, which is what keeps the three in agreement: what
+          // is saved, what is on screen, and what the next question continues from are all this article.
           yield* wire.send({ type: "answer", text: article });
-          if (article) yield* shelf();
+          // Memory after the reader, so a failure here costs the conversation and never the page — the next
+          // question rebuilds it from the record.
+          yield* rebase(session, query, article);
+          remembered = id;
+          turnInFlight = false;
+          yield* shelf();   // last, so the shelf arriving is the whole turn being over
         } catch (err) {
           // Already stopped: this is the halt arriving, and it is `run`'s to judge — a cleanup that failed
           // means the model's state cannot be trusted.
           if (!turnInFlight) throw err;
           turnInFlight = false;
+          remembered = null;   // a turn that died may have committed a pair nobody was shown
           yield* wire.send({ type: "run:aborted" });
           yield* wire.send({ type: "ui:error", message: errorMessage(err) });
           throw err;   // recorded on the run's future: the loop drops it, the one-shot path exits with it
@@ -166,33 +192,46 @@ export function articles(deps: {
     );
   }
 
+  /** The model's memory of the page, as this turn may use it: the trunk when it is trusted, and otherwise one
+   *  rebuilt from the page's own record — never from whichever folder happens to be newest. */
+  function* recalled(): Operation<Branch | null> {
+    if (page === null) return null;
+    if (remembered === page && session.trunk) return session.trunk;
+    const record = saved(root()).find((a) => a.id === page);
+    if (!record) return null;
+    yield* rebase(session, record.query, record.answer);
+    remembered = page;
+    return session.trunk;
+  }
+
   function* abortRun(): Operation<void> {
     const dying = turnInFlight;
     // Withdraws an accepted run and halts a live one. Returns at once; `run.busy` holds until the model settles.
     yield* run.stop();
     turnInFlight = false;
-    if (dying) yield* wire.send({ type: "run:aborted" });
+    if (dying) {
+      remembered = null;   // it may have committed a pair nobody was shown; the next question rebuilds
+      yield* wire.send({ type: "run:aborted" });
+    }
   }
 }
 
 /**
- * The page IS the state, so the trunk is re-based on the article as it now stands rather than having another
- * copy appended beside the drafts it supersedes. Clearing it first is what selects that: with no trunk,
- * `commitTurn` takes its cold path — fresh branch, prefill, promote — and promote's `retainOnly` reclaims the
- * old one. Append instead and the trunk ends up holding every revision of the page.
- */
-/**
- * Keep the article. The markdown is a projection a human or a corpus can read; the record is the commit.
+ * Keep the article, and say which record it became — the folder's name is the identity, so the caller needs it
+ * back to know what this session's page now is.
  *
- * The ordering is the whole lesson, which is why these are two calls to the SAME function: a crash between
- * them leaves a folder holding markdown and no record, and `listFolders` does not list it — correctly, because
- * a half-written turn is not an article.
+ * The markdown is a projection a human or a corpus can read; the record is the commit. The ordering is the
+ * whole lesson, which is why these are two calls to the SAME function: a crash between them leaves a folder
+ * holding markdown and no record, and `listFolders` does not list it — correctly, because a half-written turn
+ * is not an article.
  */
-function keep(root: string, query: string, answer: string): void {
-  const dir = join(root, reserveFolder(root));
+function keep(root: string, query: string, answer: string): string {
+  const id = reserveFolder(root);
+  const dir = join(root, id);
   const record: Article = { version: 1, query, savedAt: new Date().toISOString(), answer };
   writeFileSync(join(dir, "article.md"), `# ${query}\n\n${answer}\n`, "utf8");
   writeFileSync(join(dir, RECORD), `${JSON.stringify(record, null, 2)}\n`, "utf8");   // last: its existence is the commit
+  return id;
 }
 
 /** Every kept article, oldest first — the folder names are ISO-stamped, so the listing's own order is time's.
@@ -208,17 +247,16 @@ export function saved(root: string): Saved[] {
   });
 }
 
-function* rebaseTrunk(session: Session, query: string, article: string): Operation<void> {
-  const superseded = session.trunk;
-  session.trunk = null;
-  yield* scoped(function* () {
-    // `ensure`, not `catch`: quitting mid-turn HALTS this, and a halt is not an error anything here can catch.
-    // Until `promote` lands there is no new trunk, so leaving it null would drop the article and open the next
-    // question on a blank page. Better to lose the turn than the page.
-    yield* ensure(() => {
-      if (!session.trunk) session.trunk = superseded;
-    });
-    // How a call into the model is awaited: a halt cannot drop a call already inside the model half way.
-    yield* waitUntilSettled(session.commitTurn(query, article));
-  });
+/**
+ * Put the page on the trunk as it now stands, rather than appending another copy beside the drafts it
+ * supersedes: `dispose` releases what the trunk held, which leaves `commitTurn` its cold path — fresh branch,
+ * prefill, promote. Append instead and the trunk ends up holding every revision of the page.
+ *
+ * Nothing is restored if this fails. It does not need to be: the record on disk is what the page is, and the
+ * next question rebuilds memory from it.
+ */
+function* rebase(session: Session, query: string, article: string): Operation<void> {
+  // How a call into the model is awaited: a halt cannot drop a call already inside the model half way.
+  yield* waitUntilSettled(session.dispose());
+  yield* waitUntilSettled(session.commitTurn(query, article));
 }

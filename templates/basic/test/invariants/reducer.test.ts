@@ -56,6 +56,34 @@ test("a warm turn keeps BOTH the title and the article it is extending", () => {
   assert.equal(s.answer, "## The article", "blanking the page would empty it for the whole synthesis");
 });
 
+test("a warm turn keeps what SUPPORTS the article too", () => {
+  // The article and its sources are one thing on screen. Clearing the sources while keeping the article — which
+  // is what a follow-up that finds nothing, or one that is stopped, leaves behind — shows a page that states
+  // less than it knows, with no way for the reader to tell why its citations went away.
+  const before = fold(
+    [
+      { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
+      { type: "agent:tool_call", agentId: 1, tool: "wikipedia_search", args: '{"query":"antikythera"}' } as WorkflowEvent,
+      {
+        type: "agent:tool_result",
+        agentId: 1,
+        tool: "wikipedia_fetch",
+        result: '{"title":"Antikythera mechanism","extract":"An ancient device.","url":"https://en.wikipedia.org/wiki/X"}',
+      } as WorkflowEvent,
+    ],
+    settled(),
+  );
+  assert.equal(before.sources.length, 1);
+
+  const warm = fold([{ type: "query", text: "follow-up", warm: true } as WorkflowEvent], before);
+  assert.deepEqual(warm.sources, before.sources, "the article survives the turn, so its sources must too");
+  assert.deepEqual(warm.queries, before.queries, "and what was searched to build it");
+
+  const cold = fold([{ type: "query", text: "Q2", warm: false } as WorkflowEvent], before);
+  assert.deepEqual(cold.sources, [], "a new page starts with nothing behind it");
+  assert.deepEqual(cold.queries, []);
+});
+
 test("a turn that dies keeps the article the reader already has", () => {
   const s = fold([{ type: "run:aborted" } as WorkflowEvent], settled());
   assert.equal(s.answer, "## The article", "a stopped turn is no reason to blank the page");

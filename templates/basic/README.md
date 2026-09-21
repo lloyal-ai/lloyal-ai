@@ -90,7 +90,8 @@ checked against, and only then points `package.json` at those exact bytes:
 That `file:` line is the whole reason an Ability appears in `package.json` at
 all — it is how npm is told to materialise bytes the CLI has already verified,
 never an instruction to fetch anything. Commit `vendor/` and `npm ci` reproduces
-the same bytes offline, with nothing on the install path reaching the network.
+those exact bytes from the repo — the Ability is the one dependency that never
+reaches the network, whatever else the install resolves from the registry.
 
 So the version is pinned to a file: upgrading is another `install`, not a range
 that drifts. And `lloyal new` records what it installed under

@@ -1,4 +1,5 @@
-/** Stateless helpers over text — the miscellany both halves share, owned by neither.
+/** Stateless helpers over text, owned by neither half — the slot for a helper that is about strings rather
+ *  than about your program or your view. Today every caller happens to be a view.
  *
  *  NODE-FREE, and that is a contract rather than a description: `src/ui/state.ts` imports these, and it is
  *  itself imported by the Electron MAIN process and by the served web target. A `node:` import here breaks

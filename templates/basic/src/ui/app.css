@@ -466,7 +466,12 @@
   background: var(--faint);
   flex: none;
 }
+/* Every phase an agent is WORKING in. `phase` has six values and the dot is class-named from it directly, so
+   one missing here is a live agent wearing the faint resting dot. `idle` keeps that dot on purpose: spawned,
+   not yet started. */
 .wiki-dot--active,
+.wiki-dot--thinking,
+.wiki-dot--content,
 .wiki-dot--tool {
   background: var(--link);
   animation: pulse 1.3s ease-in-out infinite;
