@@ -126,10 +126,16 @@ test("after a stop, memory is rebuilt from the record rather than trusted", asyn
 });
 
 test("the page a session extends is the record it saved, not the newest folder", async () => {
-  // Someone else's article, planted with a LATER name than the one this session writes, so "newest folder"
-  // and "this session's page" disagree. Memory has to be rebuilt from the latter.
+  // Someone else's article, planted with a LATER name than anything this session writes, so "newest folder"
+  // and "this session's page" disagree and only one of them is right.
+  //
+  // The interruption has to reach a turn that is still RUNNING: a stop after one has finished is a no-op, so a
+  // script that waits for the shelf first leaves memory trusted and the rebuild never happens. What is asserted
+  // is the restoration itself — the query and answer it put back — because the scripted reply text is the same
+  // whichever record the model was handed, and so cannot tell them apart.
+  const STRANGER = "an article from another session";
   const run = await runHarness({
-    setup: (outputDir) => plant(outputDir, "2099-01-01-elsewhere", recordOf("an article from another session")),
+    setup: (outputDir) => plant(outputDir, "2099-01-01-elsewhere", recordOf(STRANGER)),
     utterances: [
       { kind: "report", text: "Angle one." },
       { kind: "report", text: "Angle two." },
@@ -137,19 +143,127 @@ test("the page a session extends is the record it saved, not the newest folder",
       { kind: "report", text: "Angle one, again." },
       { kind: "report", text: "Angle two, again." },
       { kind: "text", text: "## The article, extended" },
+      { kind: "report", text: "Angle one, third." },
+      { kind: "report", text: "Angle two, third." },
+      { kind: "text", text: "## The article, third" },
     ],
     script: [
       { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
       { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
-      { send: { type: "stop" } },   // invalidates memory, forcing the next question to rebuild
       { send: { type: "submit_query", query: "who built it?" } },
+      { send: { type: "stop" } },   // lands mid-turn, so memory is no longer trusted
+      { on: (ev) => ev.type === "run:aborted" },
+      { send: { type: "submit_query", query: "when was it found?" } },
       { on: (ev) => ev.type === "library" && ev.articles.length === 3 },
+    ],
+  });
+
+  const commits = warmDeltas(run.trace).map((t) => t.content ?? "");
+  const restored = commits.filter((c) => c.includes("what is the Antikythera mechanism?"));
+  assert.ok(
+    restored.length >= 2,
+    `the page had to be put back before it could be extended — commits: ${JSON.stringify(commits)}`,
+  );
+  assert.ok(
+    restored.some((c) => c.includes("## The article")),
+    "the restoration must carry the answer this session actually saved",
+  );
+  assert.equal(
+    commits.filter((c) => c.includes(STRANGER)).length,
+    0,
+    "a stranger's record is on disk and is newer; nothing may rebuild from it",
+  );
+});
+
+// ── when the parts that can fail, fail ──────────────────────────────────────
+//
+// Saving and remembering are the two things a turn does after the model has spoken, and each can fail on its
+// own. What must hold either way: nothing is published that was not saved, nothing is remembered that was not
+// published, and the next question continues from whatever the reader last actually saw.
+
+/** Make the library unwritable: the folder can still be listed, so boot is unaffected, but reserving one fails. */
+const seal = (dir: string) => fs.chmodSync(dir, 0o500);
+const unseal = (dir: string) => fs.chmodSync(dir, 0o700);
+
+const TURN = [
+  { kind: "report" as const, text: "Angle one." },
+  { kind: "report" as const, text: "Angle two." },
+  { kind: "text" as const, text: "## The article" },
+];
+const AGAIN = [
+  { kind: "report" as const, text: "Angle one, again." },
+  { kind: "report" as const, text: "Angle two, again." },
+  { kind: "text" as const, text: "## The article, extended" },
+];
+const THIRD = [
+  { kind: "report" as const, text: "Angle one, third." },
+  { kind: "report" as const, text: "Angle two, third." },
+  { kind: "text" as const, text: "## The article, third" },
+];
+
+test("an article that cannot be saved is not published either", async () => {
+  // Disk first is what makes this the safe failure: the record is written before the reader is told anything,
+  // so a library that cannot be written costs the turn rather than leaving an article on screen that no
+  // relaunch would find. The page is untouched, so the next question is still a cold one.
+  const run = await runHarness({
+    setup: seal,
+    utterances: [...TURN, ...AGAIN],
+    script: [
+      { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
+      { on: (ev) => ev.type === "ui:error" },
+      { send: { type: "submit_query", query: "who built it?" } },
+      { on: (ev) => ev.type === "query" && ev.text === "who built it?" },
+    ],
+  });
+  unseal(run.outputDir);
+
+  assert.deepEqual(answers(run.events), [], "nothing may be published that was not saved");
+  assert.deepEqual(
+    fs.readdirSync(run.outputDir).filter((d) => fs.existsSync(path.join(run.outputDir, d, "article.json"))),
+    [],
+    "no record should have survived the failure",
+  );
+  assert.equal(queries(run.events)[1].warm, false, "there is no page, so the next question opens a new one");
+});
+
+test("a follow-up that cannot be saved leaves the article it failed to extend", async () => {
+  // The first article is on disk and on screen. The second turn produces prose but cannot keep it, so it is
+  // published nowhere and the page stays what it was — and because that turn died, memory is no longer trusted
+  // and the question after it rebuilds the page from its record.
+  let library = "";
+  const run = await runHarness({
+    utterances: [...TURN, ...AGAIN, ...THIRD],
+    setup: (outputDir) => { library = outputDir; },
+    observe: (ev) => {
+      // Take the library away once the first article is on the shelf, and give it back when the turn that
+      // could not use it has died — so the question after it is a normal one, failing at nothing.
+      if (ev.type === "library" && ev.articles.length === 1) seal(library);
+      if (ev.type === "run:aborted") unseal(library);
+    },
+    script: [
+      { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 1 },
+      { send: { type: "submit_query", query: "who built it?" } },
+      { on: (ev) => ev.type === "ui:error" },
+      { send: { type: "submit_query", query: "when was it found?" } },
+      // The shelf is the whole turn being over, so this waits for the rebuild rather than racing it.
+      { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
     ],
   });
 
   assert.deepEqual(
     answers(run.events).filter((a) => a !== null),
-    ["## The article", "## The article, extended"],
-    "rebuilding from the wrong record would extend a stranger's article",
+    ["## The article", "## The article, third"],
+    "the follow-up could not be kept, so it is not an answer; the question after it is unaffected",
   );
+  assert.equal(queries(run.events)[2].warm, true, "the page it failed to extend is still the page");
+  const restored = warmDeltas(run.trace)
+    .map((t) => t.content ?? "")
+    .filter((c) => c.includes("what is the Antikythera mechanism?"));
+  assert.ok(restored.length >= 2, "the dead turn left memory untrusted, so the page is put back from its record");
 });
+
+// NOT tested here, deliberately: an article that saves but whose memory update then fails. Reaching that
+// path means making a native call fail, and the only handle on it from a template is the mock context's own
+// `_storePrefill` — a layer this app has no business touching, in a file every scaffold inherits. The ordering
+// that makes it safe is visible in `article.ts` instead: the record and the reader both come first.

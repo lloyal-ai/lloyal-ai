@@ -64,6 +64,10 @@ export interface AppState {
   /** The last turn ended with no article. Distinct from an empty `answer`: a follow-up that finds nothing
    *  leaves the previous article on screen, so the page alone cannot say it. */
   nothingFound: boolean;
+  /** How many articles this session has ACCEPTED. A surface that shows each one once needs this rather than
+   *  the text: two turns can produce identical prose, and a stopped turn returns the page to `answered`
+   *  holding what it already held. Only an answer with an article advances it. */
+  accepted: number;
   error: string | null;
   /** KV pressure for the gauge (from `agent:tick`). */
   kv: { used: number; total: number };
@@ -82,6 +86,7 @@ export const initialState: AppState = {
   queries: [],
   answer: "",
   nothingFound: false,
+  accepted: 0,
   error: null,
   kv: { used: 0, total: 0 },
   topic: "",
@@ -145,7 +150,14 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
     case "answer":
       // A null article leaves the page exactly as it was — on a follow-up that is the article being extended,
       // and on a cold turn the preceding `query` already cleared it.
-      return { ...s, phase: "answered", answer: ev.text ?? s.answer, nothingFound: ev.text === null, error: null };
+      return {
+        ...s,
+        phase: "answered",
+        answer: ev.text ?? s.answer,
+        nothingFound: ev.text === null,
+        accepted: ev.text === null ? s.accepted : s.accepted + 1,
+        error: null,
+      };
     case "run:aborted":
       // The turn ended without an answer. The page decides the phase — an article means `answered`.
       return { ...s, phase: s.answer ? "answered" : "ready" };

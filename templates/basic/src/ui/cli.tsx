@@ -185,7 +185,7 @@ function View({
   // clear-on-overflow.
   const [scrollback, setScrollback] = useState<Scrollback[]>([]);
   const committed = useRef<Set<number>>(new Set());
-  const printed = useRef<string | null>(null);
+  const printed = useRef(0);
   useEffect(() => {
     const add: Scrollback[] = [];
     for (const a of state.roster.agents.values()) {
@@ -194,11 +194,12 @@ function View({
         add.push({ kind: "agent", agent: a });
       }
     }
-    // What is printed is a new ARTICLE, never a new phase. Several things return the page to `answered`
-    // holding what it already held — a follow-up that found nothing, and a stopped one, both keep the previous
-    // article — and each of those would print it to scrollback a second time.
-    if (state.phase === "answered" && state.answer && state.answer !== printed.current) {
-      printed.current = state.answer;
+    // What is printed is a newly ACCEPTED article, which is neither a new phase nor new text. Several things
+    // return the page to `answered` holding what it already held — a follow-up that found nothing, and a
+    // stopped one — and printing on the phase repeats the article. Two turns can also settle on the same
+    // prose, and printing on the text would swallow the second one along with the sources it found.
+    if (state.accepted > printed.current) {
+      printed.current = state.accepted;
       add.push({ kind: "answer", text: state.answer, sources: state.sources });
     }
     if (add.length) setScrollback((s) => [...s, ...add]);
