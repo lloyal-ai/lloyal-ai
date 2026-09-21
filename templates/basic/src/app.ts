@@ -35,14 +35,8 @@ export const abilities = [createWikipediaAbility];
 export { config } from "./config.js";
 export type { Config, Origin } from "./config.js";
 
-/**
- * What to CALL the model in the header: whichever selection actually won.
- *
- * A configured `model.path` outranks the catalog id, and the boot resolves both
- * into `model.path` — so reading `model.id` alone would name the yml's catalog
- * entry while entirely different weights are resident. Provenance is what tells
- * the two apart: anything but `default` on `model.path` means someone chose it.
- */
+/** What to CALL the model: whichever selection won. A configured `model.path` outranks the catalog id and
+ *  the boot resolves both into `model.path`, so only PROVENANCE tells them apart. */
 function modelLabel(
   model: { id?: string; path?: string },
   origin: Record<string, string>,
@@ -52,9 +46,7 @@ function modelLabel(
   return model.id ?? (model.path ? basename(model.path) : "model");
 }
 
-/** The resolved weight's size on disk, for the boot header. Measured here rather
- *  than carried in config: the boot resolves the path, so the file IS the fact,
- *  and a stat that fails is a header without a size, never a failed boot. */
+/** The resolved weight's size on disk. The boot resolves the path, so the file is the fact. */
 function weightBytes(path: string | undefined): number {
   if (!path) return 0;
   try {
@@ -67,17 +59,12 @@ function weightBytes(path: string | undefined): number {
 /**
  * Your harness — the platform contract, and the thin half of it.
  *
- * `ctx` is the resident model; `events` streams your `WorkflowEvent`s to
- * whatever surface is mounted (terminal / Electron / browser); `commands`
- * delivers that surface's `Command`s back. `initializeHarness` does the boot
- * every harness shares — the agent runtime, the ability registry, the pool's
- * defaults, the wind-down and cancel signals, and the first two events on the
- * wire — and hands back the parts to compose over. What is left here is this
- * app's own: announce readiness, then serve commands.
+ * `ctx` is the resident model; `events` streams your `WorkflowEvent`s to whatever surface is mounted;
+ * `commands` delivers that surface's `Command`s back. `initializeHarness` does the boot every harness shares
+ * and hands back the parts to compose over. What is left here is this app's own: say ready, then serve.
  *
- * The program itself is `harness/wiki.ts`. That is the file to edit; nothing
- * else in the project needs to know what you wrote there. `harness/article.ts`
- * sits between the two — what a reader can do, and what happens when they do it.
+ * The program itself is `harness/wiki.ts` — the file to edit. `harness/article.ts` sits between the two:
+ * what a reader can do, and what happens when they do it.
  */
 export function* harness(
   ctx: SessionContext,

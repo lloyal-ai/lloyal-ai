@@ -1,25 +1,11 @@
 /**
- * How a view *accumulates* your events into renderable state.
+ * How a view accumulates your events into renderable state: `reduce(state, event) → AppState`, a pure
+ * node-free fold. Only the raw `WorkflowEvent` crosses a target boundary, never the growing transcript, so
+ * the fold happens in the SINK — and all three views (Ink · desktop · web) import this one function.
  *
- * `reduce(state, event) → AppState` is a pure, node-free fold. It lives here —
- * not in the harness, not in a view — for two reasons:
- *   1. Only the small raw `WorkflowEvent` crosses a target boundary (IPC to
- *      the desktop window, wss to the browser); the growing transcript never
- *      does. So the fold has to happen in the *sink*. The harness stays a pure
- *      emitter; the renderer stays a pure sink.
- *   2. All three target views — the terminal (Ink), the desktop and the web
- *      (React) — import this ONE `reduce`. Node-free so every runtime can.
- *
- * What each agent is DOING is `foldAgents`, ui's: think blocks split from the
- * model's prose, tool rows paired with their results, the report filed when it
- * returns. That is the agent runtime's shape, the same in every harness, and
- * taking it is what keeps the model's markup — `<think>`, `<tool_call>` — out
- * of this app entirely.
- *
- * What the ARTICLES are is basic's own, below it: which Wikipedia pages have
- * been read and what was searched for. Those are this app's domain, they need
- * the tools' raw payloads that a runtime roster has no reason to keep, and they
- * are the reason basic exists rather than a thing every harness does.
+ * What each agent is DOING is `foldAgents`, ui's, which is what keeps the model's markup out of this app.
+ * What the ARTICLES are is below it, and basic's own: it reads the tools' raw payloads, which a runtime
+ * roster has no reason to keep.
  */
 import { emptyRoster, foldAgents } from "@lloyal-labs/ui/fold";
 import type { AgentRoster, AgentRuntime, AgentEvent as FoldableEvent } from "@lloyal-labs/ui/fold";
@@ -30,9 +16,7 @@ export type { AgentRoster, AgentRuntime, TimelineItem } from "@lloyal-labs/ui/fo
 
 export type Phase = "booting" | "ready" | "working" | "answered";
 
-/** Human-readable file size — the boot header renders the model's measured bytes.
- *  `sizeBytes` is best-effort (0 when the stat failed), so 0/unknown reads as
- *  "unknown" rather than a fabricated "1 KB". */
+/** Human-readable file size. `sizeBytes` is best-effort — 0 means the stat failed. */
 export function formatSize(bytes: number): string {
   if (bytes <= 0) return "unknown";
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
@@ -97,13 +81,8 @@ export const initialState: AppState = {
 const isAgentEvent = (ev: WorkflowEvent): ev is FoldableEvent & WorkflowEvent =>
   ev.type.startsWith("agent:") && ev.type !== "agent:tick" && ev.type !== "agent:trace";
 
-/**
- * What the roster is told at a spawn: whether to keep a timeline, and which angle this is.
- *
- * An agent spawned outside a turn works no part of the page — the topic classifier runs at boot, beside the
- * session — so it is tracked by its numbers and never shown. The angles carry `taskKey(i)`; the settling
- * agent carries no key, which is exactly "keeps a timeline, works no angle".
- */
+/** What the roster is told at a spawn. An agent spawned outside a turn works no part of the page, so it is
+ *  tracked by its numbers and never shown. The angles carry `taskKey(i)`; the settling agent carries none. */
 const spawnDecision = (s: AppState, ev: Extract<FoldableEvent, { type: "agent:spawn" }>) => ({
   timeline: s.phase === "working",
   taskIndex: taskIndexOf(ev.key),
@@ -119,9 +98,7 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
     // The same events, read a second time for this app's own facts — the payloads the roster summarises away.
     if (ev.type === "agent:tool_result") return { ...s, roster, sources: withArticle(s.sources, ev) };
     if (ev.type === "agent:tool_call") return { ...s, roster, queries: withQuery(s.queries, ev) };
-    // An agent spawning does NOT mean the app is busy: the topic classifier runs at boot, beside the session.
-    // `query` is what says a turn began — it is emitted before any work for exactly this reason — so reading
-    // busy-ness off a spawn would put the landing into "Reading…" with its own shelf hidden behind it.
+    // A spawn does not mean busy — `query` is what says a turn began.
     return { ...s, roster };
   }
 
@@ -129,26 +106,22 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
     case "ready":
       return { ...s, phase: s.phase === "booting" ? "ready" : s.phase, boot: ev.facts };
     case "query":
-      // A turn began. The roster starts empty: what the previous turn's agents did is not this turn's work,
-      // and the article they produced is the record that survives.
+      // A fresh roster: the previous turn's agents are not this turn's work, and the page they produced is.
       return {
         ...s,
         phase: "working",
         roster: emptyRoster(),
-        // What supports the article is kept exactly as long as the article is. A follow-up that finds nothing —
-        // or is stopped — leaves the page standing, and a page whose sources vanished states less than it knows.
+        // What supports the article is kept exactly as long as the article is.
         sources: ev.warm ? s.sources : [],
         queries: ev.warm ? s.queries : [],
-        // The page keeps the subject it was opened on. A follow-up deepens that article, so retitling it to
-        // the latest question would misname a page that is now about more than the question just asked.
+        // The page keeps the subject it was opened on; a follow-up deepens it rather than renaming it.
         topic: ev.warm ? s.topic : ev.text,
         error: null,
         nothingFound: false,
         answer: ev.warm ? s.answer : "",
       };
     case "answer":
-      // A null article leaves the page exactly as it was — on a follow-up that is the article being extended,
-      // and on a cold turn the preceding `query` already cleared it.
+      // A null article leaves the page as it was; on a cold turn the preceding `query` already cleared it.
       return {
         ...s,
         phase: "answered",
@@ -167,9 +140,7 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
 
     // ── rig's own words (SettingsEvent) ──
     case "ui:error":
-      // A toast, nothing more. One event, one meaning: a turn ENDING is `run:aborted` alone, which a dying
-      // run says as well as this. A benign failure — a bad config path, an ability that would not start —
-      // says only this, and must not look like a turn that died.
+      // A toast, nothing more. A turn ENDING is `run:aborted`, which a dying run says as well as this.
       return { ...s, error: ev.message };
 
     default:
@@ -179,9 +150,8 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
 
 // ── this app's domain: the Wikipedia pages behind the article ──────
 //
-// The default ability (`lloyal/wikipedia`) is the ONE domain this view knows richly. These read its
-// STRUCTURED tool payloads — never the model's prose — so the UI shows the source material flowing through
-// the model as it arrives. Swap the ability and they simply stay empty; grow the view with one per tool.
+// These read the ability's STRUCTURED tool payloads, never the model's prose. Swap the ability and they stay
+// empty; grow the view with one per tool.
 
 /** Parse a tool payload into an object, or null if unparseable/non-object. */
 function parseObject(s: string | null): Record<string, unknown> | null {
@@ -251,11 +221,8 @@ export interface Shelf {
   articles: KeptArticle[];
 }
 
-/**
- * The landing's shelf. ONE shape whether or not the model has grouped anything, which is what makes the
- * first moment, the single-article case and a refused grouping the same render — no loading state, no empty
- * state, no error state to design.
- */
+/** The landing's shelf: ONE shape whether or not the model has grouped anything, so the first moment, the
+ *  single-article case and a refused grouping are the same render — no loading, empty or error state. */
 export function shelf(s: AppState): Shelf[] {
   if (s.library.length === 0) return [];
   if (!s.groups) return [{ topic: null, articles: s.library }];
