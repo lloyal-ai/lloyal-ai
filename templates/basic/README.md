@@ -12,34 +12,62 @@ Then start a surface — each folds the same harness:
 
 __RUN_STEPS__
 
-The recommended model is fetched and **digest-verified** into `models/llm/` on first run — no key. (Prefer your own weight? Drop a `.gguf` in `models/llm/`, or point `model.llm.path` in `harness.yml` at one.) Type a question and watch two agents research it in parallel while a synth combines their notes.
+The recommended model is fetched and **digest-verified** into `models/llm/` on first run — no key. (Prefer your own weight? Drop a `.gguf` in `models/llm/`, or point `model.llm.path` in `harness.yml` at one.) Type a question and watch two agents read Wikipedia in parallel while a settling agent folds their notes into one article.
 
 The **web** surface is two processes — a resident-model **host** and a browser client; `npm run dev:web` starts both (the browser reconnects until the host is up). To run the host on its own (a remote box, or the browser elsewhere), use `npm run serve` + `npm run dev:web:client`. For a fast cli loop without a build step, use `npm run dev`.
 
 ## The shape
 
+Folders are roles; the files inside them are your domain.
+
 ```
 src/
-  app.ts         what this app IS: its abilities, its config, its harness
-  harness/
-    harness.ts   ← the one file that's yours: your program, as code
-    protocol.ts  the events (↓) and commands (↑) your harness speaks
-  ui/
-    state.ts     node-free reduce(events) → AppState (every view folds it)
-    App.tsx      the React view (desktop + web)
-    cli.tsx      the Ink view (terminal)
+  app.ts          what this app IS: its abilities, its config, its harness
+  config.ts       the knobs, as data
+  protocol.ts     the events (↓) and commands (↑) your harness speaks
+  harness/        ← your program
+    wiki.ts       what the MODEL does: two angles, a shared spine, a settling pass
+    article.ts    an article's life — and the only place the trunk is written
+    prompts.ts    Eta reads prompts/ ; an edit is live at the next question
+    prompts/      one .eta file per prompt — the words, editable
+    instructions.ts   who this app is for, in the model's ear
+  ui/             ← your view
+    state.ts      node-free reduce(events) → AppState (every view folds it)
+    App.tsx       the React view (desktop + web)
+    cli.tsx       the Ink view (terminal)
+    presentation.ts   what the app is called, said once
+  common/util.ts  stateless helpers both halves use
 targets/
-  <surface>/     one thin entry per surface — cli · desktop · web
-                 each is one call to the boot that owns it
+  <surface>/      one thin entry per surface — cli · desktop · web
+                  each is one call to the boot that owns it
 test/
-  invariants/    the fold's behaviour, over the real reduce
+  invariants/     behaviour, over the real harness and the real reduce
 models/
-  llm/           the resident model (fetched on first run; gitignored)
-vendor/          signed Abilities — Ed25519-verified tarballs, committed
-harness.yml      targets + model
+  llm/            the resident model (fetched on first run; gitignored)
+vendor/           signed Abilities — Ed25519-verified tarballs, committed
+harness.yml       targets + model
 ```
 
-Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The center — `src/harness/harness.ts` — is where you program what your intelligence does: which agents exist, how they collaborate, what they trust, when work is done. `basic` runs a `parallel` pool + synth; `chain` is a one-line swap.
+Everything under `targets/` is convention handled for you — the boot mounts a view over a binding; a view is a sink that folds `reduce`. The centre is `src/harness/`: `wiki.ts` is where you program what your intelligence does — which agents exist, how they collaborate, what they trust, when work is done — and it returns an article without ever writing the model's memory. `article.ts` decides what becomes of it. `basic` runs a `parallel` pool + a settling pass; `chain` is a one-line swap.
+
+## Make it yours
+
+Three edits change what this app is:
+
+- **`src/ui/presentation.ts`** — its name, everywhere.
+- **`src/harness/instructions.ts`** — who it is for, and what its answers must do. Every prompt that is framed says them.
+- **`ANGLES` in `src/harness/wiki.ts`** — the two angles it reads from. A real harness would *compute* these; this one keeps them static so the file reads top to bottom.
+
+Then the words themselves: `src/harness/prompts/` holds one `.eta` file per prompt, read from disk each time, so an edit reaches the next question with no restart and no rebuild.
+
+## What it keeps, and what it does not
+
+A settled article is written to `sources.outputDir`: `article.md` first, then a small `article.json` record — and the record's existence is what makes the folder an article, so a crash midway leaves nothing half-kept. Past articles appear on the landing, grouped by topic: the list paints immediately and rearranges when the resident model answers, because nothing on screen waits for a model call.
+
+Two limits worth knowing before you meet them:
+
+- **Reopening an article does not resume it.** A follow-up deepens the article only while the session still holds it in memory; putting a saved one back on the trunk is state reconstruction, which is a different thing from keeping a file.
+- **The terminal reports the count and leaves browsing to the other two surfaces.** One fold serves all three bindings, but a reflow into topics is not something a scrolling view can show honestly.
 
 ## Add capabilities
 

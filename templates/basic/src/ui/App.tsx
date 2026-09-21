@@ -5,7 +5,7 @@
  *
  * It's styled as a Wikipedia article, because `basic` ships the `lloyal/wikipedia`
  * ability: a Contents rail, a serif title + editorial prose, the fetched articles
- * floated as captioned figures, and a collapsible research log where each agent's
+ * floated as captioned figures, and a collapsible agent log where each agent's
  * thinking and findings stream in. Swap the ability and the wiki-specific bits (source
  * figures) gracefully empty; the layout + the streaming log stay generic. This is
  * the floor — reskin it into your product's own look.
@@ -17,38 +17,33 @@ import "./app.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import { config } from "../config.js";
+import { lastLine, slugify } from "../common/util.js";
 import { APP } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
 import {
   reduce,
   initialState,
   formatSize,
-  cleanNarration,
-  reportBody,
-  extractStreamingReport,
-  wikipediaSources,
-  reportHeadings,
-  isResearchAgent,
+  isWikiAgent,
   isLiveAgent,
+  reasoningOf,
+  reportOf,
+  shelf,
   type AppState,
-  type AgentView,
+  type AgentRuntime,
+  type Shelf as ShelfGroup,
   type WikiSource,
 } from "./state.js";
+import { extractStreamingReport, hostOf } from "@lloyal-labs/ui/fold";
+import { RIG_REPORT } from "@lloyal-labs/rig";
+import { headingsOf } from "@lloyal-labs/ui/prose";
 import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
 import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
-import type { WorkflowEvent, Command } from "../harness/protocol.js";
+import type { WorkflowEvent, Command } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
 
 const scrollTo = (id: string): void =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
 
 /** A fetched article as a Wikipedia-style figure, floated into the prose. */
 function SourceFigure({ s }: { s: WikiSource }): ReactElement {
@@ -67,88 +62,88 @@ function SourceFigure({ s }: { s: WikiSource }): ReactElement {
 
 /** The model's reasoning while it streams — a ticker, not the page. Collapsed by default: the newest line and
  *  how much has been thought, so a mind going in circles is visible as circles, not as an article. Expanded,
- *  the whole stream in a bounded box pinned to the newest line. The `<think>` block ends when the model closes
- *  it; only then does the report begin (`reportBody`). */
+ *  the whole stream in a bounded box pinned to the newest line. Where the reasoning ends and the article
+ *  begins is the fold's to know. */
 function Thinking({ text }: { text: string }): ReactElement {
   const [open, setOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const lines = text.split("\n").filter((l) => l.trim());
-  const last = lines[lines.length - 1] ?? "";
+  const last = lastLine(text);
   const words = text.split(/\s+/).filter(Boolean).length;
   useEffect(() => {
     if (open && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
   }, [text, open]);
   return (
-    <div className="wiki-log-entry wiki-thinking">
-      <div className="wiki-log-head">
+    <div className="wiki-agents-entry wiki-thinking">
+      <div className="wiki-agents-head">
         <span className="wiki-dot wiki-dot--active" />
-        <span className="wiki-log-title">Thinking</span>
-        <span className="wiki-log-status">{words} words · {lines.length} lines</span>
+        <span className="wiki-agents-title">Thinking</span>
+        <span className="wiki-agents-status">{words} words · {lines.length} lines</span>
         <button type="button" className="wiki-toggle" onClick={() => setOpen((o) => !o)}>
           [{open ? "hide" : "show"}]
         </button>
       </div>
       {!open ? (
-        <div className="wiki-log-preview">{last || "thinking…"}<span className="wiki-caret">▍</span></div>
+        <div className="wiki-agents-preview">{last || "thinking…"}<span className="wiki-caret">▍</span></div>
       ) : (
-        <div className="wiki-log-body" ref={bodyRef}>
-          <p className="wiki-log-think">{text}<span className="wiki-caret">▍</span></p>
+        <div className="wiki-agents-body" ref={bodyRef}>
+          <p className="wiki-agents-think">{text}<span className="wiki-caret">▍</span></p>
         </div>
       )}
     </div>
   );
 }
 
-/** One agent in the research log: a collapsible row (Wikipedia [show]/[hide]).
+/** One agent in the agent log: a collapsible row (Wikipedia [show]/[hide]).
  *  Collapsed shows a live one-line preview; expanded reveals the streaming
  *  thinking and, once the agent writes its terminal report, the findings — both
  *  in a bounded, scrollable box pinned to the newest line. */
-function AgentEntry({ a }: { a: AgentView }): ReactElement {
+function AgentEntry({ a }: { a: AgentRuntime }): ReactElement {
   const [open, setOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const reasoning = cleanNarration(a.body);
-  const report = extractStreamingReport(a.body); // null until the report tool call starts
+  // The fold has already split the model's reasoning from its prose; the live report is the terminal call
+  // as it is written, and the filed one replaces it the moment the agent returns.
+  const reasoning = reasoningOf(a);
+  const report =
+    reportOf(a) ?? extractStreamingReport(a.contentBuffer, { tool: RIG_REPORT.tool, field: RIG_REPORT.field });
   const live = isLiveAgent(a);
-  const lastLine = (t: string): string => t.split("\n").filter(Boolean).slice(-1)[0] ?? "";
   const preview = report !== null ? lastLine(report) || "writing report…" : lastLine(reasoning) || "thinking…";
   const status =
-    a.status === "done"
+    a.phase === "done"
       ? "done"
-      : a.status === "failed"
+      : a.phase === "failed"
         ? "failed"
-        : a.status === "tool" && a.currentTool
-          ? a.currentTool
-          : report !== null
-            ? "writing report"
-            : "reading";
+        : report !== null
+          ? "writing report"
+          : "reading";
   // Keep the expanded box pinned to the newest line while it streams.
   useEffect(() => {
     if (open && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
   }, [reasoning, report, open]);
 
   return (
-    <div className="wiki-log-entry">
-      <div className="wiki-log-head">
-        <span className={`wiki-dot wiki-dot--${a.status}`} />
-        <span className="wiki-log-title">Agent {a.id}</span>
-        <span className="wiki-log-status">{status}</span>
+    <div className="wiki-agents-entry">
+      <div className="wiki-agents-head">
+        <span className={`wiki-dot wiki-dot--${a.phase}`} />
+        <span className="wiki-agents-title">Agent {a.label}</span>
+        <span className="wiki-agents-status">{status}</span>
         <button type="button" className="wiki-toggle" onClick={() => setOpen((o) => !o)}>
           [{open ? "hide" : "show"}]
         </button>
       </div>
       {!open ? (
-        <div className="wiki-log-preview">{preview}</div>
+        <div className="wiki-agents-preview">{preview}</div>
       ) : (
-        <div className="wiki-log-body" ref={bodyRef}>
+        <div className="wiki-agents-body" ref={bodyRef}>
           {reasoning && (
-            <p className="wiki-log-think">
+            <p className="wiki-agents-think">
               {reasoning}
               {live && report === null && <span className="wiki-caret">▍</span>}
             </p>
           )}
           {report !== null && (
-            <div className="wiki-log-report">
-              <div className="wiki-log-report-label">Findings</div>
+            <div className="wiki-agents-report">
+              <div className="wiki-agents-report-label">Findings</div>
               <div className="md">
                 {live ? <StreamingMarkdown text={report} /> : <Markdown text={report} />}
               </div>
@@ -158,6 +153,33 @@ function AgentEntry({ a }: { a: AgentView }): ReactElement {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What is already on the shelf, on the landing. The heading appears only once the model has named a topic,
+ * so the ungrouped list and the grouped one are the same markup — and CSS does the reflow when `key` order
+ * changes, which is what makes the model's work visible without blocking a single frame on it.
+ */
+function Shelf({ groups }: { groups: ShelfGroup[] }): ReactElement | null {
+  if (groups.length === 0) return null;
+  return (
+    <section className="wiki-shelf">
+      <h2>Already here</h2>
+      {groups.map((g, i) => (
+        <div key={g.topic ?? `ungrouped-${i}`} className="wiki-shelf-group">
+          {g.topic && <h3>{g.topic}</h3>}
+          <ul>
+            {g.articles.map((a) => (
+              <li key={a.id}>
+                {a.query}
+                <span className="wiki-shelf-when"> — {a.savedAt.slice(0, 10)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -214,39 +236,34 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
     setQuery("");
   };
 
-  const agents: AgentView[] = [...state.agents.values()];
-  const research = agents.filter(isResearchAgent);
-  // Agents accumulate across turns (they are the composition history), so the
-  // synth must be picked from THIS turn — `find` over the whole map would pin it
-  // to the first turn's synth forever, and a follow-up would never render.
-  // `isResearchAgent` is "has recorded a tool call", so a research agent looks
-  // synth-like until its first call: take the LAST match in this turn, which is
-  // the real synth once it exists and is harmless before then.
-  const thisTurn = agents.filter((a) => a.turn === state.turn);
-  const synth = [...thisTurn].reverse().find((a) => !isResearchAgent(a));
-  const live = thisTurn.filter((a) => isLiveAgent(a) && isResearchAgent(a));
-  // The log keeps every turn's agents as the record of how this page was
-  // composed — but calling the finished ones "reading" is false the moment a
-  // follow-up starts, so the present tense counts only what is live.
+  // The roster holds THIS turn's agents, so the settling agent is simply the one working no angle.
+  const agents: AgentRuntime[] = [...state.roster.agents.values()];
+  const readers = agents.filter(isWikiAgent);
+  const synth = agents.find((a) => a.timeline !== null && !isWikiAgent(a));
+  const live = readers.filter(isLiveAgent);
   const plural = (n: number): string => (n === 1 ? "" : "s");
-  const researchNote =
+  const readersNote =
     live.length > 0
       ? `${live.length} agent${plural(live.length)} reading Wikipedia in parallel.`
-      : `${research.length} agent${plural(research.length)} researched this page.`;
-  const sources = wikipediaSources(agents);
+      : `${readers.length} agent${plural(readers.length)} read Wikipedia for this page.`;
+  const sources = state.sources;
   const working = state.phase === "working";
   // The browser tab mirrors run state — a dot while working, like an unread badge.
   useEffect(() => {
     document.title = working ? `● ${APP.name}` : APP.name;
   }, [working]);
-  // The article prose = the final answer, or the synth's report streaming in
-  // (the synth writes free text: `reportBody` strips its `<think>` reasoning).
-  const liveSynth = synth && synth.body.includes("</think>") ? reportBody(synth.body) : "";
-  const report = state.answer || liveSynth;
-  // While the synth is still thinking (before it starts the report), show its
-  // reasoning streaming so the report pane is alive, not a static spinner.
-  const synthThinking = synth && !report ? cleanNarration(synth.body) : "";
-  const headings = report ? reportHeadings(report) : [];
+  // The article: the settled answer, or the settling agent's prose as it arrives. The fold has already
+  // separated that prose from its reasoning, so there is no marker to look for here.
+  const report = state.answer || synth?.contentBuffer.trim() || "";
+  // Before it starts writing, show its reasoning streaming so the pane is alive, not a static spinner.
+  const synthThinking = synth && !report ? reasoningOf(synth) : "";
+  // The Contents, from the SAME rendered heading text the renderer assigns ids from
+  // (`headingsOf` reads the render grammar), so a link and its target cannot disagree.
+  const headings = report
+    ? headingsOf(report)
+        .filter((h) => h.depth === 2 || h.depth === 3)
+        .map((h) => ({ text: h.text, level: h.depth, slug: slugify(h.text) }))
+    : [];
   // `state.topic` is authoritative (it survives a reload and is the same on
   // every surface); the local one only covers the instant before `query` lands.
   const title = state.topic || topic || APP.name;
@@ -291,7 +308,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
               disabled={working}
             />
             <button type="submit" disabled={working || !query.trim()}>
-              {working ? "Researching…" : "Ask"}
+              {working ? "Reading…" : "Ask"}
             </button>
           </form>
         </header>
@@ -312,10 +329,10 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
                   </button>
                 </li>
               ))}
-              {research.length > 0 && (
+              {readers.length > 0 && (
                 <li>
-                  <button type="button" onClick={() => scrollTo("research")}>
-                    Research
+                  <button type="button" onClick={() => scrollTo("agents")}>
+                    Agents
                   </button>
                 </li>
               )}
@@ -353,20 +370,29 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
                 {synthThinking && <Thinking text={synthThinking} />}
               </div>
             ) : working ? (
-              <p className="wiki-lead">Researching Wikipedia… The report will appear here.</p>
+              <p className="wiki-lead">Reading Wikipedia… The article will appear here.</p>
             ) : (
-              <p className="wiki-lead">Ask a question above to research it across Wikipedia.</p>
+              <>
+                <p className="wiki-lead">Ask a question above to build an article from Wikipedia.</p>
+                <Shelf groups={shelf(state)} />
+              </>
+            )}
+
+            {state.nothingFound && (
+              <p className="wiki-lead">
+                Nothing found on Wikipedia for that. Try naming the subject more directly.
+              </p>
             )}
 
             {state.error && <p className="wiki-error">Error: {state.error}</p>}
 
-            {research.length > 0 && (
-              <section id="research" className="wiki-log">
-                <h2>Research</h2>
-                <p className="wiki-log-note">
-                  {researchNote} Expand an agent to follow its reasoning and findings.
+            {readers.length > 0 && (
+              <section id="agents" className="wiki-agents">
+                <h2>Agents</h2>
+                <p className="wiki-agents-note">
+                  {readersNote} Expand an agent to follow its reasoning and findings.
                 </p>
-                {research.map((a) => (
+                {readers.map((a) => (
                   <AgentEntry key={a.id} a={a} />
                 ))}
               </section>

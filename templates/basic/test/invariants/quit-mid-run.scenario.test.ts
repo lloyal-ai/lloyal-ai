@@ -1,17 +1,8 @@
 /**
  * `quit` arriving while a turn is in flight must END the run, not queue behind it.
  *
- * SKIPPED until the command loop moves to `serveCommands` + `useExecution` (step 6
- * of the basic arc). Today `app.ts` awaits `runQuery` inside its own `for (const cmd
- * of yield* each(commands))`, so the loop is not reading commands while the model
- * works: a `quit` sent mid-turn is buffered by the signal and acted on only once the
- * answer has already been produced and committed. That is exactly the behaviour the
- * step changes — `submit` will hand the work to `run.replace(...)` and stop awaiting
- * it — so this test is written now, red, and turned on there rather than written
- * afterwards to describe whatever the rewrite happened to do.
- *
- * Kept skipped rather than failing so the suite stays a usable gate for every other
- * step; the cost is that it must actually be un-skipped, which is why step 6 names it.
+ * The loop must be free while the model works: `submit` hands its work to `run` and returns, so a `quit`
+ * arriving mid-turn is dispatched rather than buffered behind the answer.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +16,7 @@ const SLOW: Utterance[] = [
   { kind: "text", text: "A settled answer nobody should be shown." },
 ];
 
-test.skip("quit during a turn ends the run without answering [un-skip at arc step 6]", async () => {
+test("quit during a turn ends the run without answering", async () => {
   const run = await runHarness({
     utterances: SLOW,
     script: [

@@ -11,11 +11,11 @@
  * Grow these two types as your harness grows; nothing else in the project needs
  * to change when you do.
  *
- * Types only, node-free, so a renderer imports this to speak the protocol
- * without depending on the harness.
+ * Node-free, so a renderer imports this to speak the protocol without depending
+ * on the harness. Types, and the two small values the contract itself owns.
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
-import type { HostResourcesEvent, SettingsEvent } from "@lloyal-labs/rig";
+import type { HostResourcesEvent, RunCommand, SettingsEvent } from "@lloyal-labs/rig";
 
 /**
  * The measured facts the boot surface renders — every line a runtime truth, not
@@ -55,11 +55,46 @@ export type WorkflowEvent =
   // a trunk, i.e. this turn DEEPENS the existing article rather than starting a
   // fresh one; the view uses it to decide between replacing and extending.
   | { type: "query"; text: string; warm: boolean }
-  // The answer for the last query.
-  | { type: "answer"; text: string }
-  // A recoverable error to show; the surface returns to accepting input.
-  | { type: "error"; message: string };
+  // The article for the last query — `null` when the agents found nothing worth settling. The event ALWAYS
+  // fires, so a surface never has to infer "the turn is over" from silence; `null` is what it says instead of
+  // inventing prose nobody's sources support.
+  | { type: "answer"; text: string | null }
+  // The turn stopped short of an answer — the reader stopped it, or it failed. Said on its own, because
+  // "the run ended badly" and "here is something to show the reader" are two facts: a benign failure
+  // toasts through rig's `ui:error` without any turn ending, and a dying run says BOTH.
+  | { type: "run:aborted" }
+  // What is kept on disk, said at boot and after every turn that keeps something. `groups` is the resident
+  // model's grouping of them, `null` until it answers — the list paints flat first and regroups when it does,
+  // so nothing on screen ever waits for a model call.
+  | { type: "library"; articles: KeptArticle[]; groups: Group[] | null };
 
+/** One kept article, as a surface lists it — the folder name is the identity. */
+export interface KeptArticle {
+  id: string;
+  query: string;
+  savedAt: string;
+}
+
+/** A topic the model named, and the articles it put under it. */
+export interface Group {
+  topic: string;
+  ids: string[];
+}
+
+/**
+ * What a surface can ask for. `stop` is rig's word, not this app's — `RunCommand` is rig's whole vocabulary
+ * for the controls of a live run (`stop` · `wrap_up` · `pause` · `resume` · `cancel_agent`), and taking one
+ * member of it by `Extract` says so out loud while costing exactly one concept. basic offers no control below
+ * boot beyond stopping, so it declares no more than it keeps; widen to the whole union the day a surface
+ * grows a pause button.
+ */
 export type Command =
   | { type: "submit_query"; query: string }
+  | Extract<RunCommand, { type: "stop" }>
   | { type: "quit" };
+
+/** Any thrown thing as a sentence, for the one place that shows the reader an error. */
+export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/** A one-shot run the harness could not proceed past — rig's: the boot writes its message and exits with its code. */
+export { HarnessExit } from "@lloyal-labs/rig";

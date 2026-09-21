@@ -10,8 +10,8 @@
 import { isValidElement, memo, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { slugify } from "./state.js";
-import { splitStreaming } from "./streaming.js";
+import { slugify } from "../common/util.js";
+import { splitStreaming } from "@lloyal-labs/ui/prose";
 
 /** Flatten a heading's children to text, for the anchor slug — recursing into
  *  inline elements (`**bold**`, `` `code` ``, links) so a heading with markup

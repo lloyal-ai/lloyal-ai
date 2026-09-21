@@ -18,8 +18,9 @@
     "noEmit": true
   },
   "include": [
-    "src/harness/protocol.ts",
+    "src/protocol.ts",
     "src/config.ts",
+    "src/common/util.ts",
     "src/ui/**/*",
     "types/**/*",
     "targets/desktop/view.tsx",

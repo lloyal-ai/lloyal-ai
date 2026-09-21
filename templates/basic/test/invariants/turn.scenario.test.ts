@@ -27,7 +27,7 @@ const SCRIPT: Utterance[] = [
   { kind: "text", text: SETTLED },
 ];
 
-test("a cold question is researched, settled, and answered in the settling agent's own words", async () => {
+test("a cold question is worked, settled, and answered in the settling agent's own words", async () => {
   const run = await runHarness({
     utterances: SCRIPT,
     script: [
@@ -49,4 +49,47 @@ test("a cold question is researched, settled, and answered in the settling agent
 
   // The one that matters: the reader is shown what the settling agent actually said.
   assert.equal(answerOf(run.events), SETTLED);
+});
+
+test("the article reaches the reader verbatim — the engine cleans nothing", async () => {
+  // Separating reasoning from prose is the RUNTIME's job, not this app's: the model hands back `content` and
+  // `reasoningContent` as two fields, so an article never arrives with a `<think>` block inside it. An engine
+  // that stripped markup anyway would be re-deriving a guarantee it already has — and would corrupt the one
+  // case where the characters are the content, which is what this pins.
+  //
+  // The live STREAM is ui's fold's business: it separates the reasoning from the prose as the tokens arrive,
+  // so this app holds no marker of the model's anywhere.
+  const ABOUT_MARKUP = [
+    "## Thesis",
+    "",
+    "Hermes-format models wrap calls in `<tool_call>` tags:",
+    "",
+    "```xml",
+    "<tool_call>",
+    '<function=report>',
+    "</tool_call>",
+    "```",
+    "",
+    "## Bottom line",
+    "",
+    "The tags are the subject here, not markup to strip.",
+  ].join("\n");
+
+  const run = await runHarness({
+    utterances: [
+      { kind: "report", text: "Angle one." },
+      { kind: "report", text: "Angle two." },
+      { kind: "text", text: ABOUT_MARKUP },
+    ],
+    script: [
+      { send: { type: "submit_query", query: "how do hermes tool calls look?" } },
+      { on: (ev) => ev.type === "answer" },
+    ],
+  });
+
+  assert.equal(
+    answerOf(run.events),
+    ABOUT_MARKUP,
+    "an article ABOUT tool-call syntax came back altered — something on the host is stripping the model's bytes",
+  );
 });

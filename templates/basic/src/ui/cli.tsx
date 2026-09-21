@@ -20,20 +20,20 @@ import {
   initialState,
   reduce,
   formatSize,
-  cleanNarration,
-  toolArgSummary,
-  resultMeta,
-  wikipediaSources,
-  isResearchAgent,
+  isWikiAgent,
+  isLiveAgent,
+  reasoningOf,
 } from "./state.js";
 import type {
-  AgentView,
+  AgentRuntime,
   AppState,
   Phase,
-  ToolStep,
+  TimelineItem,
   WikiSource,
 } from "./state.js";
-import type { Command, WorkflowEvent } from "../harness/protocol.js";
+import { hostOf } from "@lloyal-labs/ui/fold";
+import { lastLine } from "../common/util.js";
+import type { Command, WorkflowEvent } from "../protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
 import { APP } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
@@ -41,29 +41,32 @@ import { FRAMING } from "./devtools.js";
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
   bootstrap.reduce(reduce, initialState);
 
-const glyph = (s: AgentView["status"]): string =>
-  s === "active" ? "●" : s === "tool" ? "◍" : s === "done" ? "✓" : "✗";
+const glyph = (p: AgentRuntime["phase"]): string =>
+  p === "tool" ? "◍" : p === "done" ? "✓" : p === "failed" ? "✗" : "●";
 
-const statusColor = (s: AgentView["status"]): string =>
-  s === "active" ? "yellow" : s === "tool" ? "cyan" : s === "done" ? "green" : "red";
+const statusColor = (p: AgentRuntime["phase"]): string =>
+  p === "tool" ? "cyan" : p === "done" ? "green" : p === "failed" ? "red" : "yellow";
 
-/** Hostname of a URL, `www.` stripped — for the sources footer. */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
+/** The tool rows of an agent's timeline, newest last — a call and, once it lands, its result. */
+const toolRows = (a: AgentRuntime): TimelineItem[] =>
+  (a.timeline ?? []).filter((it) => it.kind === "tool_call" || it.kind === "tool_result");
+
+/** One timeline row as an atomic chip: `⚒ tool · args` for a call, `→ meta` for its result. */
+function ToolChip({ item }: { item: TimelineItem }): React.ReactElement | null {
+  if (item.kind === "tool_call") {
+    return (
+      <Text wrap="truncate-end">
+        <Text color="magenta">⚒ {item.tool}</Text>
+        {item.argsSummary ? <Text dimColor>{`  ${item.argsSummary}`}</Text> : null}
+      </Text>
+    );
   }
-}
-
-/** One tool invocation as an atomic chip: `⚒ tool · args → result-meta`. */
-function ToolChip({ step }: { step: ToolStep }): React.ReactElement {
-  const args = toolArgSummary(step.args);
+  if (item.kind !== "tool_result") return null;
+  const meta = item.resultCount !== null ? `${item.resultCount} results` : `${item.byteLength}b`;
   return (
     <Text wrap="truncate-end">
-      <Text color="magenta">⚒ {step.tool}</Text>
-      {args ? <Text dimColor>{`  ${args}`}</Text> : null}
-      <Text color={step.result === null ? "gray" : "green"}>{`  → ${resultMeta(step.result)}`}</Text>
+      <Text color="green">{`  → ${meta}`}</Text>
+      {item.preview ? <Text dimColor>{`  ${item.preview}`}</Text> : null}
     </Text>
   );
 }
@@ -71,17 +74,17 @@ function ToolChip({ step }: { step: ToolStep }): React.ReactElement {
 /** A LIVE agent, as a fixed-width column: header · recent tool chips · a short
  *  narration preview (the last line of the model's prose, XML stripped). The
  *  bounded shape (last 4 chips + 1 line) keeps the dynamic frame small. */
-function AgentColumn({ a, width }: { a: AgentView; width: number }): React.ReactElement {
-  const preview = cleanNarration(a.body).split("\n").filter(Boolean).slice(-1)[0] ?? "";
+function AgentColumn({ a, width }: { a: AgentRuntime; width: number }): React.ReactElement {
+  const preview = lastLine(reasoningOf(a));
   return (
     <Box flexDirection="column" width={width} marginRight={2}>
       <Text wrap="truncate-end">
-        <Text color={statusColor(a.status)}>{glyph(a.status)}</Text>
-        {` agent ${a.id}`}
-        <Text dimColor>{` · ${a.tokens} tok`}</Text>
+        <Text color={statusColor(a.phase)}>{glyph(a.phase)}</Text>
+        {` ${a.label}`}
+        <Text dimColor>{` · ${a.tokenCount} tok`}</Text>
       </Text>
-      {a.tools.slice(-4).map((t, i) => (
-        <ToolChip key={i} step={t} />
+      {toolRows(a).slice(-4).map((t) => (
+        <ToolChip key={t.id} item={t} />
       ))}
       {preview ? (
         <Text dimColor wrap="truncate-end">
@@ -92,16 +95,18 @@ function AgentColumn({ a, width }: { a: AgentView; width: number }): React.React
   );
 }
 
-/** A FINISHED research agent, collapsed to a one-line summary in Static — the
+/** A FINISHED wiki agent, collapsed to a one-line summary in Static — the
  *  live detail scrolled by; the record is a tidy line. */
-function FinishedAgentRow({ a }: { a: AgentView }): React.ReactElement {
-  const reads = a.tools.filter((t) => t.tool === "wikipedia_fetch" && t.result !== null).length;
+function FinishedAgentRow({ a }: { a: AgentRuntime }): React.ReactElement {
+  const reads = (a.timeline ?? []).filter(
+    (it) => it.kind === "tool_result" && it.tool === "wikipedia_fetch",
+  ).length;
   return (
     <Text>
-      <Text color={statusColor(a.status)}>{glyph(a.status)}</Text>
-      {` agent ${a.id}`}
+      <Text color={statusColor(a.phase)}>{glyph(a.phase)}</Text>
+      {` ${a.label}`}
       <Text dimColor>
-        {` · ${a.toolCalls} tool${a.toolCalls === 1 ? "" : "s"}`}
+        {` · ${a.toolCallCount} tool${a.toolCallCount === 1 ? "" : "s"}`}
         {reads ? ` · ${reads} article${reads === 1 ? "" : "s"}` : ""}
       </Text>
     </Text>
@@ -142,7 +147,7 @@ function Gauge({ used, total }: { used: number; total: number }): React.ReactEle
 
 /** One committed line of scrollback — a finished agent or an answer. */
 type Scrollback =
-  | { kind: "agent"; agent: AgentView }
+  | { kind: "agent"; agent: AgentRuntime }
   | { kind: "answer"; text: string; sources: WikiSource[] };
 
 function View({
@@ -171,7 +176,7 @@ function View({
   });
 
   // Move finished work into Static so it's painted to scrollback ONCE and never
-  // re-rendered: each research agent when it terminates, and each answer on the
+  // re-rendered: each wiki agent when it terminates, and each answer on the
   // working→answered transition. The dynamic frame below then holds only the
   // live agents + input, so it can't grow past the viewport and trigger Ink's
   // clear-on-overflow.
@@ -180,22 +185,16 @@ function View({
   const prevPhase = useRef<Phase>("booting");
   useEffect(() => {
     const add: Scrollback[] = [];
-    for (const a of state.agents.values()) {
-      if (
-        isResearchAgent(a) &&
-        (a.status === "done" || a.status === "failed") &&
-        !committed.current.has(a.id)
-      ) {
+    for (const a of state.roster.agents.values()) {
+      if (isWikiAgent(a) && !isLiveAgent(a) && !committed.current.has(a.id)) {
         committed.current.add(a.id);
         add.push({ kind: "agent", agent: a });
       }
     }
-    if (state.phase === "answered" && prevPhase.current !== "answered" && state.answer) {
-      add.push({
-        kind: "answer",
-        text: state.answer,
-        sources: wikipediaSources(state.agents.values()),
-      });
+    // `nothingFound` keeps the previous article in `answer`, so committing on it would print that article
+    // to scrollback a second time for a turn that produced none.
+    if (state.phase === "answered" && prevPhase.current !== "answered" && state.answer && !state.nothingFound) {
+      add.push({ kind: "answer", text: state.answer, sources: state.sources });
     }
     prevPhase.current = state.phase;
     if (add.length) setScrollback((s) => [...s, ...add]);
@@ -204,9 +203,7 @@ function View({
   const working = state.phase === "working";
   // Only the still-running agents stay in the dynamic frame; finished ones are
   // in Static. The synth (tool-less) streams here as a column until it's done.
-  const live = [...state.agents.values()].filter(
-    (a) => a.status === "active" || a.status === "tool",
-  );
+  const live = [...state.roster.agents.values()].filter(isLiveAgent);
   const cols = process.stdout.columns ?? 80;
   const colWidth = Math.max(30, Math.min(56, Math.floor((cols - 2) / Math.max(1, live.length)) - 2));
 
@@ -233,6 +230,11 @@ function View({
               <Text color="gray">Inference  local · no provider</Text>
               <Text color="gray">{`Abilities       ${state.boot.abilities.length ? state.boot.abilities.join(", ") : "none installed"}`}</Text>
               <Text color="gray">Surface    cli</Text>
+              {state.library.length > 0 && (
+                // The terminal reports what is kept and leaves browsing to the other two surfaces: a reflow
+                // into topics is not something a scrolling view can show honestly.
+                <Text color="gray">{`Kept       ${state.library.length} article${state.library.length === 1 ? "" : "s"}`}</Text>
+              )}
             </>
           ) : (
             <Text color="gray">booting…</Text>
@@ -248,6 +250,10 @@ function View({
             </Box>
             <Gauge used={state.kv.used} total={state.kv.total} />
           </Box>
+        )}
+
+        {state.nothingFound && (
+          <Text color="yellow">nothing found on Wikipedia for that — try naming the subject more directly.</Text>
         )}
 
         {state.error && <Text color="red">error: {state.error}</Text>}

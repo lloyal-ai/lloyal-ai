@@ -1,0 +1,6 @@
+Saved articles:
+<% it.articles.forEach(function (a) { %>- <%= a.id %>: <%= a.query %>
+
+<% }) %>
+
+Sort them into topics.

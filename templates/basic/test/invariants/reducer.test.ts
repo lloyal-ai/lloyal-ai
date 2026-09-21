@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
-import type { WorkflowEvent } from "../../src/harness/protocol.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
   events.reduce(reduce, from);
@@ -45,7 +45,6 @@ test("boot: a later `ready` never drags a working session back to ready", () => 
 test("a cold turn takes the page's title and clears the previous article", () => {
   const s = fold([{ type: "query", text: "Q2", warm: false } as WorkflowEvent], settled());
   assert.equal(s.phase, "working");
-  assert.equal(s.turn, 2);
   assert.equal(s.topic, "Q2");
   assert.equal(s.answer, "");
 });
@@ -55,17 +54,25 @@ test("a warm turn keeps BOTH the title and the article it is extending", () => {
   const s = fold([{ type: "query", text: "follow-up", warm: true } as WorkflowEvent], before);
   assert.equal(s.topic, before.topic, "a follow-up must not retitle a page that is now about more");
   assert.equal(s.answer, "## The article", "blanking the page would empty it for the whole synthesis");
-  assert.equal(s.turn, 2);
 });
 
-test("a failed turn keeps the article the reader already has", () => {
-  const s = fold([{ type: "error", message: "boom" } as WorkflowEvent], settled());
-  assert.equal(s.phase, "error");
+test("a turn that dies keeps the article the reader already has", () => {
+  const s = fold([{ type: "run:aborted" } as WorkflowEvent], settled());
+  assert.equal(s.answer, "## The article", "a stopped turn is no reason to blank the page");
+  assert.equal(s.phase, "answered", "the page decides the phase: an article on screen is an answered page");
+});
+
+test("a toast does not end a turn — `ui:error` shows a message and nothing else", () => {
+  // The two facts were ONE event until step 6, and folding them together meant a benign failure — a bad
+  // config path, an ability that would not start — read on screen exactly like a turn that died. They are
+  // separate events now, so a toast arriving mid-turn must leave the turn running.
+  const working = fold([{ type: "query", text: "Q", warm: false } as WorkflowEvent]);
+  const s = fold([{ type: "ui:error", message: "boom" } as WorkflowEvent], working);
   assert.equal(s.error, "boom");
-  assert.equal(s.answer, "## The article");
+  assert.equal(s.phase, "working", "a toast is not an ending");
 });
 
-test("agents carry the turn that spawned them, so history stays distinguishable", () => {
+test("a new question starts a fresh roster — the page is the record, not the agents", () => {
   const s = fold(
     [
       { type: "agent:spawn", agentId: 3, parentAgentId: 0 } as WorkflowEvent,
@@ -74,37 +81,57 @@ test("agents carry the turn that spawned them, so history stays distinguishable"
     ],
     settled(),
   );
-  assert.equal(s.agents.get(3)?.turn, 1);
-  assert.equal(s.agents.get(4)?.turn, 2);
-  assert.equal(s.agents.size, 2, "earlier turns' agents are the record of how the page was composed");
+  assert.deepEqual([...s.roster.agents.keys()], [4], "the previous turn's agents are not this turn's work");
+  assert.equal(s.answer, "## The article", "what the previous turn produced is what survives it");
 });
 
-test("produce takes the running total, never the sum of deltas", () => {
-  const s = fold([
-    { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
-    { type: "agent:produce", agentId: 1, text: "a", tokenCount: 10 } as WorkflowEvent,
-    { type: "agent:produce", agentId: 1, text: "b", tokenCount: 20 } as WorkflowEvent,
-  ]);
-  assert.equal(s.agents.get(1)?.tokens, 20, "summing a cumulative count is quadratic and wrong");
-  assert.equal(s.agents.get(1)?.body, "ab");
+// What each agent is DOING is ui's fold, and ui tests it. What follows is basic's own: the Wikipedia pages
+// behind the article, read from the tools' raw payloads that a runtime roster has no reason to keep.
+
+test("an agent spawning outside a turn does not make the app look busy", () => {
+  // The topic classifier spawns at boot. If a spawn meant "working", the landing would show "Reading
+  // Wikipedia…" with the shelf it is classifying hidden behind that branch — the grouping blocking the very
+  // render it exists to improve.
+  const s = fold([READY, { type: "agent:spawn", agentId: 9, parentAgentId: 0 } as WorkflowEvent]);
+  assert.equal(s.phase, "ready", "only `query` says a turn began");
 });
 
-test("a tool result fills its own in-flight call, not another tool's", () => {
+test("a fetched article becomes a source, once", () => {
+  const page = '{"title":"Antikythera mechanism","extract":"An ancient device.","url":"https://en.wikipedia.org/wiki/X"}';
   const s = fold([
     { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
-    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_search", args: '{"query":"x"}' } as WorkflowEvent,
-    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_fetch", args: '{"title":"y"}' } as WorkflowEvent,
-    { type: "agent:tool_result", agentId: 1, tool: "wikipedia_fetch", result: '{"title":"y"}' } as WorkflowEvent,
+    { type: "agent:tool_result", agentId: 1, tool: "wikipedia_fetch", result: page } as WorkflowEvent,
+    // A second agent reading the same page must not put it on the shelf twice.
+    { type: "agent:spawn", agentId: 2, parentAgentId: 0 } as WorkflowEvent,
+    { type: "agent:tool_result", agentId: 2, tool: "wikipedia_fetch", result: page } as WorkflowEvent,
   ]);
-  const tools = s.agents.get(1)?.tools ?? [];
-  assert.equal(tools.length, 2);
-  assert.equal(tools[0].result, null, "the search call is still in flight");
-  assert.equal(tools[1].result, '{"title":"y"}');
+  assert.equal(s.sources.length, 1);
+  assert.equal(s.sources[0].title, "Antikythera mechanism");
+  assert.equal(s.sources[0].snippet, "An ancient device.");
+});
+
+test("a fetch that failed is not a source", () => {
+  const s = fold([
+    { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
+    { type: "agent:tool_result", agentId: 1, tool: "wikipedia_fetch", result: '{"title":"X","error":"Article not found."}' } as WorkflowEvent,
+  ]);
+  assert.deepEqual(s.sources, [], "an error payload is not a page the reader can be shown");
+});
+
+test("the searches are kept, each once, in the order they were run", () => {
+  const s = fold([
+    { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
+    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_search", args: '{"query":"antikythera"}' } as WorkflowEvent,
+    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_fetch", args: '{"title":"X"}' } as WorkflowEvent,
+    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_search", args: '{"query":"antikythera"}' } as WorkflowEvent,
+    { type: "agent:tool_call", agentId: 1, tool: "wikipedia_search", args: '{"query":"greek astronomy"}' } as WorkflowEvent,
+  ]);
+  assert.deepEqual(s.queries, ["antikythera", "greek astronomy"]);
 });
 
 test("an event for an unknown agent is ignored rather than inventing one", () => {
   const s = fold([{ type: "agent:produce", agentId: 99, text: "x", tokenCount: 1 } as WorkflowEvent]);
-  assert.equal(s.agents.size, 0);
+  assert.equal(s.roster.agents.size, 0);
 });
 
 test("kv pressure comes off the tick", () => {
@@ -114,8 +141,8 @@ test("kv pressure comes off the tick", () => {
 
 test("the fold is immutable — no event mutates the state handed to it", () => {
   const before = settled();
-  const agentsBefore = before.agents;
+  const rosterBefore = before.roster;
   const after = fold([{ type: "agent:spawn", agentId: 7, parentAgentId: 0 } as WorkflowEvent], before);
-  assert.notEqual(after.agents, agentsBefore, "a new Map, so a renderer's identity check sees the change");
-  assert.equal(agentsBefore.size, 0, "the previous state must not have gained an agent");
+  assert.notEqual(after.roster, rosterBefore, "a new roster, so a renderer's identity check sees the change");
+  assert.equal(rosterBefore.agents.size, 0, "the previous state must not have gained an agent");
 });

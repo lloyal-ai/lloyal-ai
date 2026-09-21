@@ -8,7 +8,7 @@
  * types this app declares, `Command` and `WorkflowEvent`. That is the whole of basic's own test vocabulary:
  * it has no library to plant a fixture in, no plan to answer, and no minted id to read back.
  *
- * Why it exists at all: until it did, nothing exercised `runQuery`, the prompts or the command loop. basic's
+ * Why it exists at all: until it did, nothing exercised the program, the prompts or the command loop. basic's
  * other tests are pure view-side folds, so an engine regression had nowhere to show up — a call the pool could
  * not accept sat in `harness.ts` while `npm test` stayed green, reachable only through `typecheck`.
  */
@@ -20,7 +20,7 @@ import type {
   Step as RigStep,
 } from "@lloyal-labs/rig/testing";
 import { harness, config } from "../../src/app.js";
-import type { Command, WorkflowEvent } from "../../src/harness/protocol.js";
+import type { Command, WorkflowEvent } from "../../src/protocol.js";
 
 export type { Utterance } from "@lloyal-labs/rig/testing";
 export { dirs, typesOf, warmDeltas, prunesOf, sessionReleasesOf } from "@lloyal-labs/rig/testing";

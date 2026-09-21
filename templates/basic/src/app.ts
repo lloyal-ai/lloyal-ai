@@ -11,15 +11,17 @@
  */
 import { statSync } from "node:fs";
 import { basename } from "node:path";
-import { each } from "effection";
+import { spawn } from "effection";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { initializeHarness } from "@lloyal-labs/rig";
+import { initializeHarness, serveCommands, serveDefaults, useExecution } from "@lloyal-labs/rig";
 import { config } from "./config.js";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
-import { runQuery } from "./harness/harness.js";
-import type { Command, WorkflowEvent } from "./harness/protocol.js";
+import { articles } from "./harness/article.js";
+import type { Articles } from "./harness/article.js";
+import type { Command, WorkflowEvent } from "./protocol.js";
+import { HarnessExit } from "./protocol.js";
 
 /**
  * The Abilities this harness enables. Before enabling, the boot provisions
@@ -73,8 +75,9 @@ function weightBytes(path: string | undefined): number {
  * wire — and hands back the parts to compose over. What is left here is this
  * app's own: announce readiness, then serve commands.
  *
- * The program itself is `runQuery`, in `harness/harness.ts`. That is the file to
- * edit; nothing else in the project needs to know what you wrote there.
+ * The program itself is `harness/wiki.ts`. That is the file to edit; nothing
+ * else in the project needs to know what you wrote there. `harness/article.ts`
+ * sits between the two — what a reader can do, and what happens when they do it.
  */
 export function* harness(
   ctx: SessionContext,
@@ -88,6 +91,18 @@ export function* harness(
   for (const { name, reason } of disabled) {
     yield* wire.send({ type: "ui:error", message: `${name} ability disabled: ${reason}` });
   }
+
+  // `run` owns whatever long work is live, ONE operation at a time: a replacement waits for the last one's
+  // cleanup before it touches the model, and a Stop can always reach what is running. `article` is what a
+  // reader can do; it hands its work to `run` and never waits on the model, which is why the loop below
+  // keeps dispatching while an answer is still being written.
+  const run = yield* useExecution();
+  const article = articles({
+    session,
+    run,
+    wire,
+    root: () => (runner.config() as { sources: { outputDir: string } }).sources.outputDir,
+  });
 
   // Boot done — announce it with MEASURED facts, not hardcoded strings: the
   // model's id, the weight's size read off the file the boot actually resolved,
@@ -106,24 +121,26 @@ export function* harness(
     },
   });
 
-  // The command loop. Ends on `quit` (or when the Session closes and the scope
-  // unwinds). Everything the surface can ask for is a member of `Command`.
-  for (const cmd of yield* each(commands)) {
-    if (cmd.type === "quit") return;
-    if (cmd.type === "submit_query") {
-      try {
-        // Announce the turn before any work. A warm trunk means this turn
-        // deepens the article already on the page rather than starting one.
-        yield* wire.send({ type: "query", text: cmd.query, warm: !!session.trunk });
-        const answer = yield* runQuery(cmd.query, session, wire);
-        yield* wire.send({ type: "answer", text: answer });
-      } catch (err) {
-        yield* wire.send({
-          type: "error",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-    yield* each.next();
-  }
+  // What survived earlier sessions, before the first question — the landing shows it. The grouping runs
+  // beside the session rather than in front of it: the list paints at once and rearranges when the model
+  // answers, because a landing that waited on a model call would make the app feel slower, not cleverer.
+  yield* article.shelf();
+  yield* spawn(() => article.classify());
+
+  // A terminal with nobody at it: one question, and the run's outcome is the exit code.
+  if (runner.mode === "oneshot") return yield* once(article, runner.initialQuery);
+
+  // The loop. One command at a time, each handler under its own boundary, ending on `quit`. What happens when
+  // a handler throws, a command has no handler, or the run can no longer be trusted is rig's
+  // (`serveDefaults`); what this app gives up on a failed handler is its own — the turn in flight.
+  if (runner.initialQuery) yield* article.submit(runner.initialQuery);
+  yield* serveCommands<Command>(commands, [article], serveDefaults({ wire, run, abandon: article.abortRun }));
+}
+
+/** One question, no reader. `submit` returns once the run is accepted, so wait for the run itself as well:
+ *  nobody can stop this one, and its failure is ours to exit with. */
+function* once(article: Articles, query: string | undefined): Operation<void> {
+  if (!query) throw new HarnessExit("Non-TTY mode requires --query.", 2);
+  const accepted = yield* article.submit(query);
+  yield* accepted;
 }

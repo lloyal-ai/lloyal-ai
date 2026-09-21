@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { createEngine, createWindow, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
-import type { WorkflowEvent, Command } from "../../src/harness/protocol.js";
+import type { WorkflowEvent, Command } from "../../src/protocol.js";
 
 let win: BrowserWindow | null = null;
 let engine: Engine<Command, AppState> | null = null;
