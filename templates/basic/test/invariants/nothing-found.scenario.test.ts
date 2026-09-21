@@ -1,10 +1,9 @@
 /**
  * When the angles come back empty the turn says so and keeps nothing.
  *
- * The rule it pins is that the app never invents prose its sources do not support. basic used to answer
- * "No findings — the agents returned nothing." as the ARTICLE, which then went onto the trunk: a sentence the
- * model never wrote became the page the next question would deepen. Now the answer is `null`, no trunk write
- * happens, and the words the reader sees belong to the view.
+ * The rule it pins is that the app never invents prose its sources do not support. An apology written by the
+ * harness would be prose the model never wrote, and committing it would make it the page a follow-up deepens.
+ * So the answer is `null`, nothing reaches the trunk, and the words the reader sees belong to the view.
  *
  * `answer` still fires — that is why it carries `text: string | null`. A surface must never have to infer
  * "the turn is over" from silence.

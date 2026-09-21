@@ -98,11 +98,10 @@ export function articles(deps: {
   const { session, run, wire, root } = deps;
   let turnInFlight = false;
   let asked = 0;
-  // Two different facts, and conflating them is what made a stopped turn lose the page. `page` is the record
-  // this session's article IS — what a follow-up extends. `remembered` is the record the model's memory holds
-  // in full, and it is null whenever that cannot be trusted: before the first answer, and after any turn that
-  // stopped or failed, either of which may have left memory holding something nobody was shown.
+  /** The record this session's article IS — what a follow-up extends, and what memory is rebuilt from. */
   let page: string | null = null;
+  /** The record the model's memory holds in full. Null means it cannot be trusted: a turn that stopped or
+   *  failed may have committed a pair nobody was shown, so the next question rebuilds rather than continues. */
   let remembered: string | null = null;
 
   return {

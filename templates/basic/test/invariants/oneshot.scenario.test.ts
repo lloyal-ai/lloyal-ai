@@ -27,8 +27,8 @@ test("one question, answered, and the run is waited for", async () => {
 });
 
 test("no question to run: the harness exits, it does not hang waiting for one", async () => {
-  // The interactive path would simply wait for a command. With nobody there, waiting IS the bug — so the
-  // harness says what is missing and exits with a code a script can act on.
+  // With nobody to type one, waiting for a command is waiting forever — so the harness says what is missing
+  // and exits with a code a script can act on.
   const run = await runHarness({ oneshot: "" });
 
   assert.ok(run.failure instanceof HarnessExit, `expected a HarnessExit, got ${String(run.failure)}`);

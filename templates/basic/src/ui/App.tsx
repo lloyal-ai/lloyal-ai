@@ -216,8 +216,8 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   // The projection owns the fold: it seeds from the bridge's snapshot, holds
   // frames until that lands, and RE-SEEDS when the stream's `epoch` changes — a
   // reconnected socket, or a desktop engine replaced by `recover`. Comparing
-  // `seq` alone (which this view used to do) silently drops the new stream's
-  // frames, because a fresh stream restarts its numbering.
+  // `epoch` is what a reconnect changes; `seq` restarts its numbering, so comparing
+  // that alone would silently drop the new stream's frames.
   const projection = useMemo(
     () => connectProjection<WorkflowEvent, Command, AppState>(window.harness, initialState, reduce),
     [],
@@ -253,9 +253,8 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
     document.title = working ? `● ${APP.name}` : APP.name;
   }, [working]);
   // The article: the settled answer, then what the settling agent filed, then its prose as it arrives. The
-  // middle one is not redundant — when the agent returns, the fold moves its prose out of `contentBuffer` and
-  // files it, so reading only the buffer blanks the page for as long as the trunk takes to accept the article.
-  // The fold has already separated prose from reasoning, so there is no marker to look for here.
+  // fold files a returning agent's prose as a report and clears `contentBuffer`, so those are three different
+  // places across a turn, not one with fallbacks. Prose is already separated from reasoning — no marker here.
   const report = state.answer || (synth && reportOf(synth)) || synth?.contentBuffer.trim() || "";
   // Before it starts writing, show its reasoning streaming so the pane is alive, not a static spinner.
   const synthThinking = synth && !report ? reasoningOf(synth) : "";

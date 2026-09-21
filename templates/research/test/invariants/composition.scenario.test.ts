@@ -157,10 +157,10 @@ test("a replacement planner's questions are the ones the composer asks the reade
 });
 
 test("replanning from an open review withdraws it: the brief owns the reset, not the algorithm", async () => {
-  // A replacement planner RETURNS a PlanResult and emits nothing. The fold's planning reset — leave
-  // plan_review, drop the parked plan, set the mode, empty the roster — used to ride `plan:start`,
-  // which only the stock planner sent. So a replan from an open review left the reader looking at the
-  // PREVIOUS round's outline, still acceptable, for as long as the new planner took.
+  // A replacement planner RETURNS a PlanResult and emits nothing. So the fold's planning reset — leave
+  // plan_review, drop the parked plan, set the mode, empty the roster — cannot hang off an event only the
+  // stock planner sends, or a replan from an open review leaves the previous outline on screen, still
+  // acceptable, for as long as the new planner takes. The brief owns the reset.
   let round = 0;
   const plan = function* (_t: Branch | null, ask: Inputs): Operation<PlanResult> {
     round++;

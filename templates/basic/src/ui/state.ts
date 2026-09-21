@@ -64,9 +64,8 @@ export interface AppState {
   /** The last turn ended with no article. Distinct from an empty `answer`: a follow-up that finds nothing
    *  leaves the previous article on screen, so the page alone cannot say it. */
   nothingFound: boolean;
-  /** How many articles this session has ACCEPTED. A surface that shows each one once needs this rather than
-   *  the text: two turns can produce identical prose, and a stopped turn returns the page to `answered`
-   *  holding what it already held. Only an answer with an article advances it. */
+  /** How many articles this session has accepted — what a surface counts when it shows each one once.
+   *  Only an answer carrying an article advances it, so a stop and a follow-up that found nothing do not. */
   accepted: number;
   error: string | null;
   /** KV pressure for the gauge (from `agent:tick`). */

@@ -194,10 +194,7 @@ function View({
         add.push({ kind: "agent", agent: a });
       }
     }
-    // What is printed is a newly ACCEPTED article, which is neither a new phase nor new text. Several things
-    // return the page to `answered` holding what it already held — a follow-up that found nothing, and a
-    // stopped one — and printing on the phase repeats the article. Two turns can also settle on the same
-    // prose, and printing on the text would swallow the second one along with the sources it found.
+    // One scrollback entry per article the session accepted.
     if (state.accepted > printed.current) {
       printed.current = state.accepted;
       add.push({ kind: "answer", text: state.answer, sources: state.sources });

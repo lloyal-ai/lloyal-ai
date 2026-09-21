@@ -59,9 +59,8 @@ test("a question takes the model from the grouping rather than sharing it", asyn
 });
 
 test("a stopped turn leaves the page, and the next question is still a follow-up", async () => {
-  // The bug this pins: `warm` used to be read off the live trunk at the moment the question arrived. A stop
-  // returns before its cleanup finishes, so that read caught the trunk mid-teardown, saw null, and opened a
-  // cold page — throwing away an article that was still on screen.
+  // `warm` is a fact about the PAGE, so it is read from the page. A trunk cannot answer it: `run.stop()`
+  // returns before its cleanup finishes, so a trunk read at this moment may be mid-teardown.
   const run = await runHarness({
     utterances: [
       { kind: "report", text: "Angle one." },
@@ -181,9 +180,24 @@ test("the page a session extends is the record it saved, not the newest folder",
 // own. What must hold either way: nothing is published that was not saved, nothing is remembered that was not
 // published, and the next question continues from whatever the reader last actually saw.
 
-/** Make the library unwritable: the folder can still be listed, so boot is unaffected, but reserving one fails. */
-const seal = (dir: string) => fs.chmodSync(dir, 0o500);
-const unseal = (dir: string) => fs.chmodSync(dir, 0o700);
+/**
+ * Take the library away and give it back, by putting a FILE where the folder was.
+ *
+ * `mkdirSync` refuses a path whose parent is a file, on every platform. Permissions do not work here: a
+ * read-only bit is not honoured for DIRECTORIES on Windows, and these tests ship inside every scaffold, so
+ * they have to fail the same way wherever a reader runs them.
+ *
+ * The folder is moved aside rather than removed, so whatever is already saved survives being given back.
+ */
+const ASIDE = ".aside";
+const takeLibrary = (dir: string): void => {
+  fs.renameSync(dir, dir + ASIDE);
+  fs.writeFileSync(dir, "", "utf8");
+};
+const giveLibraryBack = (dir: string): void => {
+  fs.rmSync(dir);
+  fs.renameSync(dir + ASIDE, dir);
+};
 
 const TURN = [
   { kind: "report" as const, text: "Angle one." },
@@ -205,9 +219,16 @@ test("an article that cannot be saved is not published either", async () => {
   // Disk first is what makes this the safe failure: the record is written before the reader is told anything,
   // so a library that cannot be written costs the turn rather than leaving an article on screen that no
   // relaunch would find. The page is untouched, so the next question is still a cold one.
+  let library = "";
   const run = await runHarness({
-    setup: seal,
     utterances: [...TURN, ...AGAIN],
+    setup: (outputDir) => { library = outputDir; },
+    // On the QUESTION, not at setup: boot lists the library and the grouping reads it, so taking it away any
+    // earlier would break the boot rather than the save this is about.
+    observe: (ev) => {
+      if (ev.type === "query" && ev.text.startsWith("what is")) takeLibrary(library);
+      if (ev.type === "ui:error") giveLibraryBack(library);
+    },
     script: [
       { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
       { on: (ev) => ev.type === "ui:error" },
@@ -215,7 +236,6 @@ test("an article that cannot be saved is not published either", async () => {
       { on: (ev) => ev.type === "query" && ev.text === "who built it?" },
     ],
   });
-  unseal(run.outputDir);
 
   assert.deepEqual(answers(run.events), [], "nothing may be published that was not saved");
   assert.deepEqual(
@@ -235,10 +255,10 @@ test("a follow-up that cannot be saved leaves the article it failed to extend", 
     utterances: [...TURN, ...AGAIN, ...THIRD],
     setup: (outputDir) => { library = outputDir; },
     observe: (ev) => {
-      // Take the library away once the first article is on the shelf, and give it back when the turn that
-      // could not use it has died — so the question after it is a normal one, failing at nothing.
-      if (ev.type === "library" && ev.articles.length === 1) seal(library);
-      if (ev.type === "run:aborted") unseal(library);
+      // Take the library away as the follow-up is asked, and give it back when that turn has died — so the
+      // question after it is a normal one, failing at nothing.
+      if (ev.type === "query" && ev.text === "who built it?") takeLibrary(library);
+      if (ev.type === "run:aborted") giveLibraryBack(library);
     },
     script: [
       { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
@@ -263,7 +283,6 @@ test("a follow-up that cannot be saved leaves the article it failed to extend", 
   assert.ok(restored.length >= 2, "the dead turn left memory untrusted, so the page is put back from its record");
 });
 
-// NOT tested here, deliberately: an article that saves but whose memory update then fails. Reaching that
-// path means making a native call fail, and the only handle on it from a template is the mock context's own
-// `_storePrefill` — a layer this app has no business touching, in a file every scaffold inherits. The ordering
-// that makes it safe is visible in `article.ts` instead: the record and the reader both come first.
+// One path is absent: an article that saves but whose memory update then fails. Reaching it means failing a
+// native call, which a harness has no vocabulary for — see lloyal-ai#44. The ordering that makes it safe is
+// legible in `article.ts` instead: the record and the reader both come first.
