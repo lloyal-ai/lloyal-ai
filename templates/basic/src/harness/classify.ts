@@ -45,12 +45,15 @@ function* nameTopics(listings: Listing[]): Operation<string[]> {
 }
 
 /** Each article's own agent answers with its topic's number, 0 for none. They fork from one spine that lists
- *  the topics, and decode together. */
+ *  the topics, and decode together — the number is the whole answer, so nothing reasons before it and it is
+ *  kept as the agent's result. An article whose agent answered nothing is left unfiled. */
 function* fileUnder(topics: string[], listings: Listing[]): Operation<(number | null)[]> {
   const pick = defineOutput("topic", z.number().int().min(0).max(topics.length));
   const pool = yield* agentPool({
     systemPrompt: render("topic.system", { topics }),
     schema: pick.schema,
+    enableThinking: false,
+    acceptFreeText: true,
     orchestrate: parallel(listings.map((article) => ({ systemPrompt: "", content: render("topic.user", { article }) }))),
   });
   return pool.outcomes.map((outcome) => pick.read(outcome));
