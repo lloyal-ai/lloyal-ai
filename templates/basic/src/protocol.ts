@@ -36,11 +36,18 @@ export type WorkflowEvent =
   | { type: "run:aborted" }
   // What is kept on disk. `groups` is the model's grouping, `null` until it answers — so the list paints flat
   // and regroups, and nothing on screen waits for a model call.
-  | { type: "library"; articles: KeptArticle[]; groups: Group[] | null };
+  | { type: "library"; articles: KeptArticle[]; groups: Group[] | null }
+  // A kept article, whole, from disk. Does not activate: what the page shows is `doc:active`'s to say.
+  | { type: "doc"; docId: DocId; title: string; answer: string }
+  // What the page shows. Null is the landing.
+  | { type: "doc:active"; docId: DocId | null };
 
-/** One kept article, as a surface lists it — the folder name is the identity. */
+/** One kept article's identity — the name of the folder it is kept in. */
+export type DocId = string;
+
+/** One kept article, as a surface lists it. */
 export interface KeptArticle {
-  id: string;
+  docId: DocId;
   query: string;
   savedAt: string;
 }
@@ -48,13 +55,16 @@ export interface KeptArticle {
 /** A topic the model named, and the articles it put under it. */
 export interface Group {
   topic: string;
-  ids: string[];
+  docIds: DocId[];
 }
 
 /** What a surface can ask for. `stop` is rig's word — one member of `RunCommand`, taken by `Extract` so the
  *  spelling says whose vocabulary it is. Widen to the whole union the day a surface grows a pause button. */
 export type Command =
   | { type: "submit_query"; query: string }
+  /** Put a kept article on the page, or with null go to the landing. A question deepens whatever is shown.
+   *  Ignored while a turn is running: that turn is writing the page. */
+  | { type: "open_doc"; docId: DocId | null }
   | Extract<RunCommand, { type: "stop" }>
   | { type: "quit" };
 

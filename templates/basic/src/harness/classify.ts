@@ -21,7 +21,7 @@ export function* classifyTopics(kept: Saved[]): Operation<Group[]> {
 /** How much of an article the model reads beside its question — enough to say what a follow-up was about. */
 const OPENING = 400;
 
-/** An article as the model is shown it: by number, never by folder name, so the id stays here. */
+/** An article as the model is shown it: by number, never by folder name, so its `docId` stays here. */
 interface Listing {
   n: number;
   query: string;
@@ -63,5 +63,5 @@ const SMALLEST_PILE = 2;
  *  articles stay on the flat list. */
 const pilesOf = (topics: string[], kept: Saved[], picks: (number | null)[]): Group[] =>
   topics
-    .map((topic, t) => ({ topic, ids: kept.filter((_, i) => picks[i] === t + 1).map((article) => article.id) }))
-    .filter((pile) => pile.ids.length >= SMALLEST_PILE);
+    .map((topic, t) => ({ topic, docIds: kept.filter((_, i) => picks[i] === t + 1).map((article) => article.docId) }))
+    .filter((pile) => pile.docIds.length >= SMALLEST_PILE);

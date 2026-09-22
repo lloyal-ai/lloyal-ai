@@ -63,11 +63,11 @@ Then the words themselves: `src/harness/prompts/` holds one `.eta` file per prom
 
 ## What it keeps, and what it does not
 
-A settled article is written to `sources.outputDir`: `article.md` first, then a small `article.json` record — and the record's existence is what makes the folder an article, so a crash midway leaves nothing half-kept. Past articles appear on the landing, grouped by topic: the list paints immediately and rearranges when the resident model answers, because nothing on screen waits for a model call.
+A settled article is written to `sources.outputDir`: `article.md` first, then a small `article.json` record — and the record's existence is what makes the folder an article, so a crash midway leaves nothing half-kept. Past articles appear on the landing, grouped by topic: the list paints immediately and rearranges when the resident model answers, because nothing on screen waits for a model call. Open one and it is the page again — a question asked there deepens it, with the model's memory rebuilt from the record. The name at the top returns to the landing, where a question starts a new article.
 
 Two limits worth knowing before you meet them:
 
-- **Reopening an article does not resume it.** A follow-up deepens the article only while the session still holds it in memory; putting a saved one back on the trunk is state reconstruction, which is a different thing from keeping a file.
+- **A reopened article brings back its words, not its sources.** The record keeps four facts — the question, when, the version and the article — so the pages the agents read, and the agents themselves, belong to the turn that wrote it.
 - **The terminal reports the count and leaves browsing to the other two surfaces.** One fold serves all three bindings, but a reflow into topics is not something a scrolling view can show honestly.
 
 ## Add capabilities

@@ -10,7 +10,7 @@
 import { emptyRoster, foldAgents } from "@lloyal-labs/ui/fold";
 import type { AgentRoster, AgentRuntime, AgentEvent as FoldableEvent } from "@lloyal-labs/ui/fold";
 import { RIG_REPORT, taskIndexOf } from "@lloyal-labs/rig";
-import type { WorkflowEvent, BootFacts, Group, KeptArticle } from "../protocol.js";
+import type { WorkflowEvent, BootFacts, DocId, Group, KeptArticle } from "../protocol.js";
 
 export type { AgentRoster, AgentRuntime, TimelineItem } from "@lloyal-labs/ui/fold";
 
@@ -59,6 +59,8 @@ export interface AppState {
   /** What is kept on disk, oldest first, and the model's grouping of it — `null` until it answers. */
   library: KeptArticle[];
   groups: Group[] | null;
+  /** Kept articles loaded from disk, by identity — what the page shows when one is opened. */
+  documents: Map<DocId, { title: string; answer: string }>;
 }
 
 export const initialState: AppState = {
@@ -75,6 +77,7 @@ export const initialState: AppState = {
   topic: "",
   library: [],
   groups: null,
+  documents: new Map(),
 };
 
 /** The events `foldAgents` reads. Everything else is this app's own. */
@@ -135,6 +138,24 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
       return { ...s, phase: s.answer ? "answered" : "ready" };
     case "library":
       return { ...s, library: ev.articles, groups: ev.groups };
+    case "doc":
+      // Upsert only — what the page shows is `doc:active`'s to say.
+      return { ...s, documents: new Map(s.documents).set(ev.docId, { title: ev.title, answer: ev.answer }) };
+    case "doc:active": {
+      // The page changes wholesale: a kept article brings its words, and nothing that worked on another page.
+      const doc = ev.docId === null ? undefined : s.documents.get(ev.docId);
+      return {
+        ...s,
+        phase: doc ? "answered" : "ready",
+        roster: emptyRoster(),
+        sources: [],
+        queries: [],
+        topic: doc?.title ?? "",
+        answer: doc?.answer ?? "",
+        nothingFound: false,
+        error: null,
+      };
+    }
     case "agent:tick":
       return { ...s, kv: { used: ev.cellsUsed, total: ev.nCtx } };
 
@@ -215,6 +236,18 @@ export const reportOf = (a: AgentRuntime): string | null => {
   return filed.length > 0 ? filed[filed.length - 1] : null;
 };
 
+/** The agent writing the article: the one working no angle. */
+export const settlingAgent = (s: AppState): AgentRuntime | undefined =>
+  [...s.roster.agents.values()].find((a) => a.timeline !== null && !isWikiAgent(a));
+
+/** The article the page shows. While a turn works and nothing is accepted yet, that is the settling agent's
+ *  draft — what it filed, else its prose as it arrives. Once the turn is over, only an article the session
+ *  accepted: a draft whose save failed was never published. */
+export function articleOf(s: AppState): string {
+  const writer = s.phase === "working" ? settlingAgent(s) : undefined;
+  return s.answer || (writer && (reportOf(writer) || writer.contentBuffer.trim())) || "";
+}
+
 /** The model is organising the shelf right now. Derived, not announced: the classifier is an agent like any
  *  other, and an agent alive while no turn is running is that one. `groups === null` cannot say this — it is
  *  equally "not started" and "refused". */
@@ -232,12 +265,12 @@ export interface Shelf {
 export function shelf(s: AppState): Shelf[] {
   if (s.library.length === 0) return [];
   if (!s.groups) return [{ topic: null, articles: s.library }];
-  const byId = new Map(s.library.map((a) => [a.id, a]));
+  const byId = new Map(s.library.map((a) => [a.docId, a]));
   const grouped = s.groups
-    .map((g) => ({ topic: g.topic, articles: g.ids.flatMap((id) => byId.get(id) ?? []) }))
+    .map((g) => ({ topic: g.topic, articles: g.docIds.flatMap((docId) => byId.get(docId) ?? []) }))
     .filter((g) => g.articles.length > 0);
   // A grouping that left articles out shows them anyway: the model's answer decides the shape, never what is kept.
-  const placed = new Set(grouped.flatMap((g) => g.articles.map((a) => a.id)));
-  const rest = s.library.filter((a) => !placed.has(a.id));
+  const placed = new Set(grouped.flatMap((g) => g.articles.map((a) => a.docId)));
+  const rest = s.library.filter((a) => !placed.has(a.docId));
   return rest.length ? [...grouped, { topic: null, articles: rest }] : grouped;
 }

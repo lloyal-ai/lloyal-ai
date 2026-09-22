@@ -55,6 +55,18 @@
   font-size: 20px;
   font-weight: 400;
 }
+/* The name is the way back to the landing, as a wiki's logo is — a control that still reads as the name. */
+button.wiki-brand-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.wiki-brand-name:disabled {
+  cursor: default;
+}
 .wiki-brand-sub {
   font-size: 11.5px;
   color: var(--faint);
@@ -581,6 +593,18 @@
 }
 .wiki-shelf li {
   margin: 0.25em 0;
+}
+.wiki-shelf li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--link);
+  text-align: left;
+  cursor: pointer;
+}
+.wiki-shelf li button:hover {
+  text-decoration: underline;
 }
 .wiki-shelf-when {
   color: var(--faint);

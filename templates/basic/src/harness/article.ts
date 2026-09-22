@@ -17,7 +17,7 @@ import type { Execution, Handlers } from "@lloyal-labs/rig";
 import { z } from "zod";
 import { write } from "./wiki.js";
 import { classifyTopics } from "./classify.js";
-import type { Command, Group, WorkflowEvent } from "../protocol.js";
+import type { Command, DocId, Group, WorkflowEvent } from "../protocol.js";
 import { errorMessage } from "../protocol.js";
 
 /** The file whose existence says a folder IS an article. */
@@ -34,7 +34,7 @@ const Article = z.object({
 export type Article = z.infer<typeof Article>;
 
 /** A kept article and the folder holding it. The folder's name is the identity, so the record carries none. */
-export type Saved = Article & { id: string };
+export type Saved = Article & { docId: DocId };
 
 export interface Articles {
   handlers: Handlers<Command>;
@@ -59,10 +59,10 @@ export function articles(deps: {
   const { session, run, wire, root } = deps;
   let turnInFlight = false;
   let asked = 0;
-  /** The record this session's article IS — what a follow-up extends, and what memory is rebuilt from. */
-  let page: string | null = null;
+  /** The record the page shows — what a question extends, and what memory is rebuilt from. Null is the landing. */
+  let page: DocId | null = null;
   /** The record the model's memory holds in full; null when that cannot be trusted. */
-  let remembered: string | null = null;
+  let remembered: DocId | null = null;
 
   return {
     handlers: {
@@ -71,6 +71,9 @@ export function articles(deps: {
       },
       *stop() {
         yield* abortRun();
+      },
+      *open_doc({ docId }) {
+        yield* openDoc(docId);
       },
     },
     shelf,
@@ -83,29 +86,43 @@ export function articles(deps: {
     const kept = saved(root());
     yield* wire.send({
       type: "library",
-      articles: kept.map(({ id, query, savedAt }) => ({ id, query, savedAt })),
+      articles: kept.map(({ docId, query, savedAt }) => ({ docId, query, savedAt })),
       groups,
     });
   }
 
-  /** Group the shelf as it stands and say it again. Derives over EVERY record each time, so a grouping is never
-   *  stale and nothing on disk remembers a topic. Callers choose how it is scheduled. */
-  function* regroup(): Operation<void> {
+  function* classify(): Operation<void> {
     const kept = saved(root());
     if (kept.length < 2) return;   // one pile is not a grouping
-    try {
-      // A fast structured decision from the resident LLM, JEV-style.
-      const groups = yield* classifyTopics(kept);
-      if (groups.length > 0) yield* shelf(groups);
-    } catch {
-      // A flat shelf, and every record untouched. Nothing a reader asked for failed.
-    }
+    // Through `run` like any other model work, so a question evicts it rather than sharing the context.
+    yield* run.replace("classify", () =>
+      scoped(function* () {
+        try {
+          // A fast structured decision from the resident LLM, JEV-style.
+          const groups = yield* classifyTopics(kept);
+          if (groups.length > 0) yield* shelf(groups);
+        } catch {
+          // A flat shelf, and every record untouched. Nothing a reader asked for failed.
+        }
+      }),
+    );
   }
 
-  function* classify(): Operation<void> {
-    // At boot nothing owns `run`, so this takes it like any other model work and a question evicts it.
-    // A turn does NOT call this: it already owns the slot, and replacing it from inside would halt it.
-    yield* run.replace("classify", () => scoped(regroup));
+  /** Put a kept article on the page, or with null leave for the landing — where the shelf is regrouped, since it
+   *  is about to be seen. The model's memory is not touched here: the next question rebuilds it from the record. */
+  function* openDoc(docId: DocId | null): Operation<void> {
+    if (turnInFlight) return;
+    if (docId === null) {
+      if (page === null) return;
+      page = null;
+      yield* wire.send({ type: "doc:active", docId: null });
+      return yield* classify();
+    }
+    const record = saved(root()).find((a) => a.docId === docId);
+    if (!record) return yield* wire.send({ type: "ui:error", message: "That article is no longer there." });
+    page = docId;
+    yield* wire.send({ type: "doc", docId, title: record.query, answer: record.answer });
+    yield* wire.send({ type: "doc:active", docId });
   }
 
   function* submit(query: string): Operation<Operation<void>> {
@@ -125,16 +142,14 @@ export function articles(deps: {
           }
           // The order is the point: disk, then the reader, then memory. What is saved, what is on screen and
           // what the next question continues from cannot disagree, and a failure late costs only the last.
-          const id = keep(root(), query, article);
-          page = id;
+          const docId = keep(root(), query, article);
+          page = docId;
           remembered = null;
           yield* wire.send({ type: "answer", text: article });
           yield* rebase(session, query, article);
-          remembered = id;
+          remembered = docId;
           turnInFlight = false;
-          yield* shelf();
-          // The shelf just changed, so its grouping is stale. Inline, because this turn IS the run's occupant.
-          yield* regroup();
+          yield* shelf();   // last, so the shelf arriving is the whole turn being over
         } catch (err) {
           // Not in flight: the halt is arriving, and it is `run`'s to judge.
           if (!turnInFlight) throw err;
@@ -153,7 +168,7 @@ export function articles(deps: {
   function* recalled(): Operation<Branch | null> {
     if (page === null) return null;
     if (remembered === page && session.trunk) return session.trunk;
-    const record = saved(root()).find((a) => a.id === page);
+    const record = saved(root()).find((a) => a.docId === page);
     if (!record) return null;
     yield* rebase(session, record.query, record.answer);
     remembered = page;
@@ -178,13 +193,13 @@ export function articles(deps: {
  * Two calls to the SAME function, and their order is the commit: a crash between them leaves markdown with no
  * record, which `listFolders` does not list — correctly, because a half-written turn is not an article.
  */
-function keep(root: string, query: string, answer: string): string {
-  const id = reserveFolder(root);
-  const dir = join(root, id);
+function keep(root: string, query: string, answer: string): DocId {
+  const docId = reserveFolder(root);
+  const dir = join(root, docId);
   const record: Article = { version: 1, query, savedAt: new Date().toISOString(), answer };
   writeFileSync(join(dir, "article.md"), `# ${query}\n\n${answer}\n`, "utf8");
   writeFileSync(join(dir, RECORD), `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  return id;
+  return docId;
 }
 
 /** Every kept article, oldest first — the folder names are ISO-stamped. One that cannot be read is skipped. */
@@ -192,7 +207,7 @@ export function saved(root: string): Saved[] {
   return listFolders(root, RECORD).flatMap(({ name, path }) => {
     try {
       const parsed = Article.safeParse(JSON.parse(readFileSync(path, "utf8")));
-      return parsed.success ? [{ id: name, ...parsed.data }] : [];
+      return parsed.success ? [{ docId: name, ...parsed.data }] : [];
     } catch {
       return [];
     }

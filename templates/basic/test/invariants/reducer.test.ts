@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reduce, initialState, type AppState } from "../../src/ui/state.js";
+import { reduce, initialState, articleOf, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent } from "../../src/protocol.js";
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
@@ -173,4 +173,71 @@ test("the fold is immutable — no event mutates the state handed to it", () => 
   const after = fold([{ type: "agent:spawn", agentId: 7, parentAgentId: 0 } as WorkflowEvent], before);
   assert.notEqual(after.roster, rosterBefore, "a new roster, so a renderer's identity check sees the change");
   assert.equal(rosterBefore.agents.size, 0, "the previous state must not have gained an agent");
+});
+
+// ── the page: what it shows, and how a kept article comes back onto it ──
+
+/** A turn whose settling agent has filed its draft — the moment before the answer is accepted. */
+const drafted = (warm: boolean, from: AppState): AppState =>
+  fold(
+    [
+      { type: "query", text: "Q", warm } as WorkflowEvent,
+      { type: "agent:spawn", agentId: 5, parentAgentId: 0 } as WorkflowEvent,
+      { type: "agent:return", agentId: 5, result: "## Draft" } as WorkflowEvent,
+    ],
+    from,
+  );
+
+test("while a turn works, the page shows the settling agent's draft", () => {
+  assert.equal(articleOf(drafted(false, fold([READY]))), "## Draft");
+});
+
+test("a draft whose save failed is never shown: the turn is over and nothing was accepted", () => {
+  const s = fold(
+    [{ type: "run:aborted" }, { type: "ui:error", message: "EACCES" }] as WorkflowEvent[],
+    drafted(false, fold([READY])),
+  );
+  assert.equal(articleOf(s), "", "the page shows only an article the session accepted");
+  assert.equal(s.phase, "ready");
+});
+
+test("a follow-up whose save failed leaves the article it was extending", () => {
+  const s = fold([{ type: "run:aborted" } as WorkflowEvent], drafted(true, settled()));
+  assert.equal(articleOf(s), "## The article");
+});
+
+test("a kept article loaded from disk does not change the page until it is shown", () => {
+  const s = fold([{ type: "doc", docId: "d1", title: "Kept", answer: "## Kept" } as WorkflowEvent], settled());
+  assert.equal(articleOf(s), "## The article");
+  assert.equal(s.documents.get("d1")?.answer, "## Kept");
+});
+
+test("showing a kept article puts it on the page, with nothing that worked on the previous one", () => {
+  const page = '{"title":"Antikythera mechanism","extract":"An ancient device.","url":"https://en.wikipedia.org/wiki/X"}';
+  const before = fold(
+    [
+      { type: "agent:spawn", agentId: 1, parentAgentId: 0 } as WorkflowEvent,
+      { type: "agent:tool_result", agentId: 1, tool: "wikipedia_fetch", result: page } as WorkflowEvent,
+    ],
+    settled(),
+  );
+  const s = fold(
+    [
+      { type: "doc", docId: "d1", title: "Kept", answer: "## Kept" },
+      { type: "doc:active", docId: "d1" },
+    ] as WorkflowEvent[],
+    before,
+  );
+  assert.equal(articleOf(s), "## Kept");
+  assert.equal(s.topic, "Kept");
+  assert.equal(s.phase, "answered");
+  assert.deepEqual(s.sources, [], "the previous page's sources are not this article's");
+  assert.equal(s.roster.agents.size, 0, "nor are its agents");
+});
+
+test("the landing is no page at all", () => {
+  const s = fold([{ type: "doc:active", docId: null } as WorkflowEvent], settled());
+  assert.equal(articleOf(s), "");
+  assert.equal(s.topic, "");
+  assert.equal(s.phase, "ready");
 });

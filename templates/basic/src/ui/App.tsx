@@ -29,6 +29,8 @@ import {
   isGrouping,
   reasoningOf,
   reportOf,
+  settlingAgent,
+  articleOf,
   shelf,
   type AppState,
   type AgentRuntime,
@@ -40,7 +42,7 @@ import { RIG_REPORT } from "@lloyal-labs/rig";
 import { headingsOf } from "@lloyal-labs/ui/prose";
 import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
 import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
-import type { WorkflowEvent, Command } from "../protocol.js";
+import type { Command, DocId, WorkflowEvent } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
 import { DeleteMe } from "./DeleteMe.js";
 
@@ -163,7 +165,11 @@ function AgentEntry({ a }: { a: AgentRuntime }): ReactElement {
  * so the ungrouped list and the grouped one are the same markup — and each group settles in as it mounts, which
  * is what makes the model's work visible without blocking a single frame on it.
  */
-function Shelf({ groups, grouping }: { groups: ShelfGroup[]; grouping: boolean }): ReactElement | null {
+function Shelf({ groups, grouping, onOpen }: {
+  groups: ShelfGroup[];
+  grouping: boolean;
+  onOpen: (docId: DocId) => void;
+}): ReactElement | null {
   if (groups.length === 0) return null;
   return (
     <section className="wiki-shelf">
@@ -176,8 +182,10 @@ function Shelf({ groups, grouping }: { groups: ShelfGroup[]; grouping: boolean }
           {g.topic && <h3>{g.topic}</h3>}
           <ul>
             {g.articles.map((a) => (
-              <li key={a.id}>
-                {a.query}
+              <li key={a.docId}>
+                <button type="button" onClick={() => onOpen(a.docId)}>
+                  {a.query}
+                </button>
                 <span className="wiki-shelf-when"> — {a.savedAt.slice(0, 10)}</span>
               </li>
             ))}
@@ -240,11 +248,15 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
     setTopic(q);
     setQuery("");
   };
+  const openDoc = (docId: DocId | null): void => {
+    window.harness.send({ type: "open_doc", docId });
+    setTopic("");
+  };
 
   // The roster holds THIS turn's agents, so the settling agent is simply the one working no angle.
   const agents: AgentRuntime[] = [...state.roster.agents.values()];
   const readers = agents.filter(isWikiAgent);
-  const synth = agents.find((a) => a.timeline !== null && !isWikiAgent(a));
+  const synth = settlingAgent(state);
   const live = readers.filter(isLiveAgent);
   const plural = (n: number): string => (n === 1 ? "" : "s");
   const readersNote =
@@ -257,12 +269,9 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   useEffect(() => {
     document.title = working ? `● ${APP.name}` : APP.name;
   }, [working]);
-  // The article: the settled answer, then what the settling agent filed, then its prose as it arrives. The
-  // fold files a returning agent's prose as a report and clears `contentBuffer`, so those are three different
-  // places across a turn, not one with fallbacks. Prose is already separated from reasoning — no marker here.
-  const report = state.answer || (synth && reportOf(synth)) || synth?.contentBuffer.trim() || "";
+  const report = articleOf(state);
   // Before it starts writing, show its reasoning streaming so the pane is alive, not a static spinner.
-  const synthThinking = synth && !report ? reasoningOf(synth) : "";
+  const synthThinking = working && synth && !report ? reasoningOf(synth) : "";
   // The Contents, from the SAME rendered heading text the renderer assigns ids from
   // (`headingsOf` reads the render grammar), so a link and its target cannot disagree.
   const headings = report
@@ -282,7 +291,9 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
       <div className="wiki">
         <header className="wiki-top">
           <div className="wiki-brand">
-            <span className="wiki-brand-name">{APP.name}</span>
+            <button type="button" className="wiki-brand-name" onClick={() => openDoc(null)} disabled={working}>
+              {APP.name}
+            </button>
             <span className="wiki-brand-sub">
               {state.boot
                 ? `${state.boot.model.id} · ${formatSize(state.boot.model.sizeBytes)} · ${surface}`
@@ -371,7 +382,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
               <div className="wiki-prose md">
                 {state.answer ? <Markdown text={report} /> : <StreamingMarkdown text={report} />}
               </div>
-            ) : synth ? (
+            ) : working && synth ? (
               <div>
                 <p className="wiki-lead">Writing the report…</p>
                 {synthThinking && <Thinking text={synthThinking} />}
@@ -381,7 +392,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
             ) : (
               <>
                 <p className="wiki-lead">Ask a question above to build an article from Wikipedia.</p>
-                <Shelf groups={shelf(state)} grouping={isGrouping(state)} />
+                <Shelf groups={shelf(state)} grouping={isGrouping(state)} onOpen={openDoc} />
               </>
             )}
 
