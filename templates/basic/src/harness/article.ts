@@ -45,8 +45,15 @@ export interface Articles {
   /** Accept a question. Returns once the run is ACCEPTED, and what it returns IS the run: the loop drops it,
    *  the one-shot path awaits it. */
   submit(query: string): Operation<Operation<void>>;
-  /** Whatever is in flight stops, and the surface is told. Also `serveDefaults`' `abandon`. */
+  /** Whatever is in flight stops; a turn that ends before its article reached the reader says so. Also
+   *  `serveDefaults`' `abandon`. */
   abortRun(): Operation<void>;
+}
+
+/** One question's life. Each run closes over its own, so a turn being torn down never reads a newer one's. */
+interface Turn {
+  /** Its article has reached the reader, so it is the page whatever becomes of the rest of the turn. */
+  published: boolean;
 }
 
 export function articles(deps: {
@@ -57,7 +64,8 @@ export function articles(deps: {
   root: () => string;
 }): Articles {
   const { session, run, wire, root } = deps;
-  let turnInFlight = false;
+  /** The turn now running; a stopped or replaced one is no longer it. */
+  let activeTurn: Turn | null = null;
   let asked = 0;
   /** The record the page shows — what a question extends, and what memory is rebuilt from. Null is the landing. */
   let page: DocId | null = null;
@@ -108,18 +116,21 @@ export function articles(deps: {
     );
   }
 
-  /** Put a kept article on the page, or with null leave for the landing — where the shelf is regrouped, since it
-   *  is about to be seen. The model's memory is not touched here: the next question rebuilds it from the record. */
+  /** Put a kept article on the page, or with null leave for the landing — which paints, then regroups, since it
+   *  is about to be seen. Whatever is running stops first; the next question rebuilds memory from the record. */
   function* openDoc(docId: DocId | null): Operation<void> {
-    if (turnInFlight) return;
+    if (activeTurn && !activeTurn.published) return;   // that turn is still deciding what the page is
     if (docId === null) {
       if (page === null) return;
+      yield* abortRun();
       page = null;
       yield* wire.send({ type: "doc:active", docId: null });
+      yield* shelf();
       return yield* classify();
     }
     const record = saved(root()).find((a) => a.docId === docId);
     if (!record) return yield* wire.send({ type: "ui:error", message: "That article is no longer there." });
+    yield* abortRun();
     page = docId;
     yield* wire.send({ type: "doc", docId, title: record.query, answer: record.answer });
     yield* wire.send({ type: "doc:active", docId });
@@ -129,7 +140,8 @@ export function articles(deps: {
     yield* abortRun();
     // Whether there is a page to extend. Whether the MODEL still holds it is `recalled()`, inside the run.
     yield* wire.send({ type: "query", text: query, warm: page !== null });
-    turnInFlight = true;
+    const turn: Turn = { published: false };
+    activeTurn = turn;
     return yield* run.replace(`ask-${++asked}`, () =>
       // `scoped` finishes whatever the program started — agents, forks of the model's state — before this run
       // counts as over, so the next one never meets its leftovers.
@@ -137,7 +149,7 @@ export function articles(deps: {
         try {
           const article = yield* write(yield* recalled(), query);
           if (!article) {
-            turnInFlight = false;
+            if (activeTurn === turn) activeTurn = null;
             return yield* wire.send({ type: "answer", text: null });
           }
           // The order is the point: disk, then the reader, then memory. What is saved, what is on screen and
@@ -145,17 +157,20 @@ export function articles(deps: {
           const docId = keep(root(), query, article);
           page = docId;
           remembered = null;
+          turn.published = true;
           yield* wire.send({ type: "answer", text: article });
           yield* rebase(session, query, article);
-          remembered = docId;
-          turnInFlight = false;
+          if (activeTurn === turn) {
+            remembered = docId;
+            activeTurn = null;
+          }
           yield* shelf();   // last, so the shelf arriving is the whole turn being over
         } catch (err) {
-          // Not in flight: the halt is arriving, and it is `run`'s to judge.
-          if (!turnInFlight) throw err;
-          turnInFlight = false;
+          // Stopped or replaced: the halt is arriving, and it is `run`'s to judge.
+          if (activeTurn !== turn) throw err;
+          activeTurn = null;
           remembered = null;
-          yield* wire.send({ type: "run:aborted" });
+          if (!turn.published) yield* wire.send({ type: "run:aborted" });
           yield* wire.send({ type: "ui:error", message: errorMessage(err) });
           throw err;   // the run's future records it: the loop drops it, the one-shot path exits with it
         }
@@ -176,13 +191,13 @@ export function articles(deps: {
   }
 
   function* abortRun(): Operation<void> {
-    const dying = turnInFlight;
+    const dying = activeTurn;
+    activeTurn = null;
     // Returns at once; `run.busy` holds until the model settles.
     yield* run.stop();
-    turnInFlight = false;
     if (dying) {
-      remembered = null;   // it may have committed a pair nobody was shown
-      yield* wire.send({ type: "run:aborted" });
+      remembered = null;   // it may have committed a pair nobody was shown, or been cut mid-update
+      if (!dying.published) yield* wire.send({ type: "run:aborted" });
     }
   }
 }

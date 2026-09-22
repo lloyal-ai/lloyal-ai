@@ -232,3 +232,56 @@ test("a one-shot run is over when its answer is kept: grouping waits for a landi
     "no agent may start once the article is kept",
   );
 });
+
+// ── navigating while the model's memory of a new article is still being rebuilt ──
+//
+// The article is kept and shown before the model's memory is rebuilt from it, so the page can be left in that
+// interval. Leaving must be honoured — the memory is a cache the next question can rebuild from the record.
+
+test("Home while the model is still taking in the new article is honoured", async () => {
+  const run = await runHarness({
+    utterances: [...TURN, { kind: "text", text: "## Just written" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: null } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === null },
+    ],
+  });
+
+  assert.ok(run.events.some((e) => e.type === "doc:active" && e.docId === null), "the landing was never shown");
+  const shelf = shelves(run.events).at(-1);
+  assert.equal(shelf?.articles.length, 1, "the landing lists the article just kept");
+});
+
+test("opening another article while the model is still taking in the new one is honoured", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => plant(outputDir, "2026-09-01-a", recordOf("the Antikythera mechanism")),
+    utterances: [...TURN, { kind: "text", text: "## Just written" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: "2026-09-01-a" } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === "2026-09-01-a" },
+    ],
+  });
+
+  const doc = run.events.find((e): e is Extract<WorkflowEvent, { type: "doc" }> => e.type === "doc");
+  assert.equal(doc?.title, "the Antikythera mechanism");
+});
+
+test("a question asked after leaving mid-rebuild waits for it, then starts a new article", async () => {
+  const run = await runHarness({
+    utterances: [...TURN, { kind: "text", text: "## First" }, ...TURN, { kind: "text", text: "## Second" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: null } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === null, send: { type: "submit_query", query: "what is sodium-ion?" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
+    ],
+  });
+
+  const answers = run.events.filter((e): e is Extract<WorkflowEvent, { type: "answer" }> => e.type === "answer").map((e) => e.text);
+  assert.deepEqual(answers, ["## First", "## Second"], "the second question's agents are its own, not the first turn's");
+  const queries = run.events.filter((e): e is Extract<WorkflowEvent, { type: "query" }> => e.type === "query");
+  assert.equal(queries[1]?.warm, false, "asked from the landing, it starts a new article");
+  assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0, "leaving a published article aborts nothing the reader saw");
+});
