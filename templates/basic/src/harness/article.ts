@@ -54,6 +54,9 @@ export interface Articles {
 interface Turn {
   /** Its article has reached the reader, so it is the page whatever becomes of the rest of the turn. */
   published: boolean;
+  /** Something stopped it. Whatever it throws after that is the tear-down, not its own failure — which the
+   *  turn cannot tell from the pointer to the turn now running, since finishing clears that too. */
+  cancelled: boolean;
 }
 
 export function articles(deps: {
@@ -90,18 +93,22 @@ export function articles(deps: {
     abortRun: () => abortRun(),
   };
 
-  function* shelf(groups: Group[] | null = null): Operation<void> {
+  function* shelf(groups: Group[] | null = null, grouping = false): Operation<void> {
     const kept = saved(root());
     yield* wire.send({
       type: "library",
       articles: kept.map(({ docId, query, savedAt }) => ({ docId, query, savedAt })),
       groups,
+      grouping,
     });
   }
 
   function* classify(): Operation<void> {
     const kept = saved(root());
     if (kept.length < 2) return;   // one pile is not a grouping
+    // Said before the model is asked: rendering the shelf into a prompt and prefilling it takes seconds, and
+    // until the first agent exists a surface has nothing to show for the wait.
+    yield* shelf(null, true);
     // Through `run` like any other model work, so a question evicts it rather than sharing the context.
     yield* run.replace("classify", () =>
       scoped(function* () {
@@ -140,7 +147,7 @@ export function articles(deps: {
     yield* abortRun();
     // Whether there is a page to extend. Whether the MODEL still holds it is `recalled()`, inside the run.
     yield* wire.send({ type: "query", text: query, warm: page !== null });
-    const turn: Turn = { published: false };
+    const turn: Turn = { published: false, cancelled: false };
     activeTurn = turn;
     return yield* run.replace(`ask-${++asked}`, () =>
       // `scoped` finishes whatever the program started — agents, forks of the model's state — before this run
@@ -166,9 +173,10 @@ export function articles(deps: {
           }
           yield* shelf();   // last, so the shelf arriving is the whole turn being over
         } catch (err) {
-          // Stopped or replaced: the halt is arriving, and it is `run`'s to judge.
-          if (activeTurn !== turn) throw err;
-          activeTurn = null;
+          // Stopped: the halt is arriving, and it is `run`'s to judge. Anything else is this turn's own
+          // failure — the shelf above included, which happens after it has stopped being the turn running.
+          if (turn.cancelled) throw err;
+          if (activeTurn === turn) activeTurn = null;
           remembered = null;
           if (!turn.published) yield* wire.send({ type: "run:aborted" });
           yield* wire.send({ type: "ui:error", message: errorMessage(err) });
@@ -193,6 +201,8 @@ export function articles(deps: {
   function* abortRun(): Operation<void> {
     const dying = activeTurn;
     activeTurn = null;
+    // Said before the stop, so the turn being torn down reads it in whatever it throws on the way out.
+    if (dying) dying.cancelled = true;
     // Returns at once; `run.busy` holds until the model settles.
     yield* run.stop();
     if (dying) {

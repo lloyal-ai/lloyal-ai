@@ -283,6 +283,36 @@ test("a follow-up that cannot be saved leaves the article it failed to extend", 
   assert.ok(restored.length >= 2, "the dead turn left memory untrusted, so the page is put back from its record");
 });
 
+test("a failure AFTER the article is published is still said, and is not mistaken for a stop", async () => {
+  // The turn's last step is the shelf, by which time it has already stopped being the turn running. Nothing
+  // there can be read as a tear-down: a stop is the only thing that says so, and it says it on the turn.
+  let library = "";
+  const run = await runHarness({
+    utterances: TURN,
+    setup: (outputDir) => { library = outputDir; },
+    observe: (ev) => {
+      // Take the library away once the reader has the article, so the shelf that follows it cannot be read.
+      if (ev.type === "answer" && ev.text !== null) takeLibrary(library);
+      if (ev.type === "ui:error") giveLibraryBack(library);
+    },
+    script: [
+      { send: { type: "submit_query", query: "what is the Antikythera mechanism?" } },
+      { on: (ev) => ev.type === "ui:error" },
+    ],
+  });
+
+  assert.ok(
+    run.events.some((e) => e.type === "ui:error"),
+    "the reader must hear about it: the interactive loop drops the run's failure, so this is the only telling",
+  );
+  assert.equal(
+    run.events.filter((e) => e.type === "run:aborted").length,
+    0,
+    "the article reached the reader, so nothing they were shown was abandoned",
+  );
+  assert.deepEqual(answers(run.events), ["## The article"], "the article stands: only the shelf after it failed");
+});
+
 // One path is absent: an article that saves but whose memory update then fails. Reaching it means failing a
 // native call, which a harness has no vocabulary for — see lloyal-ai#44. The ordering that makes it safe is
 // legible in `article.ts` instead: the record and the reader both come first.
