@@ -79,6 +79,33 @@
   text-decoration: underline;
   cursor: pointer;
 }
+/* Where this harness came from — delete with the component. `margin-left: auto` so it sits with the search
+   box on the right; when the wire strip is showing, that claims the space first and these follow it. */
+.wiki-origin {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.wiki-origin a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--faint);
+  text-decoration: none;
+}
+.wiki-origin a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+/* The search box claims the right edge with its own `margin-left: auto`. With two auto margins the free space
+   splits and both drift to the middle, so while these links are here they claim it instead and the box follows
+   on the flex gap. A sibling selector, so deleting the component restores the box's own rule untouched. */
+.wiki-origin + .wiki-search {
+  margin-left: 0;
+}
+
 .wiki-search {
   display: flex;
   gap: 0;

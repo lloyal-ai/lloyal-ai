@@ -41,6 +41,7 @@ import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
 import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
 import type { WorkflowEvent, Command } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
+import { DeleteMe } from "./DeleteMe.js";
 
 const scrollTo = (id: string): void =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -295,6 +296,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
               )}
             </span>
           )}
+          <DeleteMe />
           <form
             className="wiki-search"
             onSubmit={(e) => {
