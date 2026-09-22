@@ -28,6 +28,7 @@ src/
   harness/        ← your program
     wiki.ts       what the MODEL does: two angles, a shared spine, a settling pass
     article.ts    an article's life — and the only place the trunk is written
+    classify.ts   the shelf's topics: named once, then each article filed by its own agent
     prompts.ts    Eta reads prompts/ ; an edit is live at the next question
     prompts/      one .eta file per prompt — the words, editable
     instructions.ts   who this app is for, in the model's ear

@@ -536,14 +536,39 @@
   margin-top: 2em;
   clear: both;
 }
+/* A section of the page like any other, so it carries the article's own h2: serif, ruled, full size. Muted and
+   small read as a footnote, which is the wrong claim for a shelf the model just organised. */
 .wiki-shelf h2 {
-  font-size: 15px;
-  color: var(--faint);
-  border: 0;
-  margin: 0 0 0.6em;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.5em;
+  margin: 1em 0 0.35em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
 }
+/* The regroup has to be SEEN, or the model's work reads as a stutter. A `transition` cannot do it: the groups
+   are keyed by topic, so when the answer lands React replaces the nodes rather than moving them, and there is
+   no interpolated value. An animation on mount plays on exactly that replacement. */
 .wiki-shelf-group {
-  transition: transform 220ms ease, opacity 220ms ease;
+  animation: shelf-settle 260ms ease-out both;
+}
+@keyframes shelf-settle {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.wiki-shelf-working {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 10px;
+  vertical-align: middle;
+  border: 1.5px solid var(--border-faint);
+  border-top-color: var(--faint);
+  border-radius: 50%;
+  animation: shelf-spin 700ms linear infinite;
+}
+@keyframes shelf-spin {
+  to { transform: rotate(360deg); }
 }
 .wiki-shelf-group h3 {
   font-size: 14px;
@@ -561,7 +586,8 @@
   color: var(--faint);
 }
 @media (prefers-reduced-motion: reduce) {
-  .wiki-shelf-group {
-    transition: none;
+  .wiki-shelf-group,
+  .wiki-shelf-working {
+    animation: none;
   }
 }

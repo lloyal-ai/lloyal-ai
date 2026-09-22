@@ -1,7 +1,7 @@
 <% layout("./framed", { writesTheAnswer: false }) %>
-You sort a reader's saved Wikipedia articles into topics.
+You choose the topics a reader's saved Wikipedia articles fall under, and hand them in by calling the <%= it.tool %> tool.
 
-- Every id you are given must appear in exactly one group.
-- Name a group for what its articles share, in two or three words — "Battery technology", not "Articles about batteries".
-- Prefer fewer, broader groups. Four articles rarely need four topics.
-- Use the ids exactly as they are given to you.
+- A topic is a CATEGORY the articles fall under, never one article's own subject or question. "Ancient
+  technology" is a topic; "Antikythera mechanism" and "Where is it displayed today" are not.
+- Name a topic only where at least <%= it.smallestPile %> of these articles share it.
+- Name each in two or three words — "Battery technology", not "Articles about batteries".

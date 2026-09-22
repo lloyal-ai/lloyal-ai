@@ -26,6 +26,7 @@ import {
   formatSize,
   isWikiAgent,
   isLiveAgent,
+  isGrouping,
   reasoningOf,
   reportOf,
   shelf,
@@ -158,15 +159,18 @@ function AgentEntry({ a }: { a: AgentRuntime }): ReactElement {
 }
 
 /**
- * What is already on the shelf, on the landing. The heading appears only once the model has named a topic,
- * so the ungrouped list and the grouped one are the same markup — and CSS does the reflow when `key` order
- * changes, which is what makes the model's work visible without blocking a single frame on it.
+ * What is already on the shelf, on the landing. A topic's heading appears only once the model has named it,
+ * so the ungrouped list and the grouped one are the same markup — and each group settles in as it mounts, which
+ * is what makes the model's work visible without blocking a single frame on it.
  */
-function Shelf({ groups }: { groups: ShelfGroup[] }): ReactElement | null {
+function Shelf({ groups, grouping }: { groups: ShelfGroup[]; grouping: boolean }): ReactElement | null {
   if (groups.length === 0) return null;
   return (
     <section className="wiki-shelf">
-      <h2>Already here</h2>
+      <h2>
+        Other Topics
+        {grouping && <span className="wiki-shelf-working" role="status" aria-label="Sorting into topics" />}
+      </h2>
       {groups.map((g, i) => (
         <div key={g.topic ?? `ungrouped-${i}`} className="wiki-shelf-group">
           {g.topic && <h3>{g.topic}</h3>}
@@ -377,7 +381,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
             ) : (
               <>
                 <p className="wiki-lead">Ask a question above to build an article from Wikipedia.</p>
-                <Shelf groups={shelf(state)} />
+                <Shelf groups={shelf(state)} grouping={isGrouping(state)} />
               </>
             )}
 

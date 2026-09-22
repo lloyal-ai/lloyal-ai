@@ -215,6 +215,12 @@ export const reportOf = (a: AgentRuntime): string | null => {
   return filed.length > 0 ? filed[filed.length - 1] : null;
 };
 
+/** The model is organising the shelf right now. Derived, not announced: the classifier is an agent like any
+ *  other, and an agent alive while no turn is running is that one. `groups === null` cannot say this — it is
+ *  equally "not started" and "refused". */
+export const isGrouping = (s: AppState): boolean =>
+  s.phase !== "working" && [...s.roster.agents.values()].some(isLiveAgent);
+
 export interface Shelf {
   /** Null is the ungrouped run — before the model answers, and for anything its grouping left out. */
   topic: string | null;

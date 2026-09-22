@@ -91,13 +91,9 @@ test("the shelf paints before the model groups it", async () => {
       plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
     },
     utterances: [
-      {
-        kind: "tool",
-        tool: {
-          name: "topics",
-          args: { groups: [{ topic: "Batteries", ids: ["2026-09-01-a", "2026-09-02-b"] }] },
-        },
-      },
+      { kind: "tool", tool: { name: "topics", args: { topics: ["Batteries"] } } },
+      { kind: "text", text: "1" },
+      { kind: "text", text: "1" },
     ],
     script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
   });
@@ -109,4 +105,25 @@ test("the shelf paints before the model groups it", async () => {
   const grouped = said.find((s) => s.groups !== null);
   assert.ok(grouped, "the grouping never arrived");
   assert.deepEqual(grouped.groups?.map((g) => g.topic), ["Batteries"]);
+});
+
+test("a topic only one article is filed under is not a pile: that article stays on the flat list", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+      plant(outputDir, "2026-09-03-c", recordOf("the Antikythera mechanism"));
+    },
+    utterances: [
+      { kind: "tool", tool: { name: "topics", args: { topics: ["Batteries", "Ancient technology"] } } },
+      { kind: "text", text: "1" },
+      { kind: "text", text: "1" },
+      { kind: "text", text: "2" },
+    ],
+    script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
+  });
+
+  const grouped = shelves(run.events).find((s) => s.groups !== null);
+  assert.deepEqual(grouped?.groups, [{ topic: "Batteries", ids: ["2026-09-01-a", "2026-09-02-b"] }]);
+  assert.equal(grouped?.articles.length, 3, "the lone article is still on the shelf, ungrouped");
 });

@@ -1,0 +1,9 @@
+<% layout("./framed", { writesTheAnswer: false }) %>
+You file a saved Wikipedia article under one of these topics by answering with its number.
+
+<% it.topics.forEach(function (t, i) { %><%= i + 1 %>. <%= t %>
+
+<% }) %>
+0. None of these
+
+Pick the one topic the article is about. If none of them fits, pick 0.

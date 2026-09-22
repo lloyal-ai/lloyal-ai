@@ -11,13 +11,12 @@ import { scoped } from "effection";
 import type { Channel, Operation } from "effection";
 import type { Session } from "@lloyal-labs/sdk";
 import type { Branch } from "@lloyal-labs/sdk";
-import { useAgent, waitUntilSettled } from "@lloyal-labs/lloyal-agents";
-import { defineOutput } from "@lloyal-labs/rig";
+import { waitUntilSettled } from "@lloyal-labs/lloyal-agents";
 import { listFolders, reserveFolder } from "@lloyal-labs/rig/node";
 import type { Execution, Handlers } from "@lloyal-labs/rig";
 import { z } from "zod";
 import { write } from "./wiki.js";
-import { prompt } from "./prompts.js";
+import { classifyTopics } from "./classify.js";
 import type { Command, Group, WorkflowEvent } from "../protocol.js";
 import { errorMessage } from "../protocol.js";
 
@@ -36,25 +35,6 @@ export type Article = z.infer<typeof Article>;
 
 /** A kept article and the folder holding it. The folder's name is the identity, so the record carries none. */
 export type Saved = Article & { id: string };
-
-/** How the model hands the grouping back: a typed output, read as the schema or as null. */
-const topics = defineOutput(
-  "topics",
-  z.object({ groups: z.array(z.object({ topic: z.string(), ids: z.array(z.string()) })) }),
-);
-
-/** Which saved articles belong together, and what to call each pile — a fast structured decision from the
- *  resident LLM, JEV-style. Grouping is never stored, so nothing on disk depends on a model answering. */
-export function* classifyTopics(kept: Saved[], trunk: Branch | null): Operation<Group[]> {
-  const agent = yield* useAgent({
-    ...prompt("topics", { articles: kept.map(({ id, query }) => ({ id, query })) }),
-    terminal: topics.tool,
-    parent: trunk ?? undefined,
-    budget: { maxTurns: 2 },
-    enableThinking: false,   // a label, not a deliberation
-  });
-  return topics.read(agent)?.groups ?? [];
-}
 
 export interface Articles {
   handlers: Handlers<Command>;
@@ -108,20 +88,24 @@ export function articles(deps: {
     });
   }
 
-  function* classify(): Operation<void> {
+  /** Group the shelf as it stands and say it again. Derives over EVERY record each time, so a grouping is never
+   *  stale and nothing on disk remembers a topic. Callers choose how it is scheduled. */
+  function* regroup(): Operation<void> {
     const kept = saved(root());
     if (kept.length < 2) return;   // one pile is not a grouping
-    // Through `run` like any other model work, so a question evicts it rather than sharing the context.
-    yield* run.replace("classify", () =>
-      scoped(function* () {
-        try {
-          const groups = yield* classifyTopics(kept, null);
-          if (groups.length > 0) yield* shelf(groups);
-        } catch {
-          // A flat shelf, and every record untouched. Nothing a reader asked for failed.
-        }
-      }),
-    );
+    try {
+      // A fast structured decision from the resident LLM, JEV-style.
+      const groups = yield* classifyTopics(kept);
+      if (groups.length > 0) yield* shelf(groups);
+    } catch {
+      // A flat shelf, and every record untouched. Nothing a reader asked for failed.
+    }
+  }
+
+  function* classify(): Operation<void> {
+    // At boot nothing owns `run`, so this takes it like any other model work and a question evicts it.
+    // A turn does NOT call this: it already owns the slot, and replacing it from inside would halt it.
+    yield* run.replace("classify", () => scoped(regroup));
   }
 
   function* submit(query: string): Operation<Operation<void>> {
@@ -148,7 +132,9 @@ export function articles(deps: {
           yield* rebase(session, query, article);
           remembered = id;
           turnInFlight = false;
-          yield* shelf();   // last, so the shelf arriving is the whole turn being over
+          yield* shelf();
+          // The shelf just changed, so its grouping is stale. Inline, because this turn IS the run's occupant.
+          yield* regroup();
         } catch (err) {
           // Not in flight: the halt is arriving, and it is `run`'s to judge.
           if (!turnInFlight) throw err;
