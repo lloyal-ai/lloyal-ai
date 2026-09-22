@@ -35,8 +35,9 @@ export type WorkflowEvent =
   // ending, and a dying run says both.
   | { type: "run:aborted" }
   // What is kept on disk. `groups` is the model's grouping, `null` until it answers — so the list paints flat
-  // and regroups, and nothing on screen waits for a model call.
-  | { type: "library"; articles: KeptArticle[]; groups: Group[] | null }
+  // and regroups, and nothing on screen waits for a model call. `grouping` says one is under way, which a
+  // surface cannot see for itself: the model is asked seconds before its first agent exists.
+  | { type: "library"; articles: KeptArticle[]; groups: Group[] | null; grouping: boolean }
   // A kept article, whole, from disk. Does not activate: what the page shows is `doc:active`'s to say.
   | { type: "doc"; docId: DocId; title: string; answer: string }
   // What the page shows. Null is the landing.

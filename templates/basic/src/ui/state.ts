@@ -59,6 +59,8 @@ export interface AppState {
   /** What is kept on disk, oldest first, and the model's grouping of it — `null` until it answers. */
   library: KeptArticle[];
   groups: Group[] | null;
+  /** The model is organising the shelf right now, as the shelf itself said. */
+  grouping: boolean;
   /** Kept articles loaded from disk, by identity — what the page shows when one is opened. */
   documents: Map<DocId, { title: string; answer: string }>;
 }
@@ -77,6 +79,7 @@ export const initialState: AppState = {
   topic: "",
   library: [],
   groups: null,
+  grouping: false,
   documents: new Map(),
 };
 
@@ -137,7 +140,7 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
       // The turn ended without an answer. The page decides the phase — an article means `answered`.
       return { ...s, phase: s.answer ? "answered" : "ready" };
     case "library":
-      return { ...s, library: ev.articles, groups: ev.groups };
+      return { ...s, library: ev.articles, groups: ev.groups, grouping: ev.grouping };
     case "doc":
       // Upsert only — what the page shows is `doc:active`'s to say.
       return { ...s, documents: new Map(s.documents).set(ev.docId, { title: ev.title, answer: ev.answer }) };
@@ -247,12 +250,6 @@ export function articleOf(s: AppState): string {
   const writer = s.phase === "working" ? settlingAgent(s) : undefined;
   return s.answer || (writer && (reportOf(writer) || writer.contentBuffer.trim())) || "";
 }
-
-/** The model is organising the shelf right now. Derived, not announced: the classifier is an agent like any
- *  other, and an agent alive while no turn is running is that one. `groups === null` cannot say this — it is
- *  equally "not started" and "refused". */
-export const isGrouping = (s: AppState): boolean =>
-  s.phase !== "working" && [...s.roster.agents.values()].some(isLiveAgent);
 
 export interface Shelf {
   /** Null is the ungrouped run — before the model answers, and for anything its grouping left out. */

@@ -111,6 +111,26 @@ test("the shelf paints before the model groups it", async () => {
   assert.deepEqual(grouped.groups?.map((g) => g.topic), ["Batteries"]);
 });
 
+test("the shelf says a grouping is under way before the model has an agent to show for it", async () => {
+  // Rendering a shelf into a prompt and prefilling it takes seconds, and a surface watching the agents has
+  // nothing to show in them: the first agent exists at the END of that wait. So the shelf says it itself.
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: GROUPING,
+    script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
+  });
+
+  const working = run.events.findIndex((e) => e.type === "library" && e.grouping);
+  const firstAgent = run.events.findIndex((e) => e.type === "agent:spawn");
+  assert.ok(working >= 0, "the shelf never said a grouping was under way");
+  assert.ok(working < firstAgent, "it must be said BEFORE the first agent, which is the whole point");
+  assert.equal(shelves(run.events)[0].grouping, false, "the paint that carries no articles yet claims nothing");
+  assert.equal(shelves(run.events).find((s) => s.groups !== null)?.grouping, false, "grouped is not grouping");
+});
+
 test("a topic only one article is filed under is not a pile: that article stays on the flat list", async () => {
   const run = await runHarness({
     setup: (outputDir) => {

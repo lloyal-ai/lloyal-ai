@@ -26,7 +26,6 @@ import {
   formatSize,
   isWikiAgent,
   isLiveAgent,
-  isGrouping,
   reasoningOf,
   reportOf,
   settlingAgent,
@@ -392,7 +391,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
             ) : (
               <>
                 <p className="wiki-lead">Ask a question above to build an article from Wikipedia.</p>
-                <Shelf groups={shelf(state)} grouping={isGrouping(state)} onOpen={openDoc} />
+                <Shelf groups={shelf(state)} grouping={state.grouping} onOpen={openDoc} />
               </>
             )}
 
