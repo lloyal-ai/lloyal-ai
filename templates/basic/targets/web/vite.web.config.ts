@@ -48,6 +48,7 @@ export default defineConfig({
             "@lloyal-labs/binding",
             "@lloyal-labs/binding/web",
             "@lloyal-labs/rig",
+            "@lloyal-labs/ui",
             "@lloyal-labs/ui/fold",
             "@lloyal-labs/ui/prose",
             "@lloyal-labs/dev-tools/react",

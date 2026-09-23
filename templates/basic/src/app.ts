@@ -16,6 +16,7 @@ import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
 import { initializeHarness, serveCommands, serveDefaults, useExecution } from "@lloyal-labs/rig";
+import { settings } from "@lloyal-labs/rig/node";
 import { config } from "./config.js";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
 import { articles } from "./harness/article.js";
@@ -71,7 +72,7 @@ export function* harness(
   events: EventBus<WorkflowEvent>,
   commands: Signal<Command, void>,
 ): Operation<void> {
-  const { session, wire, runner, registry, disabled } = yield* initializeHarness(ctx, events, {
+  const { session, wire, runner, registry, store, disabled } = yield* initializeHarness(ctx, events, {
     abilities,
     config,
   });
@@ -113,7 +114,15 @@ export function* harness(
   // a handler throws, a command has no handler, or the run can no longer be trusted is rig's
   // (`serveDefaults`); what this app gives up on a failed handler is its own — the turn in flight.
   if (runner.initialQuery) yield* article.submit(runner.initialQuery);
-  yield* serveCommands<Command>(commands, [article], serveDefaults({ wire, run, abandon: article.abortRun }));
+  // `settings` is rig's: it serves the one settings command this app admits —
+  // pointing `model.path` at a local file, which the installer offers instead of
+  // a download. Changing it is a reload, so the handler ends the run and the
+  // shell starts a new engine that resolves the file by possession.
+  yield* serveCommands<Command>(
+    commands,
+    [article, settings({ runner, registry, store, wire, run, abilities, config })],
+    serveDefaults({ wire, run, abandon: article.abortRun }),
+  );
 }
 
 /** One question, no reader. `submit` returns once the run is accepted, so wait for the run itself as well:

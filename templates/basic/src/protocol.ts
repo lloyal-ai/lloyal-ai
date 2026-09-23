@@ -7,7 +7,7 @@
  * Node-free, so a renderer speaks the protocol without depending on the harness.
  */
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
-import type { HostResourcesEvent, RunCommand, SettingsEvent } from "@lloyal-labs/rig";
+import type { HostResourcesEvent, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
 
 /** What the boot header renders: the model as resolved, and the abilities the registry actually enabled.
  *  Which surface is mounted is absent — a renderer knows that without being told. */
@@ -67,6 +67,10 @@ export type Command =
    *  Ignored while a turn is running: that turn is writing the page. */
   | { type: "open_doc"; docId: DocId | null }
   | Extract<RunCommand, { type: "stop" }>
+  /** Point the harness at a model already on this machine instead of downloading one. Rig's word again, one
+   *  member taken by `Extract`: `model.path` is declared `applies: 'reload'`, so changing it restarts the
+   *  runtime rather than the session. Widen to the whole union the day a surface edits settings generally. */
+  | Extract<SettingsCommand, { type: "reload_runtime" }>
   | { type: "quit" };
 
 /** Any thrown thing as a sentence, for the one place that shows the reader an error. */

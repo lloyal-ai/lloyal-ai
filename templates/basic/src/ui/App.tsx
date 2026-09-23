@@ -10,11 +10,12 @@
  * figures) gracefully empty; the layout + the streaming log stay generic. This is
  * the floor — reskin it into your product's own look.
  *
- * It's transport-agnostic: it reads only `window.harness`, a bridge injected by
- * desktop's preload (IPC) or web's boot (`connectWss`).
+ * It's transport-agnostic: the target entry mounts `HarnessProvider` over whichever
+ * bridge that surface installed — desktop's preload (IPC) or web's boot (`connectWss`)
+ * — and this view reads it through hooks, never a bridge of its own.
  */
 import "./app.css";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import { config } from "../config.js";
 import { lastLine, slugify } from "../common/util.js";
@@ -39,11 +40,12 @@ import {
 import { extractStreamingReport, hostOf } from "@lloyal-labs/ui/fold";
 import { RIG_REPORT } from "@lloyal-labs/rig";
 import { headingsOf } from "@lloyal-labs/ui/prose";
-import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
-import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
+import { useAvailability, useInstall, useProjection } from "@lloyal-labs/ui";
+import type { Availability } from "@lloyal-labs/binding";
 import type { Command, DocId, WorkflowEvent } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
 import { DeleteMe } from "./DeleteMe.js";
+import { Installer } from "./Installer.js";
 
 const scrollTo = (id: string): void =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -195,25 +197,6 @@ function Shelf({ groups, grouping, onOpen }: {
   );
 }
 
-/**
- * The wire and the session as ONE word the view can render. Both planes are
- * optional on a `Bridge`: the desktop's in-process link cannot drop, so it
- * reports no status — absence there means connected, not broken.
- */
-function useAvailability(): Availability {
-  const [wire, setWire] = useState<WireStatus>(
-    window.harness.onStatus ? "connecting" : "connected",
-  );
-  const [session, setSession] = useState<SessionState | null>(null);
-  useEffect(() => {
-    const offs = [window.harness.onStatus?.(setWire), window.harness.onSession?.(setSession)];
-    return () => {
-      for (const off of offs) off?.();
-    };
-  }, []);
-  return availabilityOf(session, wire);
-}
-
 /** What each availability means to a reader, in their terms — never the wire's. */
 const WIRE_WORDS: Record<Availability, string> = {
   connecting: "connecting…",
@@ -225,18 +208,13 @@ const WIRE_WORDS: Record<Availability, string> = {
 };
 
 export function HarnessApp({ surface }: { surface: string }): ReactElement {
-  // The projection owns the fold: it seeds from the bridge's snapshot, holds
-  // frames until that lands, and RE-SEEDS when the stream's `epoch` changes — a
-  // reconnected socket, or a desktop engine replaced by `recover`. Comparing
-  // `epoch` is what a reconnect changes; `seq` restarts its numbering, so comparing
-  // that alone would silently drop the new stream's frames.
-  const projection = useMemo(
-    () => connectProjection<WorkflowEvent, Command, AppState>(window.harness, initialState, reduce),
-    [],
-  );
-  useEffect(() => () => projection.dispose(), [projection]);
-  const state = useSyncExternalStore(projection.subscribe, projection.getSnapshot);
+  // `HarnessProvider` (the target entry) owns the subscription, the snapshot
+  // seed and the re-seed on a new stream. Reading the whole fold is deliberate:
+  // this app is small enough that one state object is clearer than selectors,
+  // and `useProjection` memoizes per fold either way.
+  const state = useProjection((s: AppState) => s);
   const availability = useAvailability();
+  const install = useInstall();
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("");
 
@@ -264,6 +242,10 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
       : `${readers.length} agent${plural(readers.length)} read Wikipedia for this page.`;
   const sources = state.sources;
   const working = state.phase === "working";
+  /** Weights are still loading. Not the same as installing — this is every run,
+   *  and it is seconds — but the surface must not invite a question it cannot
+   *  yet take. */
+  const booting = state.phase === "booting";
   // The browser tab mirrors run state — a dot while working, like an unread badge.
   useEffect(() => {
     document.title = working ? `● ${APP.name}` : APP.name;
@@ -281,6 +263,14 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   // `state.topic` is authoritative (it survives a reload and is the same on
   // every surface); the local one only covers the instant before `query` lands.
   const title = state.topic || topic || APP.name;
+
+  // A first run acquires weights before there is anything to ask. That is the
+  // installer's screen, not the app's: the steps come from the PLATFORM's stream
+  // (`useInstall`), never this app's fold, so nothing about acquiring weights is
+  // declared in `protocol.ts` or `state.ts` and nothing here can be miswired.
+  // Empty on every run that acquires nothing — which is every run but the first,
+  // and is why the app then simply opens.
+  if (install.length > 0) return <Installer steps={install} />;
 
   // The dev shell: the wiki view lives in the shell's scroll container and the pane docks below it, only when
   // the wire said dev. The config table gives the Settings tab its tiers and each key's words; no key of this
@@ -321,11 +311,14 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Wikipedia…"
-              disabled={working}
+              placeholder={booting ? "Loading the model…" : "Search Wikipedia…"}
+              disabled={working || booting}
             />
-            <button type="submit" disabled={working || !query.trim()}>
-              {working ? "Reading…" : "Ask"}
+            {/* Boot counts as busy here, not just a turn. Gating on `working`
+                alone left the field live and the button reading "Ask" while the
+                model was still loading — an invitation nothing could accept. */}
+            <button type="submit" disabled={working || booting || !query.trim()}>
+              {working ? "Reading…" : booting ? "Loading…" : "Ask"}
             </button>
           </form>
         </header>
