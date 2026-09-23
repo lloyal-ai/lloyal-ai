@@ -124,6 +124,19 @@ test("an agent spawning outside a turn does not make the app look busy", () => {
   assert.equal(s.phase, "ready", "only `query` says a turn began");
 });
 
+test("a question ends the grouping it evicted, however the turn goes", () => {
+  // A question replaces the classifier's run, and a halted operation says nothing on its way out. So the
+  // question itself is the end of that grouping — otherwise a turn that then failed would land back on the
+  // shelf with a spinner nothing would ever stop.
+  const s = fold([
+    READY,
+    { type: "library", articles: [], groups: null, grouping: true } as WorkflowEvent,
+    { type: "query", text: "what is a solid-state cell?", warm: false } as WorkflowEvent,
+    { type: "run:aborted" } as WorkflowEvent,
+  ]);
+  assert.equal(s.grouping, false, "the shelf the reader comes back to is not still sorting");
+});
+
 test("a fetched article becomes a source, once", () => {
   const page = '{"title":"Antikythera mechanism","extract":"An ancient device.","url":"https://en.wikipedia.org/wiki/X"}';
   const s = fold([

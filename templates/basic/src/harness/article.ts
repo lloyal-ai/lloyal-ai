@@ -109,15 +109,18 @@ export function articles(deps: {
     // Said before the model is asked: rendering the shelf into a prompt and prefilling it takes seconds, and
     // until the first agent exists a surface has nothing to show for the wait.
     yield* shelf(null, true);
-    // Through `run` like any other model work, so a question evicts it rather than sharing the context.
+    // Through `run` like any other model work, so a question evicts it rather than sharing the context — and
+    // whatever comes back, the shelf is said again: having announced the work, this owes the reader its end.
     yield* run.replace("classify", () =>
       scoped(function* () {
         try {
           // A fast structured decision from the resident LLM, JEV-style.
           const groups = yield* classifyTopics(kept);
-          if (groups.length > 0) yield* shelf(groups);
+          // No topics is an ANSWER: the list stays flat, and stops saying it is being sorted.
+          yield* shelf(groups.length > 0 ? groups : null);
         } catch {
           // A flat shelf, and every record untouched. Nothing a reader asked for failed.
+          yield* shelf();
         }
       }),
     );

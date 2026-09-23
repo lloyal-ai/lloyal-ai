@@ -122,6 +122,9 @@ export function reduce(s: AppState, ev: WorkflowEvent): AppState {
         queries: ev.warm ? s.queries : [],
         // The page keeps the subject it was opened on; a follow-up deepens it rather than renaming it.
         topic: ev.warm ? s.topic : ev.text,
+        // A question evicts a grouping in progress, and nothing that is evicted says so — it is halted, not
+        // told. Whatever the turn does next, the landing it returns to paints its shelf before anything else.
+        grouping: false,
         error: null,
         nothingFound: false,
         answer: ev.warm ? s.answer : "",

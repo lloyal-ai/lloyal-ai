@@ -131,6 +131,36 @@ test("the shelf says a grouping is under way before the model has an agent to sh
   assert.equal(shelves(run.events).find((s) => s.groups !== null)?.grouping, false, "grouped is not grouping");
 });
 
+test("a grouping that comes back with nothing still says it is over", async () => {
+  // The shelf says a grouping is under way, so it owes the reader the other half whatever comes back. A model
+  // that names no topic is an ANSWER, not a failure — and a spinner left turning would be the only thing on
+  // the landing that never ends.
+  let working = false;
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: [{ kind: "tool", tool: { name: "topics", args: { topics: [] } } }],
+    script: [{
+      // Wait for the shelf to say it is working, and then for it to say it is not.
+      until: (ev) => {
+        if (ev.type === "library" && ev.grouping) working = true;
+        return ev.type === "library" && working && !ev.grouping;
+      },
+      repoke: () => false,
+      poke: [],
+    }],
+  });
+
+  const said = shelves(run.events);
+  assert.ok(said.some((s) => s.grouping), "the shelf never said it was working");
+  const last = said.at(-1);
+  assert.equal(last?.grouping, false, "and it must say when it is not");
+  assert.equal(last?.groups, null, "nothing was grouped, so the list stays flat");
+  assert.equal(last?.articles.length, 2, "and keeps both articles");
+});
+
 test("a topic only one article is filed under is not a pile: that article stays on the flat list", async () => {
   const run = await runHarness({
     setup: (outputDir) => {
