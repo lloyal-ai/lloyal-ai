@@ -22,6 +22,17 @@ import * as research from "./harness/research.js";
 
 /** What is installed: the sources a brief can draw on. Add one with `npx lloyal-ai install`, then list it here. */
 export const abilities = [createCorpusAbility, createWebAbility, createDocumentsAbility];
+
+/**
+ * Auxiliary services THIS harness's own code consumes, beside its abilities'.
+ *
+ * `vision` because the brief prefills bitmaps straight to the model
+ * (`prefillUserMultimodal` in `harness/brief.ts`) — a reader attaches an image
+ * and the model sees it, with no ability in between. Declaring it is what makes
+ * the boot fetch a projector: an auxiliary model is fetched because a consumer
+ * asked, never because the weights happened to support it.
+ */
+export const services = ["vision"] as const;
 export { config };
 
 /**

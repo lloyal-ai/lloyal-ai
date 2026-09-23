@@ -4,7 +4,7 @@
  * and desktop run. Everything below the seam is rig's `bootServed`.
  */
 import { bootServed } from "@lloyal-labs/rig/node";
-import { harness, abilities, config } from "../../src/app.js";
+import { harness, abilities, config, services } from "../../src/app.js";
 import { APP } from "../../src/ui/presentation.js";
 
-bootServed({ harness, abilities, config }, { name: APP.name });
+bootServed({ harness, abilities, config, services }, { name: APP.name });
