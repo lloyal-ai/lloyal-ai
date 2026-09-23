@@ -46,7 +46,6 @@ describe('MODEL_FOOTPRINT_HINT — the hardware floor shown at the model step', 
   const RIG_SIZE_BYTES: Record<string, number> = {
     'qwen3.5-4b': 2_600_000_000,
     'qwen3.8-27b-q4': 16_464_440_224,
-    'qwen3.8-27b-iq1': 6_192_222_208,
   };
 
   it('every llm row quotes a download size matching rig’s sizeBytes', () => {
@@ -62,11 +61,32 @@ describe('MODEL_FOOTPRINT_HINT — the hardware floor shown at the model step', 
     }
   });
 
-  it('stays one short line carrying the measured figure', () => {
+  it('every llm row names the machine class rig will gate on', () => {
+    // Same cross-repo pin as the sizes above: rig's MODEL_CATALOG is the source
+    // of truth, and nothing enforces the mirror across the boundary. A row that
+    // names no class scaffolds a project whose boot cannot say whether the
+    // machine can run it.
+    const RIG_MACHINE_CLASS: Record<string, string> = {
+      'qwen3.5-4b': 'edge',
+      'qwen3.8-27b-q4': 'appliance',
+    };
+    for (const m of modelsForRole('llm')) {
+      expect(m.machineClass, `catalog llm "${m.id}" names no machineClass`).toBeDefined();
+      expect(m.machineClass).toBe(RIG_MACHINE_CLASS[m.id]);
+    }
+  });
+
+  it('stays one short line carrying the enforced floors', () => {
     // This sits under the picker at the moment of choosing, so length is the
     // property worth guarding. It previously ran to three sentences and opened
     // by repeating the Field hint directly above it.
-    expect(MODEL_FOOTPRINT_HINT).toMatch(/16 GB/);
+    //
+    // The figures are the FLOORS the boot refuses below (rig's
+    // MACHINE_CLASS_FLOOR_BYTES), so both classes must be stated: a reader on a
+    // 16 GB laptop needs to see that the 27B is out of reach before choosing it
+    // and discovering so four minutes into a download.
+    expect(MODEL_FOOTPRINT_HINT).toMatch(/10 GB/);
+    expect(MODEL_FOOTPRINT_HINT).toMatch(/24 GB/);
     expect(MODEL_FOOTPRINT_HINT.length).toBeLessThan(70);
 
     // It must not restate what the Field hint already says one line above.

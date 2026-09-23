@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
-import { useHarness, useProjection, useSend } from "@lloyal-labs/ui";
+import { useHarness, useInstall, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../protocol.js";
 import type { AppState } from "./state.js";
 import {
@@ -21,6 +21,7 @@ import { config } from "../config.js";
 import { Shell } from "./parts/Shell.js";
 import { Composer } from "./parts/Composer.js";
 import { Library } from "./parts/Library.js";
+import { Installer } from "./parts/Installer.js";
 import { Ask } from "./moments/Ask.js";
 import { Frame } from "./moments/Frame.js";
 import { Write } from "./moments/Write.js";
@@ -36,6 +37,7 @@ const COMPOSER_HINT: Record<ReturnType<typeof selectMoment>, string> = {
 export function HarnessApp(): ReactElement {
   const send = useSend<Command>();
   const { bridge, projection } = useHarness<WorkflowEvent, Command, AppState>();
+  const install = useInstall();
   const moment = useProjection(selectMoment);
   const live = useProjection(selectLive);
   const activeDocId = useProjection(selectActiveDocId);
@@ -71,6 +73,15 @@ export function HarnessApp(): ReactElement {
     const tasks = doc.plan?.tasks.length ?? 0;
     if (tasks >= 2) recordPace(depthOf(app, doc), shapeOf(doc), tasks, doc.pipelineElapsedMs ?? 0);
   }, [runDocId]);
+
+  // A first run acquires weights before there is anything to ask. That is the
+  // installer's screen, not the app's: the steps come from the PLATFORM's stream
+  // (`useInstall`), never this app's fold, so nothing about acquiring weights is
+  // declared in `protocol.ts` or `reduce.ts`. Empty on every run that acquires
+  // nothing — which is every run but the first, and is why the app then simply
+  // opens. Loading weights already here is boot; `Shell`'s availability banner
+  // says that, from the platform's own `warming`.
+  if (install.length > 0) return <Installer steps={install} />;
 
   return (
     <DevPane

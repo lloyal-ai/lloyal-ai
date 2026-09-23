@@ -14,6 +14,9 @@
 
 export type ModelRole = 'llm' | 'reranker';
 
+/** The size of machine a model is for. Mirrors rig's `MachineClass`. */
+export type MachineClass = 'edge' | 'appliance';
+
 export interface CatalogModel {
   /** Stable id — what gets written into `harness.yml` `model.<role>.id`. */
   id: string;
@@ -22,6 +25,11 @@ export interface CatalogModel {
   label: string;
   /** Suggested `context` (nCtx) — written alongside an `llm` choice. */
   recommendedContext?: number;
+  /** LLM rows only: the smallest machine this runs on. The CLI does not
+   *  enforce it — it cannot know which machine the project will be RUN on,
+   *  only which one is scaffolding — so this is here to be shown, and the boot
+   *  is what refuses a box that cannot hold the weights. */
+  machineClass?: MachineClass;
 }
 
 /** Mirrors `@lloyal-labs/rig`'s `MODEL_CATALOG`, minus urls/sha256/sizeBytes. */
@@ -31,18 +39,14 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
     role: 'llm',
     label: 'Qwen3.5 4B · Q4_K_M · 2.6 GB',
     recommendedContext: 32768,
+    machineClass: 'edge',
   },
   {
     id: 'qwen3.8-27b-q4',
     role: 'llm',
     label: 'Qwen3.8 27B · Q4_K_M · 16.5 GB',
     recommendedContext: 32768,
-  },
-  {
-    id: 'qwen3.8-27b-iq1',
-    role: 'llm',
-    label: 'Qwen3.8 27B · UD-IQ1_S · 6.2 GB',
-    recommendedContext: 32768,
+    machineClass: 'appliance',
   },
   {
     id: 'qwen3-reranker-0.6b-q8',
@@ -58,12 +62,13 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
  * Keep it to a single clause a reader can take in without stopping. Anything
  * needing a "because" belongs in the docs, not at the moment of choosing.
  *
- * The 16 GB figure is measured, not guessed: the machine the `research`
- * template was verified end-to-end on (Apple M2, 16 GB) running `qwen3.5-4b`
- * plus the 0.6B reranker. No figure is offered for the 27B rows because none
- * has been measured — better silent than invented.
+ * These are the FLOORS the boot enforces (rig's `MACHINE_CLASS_FLOOR_BYTES`),
+ * not comfortable sizes: under them a run is refused before it downloads
+ * anything, so they are the numbers a reader needs at the moment of choosing.
+ * For reference, the `research` template was verified end-to-end on an Apple M2
+ * with 16 GB — a roomy edge box, well over the 10 GB floor.
  */
-export const MODEL_FOOTPRINT_HINT = '16 GB RAM runs the 4B. Larger models need more.';
+export const MODEL_FOOTPRINT_HINT = 'The 4B needs 10 GB RAM; the 27B needs 24 GB.';
 
 /** The catalog entries for one role, in listing order. */
 export function modelsForRole(role: ModelRole): readonly CatalogModel[] {

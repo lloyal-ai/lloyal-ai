@@ -11,7 +11,7 @@
  * never the growing transcript; the engine's own fold answers ONE snapshot per
  * (re)load, so a reload seeds from a consistent cut.
  */
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { APP } from "../../src/ui/presentation.js";
 import { join } from "node:path";
 import { createEngine, createWindow, CHANNELS } from "@lloyal-labs/desktop";
@@ -25,6 +25,18 @@ let engine: Engine<Command, AppState> | null = null;
 /** Send to the renderer only if the window is still alive (a destroyed window's `send` throws). */
 function safeSend(channel: string, payload: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+/** One file, opened for reading. `extensions` comes from the caller because what
+ *  counts as a model is the engine's business, not this shell's. */
+function dialogOptions(opts?: { extensions?: string[]; title?: string }) {
+  return {
+    title: opts?.title ?? "Choose a file",
+    properties: ["openFile" as const],
+    ...(opts?.extensions?.length
+      ? { filters: [{ name: "Models", extensions: opts.extensions }] }
+      : {}),
+  };
 }
 
 app.whenReady().then(() => {
@@ -57,6 +69,25 @@ app.whenReady().then(() => {
   // A reader asking for a working harness. Here that is a new engine process — the
   // renderer's own IPC link never dropped, which is why this is not a reload.
   ipcMain.handle(CHANNELS.recover, () => engine!.restart());
+  // What is being acquired, for a renderer that loaded after the install began.
+  // The engine retains it beside the session for the same reason: a window that
+  // opens mid-download — or after a refusal ended the run — must not be left
+  // guessing. Never folded into the app's state; acquiring weights is not this
+  // app's business.
+  ipcMain.handle(CHANNELS.installNow, () => engine?.install() ?? null);
+  // Choosing a local model rather than downloading one. The dialog is main's
+  // because only main has a filesystem; the renderer gets back a PATH, which is
+  // what `model.llm.path` takes and why a browser cannot offer this at all.
+  ipcMain.handle(
+    CHANNELS.chooseFile,
+    async (_e, opts?: { extensions?: string[]; title?: string }) => {
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      const picked = await (win
+        ? dialog.showOpenDialog(win, dialogOptions(opts))
+        : dialog.showOpenDialog(dialogOptions(opts)));
+      return picked.canceled ? null : (picked.filePaths[0] ?? null);
+    },
+  );
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();
   });
