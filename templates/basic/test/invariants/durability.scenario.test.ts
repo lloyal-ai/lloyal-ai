@@ -161,6 +161,29 @@ test("a grouping that comes back with nothing still says it is over", async () =
   assert.equal(last?.articles.length, 2, "and keeps both articles");
 });
 
+test("stopping a grouping says so: the shelf stops being sorted", async () => {
+  // `stop` halts whatever is running, and a halted classification says nothing on its way out — it never
+  // reaches its own catch. So the command that stopped it is what tells the reader it is over.
+  let working = false;
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    // The naming agent never answers: the grouping is still running when the stop arrives.
+    utterances: [{ kind: "text", text: "still thinking" }],
+    script: [
+      { on: (ev) => { if (ev.type === "library" && ev.grouping) working = true; return working; } },
+      { send: { type: "stop" } },
+      { on: (ev) => ev.type === "library" && !ev.grouping },
+    ],
+  });
+
+  const last = shelves(run.events).at(-1);
+  assert.equal(last?.grouping, false, "a stopped grouping must not leave the shelf sorting for ever");
+  assert.equal(last?.articles.length, 2, "and the articles are still there, ungrouped");
+});
+
 test("a topic only one article is filed under is not a pile: that article stays on the flat list", async () => {
   const run = await runHarness({
     setup: (outputDir) => {

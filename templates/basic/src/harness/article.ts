@@ -82,6 +82,9 @@ export function articles(deps: {
       },
       *stop() {
         yield* abortRun();
+        // A halted operation says nothing on its way out, and a grouping is the one whose work the shelf has
+        // announced. Saying the shelf again ends it, whatever was running.
+        yield* shelf();
       },
       *open_doc({ docId }) {
         yield* openDoc(docId);
