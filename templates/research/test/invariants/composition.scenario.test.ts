@@ -21,12 +21,12 @@ import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@
 import type { PlanResult } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
 import { abilities, config, harness } from "../../src/app.js";
-import { briefs } from "../../src/brief/brief.js";
-import { openLibrary } from "../../src/brief/library.js";
-import type { Command, WorkflowEvent } from "../../src/brief/protocol.js";
-import * as research from "../../src/research/research.js";
+import { briefs } from "../../src/harness/brief.js";
+import { openLibrary } from "../../src/harness/library.js";
+import type { Command, WorkflowEvent } from "../../src/protocol.js";
+import * as research from "../../src/harness/research.js";
 
-import type { Evidence, Inputs, Research, Written } from "../../src/research/research.js";
+import type { Evidence, Inputs, Research, Written } from "../../src/harness/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";
@@ -157,10 +157,10 @@ test("a replacement planner's questions are the ones the composer asks the reade
 });
 
 test("replanning from an open review withdraws it: the brief owns the reset, not the algorithm", async () => {
-  // A replacement planner RETURNS a PlanResult and emits nothing. The fold's planning reset — leave
-  // plan_review, drop the parked plan, set the mode, empty the roster — used to ride `plan:start`,
-  // which only the stock planner sent. So a replan from an open review left the reader looking at the
-  // PREVIOUS round's outline, still acceptable, for as long as the new planner took.
+  // A replacement planner RETURNS a PlanResult and emits nothing. So the fold's planning reset — leave
+  // plan_review, drop the parked plan, set the mode, empty the roster — cannot hang off an event only the
+  // stock planner sends, or a replan from an open review leaves the previous outline on screen, still
+  // acceptable, for as long as the new planner takes. The brief owns the reset.
   let round = 0;
   const plan = function* (_t: Branch | null, ask: Inputs): Operation<PlanResult> {
     round++;

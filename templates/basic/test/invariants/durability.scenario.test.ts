@@ -1,0 +1,360 @@
+/**
+ * An article outlives the process, and the ORDER of the two writes is what decides when it counts.
+ *
+ * `article.md` is written first — a projection a human or a corpus can read — and the record last, so the
+ * record's existence IS the commit. A crash between them leaves markdown nobody listed, which is correct: a
+ * half-written turn is not an article. That is the one behaviour worth a test here, because it is the one a
+ * developer reading the template is meant to learn.
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { runHarness, warmDeltas } from "./harness.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
+
+const ARTICLE = "## Thesis\n\nSolid-state cells are near, not here.";
+
+const TURN = [
+  { kind: "report" as const, text: "Angle one." },
+  { kind: "report" as const, text: "Angle two." },
+];
+
+const SCRIPT = [...TURN, { kind: "text" as const, text: ARTICLE }];
+
+/** The model grouping a shelf of two under one topic: the naming agent, then one filing agent per article. */
+const GROUPING = [
+  { kind: "tool" as const, tool: { name: "topics", args: { topics: ["Batteries"] } } },
+  { kind: "text" as const, text: "1" },
+  { kind: "text" as const, text: "1" },
+];
+
+/** Every `library` event on the wire, in order — the shelf as each surface saw it. */
+const shelves = (events: readonly WorkflowEvent[]) =>
+  events.filter((e): e is Extract<WorkflowEvent, { type: "library" }> => e.type === "library");
+
+/** Plant a folder the way a turn would have left it, or half of one. */
+function plant(root: string, name: string, record: unknown | null): void {
+  const dir = path.join(root, name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "article.md"), "# planted\n\nbody\n", "utf8");
+  if (record !== null) {
+    fs.writeFileSync(path.join(dir, "article.json"), `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  }
+}
+
+const recordOf = (query: string) => ({ version: 1, query, savedAt: "2026-09-01T00:00:00.000Z", answer: "kept" });
+
+test("a settled turn is written to disk and listed back", async () => {
+  const run = await runHarness({
+    utterances: SCRIPT,
+    script: [
+      { send: { type: "submit_query", query: "are solid-state batteries ready?" } },
+      // Wait for the SHELF, not the answer: keeping the article is the last thing the turn does, and a script
+      // that stops at `answer` quits while that is still in flight.
+      { on: (ev) => ev.type === "library" && ev.articles.length === 1 },
+    ],
+  });
+
+  const last = shelves(run.events).at(-1);
+  assert.ok(last, "the shelf was never said");
+  assert.equal(last.articles.length, 1, "the settled turn should be on the shelf");
+  assert.equal(last.articles[0].query, "are solid-state batteries ready?");
+
+  // …and it is genuinely on disk, not merely announced.
+  const folder = path.join(run.outputDir, last.articles[0].docId);
+  const record = JSON.parse(fs.readFileSync(path.join(folder, "article.json"), "utf8")) as Record<string, unknown>;
+  assert.equal(record.answer, ARTICLE, "the record must keep what the model actually produced");
+  assert.deepEqual(
+    Object.keys(record).sort(),
+    ["answer", "query", "savedAt", "version"],
+    "four fields — a `topic` here would mean classification moved back to save time, which bakes in drift",
+  );
+  assert.match(fs.readFileSync(path.join(folder, "article.md"), "utf8"), /Solid-state cells/);
+});
+
+test("the record's existence is the commit — markdown alone is not an article", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-complete", recordOf("a finished turn"));
+      plant(outputDir, "2026-09-02-crashed", null);   // died between the two writes
+    },
+    script: [{ on: (ev) => ev.type === "library" }],
+  });
+
+  const shelf = shelves(run.events)[0];
+  assert.deepEqual(
+    shelf.articles.map((a) => a.query),
+    ["a finished turn"],
+    "a folder holding markdown but no record must not be listed — the turn never committed",
+  );
+});
+
+test("the shelf paints before the model groups it", async () => {
+  // The non-blocking property IS the feature: a landing that waited on a model call would make the app feel
+  // slower, not cleverer. So the first shelf on the wire must already carry the articles, with no grouping.
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: GROUPING,
+    script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
+  });
+
+  const said = shelves(run.events);
+  assert.equal(said[0].articles.length, 2, "the shelf must be said with its articles before any grouping");
+  assert.equal(said[0].groups, null, "the first paint must not wait for the model");
+
+  const grouped = said.find((s) => s.groups !== null);
+  assert.ok(grouped, "the grouping never arrived");
+  assert.deepEqual(grouped.groups?.map((g) => g.topic), ["Batteries"]);
+});
+
+test("the shelf says a grouping is under way before the model has an agent to show for it", async () => {
+  // Rendering a shelf into a prompt and prefilling it takes seconds, and a surface watching the agents has
+  // nothing to show in them: the first agent exists at the END of that wait. So the shelf says it itself.
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: GROUPING,
+    script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
+  });
+
+  const working = run.events.findIndex((e) => e.type === "library" && e.grouping);
+  const firstAgent = run.events.findIndex((e) => e.type === "agent:spawn");
+  assert.ok(working >= 0, "the shelf never said a grouping was under way");
+  assert.ok(working < firstAgent, "it must be said BEFORE the first agent, which is the whole point");
+  assert.equal(shelves(run.events)[0].grouping, false, "the paint that carries no articles yet claims nothing");
+  assert.equal(shelves(run.events).find((s) => s.groups !== null)?.grouping, false, "grouped is not grouping");
+});
+
+test("a grouping that comes back with nothing still says it is over", async () => {
+  // The shelf says a grouping is under way, so it owes the reader the other half whatever comes back. A model
+  // that names no topic is an ANSWER, not a failure — and a spinner left turning would be the only thing on
+  // the landing that never ends.
+  let working = false;
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: [{ kind: "tool", tool: { name: "topics", args: { topics: [] } } }],
+    script: [{
+      // Wait for the shelf to say it is working, and then for it to say it is not.
+      until: (ev) => {
+        if (ev.type === "library" && ev.grouping) working = true;
+        return ev.type === "library" && working && !ev.grouping;
+      },
+      repoke: () => false,
+      poke: [],
+    }],
+  });
+
+  const said = shelves(run.events);
+  assert.ok(said.some((s) => s.grouping), "the shelf never said it was working");
+  const last = said.at(-1);
+  assert.equal(last?.grouping, false, "and it must say when it is not");
+  assert.equal(last?.groups, null, "nothing was grouped, so the list stays flat");
+  assert.equal(last?.articles.length, 2, "and keeps both articles");
+});
+
+test("stopping a grouping says so: the shelf stops being sorted", async () => {
+  // `stop` halts whatever is running, and a halted classification says nothing on its way out — it never
+  // reaches its own catch. So the command that stopped it is what tells the reader it is over.
+  let working = false;
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    // The naming agent never answers: the grouping is still running when the stop arrives.
+    utterances: [{ kind: "text", text: "still thinking" }],
+    script: [
+      { on: (ev) => { if (ev.type === "library" && ev.grouping) working = true; return working; } },
+      { send: { type: "stop" } },
+      { on: (ev) => ev.type === "library" && !ev.grouping },
+    ],
+  });
+
+  const last = shelves(run.events).at(-1);
+  assert.equal(last?.grouping, false, "a stopped grouping must not leave the shelf sorting for ever");
+  assert.equal(last?.articles.length, 2, "and the articles are still there, ungrouped");
+});
+
+test("a topic only one article is filed under is not a pile: that article stays on the flat list", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+      plant(outputDir, "2026-09-03-c", recordOf("the Antikythera mechanism"));
+    },
+    utterances: [
+      { kind: "tool", tool: { name: "topics", args: { topics: ["Batteries", "Ancient technology"] } } },
+      { kind: "text", text: "1" },
+      { kind: "text", text: "1" },
+      { kind: "text", text: "2" },
+    ],
+    script: [{ until: (ev) => ev.type === "library" && ev.groups !== null, repoke: () => false, poke: [] }],
+  });
+
+  const grouped = shelves(run.events).find((s) => s.groups !== null);
+  assert.deepEqual(grouped?.groups, [{ topic: "Batteries", docIds: ["2026-09-01-a", "2026-09-02-b"] }]);
+  assert.equal(grouped?.articles.length, 3, "the lone article is still on the shelf, ungrouped");
+});
+
+// ── a kept article opens back onto the page ──
+
+test("a kept article opens onto the page, and a question asked there deepens it from its record", async () => {
+  const KEPT = "## A kept page about the mechanism";
+  const run = await runHarness({
+    setup: (outputDir) => plant(outputDir, "2026-09-01-a", { ...recordOf("the Antikythera mechanism"), answer: KEPT }),
+    utterances: [...TURN, { kind: "text", text: "## The page, deepened" }],
+    script: [
+      { send: { type: "open_doc", docId: "2026-09-01-a" } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === "2026-09-01-a" },
+      { send: { type: "submit_query", query: "where is it displayed today?" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
+    ],
+  });
+
+  const doc = run.events.find((e) => e.type === "doc");
+  assert.deepEqual(doc, { type: "doc", docId: "2026-09-01-a", title: "the Antikythera mechanism", answer: KEPT });
+  const query = run.events.find((e): e is Extract<WorkflowEvent, { type: "query" }> => e.type === "query");
+  assert.equal(query?.warm, true, "a question asked on an opened article deepens it");
+  assert.ok(
+    warmDeltas(run.trace).some((t) => (t.content ?? "").includes(KEPT)),
+    "the model's memory of the page is rebuilt from the opened article's own record",
+  );
+});
+
+test("an article that is no longer there says so, and the page stays as it was", async () => {
+  const run = await runHarness({
+    script: [
+      { send: { type: "open_doc", docId: "2026-01-01-gone" } },
+      { on: (ev) => ev.type === "ui:error" },
+    ],
+  });
+
+  assert.deepEqual(run.events.filter((e) => e.type === "doc" || e.type === "doc:active"), []);
+  const toast = run.events.find((e): e is Extract<WorkflowEvent, { type: "ui:error" }> => e.type === "ui:error");
+  assert.match(toast?.message ?? "", /no longer there/);
+});
+
+test("the landing is where the shelf is regrouped, and a question asked there starts a new article", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: [...GROUPING, ...GROUPING, ...TURN, { kind: "text", text: "## A new page" }],
+    script: [
+      { on: (ev) => ev.type === "library" && ev.groups !== null },
+      { send: { type: "open_doc", docId: "2026-09-01-a" } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId !== null },
+      { send: { type: "open_doc", docId: null } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === null },
+      { on: (ev) => ev.type === "library" && ev.groups !== null },
+      { send: { type: "submit_query", query: "what is sodium-ion?" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 3 },
+    ],
+  });
+
+  const home = run.events.findIndex((e) => e.type === "doc:active" && e.docId === null);
+  const regrouped = run.events.findIndex((e, i) => i > home && e.type === "library" && e.groups !== null);
+  assert.ok(home >= 0 && regrouped > home, "arriving on the landing regroups the shelf it is about to show");
+  const query = run.events.find((e): e is Extract<WorkflowEvent, { type: "query" }> => e.type === "query");
+  assert.equal(query?.warm, false, "a question asked from the landing starts a new article");
+});
+
+test("while a turn is writing the page, navigating away is ignored", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => plant(outputDir, "2026-09-01-a", recordOf("the Antikythera mechanism")),
+    utterances: [...TURN, { kind: "text", text: "## Written" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { send: { type: "open_doc", docId: "2026-09-01-a" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
+    ],
+  });
+
+  assert.deepEqual(run.events.filter((e) => e.type === "doc" || e.type === "doc:active"), []);
+  const answer = run.events.find((e): e is Extract<WorkflowEvent, { type: "answer" }> => e.type === "answer");
+  assert.equal(answer?.text, "## Written", "the turn finishes the page it was writing");
+});
+
+test("a one-shot run is over when its answer is kept: grouping waits for a landing it will never show", async () => {
+  // The process waits for the whole run before it exits, so anything started after the answer is time the
+  // caller pays for a shelf nobody sees.
+  const run = await runHarness({
+    oneshot: "are solid-state batteries ready?",
+    setup: (outputDir) => {
+      plant(outputDir, "2026-09-01-a", recordOf("solid state batteries"));
+      plant(outputDir, "2026-09-02-b", recordOf("lithium mining"));
+    },
+    utterances: [...TURN, { kind: "text", text: "## Settled without a reader" }],
+  });
+
+  const answered = run.events.findIndex((e) => e.type === "answer");
+  assert.ok(answered >= 0, "the run never answered");
+  assert.deepEqual(
+    run.events.slice(answered).filter((e) => e.type === "agent:spawn"),
+    [],
+    "no agent may start once the article is kept",
+  );
+});
+
+// ── navigating while the model's memory of a new article is still being rebuilt ──
+//
+// The article is kept and shown before the model's memory is rebuilt from it, so the page can be left in that
+// interval. Leaving must be honoured — the memory is a cache the next question can rebuild from the record.
+
+test("Home while the model is still taking in the new article is honoured", async () => {
+  const run = await runHarness({
+    utterances: [...TURN, { kind: "text", text: "## Just written" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: null } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === null },
+    ],
+  });
+
+  assert.ok(run.events.some((e) => e.type === "doc:active" && e.docId === null), "the landing was never shown");
+  const shelf = shelves(run.events).at(-1);
+  assert.equal(shelf?.articles.length, 1, "the landing lists the article just kept");
+});
+
+test("opening another article while the model is still taking in the new one is honoured", async () => {
+  const run = await runHarness({
+    setup: (outputDir) => plant(outputDir, "2026-09-01-a", recordOf("the Antikythera mechanism")),
+    utterances: [...TURN, { kind: "text", text: "## Just written" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: "2026-09-01-a" } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === "2026-09-01-a" },
+    ],
+  });
+
+  const doc = run.events.find((e): e is Extract<WorkflowEvent, { type: "doc" }> => e.type === "doc");
+  assert.equal(doc?.title, "the Antikythera mechanism");
+});
+
+test("a question asked after leaving mid-rebuild waits for it, then starts a new article", async () => {
+  const run = await runHarness({
+    utterances: [...TURN, { kind: "text", text: "## First" }, ...TURN, { kind: "text", text: "## Second" }],
+    script: [
+      { send: { type: "submit_query", query: "what is a solid-state cell?" } },
+      { on: (ev) => ev.type === "answer", send: { type: "open_doc", docId: null } },
+      { on: (ev) => ev.type === "doc:active" && ev.docId === null, send: { type: "submit_query", query: "what is sodium-ion?" } },
+      { on: (ev) => ev.type === "library" && ev.articles.length === 2 },
+    ],
+  });
+
+  const answers = run.events.filter((e): e is Extract<WorkflowEvent, { type: "answer" }> => e.type === "answer").map((e) => e.text);
+  assert.deepEqual(answers, ["## First", "## Second"], "the second question's agents are its own, not the first turn's");
+  const queries = run.events.filter((e): e is Extract<WorkflowEvent, { type: "query" }> => e.type === "query");
+  assert.equal(queries[1]?.warm, false, "asked from the landing, it starts a new article");
+  assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0, "leaving a published article aborts nothing the reader saw");
+});

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
 import { useAvailability, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
-import type { Command } from "../../brief/protocol.js";
+import type { Command } from "../../protocol.js";
 import {
   etaOf, selectBanked, selectControls, selectEtaTasks, selectLive, selectMoment,
   selectNotice, selectResumedAt, selectReviewing, selectRunDepth, selectRunShape, selectRunTitle,
@@ -13,6 +13,7 @@ import { paceFor } from "../pace.js";
 import { Lightbox, useAssets } from "./Figures.js";
 import { contentOrigin, representationUrl } from "../content-urls.js";
 import { APP } from "../presentation.js";
+import { DeleteMe } from "./DeleteMe.js";
 
 /** The mark, the name, and the control that puts the panel away. Collapsed,
  *  the name and the library go and the rail keeps only the mark and the
@@ -226,6 +227,7 @@ export function Shell({ children, dock, library }: {
         <div style={{ flex: 1 }} />
         {!collapsed && (
           <div style={S.sideFoot}>
+            <DeleteMe />
             <TrustStrip />
           </div>
         )}

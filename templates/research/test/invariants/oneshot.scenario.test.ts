@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { HarnessExit } from "../../src/brief/protocol.js";
+import { HarnessExit } from "../../src/protocol.js";
 import { runHarness, docIdOfQuery } from "./harness.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });

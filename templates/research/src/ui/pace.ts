@@ -5,8 +5,8 @@
  *  pass) and are replaced by what THIS machine actually does: each settled
  *  brief records its wall time, keyed by depth and shape, halved toward
  *  the newest run. */
-import { BUDGETS } from "../research/budgets.js";
-import type { Effort } from "../research/budgets.js";
+import { BUDGETS } from "../harness/budgets.js";
+import type { Effort } from "../harness/budgets.js";
 import type { Shape } from "./select.js";
 import { APP } from "./presentation.js";
 

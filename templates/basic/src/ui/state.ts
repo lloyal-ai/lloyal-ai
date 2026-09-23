@@ -1,27 +1,22 @@
 /**
- * How a view *accumulates* your events into renderable state.
+ * How a view accumulates your events into renderable state: `reduce(state, event) → AppState`, a pure
+ * node-free fold. Only the raw `WorkflowEvent` crosses a target boundary, never the growing transcript, so
+ * the fold happens in the SINK — and all three views (Ink · desktop · web) import this one function.
  *
- * `reduce(state, event) → AppState` is a pure, node-free fold. It lives here —
- * not in the harness, not in a view — for two reasons:
- *   1. Only the small raw `WorkflowEvent` crosses a target boundary (IPC to
- *      the desktop window, wss to the browser); the growing transcript never
- *      does. So the fold has to happen in the *sink*. The harness stays a pure
- *      emitter; the renderer stays a pure sink.
- *   2. All three target views — the terminal (Ink), the desktop and the web
- *      (React) — import this ONE `reduce`. Node-free so every runtime can.
- *
- * `AppState` is a standard shape the generic auto-view knows how to render.
- * Grow it as your harness emits more events; add a `case` per event, keep the
- * fold immutable (new `Map` + new object only for what changed), and the views
- * update for free.
+ * What each agent is DOING is `foldAgents`, ui's, which is what keeps the model's markup out of this app.
+ * What the ARTICLES are is below it, and basic's own: it reads the tools' raw payloads, which a runtime
+ * roster has no reason to keep.
  */
-import type { WorkflowEvent, BootFacts } from "../harness/protocol.js";
+import { emptyRoster, foldAgents } from "@lloyal-labs/ui/fold";
+import type { AgentRoster, AgentRuntime, AgentEvent as FoldableEvent } from "@lloyal-labs/ui/fold";
+import { RIG_REPORT, taskIndexOf } from "@lloyal-labs/rig";
+import type { WorkflowEvent, BootFacts, DocId, Group, KeptArticle } from "../protocol.js";
 
-export type Phase = "booting" | "ready" | "working" | "answered" | "error";
+export type { AgentRoster, AgentRuntime, TimelineItem } from "@lloyal-labs/ui/fold";
 
-/** Human-readable file size — the boot header renders the model's measured bytes.
- *  `sizeBytes` is best-effort (0 when the stat failed), so 0/unknown reads as
- *  "unknown" rather than a fabricated "1 KB". */
+export type Phase = "booting" | "ready" | "working" | "answered";
+
+/** Human-readable file size. `sizeBytes` is best-effort — 0 means the stat failed. */
 export function formatSize(bytes: number): string {
   if (bytes <= 0) return "unknown";
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
@@ -29,263 +24,6 @@ export function formatSize(bytes: number): string {
   if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} KB`;
   return `${bytes} B`;
 }
-
-export type AgentStatus = "active" | "tool" | "done" | "failed";
-
-/** One tool invocation, paired with its result — the atomic unit the view
- *  renders as a chip (a call in flight has `result: null`). Built from the
- *  structured `agent:tool_call` / `agent:tool_result` events, NOT by parsing the
- *  model's `<tool_call>` XML out of the stream. `args` is the raw JSON string
- *  the event carries; `toolArgSummary` formats it for display. */
-export interface ToolStep {
-  tool: string;
-  args: string;
-  result: string | null;
-}
-
-export interface AgentView {
-  id: number;
-  parentId: number;
-  /** Which turn spawned this agent. Agents accumulate across turns as the
-   *  composition history of the page, so "which agents are working NOW" and
-   *  "which agent is THIS turn's synth" both need the turn, not insertion
-   *  order — ids are not comparable across pools. */
-  turn: number;
-  status: AgentStatus;
-  /** Accumulated streamed text (`agent:produce` deltas). Includes the model's
-   *  `<think>` / `<tool_call>` markup verbatim — `cleanNarration` strips it for
-   *  display (tools render as chips from `tools`, not from this text). */
-  body: string;
-  tokens: number;
-  currentTool: string | null;
-  toolCalls: number;
-  /** Tool calls in order, each paired with its result — see `ToolStep`. */
-  tools: ToolStep[];
-}
-
-export interface AppState {
-  phase: Phase;
-  /** Measured boot facts for the header — null until `ready` lands. */
-  boot: BootFacts | null;
-  /** Insertion-ordered by spawn — the auto-view renders the tree from `parentId`.
-   *  Agents from earlier turns are KEPT on purpose: they are the record of how
-   *  the article was composed. Use `turn` to tell history from live work. */
-  agents: Map<number, AgentView>;
-  answer: string;
-  error: string | null;
-  /** KV pressure for the gauge (from `agent:tick`). */
-  kv: { used: number; total: number };
-  /** Turn counter, incremented by `query`. Agents carry the turn they belong to. */
-  turn: number;
-  /** The question being answered right now. */
-  topic: string;
-}
-
-export const initialState: AppState = {
-  phase: "booting",
-  boot: null,
-  agents: new Map(),
-  answer: "",
-  error: null,
-  kv: { used: 0, total: 0 },
-  turn: 0,
-  topic: "",
-};
-
-export function reduce(s: AppState, ev: WorkflowEvent): AppState {
-  switch (ev.type) {
-    // ── your harness's own events ──
-    case "ready":
-      // Boot facts land here — the view renders the header from `s.boot`.
-      return { ...s, phase: s.phase === "booting" ? "ready" : s.phase, boot: ev.facts };
-    case "query":
-      // A turn began. Bump the turn so agents spawned from here are
-      // distinguishable from the previous turn's, which stay in the map as the
-      // record of how the page was composed.
-      //
-      // The answer is deliberately NOT cleared on a warm turn: the article on
-      // screen is the one being extended, and blanking it would leave the page
-      // empty for the minutes the new synthesis takes.
-      return {
-        ...s,
-        phase: "working",
-        turn: s.turn + 1,
-        // The page keeps the subject it was opened on. A follow-up deepens that
-        // article, so retitling it to the latest question would misname a page
-        // that is now about more than the question just asked.
-        topic: ev.warm ? s.topic : ev.text,
-        error: null,
-        answer: ev.warm ? s.answer : "",
-      };
-    case "answer":
-      return { ...s, phase: "answered", answer: ev.text, error: null };
-    case "error":
-      // Keep `answer`. On a follow-up it is the article being deepened, and a
-      // failed turn is no reason to blank the page the reader already has; on a
-      // fresh turn the preceding `query` already cleared it.
-      return { ...s, phase: "error", error: ev.message };
-
-    // ── framework agent events (shared across every harness) ──
-    case "agent:spawn": {
-      const agents = new Map(s.agents);
-      agents.set(ev.agentId, {
-        id: ev.agentId,
-        parentId: ev.parentAgentId,
-        turn: s.turn,
-        status: "active",
-        body: "",
-        tokens: 0,
-        currentTool: null,
-        toolCalls: 0,
-        tools: [],
-      });
-      // Turn boundaries are marked by `query`, which arrives before any agent —
-      // this case no longer has to infer one (and must not clear `answer`, or a
-      // warm turn would blank the article it is extending).
-      return { ...s, phase: "working", agents };
-    }
-    case "agent:produce":
-      return patch(s, ev.agentId, (a) => ({
-        ...a,
-        status: "active",
-        currentTool: null,
-        body: a.body + ev.text,
-        // `tokenCount` is the agent's running TOTAL, not a per-delta count —
-        // take the latest, don't sum (summing cumulatives is quadratic).
-        tokens: ev.tokenCount,
-      }));
-    case "agent:tool_call":
-      return patch(s, ev.agentId, (a) => ({
-        ...a,
-        status: "tool",
-        currentTool: ev.tool,
-        toolCalls: a.toolCalls + 1,
-        tools: [...a.tools, { tool: ev.tool, args: ev.args, result: null }],
-      }));
-    case "agent:tool_result":
-      return patch(s, ev.agentId, (a) => ({
-        ...a,
-        status: "active",
-        currentTool: null,
-        // Fill the most recent in-flight call for this tool with its result.
-        tools: fillResult(a.tools, ev.tool, ev.result),
-      }));
-    case "agent:return":
-    case "agent:recovered":
-      return patch(s, ev.agentId, (a) => ({ ...a, status: "done", body: a.body || ev.result }));
-    case "agent:failed":
-      return patch(s, ev.agentId, (a) => ({ ...a, status: "failed" }));
-    case "agent:done":
-      return patch(s, ev.agentId, (a) =>
-        a.status === "active" || a.status === "tool" ? { ...a, status: "done" } : a,
-      );
-    case "agent:tick":
-      return { ...s, kv: { used: ev.cellsUsed, total: ev.nCtx } };
-
-    // agent:tool_progress / agent:tool_retry aren't shown in the austere view.
-    default:
-      return s;
-  }
-}
-
-/** Immutably replace one agent — new `Map`, new object, only for the change. */
-function patch(
-  s: AppState,
-  id: number,
-  fn: (a: AgentView) => AgentView,
-): AppState {
-  const cur = s.agents.get(id);
-  if (!cur) return s;
-  const agents = new Map(s.agents);
-  agents.set(id, fn(cur));
-  return { ...s, agents };
-}
-
-/** Fill the last in-flight (`result === null`) call of `tool` with `result`. */
-function fillResult(tools: ToolStep[], tool: string, result: string): ToolStep[] {
-  for (let i = tools.length - 1; i >= 0; i--) {
-    if (tools[i].tool === tool && tools[i].result === null) {
-      const next = tools.slice();
-      next[i] = { ...tools[i], result };
-      return next;
-    }
-  }
-  return tools;
-}
-
-// ── display helpers (pure; the cli + desktop/web views share them) ──
-
-const truncate = (s: string, max: number): string =>
-  s.length > max ? `${s.slice(0, max - 1)}…` : s;
-
-/**
- * The narration to *show* — the model's prose with its `<tool_call>` blocks and
- * `<think>` tags stripped. Tool calls render as chips (from `tools`), so their
- * raw XML is noise here; a trailing unterminated `<tool_call>` (mid-stream) is
- * dropped too. `<think>` bodies are kept (they're the reasoning) minus the tags.
- */
-export function cleanNarration(body: string): string {
-  return body
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "")
-    .replace(/<tool_call>[\s\S]*$/g, "")
-    .replace(/<\/?think>/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-/**
- * The final REPORT to show. A thinking model emits `<think>…reasoning…</think>`
- * and *then* the report; for the answer we want ONLY the report — take everything
- * after the last `</think>` (dropping the reasoning entirely, unlike
- * `cleanNarration`, which keeps it for the live agent cards), strip any stray
- * tool-call markup, and tidy the whitespace. Used harness-side before the `answer`
- * event is emitted, so every surface receives a clean report.
- */
-export function reportBody(raw: string): string {
-  const CLOSE = "</think>";
-  const i = raw.lastIndexOf(CLOSE);
-  const body = i >= 0 ? raw.slice(i + CLOSE.length) : raw;
-  return body
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "")
-    .replace(/<tool_call>[\s\S]*$/g, "")
-    .replace(/<\/?think>/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-/** A one-line `key: value · key: value` summary of a tool call's JSON args. */
-export function toolArgSummary(args: string): string {
-  try {
-    const obj = JSON.parse(args) as Record<string, unknown>;
-    return Object.entries(obj)
-      .map(([k, v]) => `${k}: ${truncate(String(v), 40)}`)
-      .join(" · ");
-  } catch {
-    return truncate(args.trim(), 60);
-  }
-}
-
-/** Compact result meta: "…" while in flight, "N results" for a JSON array,
- *  else an approximate size — the same idea as Artifact's row meta. */
-export function resultMeta(result: string | null): string {
-  if (result === null) return "…";
-  try {
-    const parsed = JSON.parse(result) as unknown;
-    if (Array.isArray(parsed)) return `${parsed.length} result${parsed.length === 1 ? "" : "s"}`;
-  } catch {
-    // not JSON — fall through to a size estimate
-  }
-  const kb = result.length / 1000;
-  return kb >= 1 ? `${kb.toFixed(1)} kb` : `${result.length} chars`;
-}
-
-// ── domain rendering: the Wikipedia articles the model has read ──
-//
-// The default ability (`lloyal/wikipedia`) is the ONE domain this austere view
-// knows how to render richly. The helpers below turn its STRUCTURED tool results
-// (never the model's prose) into cards + activity — so the UI shows the source
-// material flowing through the model. Swap the ability and these gracefully return
-// nothing; grow the view with a helper per tool your ability exposes.
 
 /** One article the model fetched — a card in the view (thumbnail optional). */
 export interface WikiSource {
@@ -295,7 +33,154 @@ export interface WikiSource {
   thumbnail?: string;
 }
 
-/** Parse a tool-result JSON string into an object, or null if unparseable/non-object. */
+export interface AppState {
+  phase: Phase;
+  /** Measured boot facts for the header — null until `ready` lands. */
+  boot: BootFacts | null;
+  /** What each agent is doing. Fresh per question: a roster is this turn's work, and the page the turn
+   *  produced is the record of what came before it. */
+  roster: AgentRoster;
+  /** The Wikipedia articles the agents have READ, deduped, in first-seen order. */
+  sources: WikiSource[];
+  /** The distinct searches they ran, in first-seen order. */
+  queries: string[];
+  answer: string;
+  /** The last turn ended with no article. Distinct from an empty `answer`: a follow-up that finds nothing
+   *  leaves the previous article on screen, so the page alone cannot say it. */
+  nothingFound: boolean;
+  /** How many articles this session has accepted — what a surface counts when it shows each one once.
+   *  Only an answer carrying an article advances it, so a stop and a follow-up that found nothing do not. */
+  accepted: number;
+  error: string | null;
+  /** KV pressure for the gauge (from `agent:tick`). */
+  kv: { used: number; total: number };
+  /** The question being answered right now. */
+  topic: string;
+  /** What is kept on disk, oldest first, and the model's grouping of it — `null` until it answers. */
+  library: KeptArticle[];
+  groups: Group[] | null;
+  /** The model is organising the shelf right now, as the shelf itself said. */
+  grouping: boolean;
+  /** Kept articles loaded from disk, by identity — what the page shows when one is opened. */
+  documents: Map<DocId, { title: string; answer: string }>;
+}
+
+export const initialState: AppState = {
+  phase: "booting",
+  boot: null,
+  roster: emptyRoster(),
+  sources: [],
+  queries: [],
+  answer: "",
+  nothingFound: false,
+  accepted: 0,
+  error: null,
+  kv: { used: 0, total: 0 },
+  topic: "",
+  library: [],
+  groups: null,
+  grouping: false,
+  documents: new Map(),
+};
+
+/** The events `foldAgents` reads. Everything else is this app's own. */
+const isAgentEvent = (ev: WorkflowEvent): ev is FoldableEvent & WorkflowEvent =>
+  ev.type.startsWith("agent:") && ev.type !== "agent:tick" && ev.type !== "agent:trace";
+
+/** What the roster is told at a spawn. An agent spawned outside a turn works no part of the page, so it is
+ *  tracked by its numbers and never shown. The angles carry `taskKey(i)`; the settling agent carries none. */
+const spawnDecision = (s: AppState, ev: Extract<FoldableEvent, { type: "agent:spawn" }>) => ({
+  timeline: s.phase === "working",
+  taskIndex: taskIndexOf(ev.key),
+});
+
+export function reduce(s: AppState, ev: WorkflowEvent): AppState {
+  if (isAgentEvent(ev)) {
+    const roster = foldAgents(s.roster, ev, {
+      spawn: (spawn) => spawnDecision(s, spawn),
+      terminal: RIG_REPORT.tool,
+      terminalField: RIG_REPORT.field,
+    });
+    // The same events, read a second time for this app's own facts — the payloads the roster summarises away.
+    if (ev.type === "agent:tool_result") return { ...s, roster, sources: withArticle(s.sources, ev) };
+    if (ev.type === "agent:tool_call") return { ...s, roster, queries: withQuery(s.queries, ev) };
+    // A spawn does not mean busy — `query` is what says a turn began.
+    return { ...s, roster };
+  }
+
+  switch (ev.type) {
+    case "ready":
+      return { ...s, phase: s.phase === "booting" ? "ready" : s.phase, boot: ev.facts };
+    case "query":
+      // A fresh roster: the previous turn's agents are not this turn's work, and the page they produced is.
+      return {
+        ...s,
+        phase: "working",
+        roster: emptyRoster(),
+        // What supports the article is kept exactly as long as the article is.
+        sources: ev.warm ? s.sources : [],
+        queries: ev.warm ? s.queries : [],
+        // The page keeps the subject it was opened on; a follow-up deepens it rather than renaming it.
+        topic: ev.warm ? s.topic : ev.text,
+        // A question evicts a grouping in progress, and nothing that is evicted says so — it is halted, not
+        // told. Whatever the turn does next, the landing it returns to paints its shelf before anything else.
+        grouping: false,
+        error: null,
+        nothingFound: false,
+        answer: ev.warm ? s.answer : "",
+      };
+    case "answer":
+      // A null article leaves the page as it was; on a cold turn the preceding `query` already cleared it.
+      return {
+        ...s,
+        phase: "answered",
+        answer: ev.text ?? s.answer,
+        nothingFound: ev.text === null,
+        accepted: ev.text === null ? s.accepted : s.accepted + 1,
+        error: null,
+      };
+    case "run:aborted":
+      // The turn ended without an answer. The page decides the phase — an article means `answered`.
+      return { ...s, phase: s.answer ? "answered" : "ready" };
+    case "library":
+      return { ...s, library: ev.articles, groups: ev.groups, grouping: ev.grouping };
+    case "doc":
+      // Upsert only — what the page shows is `doc:active`'s to say.
+      return { ...s, documents: new Map(s.documents).set(ev.docId, { title: ev.title, answer: ev.answer }) };
+    case "doc:active": {
+      // The page changes wholesale: a kept article brings its words, and nothing that worked on another page.
+      const doc = ev.docId === null ? undefined : s.documents.get(ev.docId);
+      return {
+        ...s,
+        phase: doc ? "answered" : "ready",
+        roster: emptyRoster(),
+        sources: [],
+        queries: [],
+        topic: doc?.title ?? "",
+        answer: doc?.answer ?? "",
+        nothingFound: false,
+        error: null,
+      };
+    }
+    case "agent:tick":
+      return { ...s, kv: { used: ev.cellsUsed, total: ev.nCtx } };
+
+    // ── rig's own words (SettingsEvent) ──
+    case "ui:error":
+      // A toast, nothing more. A turn ENDING is `run:aborted`, which a dying run says as well as this.
+      return { ...s, error: ev.message };
+
+    default:
+      return s;
+  }
+}
+
+// ── this app's domain: the Wikipedia pages behind the article ──────
+//
+// These read the ability's STRUCTURED tool payloads, never the model's prose. Swap the ability and they stay
+// empty; grow the view with one per tool.
+
+/** Parse a tool payload into an object, or null if unparseable/non-object. */
 function parseObject(s: string | null): Record<string, unknown> | null {
   if (s === null) return null;
   try {
@@ -308,124 +193,84 @@ function parseObject(s: string | null): Record<string, unknown> | null {
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 
-/**
- * The Wikipedia articles the agents have READ — one entry per COMPLETED
- * `wikipedia_fetch`, deduped by URL (then title), in first-seen order. Built
- * from the structured `wikipedia_fetch` result (`{title, extract, url,
- * thumbnail}`) the ability now returns — not the model's stream. Errors/in-flight
- * calls are skipped. This is the source material the view streams as cards.
- */
-export function wikipediaSources(agents: Iterable<AgentView>): WikiSource[] {
-  const out: WikiSource[] = [];
-  const seen = new Set<string>();
-  for (const a of agents) {
-    for (const t of a.tools) {
-      if (t.tool !== "wikipedia_fetch" || t.result === null) continue;
-      const obj = parseObject(t.result);
-      if (!obj || "error" in obj) continue;
-      const url = str(obj.url);
-      const title = str(obj.title);
-      const key = url || title;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push({
-        title: title ?? "Untitled",
-        snippet: str(obj.extract) ?? str(obj.description) ?? "",
-        url: url ?? "",
-        thumbnail: str(obj.thumbnail),
-      });
-    }
-  }
-  return out;
+/** A completed `wikipedia_fetch`, as a card — deduped by url, then title. Errors and other tools pass through. */
+function withArticle(seen: WikiSource[], ev: Extract<FoldableEvent, { type: "agent:tool_result" }>): WikiSource[] {
+  if (ev.tool !== "wikipedia_fetch") return seen;
+  const obj = parseObject(ev.result);
+  if (!obj || "error" in obj) return seen;
+  const url = str(obj.url);
+  const title = str(obj.title);
+  const key = url || title;
+  if (!key || seen.some((s) => (s.url || s.title) === key)) return seen;
+  return [
+    ...seen,
+    {
+      title: title ?? "Untitled",
+      snippet: str(obj.extract) ?? str(obj.description) ?? "",
+      url: url ?? "",
+      thumbnail: str(obj.thumbnail),
+    },
+  ];
 }
 
-/** The distinct search queries the agents have run (a compact activity line). */
-export function searchQueries(agents: Iterable<AgentView>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const a of agents) {
-    for (const t of a.tools) {
-      if (t.tool !== "wikipedia_search") continue;
-      const q = str(parseObject(t.args)?.query)?.trim();
-      if (q && !seen.has(q)) {
-        seen.add(q);
-        out.push(q);
-      }
-    }
-  }
-  return out;
+/** A `wikipedia_search`'s query, once. */
+function withQuery(seen: string[], ev: Extract<FoldableEvent, { type: "agent:tool_call" }>): string[] {
+  if (ev.tool !== "wikipedia_search") return seen;
+  const q = str(parseObject(ev.args)?.query)?.trim();
+  return q && !seen.includes(q) ? [...seen, q] : seen;
 }
 
-/** Total tool invocations across all agents — for the activity line. */
-export function toolCount(agents: Iterable<AgentView>): number {
-  let n = 0;
-  for (const a of agents) n += a.tools.length;
-  return n;
-}
+// ── derivations over the roster ────────────────────────────────────
 
-/** Research agents (those that use tools) vs the tool-less synth agent. */
-export const isResearchAgent = (a: AgentView): boolean => a.tools.length > 0;
+/** The agents that READ — one per angle of the question. The settling agent works no angle: its prose is the
+ *  article, so it is shown as the page rather than as a worker. */
+export const isWikiAgent = (a: AgentRuntime): boolean => a.taskIndex !== null;
 
-/** Still working — generating, or waiting on a tool call. Both count as live:
- *  an agent spends most of its run in `tool`, so treating only `active` as
- *  working would read as "finished" for most of the research. */
-export const isLiveAgent = (a: AgentView): boolean =>
-  a.status === "active" || a.status === "tool";
+/** Still working. An agent spends most of its run waiting on a tool, so anything but a terminal phase counts. */
+export const isLiveAgent = (a: AgentRuntime): boolean => a.phase !== "done" && a.phase !== "failed";
 
-/**
- * The report body a research agent is WRITING, streamed. The model emits its
- * terminal `report(...)` call as Hermes XML, and the report markdown lives
- * between `<parameter=result>` and `</parameter>` in the raw stream — so we can
- * show it token-by-token instead of waiting for the structured result. Returns
- * null until the open marker arrives (so a half-written tool call never flashes
- * as a report). Ported from reasoning.run; verified against basic's own stream.
- * (The synth agent is different — it writes the answer as free text; use
- * `reportBody` for that.)
- */
-export function extractStreamingReport(buffer: string): string | null {
-  const OPEN = "<parameter=result>";
-  const i = buffer.indexOf(OPEN);
-  if (i === -1) return null;
-  let body = buffer.slice(i + OPEN.length);
-  const c = body.indexOf("</parameter>");
-  if (c !== -1) body = body.slice(0, c);
-  return body.replace(/^\n/, "");
-}
-
-/** A URL-safe anchor slug — the Contents link and the heading id share it. */
-export function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .slice(0, 64) || "section"
-  );
-}
-
-/** Strip inline markdown (links, bold/italic, code) from a heading so the TOC
- *  shows clean text AND its slug matches the id the renderer derives from the
- *  *rendered* heading (which flattens `[Title](url)` to `Title`). Keeps the two
- *  in sync so Contents links actually resolve. */
-function stripInlineMarkdown(s: string): string {
-  return s
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // [text](url) → text
-    .replace(/(\*\*|__)(.*?)\1/g, "$2") // **bold** / __bold__ → bold
-    .replace(/(\*|_)(.*?)\1/g, "$2") // *italic* / _italic_ → italic
-    .replace(/`([^`]+)`/g, "$1") // `code` → code
+/** Every think block this agent has written, oldest first — its reasoning, with the markup already gone. */
+export const reasoningOf = (a: AgentRuntime): string =>
+  (a.timeline ?? [])
+    .flatMap((it) => (it.kind === "think" ? [it.body] : []))
+    .join("\n\n")
     .trim();
+
+/** The findings it filed, or null while it is still writing them. */
+export const reportOf = (a: AgentRuntime): string | null => {
+  const filed = (a.timeline ?? []).flatMap((it) => (it.kind === "report" ? [it.body] : []));
+  return filed.length > 0 ? filed[filed.length - 1] : null;
+};
+
+/** The agent writing the article: the one working no angle. */
+export const settlingAgent = (s: AppState): AgentRuntime | undefined =>
+  [...s.roster.agents.values()].find((a) => a.timeline !== null && !isWikiAgent(a));
+
+/** The article the page shows. While a turn works and nothing is accepted yet, that is the settling agent's
+ *  draft — what it filed, else its prose as it arrives. Once the turn is over, only an article the session
+ *  accepted: a draft whose save failed was never published. */
+export function articleOf(s: AppState): string {
+  const writer = s.phase === "working" ? settlingAgent(s) : undefined;
+  return s.answer || (writer && (reportOf(writer) || writer.contentBuffer.trim())) || "";
 }
 
-/** The `##`/`###` headings of a markdown report → the Contents (TOC) entries. */
-export function reportHeadings(md: string): { text: string; level: number; slug: string }[] {
-  const out: { text: string; level: number; slug: string }[] = [];
-  for (const line of md.split("\n")) {
-    const m = /^(#{2,3})\s+(.+?)\s*$/.exec(line);
-    if (m) {
-      const text = stripInlineMarkdown(m[2]);
-      out.push({ level: m[1].length, text, slug: slugify(text) });
-    }
-  }
-  return out;
+export interface Shelf {
+  /** Null is the ungrouped run — before the model answers, and for anything its grouping left out. */
+  topic: string | null;
+  articles: KeptArticle[];
+}
+
+/** The landing's shelf: ONE shape whether or not the model has grouped anything, so the first moment, the
+ *  single-article case and a refused grouping are the same render — no loading, empty or error state. */
+export function shelf(s: AppState): Shelf[] {
+  if (s.library.length === 0) return [];
+  if (!s.groups) return [{ topic: null, articles: s.library }];
+  const byId = new Map(s.library.map((a) => [a.docId, a]));
+  const grouped = s.groups
+    .map((g) => ({ topic: g.topic, articles: g.docIds.flatMap((docId) => byId.get(docId) ?? []) }))
+    .filter((g) => g.articles.length > 0);
+  // A grouping that left articles out shows them anyway: the model's answer decides the shape, never what is kept.
+  const placed = new Set(grouped.flatMap((g) => g.articles.map((a) => a.docId)));
+  const rest = s.library.filter((a) => !placed.has(a.docId));
+  return rest.length ? [...grouped, { topic: null, articles: rest }] : grouped;
 }

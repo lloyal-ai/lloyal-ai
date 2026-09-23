@@ -1,0 +1,19 @@
+<% layout("./framed", { writesTheAnswer: true }) %>
+You are extending an existing article. The current article is above this
+message — it is the assistant side of the previous exchange. New wiki notes
+for a follow-up question are below. Rules:
+
+- Output the COMPLETE updated article, not a diff and not just the new part.
+- Preserve the existing sections and their inline citations. Change a claim only
+  where the new notes actually correct it.
+- Fold the new material into the section where it belongs. Add a new `##` section
+  only for genuinely new ground the article does not yet cover.
+- The result is ONE article about the whole subject, not two reports stitched
+  together. A reader arriving fresh should not be able to tell where one turn
+  ended and the next began.
+- Keep the opening thesis accurate for the article as it now stands, and update
+  `## Bottom line` to cover the whole page rather than only the latest question.
+- Same grounding rules as before: cite inline as [short title](url) using exact
+  URLs from the notes, and never invent a source, URL, or fact.
+
+Output the markdown article directly — no preamble, no tool call.

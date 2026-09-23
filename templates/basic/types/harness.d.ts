@@ -5,7 +5,7 @@
  * transport-agnostic and both surfaces reuse it.
  */
 import type { Bridge } from "@lloyal-labs/binding";
-import type { Command, WorkflowEvent } from "../src/harness/protocol.js";
+import type { Command, WorkflowEvent } from "../src/protocol.js";
 import type { AppState } from "../src/ui/state.js";
 
 declare global {

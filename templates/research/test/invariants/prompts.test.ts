@@ -8,10 +8,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { INSTRUCTIONS } from "../../src/research/instructions.js";
-import { prompt, render } from "../../src/research/prompts.js";
+import { INSTRUCTIONS } from "../../src/harness/instructions.js";
+import { PROMPTS as DIR, prompt, render } from "../../src/harness/prompts.js";
 
-const DIR = path.join(process.cwd(), "src/research/prompts");
 const systemFiles = fs.readdirSync(DIR).filter((f) => f.endsWith(".system.eta")).sort();
 
 test("every system prompt opens by handing itself to the one frame", () => {

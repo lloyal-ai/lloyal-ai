@@ -7,7 +7,7 @@
  */
 import { createBridge } from "@lloyal-labs/binding/web";
 import { initialState, reduce, type AppState } from "../../src/ui/state.js";
-import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
+import type { WorkflowEvent, Command } from "../../src/protocol.js";
 
 /** Where the host is, when nothing points this page elsewhere. The bundler resolves it from the
  *  same `.env` the host reads, so a port written once moves both ends of the socket; the literal

@@ -10,8 +10,8 @@ import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
 import type { PlanIntent, Reports, ResearchTask, RunCommand, SettingsCommand, SettingsEvent } from "@lloyal-labs/rig";
-import type { Config, Origin } from "../config.js";
-import type { Effort } from "../research/budgets.js";
+import type { Config, Origin } from "./config.js";
+import type { Effort } from "./harness/budgets.js";
 
 /** One brief's identity — the SAME string names the fold's document, the browser route
  *  (`/brief/:docId`) and the folder on disk. ISO stamp then a UUID: sortable, URL-safe. */

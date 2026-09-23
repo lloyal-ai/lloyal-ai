@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { runHarness, warmDeltas, docIdOfQuery, writeReportFixture, accept } from "./harness.js";
-import type { Command } from "../../src/brief/protocol.js";
+import type { Command } from "../../src/protocol.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });
 const B = "2026-01-01T00-00-00-000";

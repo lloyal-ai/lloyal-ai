@@ -5,7 +5,7 @@
  * `HarnessProvider` at the entry, and every component reads the provider.
  */
 import type { Bridge } from "@lloyal-labs/binding";
-import type { Command, WorkflowEvent } from "../src/brief/protocol.js";
+import type { Command, WorkflowEvent } from "../src/protocol.js";
 import type { AppState } from "../src/ui/state.js";
 
 declare global {

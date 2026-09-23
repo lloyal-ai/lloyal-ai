@@ -13,8 +13,8 @@ import * as path from "node:path";
 import { runHarness as runRig } from "@lloyal-labs/rig/testing";
 import type { HarnessRun as RigRun, HarnessSpec as RigSpec, Sendable as RigSendable, Step as RigStep } from "@lloyal-labs/rig/testing";
 import { harness, config } from "../../src/app.js";
-import { writeBrief } from "../../src/brief/library.js";
-import type { WorkflowEvent, Command } from "../../src/brief/protocol.js";
+import { writeBrief } from "../../src/harness/library.js";
+import type { WorkflowEvent, Command } from "../../src/protocol.js";
 
 export type { Utterance } from "@lloyal-labs/rig/testing";
 export { dirs, typesOf, warmDeltas, prunesOf, sessionReleasesOf } from "@lloyal-labs/rig/testing";

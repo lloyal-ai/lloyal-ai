@@ -9,7 +9,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { color, font, radius } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
-import type { Command, LibraryEntry } from "../../brief/protocol.js";
+import type { Command, LibraryEntry } from "../../protocol.js";
 import {
   selectLibrary, selectLibrarySearch, selectLive, selectTitle,
 } from "../select.js";

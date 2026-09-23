@@ -16,8 +16,8 @@ import type { MockSessionContext } from "@lloyal-labs/sdk/testing";
 import {
   runHarness, accept,
 } from "./harness.js";
-import type { WorkflowEvent } from "../../src/brief/protocol.js";
-import { writeBrief } from "../../src/brief/library.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
+import { writeBrief } from "../../src/harness/library.js";
 import type { TraceEvent } from "@lloyal-labs/lloyal-agents";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);

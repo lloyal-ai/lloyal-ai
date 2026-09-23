@@ -1,0 +1,8 @@
+Follow-up question: <%= it.query %>
+
+
+New wiki notes (cite by the URLs inside them):
+<%= it.notes %>
+
+
+Extend the article above to cover this as well, and output the complete article.

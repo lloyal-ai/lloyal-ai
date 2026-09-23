@@ -19,8 +19,8 @@
     "noEmit": true
   },
   "include": [
-    "src/brief/protocol.ts",
-    "src/research/budgets.ts",
+    "src/protocol.ts",
+    "src/harness/budgets.ts",
     "src/ui/**/*",
     "types/**/*",
     "targets/desktop/view.tsx",

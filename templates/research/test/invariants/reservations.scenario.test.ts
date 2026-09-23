@@ -19,7 +19,7 @@ import * as path from "node:path";
 import {
   runHarness, docIdOfQuery, writeReportFixture, accept, answer, dirs,
 } from "./harness.js";
-import type { WorkflowEvent } from "../../src/brief/protocol.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
 
 const PLAN_JSON = JSON.stringify({ intent: "research", tasks: [{ description: "investigate the topic" }], clarifyQuestions: [] });
 const CLARIFY_JSON = JSON.stringify({ intent: "clarify", tasks: [], clarifyQuestions: ["Which one?"] });
@@ -126,9 +126,8 @@ test("a follow-up on a settled document threads beside its report", async () => 
 });
 
 test("a submit over a live run: the abandoned run's end never reaches the new document's sink", async () => {
-  // The sink reads the wire behind the handler. Read off the wire, the old
-  // run's abort would have ended whichever run the handler had started since —
-  // the new document then settled with no report on disk.
+  // The sink reads the wire behind the handler, so an abort taken off the wire ends whichever run the
+  // handler has started since — leaving the new document to settle with no report on disk.
   const run = await runHarness({
     utterances: [plan, { text: "never finishes", kind: "report", stallTokens: 2000 }, plan, report],
     script: [

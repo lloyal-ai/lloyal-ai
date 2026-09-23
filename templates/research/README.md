@@ -70,7 +70,7 @@ independent lenses and runs them side by side; **Investigate** runs them
 one after another, each reading what the last one found. The *depth*:
 **Quick**, **Standard** or **Thorough** — two, four or six lines of
 inquiry, with the turns and time to match (every number is in
-`src/research/budgets.ts`). The chips under the composer switch a source
+`src/harness/budgets.ts`). The chips under the composer switch a source
 off for this question; attach a photo or a PDF by dropping it on.
 
 **Frame.** When more than one source takes part, each is first asked what
@@ -209,7 +209,7 @@ plan commands) → a **research pool** of agents, parallel for a Survey or
 chained over a shared KV spine for an Investigation, each retrieval
 scored by the reranker before it enters context → **synthesis** into one
 voice, citations woven inline. Every number it obeys is in one file,
-`src/research/budgets.ts`; the minutes the pickers quote are learned from
+`src/harness/budgets.ts`; the minutes the pickers quote are learned from
 what YOUR machine actually does.
 
 ## Memory: every brief is ground for the next
@@ -267,20 +267,20 @@ components.
 
 1. `src/app.ts` — the whole app in one generator: what is installed, the
    three parts, the command loop. Start here.
-2. `src/brief/protocol.ts` — everything a reader can do (`Command`) and
+2. `src/protocol.ts` — everything a reader can do (`Command`) and
    everything a view is told (`WorkflowEvent`). The table of contents.
-3. `src/brief/brief.ts` — what happens when the reader does each thing.
+3. `src/harness/brief.ts` — what happens when the reader does each thing.
    Its handlers come first, grouped by moment; how each is done is below
    them. This is where you see why a Stop is always heard, and why an
    attached image costs one projection however many agents look at it.
-4. `src/research/research.ts` — what the model does: `plan`, `write`,
+4. `src/harness/research.ts` — what the model does: `plan`, `write`,
    `answer`. `inquire` is the whole strategy — side by side or one after
    another — in one expression, and every stage can be replaced alone.
 5. `src/ui/reduce.ts`, then `src/ui/select.ts`, then `src/ui/moments/` —
    events become one state, state becomes the brief's language, language
    becomes four components. No view holds truth, which is why the
    terminal, the window and the browser cannot disagree.
-6. `src/brief/library.ts` — what is kept, and how every settled brief
+6. `src/harness/library.ts` — what is kept, and how every settled brief
    becomes ground the next one can search.
 7. `targets/` — the payoff: three surfaces, each a boot entry of a few
    lines over the same `harness`.
@@ -314,21 +314,22 @@ that a run's agents all fork from, so what is on it is paid for once.
 
 ## The shape
 
+Folders are roles; the files inside them are your domain.
+
 ```
 src/
   app.ts               the app: what is installed, the parts, the loop
   config.ts            what can be configured, declared once as data
-  brief/               what a brief is: asked · framed · written · settled
-    protocol.ts        everything it says and hears
-    brief.ts           its life; the only place the trunk is written
+  protocol.ts          everything it says (↓) and hears (↑)
+  harness/             ← your program
+    research.ts        what the MODEL does: plan · write · answer, and the stages of write
+    brief.ts           a brief's life; the only place the trunk is written
     library.ts         settled briefs on disk
-  research/            what the model does
-    research.ts        plan · write · answer, and the stages of write
     instructions.ts    what this app is for, in the model's hearing
     budgets.ts         every number it obeys, effort as the one knob
     prompts.ts         renders the prompt files; ~30 lines
     prompts/           every prompt, one Eta file per text — see "The prompts are files"
-  ui/                  what it looks like
+  ui/                  ← your view
     presentation.ts    what it is called
     reduce.ts          reduce(state, event): the ONE fold every surface shares
     state.ts           the shape of that state
@@ -352,26 +353,26 @@ harness.yml            models, output dir, ability config, gate scope
 
 **Seeing an edit take effect.** Three kinds of file reload differently.
 The view (`src/ui/`) hot-reloads under `npm run dev:web` and
-`npm run dev:desktop`. The prompts (`src/research/prompts/`) are read
+`npm run dev:desktop`. The prompts (`src/harness/prompts/`) are read
 when a prompt is rendered, so an edit is live at the next question. The
-engine — `src/app.ts`, `src/brief/`, `src/research/*.ts`, the
-instructions included — is bundled once when the dev command starts, so
+engine — `src/app.ts` and `src/harness/`, the instructions
+included — is bundled once when the dev command starts, so
 after editing it, stop the dev command, start it again, and ask a fresh
 question.
 
 Ordered by ambition — each step is one file:
 
-1. **What it is for** — `src/research/instructions.ts` holds two sentences
+1. **What it is for** — `src/harness/instructions.ts` holds two sentences
    of yours: who the app works for, and what every answer must do. They are
    said on every path an answer can take — a direct question, a follow-up,
    a planned investigation — so this is the one edit that makes it your app.
 2. **What it is called** — `src/ui/presentation.ts`, read by every surface.
-3. **A prompt** — the files in `src/research/prompts/` are yours to edit,
+3. **A prompt** — the files in `src/harness/prompts/` are yours to edit,
    and an edit is live at the next question. Their worked examples
    (immunotherapy trials, voice-agent latency) come from the domains this
    pipeline was tuned on: replace them with examples from yours first.
    What each file is, and what it is handed, is the next section.
-4. **A number** — `src/research/budgets.ts` holds every limit the writing
+4. **A number** — `src/harness/budgets.ts` holds every limit the writing
    obeys, with effort as the single knob each row fans out from.
 5. **The register** — `src/ui/theme.ts` is the whole look as data.
 6. **A derivation** — `src/ui/select.ts` is where machinery becomes
@@ -379,7 +380,7 @@ Ordered by ambition — each step is one file:
    render it in a moment.
 7. **A moment** — `moments/` and `parts/` are plain React over the fold.
    The terminal view folds the same state.
-8. **The algorithm** — `src/research/research.ts` owns what the
+8. **The algorithm** — `src/harness/research.ts` owns what the
    intelligence does, written in the framework's grammar: a spine to fork
    from, a pool that runs agents together, a terminal that ends a turn, a
    settling pass. Hand `app.ts` a different one and everything else stands.
@@ -390,7 +391,7 @@ Ordered by ambition — each step is one file:
 ## The prompts are files
 
 Everything the model is told in this app's own words is in
-`src/research/prompts/`, one Eta file per text. A stage is a pair —
+`src/harness/prompts/`, one Eta file per text. A stage is a pair —
 `plan.system.eta` beside `plan.user.eta` — and the app renders both with
 the same input. A single file is a single turn (`clarify.eta`). Two files
 are partials every prompt shares: `framed.eta`, the frame, and
@@ -402,7 +403,7 @@ are partials every prompt shares: `framed.eta`, the frame, and
 <% layout("./framed", { writesTheAnswer: true }) %>
 ```
 
-That line is what carries your `src/research/instructions.ts` into every
+That line is what carries your `src/harness/instructions.ts` into every
 stage: the frame says your `purpose` first, then the file's own text,
 and — only where `writesTheAnswer` is true — your `answers` last. The
 planner never hears `answers` (its output is a plan); a lone inquiry, the
@@ -433,7 +434,7 @@ read when the prompt is rendered.
 
 **Add one.** A new stage is three steps. Write the pair of files, the
 system one opening with the frame. Render them where the stage runs:
-`prompt("my-stage", { query, … })` in `src/research/research.ts` returns
+`prompt("my-stage", { query, … })` in `src/harness/research.ts` returns
 `{ systemPrompt, content }`, ready to hand to an agent. Whatever the stage
 knows goes in that object — a template sees exactly what you pass and
 nothing else. `npm test` runs `test/invariants/prompts.test.ts`, which
@@ -461,6 +462,30 @@ spine, and the planner routes tasks to it by name.
 package against the catalogue, vendors its tarball into `vendor/`, and
 you add its factory to the list above. **Write one:**
 `npx lloyal-ai ability:new my-ability` starts one of your own.
+
+**Abilities never come from npm.** They are distributed through the signed
+channel, so `install` fetches the tarball, checks its Ed25519 signature
+against the trust roots shipped with the framework, writes it to
+`vendor/<publisher>__<name>-<version>.tgz` beside the signed manifest it
+was checked against, and only then points
+`package.json` at those exact bytes:
+
+```json
+"@lloyal-labs/web-ability": "file:vendor/lloyal__web-2.0.3.tgz"
+```
+
+That `file:` line is the whole reason an Ability appears in `package.json`
+at all — it is how npm is told to materialise bytes the CLI has already
+verified, never an instruction to fetch anything. Commit `vendor/` and
+`npm ci` reproduces those exact bytes from the repo — the Ability is the
+one dependency that never reaches the network, whatever else the install
+resolves from the registry.
+
+Two consequences worth knowing. The version is pinned to a file, so
+upgrading is another `install`, not a range that drifts. And `lloyal new`
+records what it installed under `harnessdev.abilities` in `package.json`
+— that list is what the launcher reads back to name the exact
+`install` commands when a clone is missing an Ability its code imports.
 
 ## Documents, routes, and the laws
 

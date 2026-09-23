@@ -23,7 +23,7 @@ import type { Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloya
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
 import { prompt, render } from "./prompts.js";
-import type { CompleteData, DocId, Mode, WorkflowEvent } from "../brief/protocol.js";
+import type { CompleteData, DocId, Mode, WorkflowEvent } from "../protocol.js";
 
 /** An ask, as the brief hands it over. */
 export type Inputs = {

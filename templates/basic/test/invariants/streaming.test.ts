@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lexer } from "marked";
-import { splitStreaming } from "../../src/ui/streaming.js";
+import { splitStreaming } from "@lloyal-labs/ui/prose";
 
 const paragraph = (i: number): string =>
   `Paragraph ${i} of the brief says something at the length a model writes, with a [citation](https://x/${i}) ` +
@@ -44,9 +44,12 @@ test("the tail is the last block CommonMark recognises — a fence owns its blan
   assert.deepEqual(splitStreaming(longer), { head: "before\n\n", tail: "````md\ncode\n\n```\nstill code\n\nmore" });
   const trailing = "before\n\n```\ncode\n```not-a-close\nstill code\n\nmore";
   assert.deepEqual(splitStreaming(trailing), { head: "before\n\n", tail: "```\ncode\n```not-a-close\nstill code\n\nmore" });
-  // A loose list is one block; a reference definition is its own.
+  // A loose list is one block.
   assert.deepEqual(splitStreaming("- a\n\n- b\n\n- c is still"), { head: "", tail: "- a\n\n- b\n\n- c is still" });
-  assert.deepEqual(splitStreaming("[x][id]\n\n[id]: https://e\n\npara"), { head: "[x][id]\n\n[id]: https://e\n\n", tail: "para" });
+  // A reference definition REFUSES the split, whole buffer as tail: it resolves links in EARLIER blocks, so
+  // a head rendered without it would show those references as literal text. basic's own copy of this
+  // function split here and rendered that bug; the platform's does not, which is why the copy is gone.
+  assert.deepEqual(splitStreaming("[x][id]\n\n[id]: https://e\n\npara"), { head: "", tail: "[x][id]\n\n[id]: https://e\n\npara" });
   // A blank line may hold spaces or tabs; CRLF is normalised before the split.
   assert.deepEqual(splitStreaming("first\n  \nsecond\n\t\nthird"), { head: "first\n  \nsecond\n\t\n", tail: "third" });
   assert.deepEqual(splitStreaming("first\r\n\r\nsecond"), { head: "first\n\n", tail: "second" });

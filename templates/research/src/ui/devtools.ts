@@ -3,7 +3,7 @@
  *  agent lanes are labelled with, and where the reader's question is. Every name is checked against the wire:
  *  renaming an event stops this compiling until it follows. Node-free. */
 import type { RunFraming } from "@lloyal-labs/dev-tools";
-import type { WorkflowEvent } from "../brief/protocol.js";
+import type { WorkflowEvent } from "../protocol.js";
 
 type Wire = WorkflowEvent["type"];
 

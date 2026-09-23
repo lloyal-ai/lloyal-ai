@@ -18,7 +18,7 @@ import type { AgentRoster, AgentEvent as FoldableAgentEvent } from '@lloyal-labs
 import type { AppState, SessionState, DocState, DocId, AgentRuntime, SynthState } from './state.js';
 import { RIG_REPORT, sourceOf, taskIndexOf } from '@lloyal-labs/rig';
 import type { Reports } from '@lloyal-labs/rig';
-import type { WorkflowEvent } from '../brief/protocol.js';
+import type { WorkflowEvent } from '../protocol.js';
 
 /** What the generic fold needs to know of how agents hand in: the call that ends a turn is recognised by its
  *  tool's name and is no timeline row, and its text streams from one argument of that call — or from none,

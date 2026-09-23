@@ -15,6 +15,7 @@
     "bin/",
     "dist/",
     "harness.yml",
+    "src/harness/prompts/",
     "LICENSE",
     "README.md"
   ],
@@ -37,19 +38,22 @@
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
     "@lloyal-labs/binding": "0.2.0-alpha.6",
-    "@lloyal-labs/desktop": "0.1.0-alpha.8",
-    "@lloyal-labs/dev-tools": "0.5.0-alpha.8",
-    "@lloyal-labs/lloyal-agents": "6.0.0-alpha.6",
-    "@lloyal-labs/lloyal.node": "3.2.0-alpha.3",
-    "@lloyal-labs/rig": "5.6.0-alpha.8",
-    "@lloyal-labs/sdk": "4.0.0-alpha.6",
+    "@lloyal-labs/desktop": "0.1.0-alpha.10",
+    "@lloyal-labs/dev-tools": "0.5.0-alpha.10",
+    "@lloyal-labs/lloyal-agents": "6.0.0-alpha.10",
+    "@lloyal-labs/lloyal.node": "3.2.0-alpha.10",
+    "@lloyal-labs/rig": "5.6.0-alpha.10",
+    "@lloyal-labs/sdk": "4.0.0-alpha.10",
+    "@lloyal-labs/ui": "0.1.0-alpha.10",
     "effection": "^4.1.0",
+    "eta": "^4.6.0",
     "ink": "^7.1.1",
     "marked": "^18.0.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

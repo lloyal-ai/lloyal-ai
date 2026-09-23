@@ -14,11 +14,11 @@
 
 import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
-import type { Effort } from '../research/budgets.js';
+import type { Effort } from '../harness/budgets.js';
 import type { Reports } from '@lloyal-labs/rig';
-import type { DocId, Mode, LibraryEntry } from '../brief/protocol.js';
+import type { DocId, Mode, LibraryEntry } from '../protocol.js';
 
-export type { DocId, Mode, LibraryEntry } from '../brief/protocol.js';
+export type { DocId, Mode, LibraryEntry } from '../protocol.js';
 export { reduce } from './reduce.js';
 
 /** The view's transport link to the host — a fact of the wire, not the fold; binding's word. */

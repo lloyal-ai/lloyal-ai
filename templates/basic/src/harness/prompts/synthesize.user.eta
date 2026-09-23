@@ -1,0 +1,8 @@
+Question: <%= it.query %>
+
+
+Wiki notes (cite by the URLs inside them):
+<%= it.notes %>
+
+
+Write the grounded markdown report.

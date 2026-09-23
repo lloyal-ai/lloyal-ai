@@ -20,7 +20,7 @@
 import { createBridge } from "@lloyal-labs/binding/web";
 import type { Bridge, Frame, SessionState, Snapshot, WireStatus } from "@lloyal-labs/binding";
 import { initialState, reduce, type AppState } from "../../src/ui/state.js";
-import type { WorkflowEvent, Command } from "../../src/harness/protocol.js";
+import type { WorkflowEvent, Command } from "../../src/protocol.js";
 
 type Inner = Bridge<WorkflowEvent, Command, AppState> & { close(): void };
 

@@ -55,6 +55,18 @@
   font-size: 20px;
   font-weight: 400;
 }
+/* The name is the way back to the landing, as a wiki's logo is — a control that still reads as the name. */
+button.wiki-brand-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.wiki-brand-name:disabled {
+  cursor: default;
+}
 .wiki-brand-sub {
   font-size: 11.5px;
   color: var(--faint);
@@ -79,6 +91,33 @@
   text-decoration: underline;
   cursor: pointer;
 }
+/* Where this harness came from — delete with the component. `margin-left: auto` so it sits with the search
+   box on the right; when the wire strip is showing, that claims the space first and these follow it. */
+.wiki-origin {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.wiki-origin a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--faint);
+  text-decoration: none;
+}
+.wiki-origin a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+/* The search box claims the right edge with its own `margin-left: auto`. With two auto margins the free space
+   splits and both drift to the middle, so while these links are here they claim it instead and the box follows
+   on the flex gap. A sibling selector, so deleting the component restores the box's own rule untouched. */
+.wiki-origin + .wiki-search {
+  margin-left: 0;
+}
+
 .wiki-search {
   display: flex;
   gap: 0;
@@ -348,12 +387,12 @@
   background: var(--panel);
 }
 
-/* ── research log: collapsible agent entries (thinking + streaming report) ── */
-.wiki-log {
+/* ── agent log: collapsible agent entries (thinking + streaming report) ── */
+.wiki-agents {
   clear: both;
   margin-top: 26px;
 }
-.wiki-log h2,
+.wiki-agents h2,
 .wiki-refs h2 {
   font-family: var(--serif);
   font-weight: 400;
@@ -362,29 +401,29 @@
   padding-bottom: 0.25em;
   border-bottom: 1px solid var(--border);
 }
-.wiki-log-note {
+.wiki-agents-note {
   color: var(--muted);
   font-size: 14px;
   margin: 0 0 12px;
 }
-.wiki-log-entry {
+.wiki-agents-entry {
   border: 1px solid var(--border-soft);
   background: var(--panel);
   border-radius: 2px;
   margin-bottom: 8px;
   overflow: hidden;
 }
-.wiki-log-head {
+.wiki-agents-head {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
   font-size: 13.5px;
 }
-.wiki-log-title {
+.wiki-agents-title {
   font-weight: 700;
 }
-.wiki-log-status {
+.wiki-agents-status {
   color: var(--faint);
 }
 .wiki-toggle {
@@ -399,7 +438,7 @@
 .wiki-toggle:hover {
   text-decoration: underline;
 }
-.wiki-log-preview {
+.wiki-agents-preview {
   padding: 0 12px 9px;
   font-size: 13px;
   color: var(--muted);
@@ -407,26 +446,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.wiki-log-body {
+.wiki-agents-body {
   max-height: 320px;
   overflow-y: auto;
   padding: 10px 14px 14px;
   background: var(--bg);
   border-top: 1px solid var(--border-soft);
 }
-.wiki-log-think {
+.wiki-agents-think {
   white-space: pre-wrap;
   font-size: 13.5px;
   line-height: 1.6;
   color: var(--muted);
   margin: 0;
 }
-.wiki-log-report {
+.wiki-agents-report {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px dashed var(--border-soft);
 }
-.wiki-log-report-label {
+.wiki-agents-report-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -466,7 +505,12 @@
   background: var(--faint);
   flex: none;
 }
+/* Every phase an agent is WORKING in. `phase` has six values and the dot is class-named from it directly, so
+   one missing here is a live agent wearing the faint resting dot. `idle` keeps that dot on purpose: spawned,
+   not yet started. */
 .wiki-dot--active,
+.wiki-dot--thinking,
+.wiki-dot--content,
 .wiki-dot--tool {
   background: var(--link);
   animation: pulse 1.3s ease-in-out infinite;
@@ -493,5 +537,81 @@
 @keyframes blink {
   50% {
     opacity: 0;
+  }
+}
+
+/* The shelf: what is already kept, on the landing. The reflow into topics when the model answers is a plain
+   CSS transition — it must never be the reason a frame waits, so the flat list paints first and this moves
+   it. Short and unstyled-feeling on purpose: springy or staggered would read as a toy and undercut the
+   speed it exists to show. */
+.wiki-shelf {
+  margin-top: 2em;
+  clear: both;
+}
+/* A section of the page like any other, so it carries the article's own h2: serif, ruled, full size. Muted and
+   small read as a footnote, which is the wrong claim for a shelf the model just organised. */
+.wiki-shelf h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.5em;
+  margin: 1em 0 0.35em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+/* The regroup has to be SEEN, or the model's work reads as a stutter. A `transition` cannot do it: the groups
+   are keyed by topic, so when the answer lands React replaces the nodes rather than moving them, and there is
+   no interpolated value. An animation on mount plays on exactly that replacement. */
+.wiki-shelf-group {
+  animation: shelf-settle 260ms ease-out both;
+}
+@keyframes shelf-settle {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.wiki-shelf-working {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 10px;
+  vertical-align: middle;
+  border: 1.5px solid var(--border-faint);
+  border-top-color: var(--faint);
+  border-radius: 50%;
+  animation: shelf-spin 700ms linear infinite;
+}
+@keyframes shelf-spin {
+  to { transform: rotate(360deg); }
+}
+.wiki-shelf-group h3 {
+  font-size: 14px;
+  margin: 0.9em 0 0.2em;
+}
+.wiki-shelf ul {
+  margin: 0.2em 0 0 1.6em;
+  padding: 0;
+  font-size: 14px;
+}
+.wiki-shelf li {
+  margin: 0.25em 0;
+}
+.wiki-shelf li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--link);
+  text-align: left;
+  cursor: pointer;
+}
+.wiki-shelf li button:hover {
+  text-decoration: underline;
+}
+.wiki-shelf-when {
+  color: var(--faint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wiki-shelf-group,
+  .wiki-shelf-working {
+    animation: none;
   }
 }
