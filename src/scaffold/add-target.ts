@@ -23,6 +23,8 @@ import {
   SHARED_RENDERER_DEPS,
   SHARED_RENDERER_DEV_DEPS,
   SHARED_VIEW_DIR,
+  openManifest,
+  readPackageJson,
   rewriteTargetsLine,
 } from './prune-targets.js';
 import {
@@ -60,7 +62,10 @@ export function addTarget(projectDir: string, target: PrunableTarget, template: 
     throw new Error(`template "${template}" has no targets/${target}/ to copy`);
   }
 
-  const projectName = (readJson(join(projectDir, 'package.json')).name as string) ?? 'harness';
+  // Read before anything is copied: a manifest the parser rejects, or a package.json that is not JSON, is
+  // found with the project untouched.
+  const manifest = openManifest(projectDir);
+  const projectName = readPackageJson(projectDir).name ?? 'harness';
   const subs = buildSubstitutions(projectName);
 
   // 1. The target's own dir.
@@ -95,7 +100,7 @@ export function addTarget(projectDir: string, target: PrunableTarget, template: 
 
   // 5. harness.yml `targets:` line.
   const after = ALL_TARGETS.filter((t) => before.has(t) || t === target);
-  rewriteTargetsLine(projectDir, after);
+  rewriteTargetsLine(manifest, after);
   return after;
 }
 

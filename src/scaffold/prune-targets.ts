@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHarnessYml, hasHarnessYml } from './harness-yml.js';
+import type { HarnessYml } from './harness-yml.js';
 import { filterJsoncArray } from './jsonc.js';
 
 export type Target = 'cli' | 'desktop' | 'web';
@@ -153,8 +154,32 @@ function viewDirOf(projectDir: string, template: string | undefined): string | u
 }
 
 /**
+ * The project's manifest, open for editing — or nothing, for a project without one. Opened BEFORE a verb
+ * deletes or copies anything: a manifest the parser rejects is discovered here, with the project untouched,
+ * rather than after a prune that can no longer be finished.
+ */
+export function openManifest(projectDir: string): HarnessYml | undefined {
+  return hasHarnessYml(projectDir) ? openHarnessYml(projectDir) : undefined;
+}
+
+/** The project's `package.json`, parsed — read before any mutation, for the same reason as the manifest. */
+export function readPackageJson(projectDir: string): PackageJson {
+  return JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')) as PackageJson;
+}
+
+export interface PackageJson {
+  name?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  [k: string]: unknown;
+}
+
+/**
  * Reduce `<projectDir>` to `keep`. `keep` MUST include `'cli'`. A no-op when all
  * three targets are kept (beyond normalizing the `harness.yml` `targets:` line).
+ * Everything it will rewrite is read first; nothing is deleted until every read
+ * has succeeded.
  */
 export function pruneTargets(
   projectDir: string,
@@ -167,6 +192,9 @@ export function pruneTargets(
   }
   const pruneDesktop = !keepSet.has('desktop');
   const pruneWeb = !keepSet.has('web');
+
+  const manifest = openManifest(projectDir);
+  const pkg = readPackageJson(projectDir);
 
   const rm = (rel: string): void => rmSync(join(projectDir, rel), { recursive: true, force: true });
 
@@ -187,7 +215,7 @@ export function pruneTargets(
 
   // 2. package.json — scripts + deps.
   if (pruneDesktop || pruneWeb) {
-    prunePackageJson(projectDir, { pruneDesktop, pruneWeb });
+    prunePackageJson(projectDir, pkg, { pruneDesktop, pruneWeb });
   }
 
   // 3. tsconfig split (only when a target was actually removed).
@@ -217,20 +245,15 @@ export function pruneTargets(
   }
 
   // 4. harness.yml `targets:` line (documentation).
-  rewriteTargetsLine(projectDir, keep);
+  rewriteTargetsLine(manifest, keep);
 }
 
 function prunePackageJson(
   projectDir: string,
+  pkg: PackageJson,
   { pruneDesktop, pruneWeb }: { pruneDesktop: boolean; pruneWeb: boolean },
 ): void {
   const pkgPath = join(projectDir, 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
-    scripts?: Record<string, string>;
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    [k: string]: unknown;
-  };
 
   const drop = (obj: Record<string, string> | undefined, keys: string[]): void => {
     if (!obj) return;
@@ -275,14 +298,12 @@ function isUnderPruned(entry: string, pruneDesktop: boolean, pruneWeb: boolean):
 }
 
 /**
- * Rewrite `targets:` in `harness.yml` to the given set, in the flow style the
- * templates ship (`[cli, web]`). Absent file or absent key: nothing to do. All
- * YAML goes through `harness-yml`.
+ * Rewrite `targets:` in an open manifest to the given set, in the flow style the
+ * templates ship (`[cli, web]`). No manifest or no key: nothing to do. All YAML
+ * goes through `harness-yml`.
  */
-export function rewriteTargetsLine(projectDir: string, keep: readonly Target[]): void {
-  if (!hasHarnessYml(projectDir)) return;
-  const yml = openHarnessYml(projectDir);
-  if (!yml.has(['targets'])) return;
-  yml.set(['targets'], keep);
-  yml.save();
+export function rewriteTargetsLine(manifest: HarnessYml | undefined, keep: readonly Target[]): void {
+  if (!manifest?.has(['targets'])) return;
+  manifest.set(['targets'], keep);
+  manifest.save();
 }

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve, relative, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pruneTargets, type Target } from '../src/scaffold/prune-targets.js';
+import { addTarget } from '../src/scaffold/add-target.js';
 import { applyModelChoice, isModelPath, readModelField } from '../src/scaffold/apply-model.js';
 import { modelsForRole, MODEL_CATALOG } from '../src/scaffold/model-catalog.js';
 import { newCommand } from '../src/commands/new.js';
@@ -359,6 +360,37 @@ describe('pruneTargets — guards', () => {
     pruneTargets(dir, ['cli', 'desktop', 'web'], 'basic');
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
     expect(existsSync(join(dir, 'targets/web'))).toBe(true);
+  });
+});
+
+// A prune that cannot finish must not start: every file it will rewrite is parsed before anything is
+// deleted, so a manifest the parser rejects — or a package.json that is not JSON — leaves the project
+// exactly as it was, rather than half-pruned with its marker and manifest describing the old set.
+describe('the targets verbs read before they write', () => {
+  it('pruneTargets refuses a malformed harness.yml before deleting anything', () => {
+    const dir = freshBlankProject();
+    writeFileSync(join(dir, 'harness.yml'), 'targets: [cli, desktop, web\nmodel: {\n');
+    expect(() => pruneTargets(dir, ['cli'], 'basic')).toThrow(/harness\.yml/);
+    expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(true);
+    expect(pkg(dir).scripts['dev:desktop']).toBeDefined();
+  });
+
+  it('pruneTargets refuses a package.json that is not JSON before deleting anything', () => {
+    const dir = freshBlankProject();
+    writeFileSync(join(dir, 'package.json'), '{ "name": "broken",');
+    expect(() => pruneTargets(dir, ['cli'], 'basic')).toThrow();
+    expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
+    expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toMatch(/^targets: \[cli, desktop, web\]$/m);
+  });
+
+  it('addTarget refuses a malformed harness.yml before copying anything', () => {
+    const dir = freshBlankProject();
+    pruneTargets(dir, ['cli'], 'basic');
+    writeFileSync(join(dir, 'harness.yml'), 'targets: [cli\n');
+    expect(() => addTarget(dir, 'web', 'basic')).toThrow(/harness\.yml/);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false);
+    expect(pkg(dir).scripts['serve']).toBeUndefined();
   });
 });
 
