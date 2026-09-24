@@ -103,6 +103,45 @@ describe('writeModelField / readModelField', () => {
     expect(readModelField(dir, 'llm')).toEqual({ id: 'other-4b' });
   });
 
+  /**
+   * The three ways the SAME document can be spelled. The line reader this
+   * replaced matched only `id: "…"` — a double-quoted value in a block map — so
+   * it reported the other two as unset and, on write, appended a second `id:`
+   * beside the one it could not see. Nothing in the suite covered them, because
+   * the suite was written against what that reader could do.
+   */
+  const SPELLINGS: ReadonlyArray<readonly [string, string]> = [
+    ['inline flow', 'model:\n  llm: { id: "qwen3.5-4b", context: 32768 }\n'],
+    ['unquoted', 'model:\n  llm:\n    id: qwen3.5-4b\n    context: 32768\n'],
+    ['single-quoted', "model:\n  llm:\n    id: 'qwen3.5-4b'\n    context: 32768\n"],
+  ];
+
+  for (const [label, yml] of SPELLINGS) {
+    it(`reads a model spelled ${label}`, () => {
+      const dir = freshBlankTree();
+      writeFileSync(join(dir, 'harness.yml'), yml);
+      expect(readModelField(dir, 'llm')).toEqual({ id: 'qwen3.5-4b' });
+    });
+
+    it(`rewrites a model spelled ${label} in place, never duplicating the key`, () => {
+      const dir = freshBlankTree();
+      writeFileSync(join(dir, 'harness.yml'), yml);
+      writeModelField(dir, 'llm', { id: 'other-4b' });
+      expect(readModelField(dir, 'llm')).toEqual({ id: 'other-4b' });
+      const text = readFileSync(join(dir, 'harness.yml'), 'utf8');
+      expect((text.match(/\bid:/g) ?? []).length).toBe(1);
+    });
+  }
+
+  it('keeps every comment across a write — the whole reason the line editor existed', () => {
+    const dir = freshBlankTree();
+    const hashes = (s: string): number => (s.match(/#/g) ?? []).length;
+    const before = hashes(readFileSync(join(dir, 'harness.yml'), 'utf8'));
+    writeModelField(dir, 'llm', { id: 'other-4b' });
+    writeModelField(dir, 'reranker', { id: 'qwen3-reranker-0.6b-q8' });
+    expect(hashes(readFileSync(join(dir, 'harness.yml'), 'utf8'))).toBe(before);
+  });
+
   it('swaps the llm key id <-> path (an entry is id XOR path)', () => {
     const dir = freshBlankTree();
     writeModelField(dir, 'llm', { path: './models/llm/x.gguf' });

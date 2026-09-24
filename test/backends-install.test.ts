@@ -138,7 +138,7 @@ describe('backends:install', () => {
     expect(cudaIsServed(unserved, false)).toBe(false);
   });
 
-  it('the gpu writer: rewrites a live line, promotes the hint, or inserts after the model id', () => {
+  it('the gpu writer: rewrites a live line, promotes the hint, or appends to the llm block', () => {
     const { readFileSync: read, writeFileSync: write } = require('node:fs') as typeof import('node:fs');
     const { root } = project(RECOMMENDED);
     const yml = join(root, 'harness.yml');
@@ -147,9 +147,12 @@ describe('backends:install', () => {
     expect(read(yml, 'utf8')).not.toMatch(/# gpu: cuda/);
     writeGpuField(root, 'cuda');                                  // idempotent on the live line
     expect(read(yml, 'utf8').match(/^    gpu: cuda$/mg)).toHaveLength(1);
+    // No hint to promote: appended to the llm block. WHERE it lands among its
+    // siblings is cosmetic — the old line editor anchored it after `id:`; the
+    // shared writer appends. Both are the same manifest.
     write(yml, 'version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\nsources:\n  outputDir: r\n');
-    writeGpuField(root, 'cuda');                                  // no hint: inserted after id
-    expect(read(yml, 'utf8')).toBe('version: 1\nmodel:\n  llm:\n    id: "x"\n    gpu: cuda\n    context: 1\nsources:\n  outputDir: r\n');
+    writeGpuField(root, 'cuda');
+    expect(read(yml, 'utf8')).toBe('version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\n    gpu: cuda\nsources:\n  outputDir: r\n');
     // model.llm, not any llm: a hand-edited yml with another `llm:` block first is written under model.
     write(yml, 'version: 1\nsomething:\n  llm:\n    id: "decoy"\nmodel:\n  llm:\n    id: "x"\nsources:\n  outputDir: r\n');
     writeGpuField(root, 'cuda');

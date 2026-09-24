@@ -8,13 +8,15 @@
  * carries the engine bin) and is never pruned.
  *
  * Edits are surgical: `package.json` is pure JSON (parse → delete keys →
- * re-stringify), while `harness.yml` + the tsconfig files are edited line-wise
- * so their guidance comments survive. The `targets:` field in `harness.yml` is
- * documentation (nothing reads it at runtime); what makes a target real is its
- * dir + scripts + deps, which is what we remove here.
+ * re-stringify), `harness.yml` goes through `harness-yml` (the one seam), and
+ * the tsconfig files are edited line-wise so their guidance comments survive.
+ * The `targets:` field in `harness.yml` is documentation (nothing reads it at
+ * runtime); what makes a target real is its dir + scripts + deps, which is what
+ * we remove here.
  */
 import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { openHarnessYml, hasHarnessYml } from './harness-yml.js';
 import { filterJsoncArray } from './jsonc.js';
 
 export type Target = 'cli' | 'desktop' | 'web';
@@ -272,12 +274,16 @@ function isUnderPruned(entry: string, pruneDesktop: boolean, pruneWeb: boolean):
   );
 }
 
-/** Rewrite the `targets: [...]` line in `harness.yml` to the given set. */
+/**
+ * Rewrite `targets:` in `harness.yml` to the given set. Replacing just the
+ * value keeps the flow style the templates ship (`[cli, web]`, not a block
+ * sequence) and every comment around it. Absent file or absent key: nothing
+ * to do. All YAML goes through `harness-yml`.
+ */
 export function rewriteTargetsLine(projectDir: string, keep: readonly Target[]): void {
-  const ymlPath = join(projectDir, 'harness.yml');
-  if (!existsSync(ymlPath)) return;
-  const text = readFileSync(ymlPath, 'utf8');
-  const rendered = `targets: [${keep.join(', ')}]`;
-  const next = text.replace(/^targets:\s*\[[^\]]*\]/m, rendered);
-  if (next !== text) writeFileSync(ymlPath, next);
+  if (!hasHarnessYml(projectDir)) return;
+  const yml = openHarnessYml(projectDir);
+  if (!yml.has(['targets'])) return;
+  yml.setInline(['targets'], `[${keep.join(', ')}]`);
+  yml.save();
 }
