@@ -44,15 +44,12 @@ export function specFromValue(value: string): ModelSpec {
 
 /**
  * Write `model.<role>` in `<projectDir>/harness.yml`. A catalog id sets `id:`,
- * a BYO path sets `path:` — an entry is `{ id | path }` and never both, so the
- * opposite key is RENAMED rather than removed and re-added, which keeps it in
- * place above `context:` and the block's guidance.
- *
- * Three states, in the order they are tried: the key is already there (set it),
- * the opposite key is (rename, then set), or neither is — a live-but-empty
- * block gets the entry, and an absent one (basic ships its `reranker:`
- * commented) gets a fresh block. `opts.context` sets the llm's `context:`,
- * which is only meaningful for llm. Throws if there is no `model:` block.
+ * a BYO path sets `path:` — an entry is `{ id | path }` and never both. When the
+ * opposite key is the one present it is RENAMED, so the entry keeps its place
+ * above `context:`; when both are (a manifest this CLI never writes) the
+ * requested key wins and the other goes. An absent role block is created.
+ * `opts.context` sets the llm's `context:`, which is only meaningful for llm.
+ * Throws if there is no `model:` block.
  */
 export function writeModelField(
   projectDir: string,
@@ -68,18 +65,16 @@ export function writeModelField(
   const key = 'id' in spec ? 'id' : 'path';
   const other = key === 'id' ? 'path' : 'id';
   const value = 'id' in spec ? spec.id : spec.path;
+  const entry = ['model', role];
 
-  if (yml.has(['model', role, other])) yml.renameKey(['model', role, other], key);
-  if (!yml.setScalar(['model', role, key], value, { quoted: true })) {
-    // JSON's escapes are YAML 1.2's for a double-quoted scalar, so a Windows
-    // path or an embedded quote round-trips.
-    const entry = `${key}: ${JSON.stringify(value)}`;
-    if (yml.has(['model', role])) yml.insert(['model', role], [entry]);
-    else yml.insert(['model'], [`${role}:`, `  ${entry}`]);
+  if (yml.has([...entry, other])) {
+    if (yml.has([...entry, key])) yml.remove([...entry, other]);
+    else yml.renameKey([...entry, other], key);
   }
+  yml.set([...entry, key], value);
 
   if (role === 'llm' && opts.context != null) {
-    yml.setScalar(['model', 'llm', 'context'], opts.context);
+    yml.set(['model', 'llm', 'context'], opts.context);
   }
   yml.save();
 }

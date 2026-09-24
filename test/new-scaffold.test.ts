@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve, relative, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pruneTargets, type Target } from '../src/scaffold/prune-targets.js';
-import { applyModelChoice, isModelPath } from '../src/scaffold/apply-model.js';
+import { applyModelChoice, isModelPath, readModelField } from '../src/scaffold/apply-model.js';
 import { modelsForRole, MODEL_CATALOG } from '../src/scaffold/model-catalog.js';
 import { newCommand } from '../src/commands/new.js';
 
@@ -377,34 +377,30 @@ describe('isModelPath', () => {
 });
 
 describe('applyModelChoice', () => {
-  it('rewrites model.llm id + context, preserving comments', () => {
+  it('rewrites model.llm id + context', () => {
     const dir = freshBlankProject();
     applyModelChoice(dir, { llm: 'custom-model', context: 8192 });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/id:\s*"custom-model"/);
+    expect(yml).toMatch(/^ {4}id: custom-model$/m);
     expect(yml).toMatch(/context:\s*8192/);
-    expect(yml).toContain('kvCache'); // the inline guidance comment survives
   });
 
-  it('writes a BYO path as `path:` (not `id:`), keeping the comment', () => {
+  it('writes a BYO path as `path:` (not `id:`), in the entry’s place', () => {
     const dir = freshBlankProject();
     applyModelChoice(dir, { llm: './models/llm/custom.gguf' });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/path:\s*"\.\/models\/llm\/custom\.gguf"/);
+    expect(yml).toMatch(/^ {4}path: \.\/models\/llm\/custom\.gguf$/m);
     // The llm block must NOT still carry an `id:` line — a model entry is id XOR path.
     const llmBlock = yml.slice(yml.indexOf('llm:'), yml.indexOf('context:'));
     expect(llmBlock).not.toMatch(/\bid:/);
-    expect(yml).toContain('kvCache'); // guidance comment survives the key swap
     expect(yml).toMatch(/context:\s*32768/); // context left at the template default
   });
 
-  it('escapes a BYO path with backslashes + quotes into valid double-quoted YAML', () => {
+  it('a BYO path with backslashes + quotes round-trips — quoting is the library’s', () => {
     const dir = freshBlankProject();
-    // A Windows path with an embedded quote — must not produce invalid YAML.
-    applyModelChoice(dir, { llm: 'C:\\models\\my "best".gguf' });
-    const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    // JSON.stringify escaping: backslashes doubled, inner quotes backslash-escaped.
-    expect(yml).toContain('path: "C:\\\\models\\\\my \\"best\\".gguf"');
+    const weird = 'C:\\models\\my "best".gguf';
+    applyModelChoice(dir, { llm: weird });
+    expect(readModelField(dir, 'llm')).toEqual({ path: weird });
   });
 
   it('leaves context untouched when not given', () => {
@@ -439,7 +435,7 @@ describe('newCommand.run — non-interactive flag path (end-to-end)', () => {
 
     expect(code).toBe(0);
     const yml = readFileSync(join(parent, 'byoproj', 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/path:\s*"\.\/models\/llm\/mine\.gguf"/);
+    expect(yml).toMatch(/^ {4}path: \.\/models\/llm\/mine\.gguf$/m);
     // cli-only prune landed too — desktop/web are gone.
     expect(existsSync(join(parent, 'byoproj', 'targets/desktop'))).toBe(false);
     expect(existsSync(join(parent, 'byoproj', 'targets/web'))).toBe(false);
@@ -464,7 +460,7 @@ describe('newCommand.run — non-interactive flag path (end-to-end)', () => {
 
     expect(code).toBe(0);
     const yml = readFileSync(join(parent, 'dflt', 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/id:\s*"qwen3.5-4b"/); // the catalog default, not an empty value
+    expect(yml).toMatch(/^ {4}id: qwen3\.5-4b$/m); // the catalog default, not an empty value
     expect(yml).not.toMatch(/(id|path):\s*""/);
   });
 

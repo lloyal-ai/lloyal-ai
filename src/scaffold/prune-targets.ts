@@ -275,15 +275,14 @@ function isUnderPruned(entry: string, pruneDesktop: boolean, pruneWeb: boolean):
 }
 
 /**
- * Rewrite `targets:` in `harness.yml` to the given set. Replacing just the
- * value keeps the flow style the templates ship (`[cli, web]`, not a block
- * sequence) and every comment around it. Absent file or absent key: nothing
- * to do. All YAML goes through `harness-yml`.
+ * Rewrite `targets:` in `harness.yml` to the given set, in the flow style the
+ * templates ship (`[cli, web]`). Absent file or absent key: nothing to do. All
+ * YAML goes through `harness-yml`.
  */
 export function rewriteTargetsLine(projectDir: string, keep: readonly Target[]): void {
   if (!hasHarnessYml(projectDir)) return;
   const yml = openHarnessYml(projectDir);
   if (!yml.has(['targets'])) return;
-  yml.setInline(['targets'], `[${keep.join(', ')}]`);
+  yml.set(['targets'], keep);
   yml.save();
 }

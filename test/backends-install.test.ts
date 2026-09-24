@@ -85,7 +85,7 @@ describe('backends:install', () => {
     expect(out).toContain('NVIDIA B200');
     expect(out).toContain('installed → /cache/9.9.9-linux-x64');
     expect(err).toContain('fetching backend-pack — 50%');
-    expect(readFileSync(join(root, 'harness.yml'), 'utf8')).toMatch(/^    gpu: cuda$/m);   // the hint became the line
+    expect(readFileSync(join(root, 'harness.yml'), 'utf8')).toMatch(/^    gpu: cuda$/m);   // written into the llm block
     expect(readFileSync(log + '.probes', 'utf8')).toBe('1');   // one snapshot: what was shown is what ran
   });
 
@@ -138,18 +138,15 @@ describe('backends:install', () => {
     expect(cudaIsServed(unserved, false)).toBe(false);
   });
 
-  it('the gpu writer: rewrites a live line, promotes the hint, or appends to the llm block', () => {
+  it('the gpu writer: sets the key in the llm block, idempotently; a user’s own hint keeps its text', () => {
     const { readFileSync: read, writeFileSync: write } = require('node:fs') as typeof import('node:fs');
     const { root } = project(RECOMMENDED);
     const yml = join(root, 'harness.yml');
     writeGpuField(root, 'cuda');
     expect(read(yml, 'utf8')).toMatch(/^    gpu: cuda$/m);
-    expect(read(yml, 'utf8')).not.toMatch(/# gpu: cuda/);
+    expect(read(yml, 'utf8')).toMatch(/# gpu: cuda/);            // the fixture's comment is the user's; its text stays
     writeGpuField(root, 'cuda');                                  // idempotent on the live line
     expect(read(yml, 'utf8').match(/^    gpu: cuda$/mg)).toHaveLength(1);
-    // No hint to promote: appended to the llm block. WHERE it lands among its
-    // siblings is cosmetic — the old line editor anchored it after `id:`; the
-    // shared writer appends. Both are the same manifest.
     write(yml, 'version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\nsources:\n  outputDir: r\n');
     writeGpuField(root, 'cuda');
     expect(read(yml, 'utf8')).toBe('version: 1\nmodel:\n  llm:\n    id: "x"\n    context: 1\n    gpu: cuda\nsources:\n  outputDir: r\n');

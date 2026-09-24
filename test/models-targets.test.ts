@@ -94,12 +94,11 @@ afterEach(() => {
 });
 
 describe('writeModelField / readModelField', () => {
-  it('rewrites the llm id in place, preserving the comment', () => {
+  it('rewrites the llm id in place', () => {
     const dir = freshBlankTree();
     writeModelField(dir, 'llm', { id: 'other-4b' });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/id:\s*"other-4b"/);
-    expect(yml).toContain('kvCache'); // trailing guidance comment survives
+    expect(yml).toMatch(/^ {4}id: other-4b$/m);
     expect(readModelField(dir, 'llm')).toEqual({ id: 'other-4b' });
   });
 
@@ -133,37 +132,38 @@ describe('writeModelField / readModelField', () => {
     });
   }
 
-  it('keeps every comment across a write — the whole reason the line editor existed', () => {
-    const dir = freshBlankTree();
-    const hashes = (s: string): number => (s.match(/#/g) ?? []).length;
-    const before = hashes(readFileSync(join(dir, 'harness.yml'), 'utf8'));
-    writeModelField(dir, 'llm', { id: 'other-4b' });
-    writeModelField(dir, 'reranker', { id: 'qwen3-reranker-0.6b-q8' });
-    expect(hashes(readFileSync(join(dir, 'harness.yml'), 'utf8'))).toBe(before);
-  });
-
-  it('swaps the llm key id <-> path (an entry is id XOR path)', () => {
+  it('swaps the llm key id <-> path (an entry is id XOR path), keeping the entry above context:', () => {
     const dir = freshBlankTree();
     writeModelField(dir, 'llm', { path: './models/llm/x.gguf' });
     let llm = sliceLlm(dir);
-    expect(llm).toMatch(/path:\s*"\.\/models\/llm\/x\.gguf"/);
+    expect(llm).toMatch(/path: \.\/models\/llm\/x\.gguf/);
     expect(llm).not.toMatch(/\bid:/);
     writeModelField(dir, 'llm', { id: 'back-to-id' });
     llm = sliceLlm(dir);
-    expect(llm).toMatch(/id:\s*"back-to-id"/);
+    expect(llm).toMatch(/id: back-to-id/);
     expect(llm).not.toMatch(/\bpath:/);
   });
 
-  it('INSERTS a live reranker block when the template ships it commented', () => {
+  it('a manifest carrying BOTH id and path: the requested key wins, the other goes', () => {
     const dir = freshBlankTree();
-    // Precondition: basic ships no LIVE reranker (it is commented).
+    writeFileSync(
+      join(dir, 'harness.yml'),
+      'model:\n  llm:\n    id: "a"\n    path: "/tmp/a.gguf"\n    context: 32768\n',
+    );
+    writeModelField(dir, 'llm', { id: 'other' });
+    expect(readModelField(dir, 'llm')).toEqual({ id: 'other' });
+    const text = readFileSync(join(dir, 'harness.yml'), 'utf8');
+    expect((text.match(/\bid:/g) ?? []).length).toBe(1);
+    expect(text).not.toMatch(/\bpath:/);
+  });
+
+  it('creates a reranker block when the template has none', () => {
+    const dir = freshBlankTree();
     expect(readModelField(dir, 'reranker')).toBeNull();
     writeModelField(dir, 'reranker', { id: 'qwen3-reranker-0.6b-q8' });
     expect(readModelField(dir, 'reranker')).toEqual({ id: 'qwen3-reranker-0.6b-q8' });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    // The live block sits inside model:, and the commented guidance survives.
-    expect(yml).toMatch(/^ {2}reranker:\n {4}id: "qwen3-reranker-0\.6b-q8"/m);
-    expect(yml).toContain('#     id: "qwen3-reranker-0.6b-q8"');
+    expect(yml).toMatch(/^ {2}reranker:\n {4}id: qwen3-reranker-0\.6b-q8$/m);
   });
 
   it('rewrites an already-live reranker block in place (no duplicate)', () => {
@@ -173,13 +173,6 @@ describe('writeModelField / readModelField', () => {
     expect(readModelField(dir, 'reranker')).toEqual({ path: './models/reranker/r.gguf' });
     const liveReranker = (readFileSync(join(dir, 'harness.yml'), 'utf8').match(/^ {2}reranker:$/gm) ?? []).length;
     expect(liveReranker).toBe(1); // exactly one live block, not two
-  });
-
-  it('escapes a path with backslashes + quotes into valid double-quoted YAML', () => {
-    const dir = freshBlankTree();
-    writeModelField(dir, 'llm', { path: 'C:\\models\\my "best".gguf' });
-    const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toContain('path: "C:\\\\models\\\\my \\"best\\".gguf"');
   });
 
   it('round-trips a value with an embedded quote through write -> read', () => {

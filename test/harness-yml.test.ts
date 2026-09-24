@@ -5,19 +5,18 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openHarnessYml, hasHarnessYml, harnessYmlPath } from '../src/scaffold/harness-yml.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const BASIC = join(HERE, '..', 'templates', 'basic');
+const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
 
 const created: string[] = [];
 afterEach(() => {
   while (created.length) rmSync(created.pop() as string, { recursive: true, force: true });
 });
 
-/** A temp dir holding just the basic template's manifest. */
-function fromTemplate(): string {
+/** A temp dir holding a template's manifest. */
+function fromTemplate(name: 'basic' | 'research' = 'basic'): string {
   const dir = mkdtempSync(join(tmpdir(), 'hy-'));
   created.push(dir);
-  cpSync(join(BASIC, 'harness.yml'), harnessYmlPath(dir));
+  cpSync(join(TEMPLATES, name, 'harness.yml'), harnessYmlPath(dir));
   return dir;
 }
 
@@ -41,7 +40,7 @@ function changedLines(before: string, after: string): string[] {
 
 describe('harness.yml — reading', () => {
   // The line reader this module replaced matched only a double-quoted value in
-  // a block map. The other two spellings are the same document.
+  // a block map. The other spellings are the same document.
   const SPELLINGS: ReadonlyArray<readonly [string, string]> = [
     ['inline flow', 'model:\n  llm: { id: "qwen3.5-4b" }\n'],
     ['unquoted', 'model:\n  llm:\n    id: qwen3.5-4b\n'],
@@ -56,13 +55,13 @@ describe('harness.yml — reading', () => {
   }
 
   it('a commented block is absent, not empty', () => {
-    const y = openHarnessYml(fromTemplate());
+    const y = openHarnessYml(fromText('model:\n  llm:\n    id: x\n  # reranker:\n  #   id: r\n'));
     expect(y.has(['model', 'llm'])).toBe(true);
-    expect(y.has(['model', 'reranker'])).toBe(false); // basic ships it commented
+    expect(y.has(['model', 'reranker'])).toBe(false);
   });
 
   it('an EMPTY block is present — absence has to mean declined, not unconfigured', () => {
-    const y = openHarnessYml(fromText('model:\n  llm:\n    id: "x"\n  vision:\n'));
+    const y = openHarnessYml(fromText('model:\n  llm:\n    id: x\n  vision:\n'));
     expect(y.has(['model', 'vision'])).toBe(true);
     expect(y.get(['model', 'vision', 'id'])).toBeUndefined();
   });
@@ -71,129 +70,178 @@ describe('harness.yml — reading', () => {
     expect(hasHarnessYml(fromTemplate())).toBe(true);
     expect(hasHarnessYml(mkdtempSync(join(tmpdir(), 'hy-none-')))).toBe(false);
   });
+
+  it('refuses a manifest that does not parse, naming the file', () => {
+    const dir = fromText('model:\n  llm: {\n');
+    expect(() => openHarnessYml(dir)).toThrow(/harness\.yml/);
+  });
 });
 
-describe('harness.yml — editing is byte-exact', () => {
-  it('setScalar changes ONLY that line, keeping its trailing comment', () => {
-    const dir = fromTemplate();
+describe('harness.yml — the templates are in the library’s own format', () => {
+  // A scaffold always writes the chosen model, so the whole file is rendered on
+  // the first run. Authored in the canonical form, that render changes only
+  // the line it was asked to.
+  for (const name of ['basic', 'research'] as const) {
+    it(`${name}: setting the model changes exactly one line`, () => {
+      const dir = fromTemplate(name);
+      const before = read(dir);
+      const y = openHarnessYml(dir);
+      y.set(['model', 'llm', 'id'], 'other-4b');
+      y.save();
+      const changed = changedLines(before, read(dir));
+      expect(changed).toEqual(['    id: other-4b']);
+    });
+  }
+
+  it('save writes nothing when nothing changed — a hand-formatted file is left alone', () => {
+    const dir = fromText('targets:   [ cli,   web ]\nmodel:\n  llm:\n    id:    "x"   # mine\n');
     const before = read(dir);
-    const y = openHarnessYml(dir);
-    expect(y.setScalar(['model', 'llm', 'id'], 'other-4b', { quoted: true })).toBe(true);
-    y.save();
-    const changed = changedLines(before, read(dir));
-    expect(changed).toHaveLength(1);
-    expect(changed[0]).toContain('other-4b');
-    // The guidance that shared the line is still on it.
-    expect(changed[0]).toContain('add `branches:`');
-  });
-
-  it('renameKey changes ONLY that line, keeping the value and comment', () => {
-    const dir = fromTemplate();
-    const before = read(dir);
-    const y = openHarnessYml(dir);
-    expect(y.renameKey(['model', 'llm', 'id'], 'path')).toBe(true);
-    y.save();
-    const changed = changedLines(before, read(dir));
-    expect(changed).toHaveLength(1);
-    expect(changed[0]).toMatch(/^\s+path: "qwen3\.5-4b"/);
-    expect(changed[0]).toContain('add `branches:`');
-  });
-
-  it('setScalar reports false rather than inventing a key', () => {
-    const dir = fromTemplate();
-    expect(openHarnessYml(dir).setScalar(['model', 'reranker', 'id'], 'x')).toBe(false);
-  });
-
-  /**
-   * The regression that sent this to the CST. Re-rendering from the Document
-   * model emits comments at the indentation of whichever node the parser
-   * attached them to, which drags a file's trailing guidance — `# sources:`,
-   * `# abilities:` — four spaces deep inside `model.llm`.
-   */
-  it('never moves a comment: every untouched line is identical, byte for byte', () => {
-    const dir = fromTemplate();
-    const before = read(dir);
-    const y = openHarnessYml(dir);
-    y.setScalar(['model', 'llm', 'id'], 'other-4b', { quoted: true });
-    y.setScalar(['model', 'llm', 'context'], 4096);
-    y.save();
-    const after = read(dir);
-
-    expect(changedLines(before, after)).toHaveLength(2);
-    // The column-0 guidance is still at column 0, not indented into a block.
-    for (const marker of ['# sources:', '# abilities:', '# Local overrides']) {
-      expect(after).toContain(`\n${marker}`);
-    }
-    expect((after.match(/#/g) ?? []).length).toBe((before.match(/#/g) ?? []).length);
-  });
-
-  it('save writes nothing when nothing changed', () => {
-    const dir = fromTemplate();
-    const before = read(dir);
-    const y = openHarnessYml(dir);
-    expect(y.setScalar(['model', 'nope', 'id'], 'x')).toBe(false);
-    y.save();
+    openHarnessYml(dir).save();
     expect(read(dir)).toBe(before);
   });
 });
 
-describe('harness.yml — inserting', () => {
-  it('adds a block at the siblings’ indent, leaving the commented guidance alone', () => {
-    const dir = fromTemplate();
-    const before = read(dir);
+describe('harness.yml — set', () => {
+  it('updates an existing scalar in place, keeping its trailing comment', () => {
+    const dir = fromText('model:\n  llm:\n    id: "x"   # trunk\n    context: 1\n');
     const y = openHarnessYml(dir);
-    y.insert(['model'], ['reranker:', '  id: "qwen3-reranker-0.6b-q8"']);
+    y.set(['model', 'llm', 'id'], 'y');
     y.save();
-    const after = read(dir);
-
-    expect(after).toMatch(/^ {2}reranker:\n {4}id: "qwen3-reranker-0\.6b-q8"/m);
-    // The template's commented hint survives untouched beside it.
-    expect(after).toContain('#     id: "qwen3-reranker-0.6b-q8"');
-    // Nothing that was there before was rewritten — only additions.
-    for (const line of before.split('\n')) {
-      if (line.trim() !== '') expect(after).toContain(line);
-    }
+    expect(read(dir)).toBe('model:\n  llm:\n    id: "y" # trunk\n    context: 1\n');
   });
 
-  it('reads back what it inserted', () => {
-    const dir = fromTemplate();
+  it('adds a key to a block map', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n    context: 1\n');
     const y = openHarnessYml(dir);
-    y.insert(['model'], ['reranker:', '  id: "r"']);
+    y.set(['model', 'llm', 'gpu'], 'cuda');
     y.save();
-    expect(openHarnessYml(dir).get(['model', 'reranker', 'id'])).toBe('r');
+    expect(read(dir)).toBe('model:\n  llm:\n    id: x\n    context: 1\n    gpu: cuda\n');
   });
 
-  it('appends after a SCALAR last child, not onto its line', () => {
-    // A block value's range ends past its newline; a scalar's ends before it.
-    // Getting that wrong splices onto the end of the previous line.
-    const dir = fromText('model:\n  llm:\n    id: "x"\n    context: 1\n');
+  it('adds a key to a FLOW map, staying on its line', () => {
+    const dir = fromText('model:\n  llm: {context: 32768}\n');
     const y = openHarnessYml(dir);
-    y.insert(['model', 'llm'], ['gpu: cuda']);
+    y.set(['model', 'llm', 'id'], 'qwen');
     y.save();
-    expect(read(dir)).toBe('model:\n  llm:\n    id: "x"\n    context: 1\n    gpu: cuda\n');
+    expect(read(dir)).toBe('model:\n  llm: {context: 32768, id: qwen}\n');
+    expect(openHarnessYml(dir).get(['model', 'llm', 'id'])).toBe('qwen');
   });
 
-  it('appends after a last child that carries a trailing comment', () => {
-    const dir = fromText('model:\n  llm:\n    id: "x"   # the model\n');
+  it('adds a key to an EMPTY flow map', () => {
+    const dir = fromText('model:\n  llm: {}\n');
     const y = openHarnessYml(dir);
-    y.insert(['model', 'llm'], ['gpu: cuda']);
+    y.set(['model', 'llm', 'id'], 'qwen');
     y.save();
-    expect(read(dir)).toBe('model:\n  llm:\n    id: "x"   # the model\n    gpu: cuda\n');
+    expect(read(dir)).toBe('model:\n  llm: {id: qwen}\n');
   });
 
-  it('inserts into an EMPTY block, one level deeper than its key', () => {
-    // `vision:` with nothing under it is how a harness says "this service, with
-    // the derived model" — so it has to be writable without a sibling to copy.
-    const dir = fromText('model:\n  llm:\n    id: "x"\n  vision:\n');
+  it('creates the blocks on the way to a new nested key', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n');
     const y = openHarnessYml(dir);
-    y.insert(['model', 'vision'], ['minTokens: 1024']);
+    y.set(['model', 'reranker', 'id'], 'r');
     y.save();
-    expect(read(dir)).toBe('model:\n  llm:\n    id: "x"\n  vision:\n    minTokens: 1024\n');
+    expect(read(dir)).toBe('model:\n  llm:\n    id: x\n  reranker:\n    id: r\n');
+  });
+
+  it('writes under an EMPTY block — how a harness requests a service with the derived model', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n  vision:\n');
+    const y = openHarnessYml(dir);
+    y.set(['model', 'vision', 'minTokens'], 1024);
+    y.save();
+    expect(read(dir)).toBe('model:\n  llm:\n    id: x\n  vision:\n    minTokens: 1024\n');
     expect(openHarnessYml(dir).get(['model', 'vision', 'minTokens'])).toBe(1024);
   });
 
-  it('refuses to insert into a block that is not there', () => {
-    const dir = fromTemplate();
-    expect(() => openHarnessYml(dir).insert(['nope'], ['x: 1'])).toThrow(/no `nope` block/);
+  it('a file with no final newline', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n    context: 32768');
+    const y = openHarnessYml(dir);
+    y.set(['model', 'llm', 'gpu'], 'cuda');
+    y.save();
+    expect(read(dir)).toBe('model:\n  llm:\n    id: x\n    context: 32768\n    gpu: cuda\n');
+  });
+
+  it('quotes what needs quoting, and only that — the library’s call, not this module’s', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n');
+    const y = openHarnessYml(dir);
+    const values: Record<string, string> = {
+      plain: './models/llm/x.gguf',
+      windows: 'C:\\models\\my "best".gguf',
+      numeric: '1e5',
+      hash: '#x',
+      colon: 'a: b',
+    };
+    for (const [k, v] of Object.entries(values)) y.set(['model', 'llm', k], v);
+    y.save();
+    const back = openHarnessYml(dir);
+    for (const [k, v] of Object.entries(values)) expect(back.get(['model', 'llm', k])).toBe(v);
+    expect(read(dir)).toContain('plain: ./models/llm/x.gguf');
+  });
+
+  it('a list is written in flow style', () => {
+    const dir = fromText('targets: [cli, desktop, web]\nmodel:\n  llm:\n    id: x\n');
+    const y = openHarnessYml(dir);
+    y.set(['targets'], ['cli', 'web']);
+    y.save();
+    expect(read(dir)).toBe('targets: [cli, web]\nmodel:\n  llm:\n    id: x\n');
+  });
+
+  it('refuses a scalar where a block is needed, naming where', () => {
+    const y = openHarnessYml(fromText('model:\n  llm: oops\n'));
+    expect(() => y.set(['model', 'llm', 'id'], 'x')).toThrow(/llm/);
+  });
+});
+
+describe('harness.yml — remove and rename', () => {
+  it('removes from a block map and from a flow map', () => {
+    const block = fromText('model:\n  llm:\n    id: x\n    path: p\n');
+    let y = openHarnessYml(block);
+    expect(y.remove(['model', 'llm', 'path'])).toBe(true);
+    y.save();
+    expect(read(block)).toBe('model:\n  llm:\n    id: x\n');
+
+    const flow = fromText('model:\n  llm: {id: x, path: p}\n');
+    y = openHarnessYml(flow);
+    expect(y.remove(['model', 'llm', 'path'])).toBe(true);
+    y.save();
+    expect(read(flow)).toBe('model:\n  llm: {id: x}\n');
+  });
+
+  it('remove reports false for a missing key or a missing block, and changes nothing', () => {
+    const dir = fromText('model:\n  llm:\n    id: x\n');
+    const y = openHarnessYml(dir);
+    expect(y.remove(['model', 'llm', 'nope'])).toBe(false);
+    expect(y.remove(['model', 'reranker', 'id'])).toBe(false);
+    y.save();
+    expect(read(dir)).toBe('model:\n  llm:\n    id: x\n');
+  });
+
+  it('renameKey keeps the entry where it sits, with its value and comment', () => {
+    const dir = fromText('model:\n  llm:\n    id: "x"   # trunk\n    context: 1\n');
+    const y = openHarnessYml(dir);
+    y.renameKey(['model', 'llm', 'id'], 'path');
+    y.save();
+    expect(read(dir)).toBe('model:\n  llm:\n    path: "x" # trunk\n    context: 1\n');
+  });
+
+  it('renameKey refuses to create a duplicate, and refuses a key that is not there', () => {
+    const y = openHarnessYml(fromText('model:\n  llm:\n    id: x\n    path: p\n'));
+    expect(() => y.renameKey(['model', 'llm', 'id'], 'path')).toThrow(/already exists/);
+    expect(() => y.renameKey(['model', 'llm', 'nope'], 'other')).toThrow(/to rename/);
+  });
+});
+
+describe('harness.yml — a user’s own comments', () => {
+  it('keep their text across a write', () => {
+    const dir = fromText(
+      '# my manifest\ntargets: [cli]\nmodel:\n  llm:\n    id: x   # the trunk\n    # gpu: cuda\n# tail note\n',
+    );
+    const y = openHarnessYml(dir);
+    y.set(['model', 'llm', 'gpu'], 'cuda');
+    y.save();
+    const after = read(dir);
+    for (const note of ['# my manifest', '# the trunk', '# gpu: cuda', '# tail note']) {
+      expect(after).toContain(note);
+    }
+    expect(openHarnessYml(dir).get(['model', 'llm', 'gpu'])).toBe('cuda');
   });
 });

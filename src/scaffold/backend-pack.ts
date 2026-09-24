@@ -97,26 +97,18 @@ export function cudaIsServed(probe: PackProbe, packInstalled: boolean): boolean 
 }
 
 /**
- * Write `gpu: cuda` into the live `llm:` block of `<projectDir>/harness.yml`: a live key is set in
- * place; otherwise the template's commented `# gpu: cuda` hint is PROMOTED to the real key, so the
- * file gains the setting without gaining a duplicate of its own guidance. Appends when there is no
- * hint. All YAML goes through `harness-yml`; nothing here knows the file is YAML.
+ * Write `gpu: cuda` into the live `llm:` block of `<projectDir>/harness.yml`. `model.llm`, not any
+ * `llm:` — and a commented-out block is not there, so a manifest with its llm commented refuses here
+ * rather than being written into. All YAML goes through `harness-yml`; nothing here knows the file is YAML.
  */
 export function writeGpuField(projectDir: string, gpu: 'cuda'): void {
   const yml = openHarnessYml(projectDir);
   const where = harnessYmlPath(projectDir);
   if (!yml.has(['model'])) throw new Error(`writeGpuField: no \`model:\` block in ${where}`);
-  // `model.llm`, not any `llm:` — and a COMMENTED block is not a node, so a
-  // template whose llm is commented out refuses here rather than being written into.
   if (!yml.has(['model', 'llm'])) {
     throw new Error(`writeGpuField: no live \`model.llm:\` block in ${where}`);
   }
-
-  // Already live → set it. Otherwise promote the template's `# gpu: cuda` hint,
-  // or append when the manifest carries no hint to promote.
-  if (!yml.setScalar(['model', 'llm', 'gpu'], gpu)) {
-    yml.promote(['model', 'llm'], 'gpu', `gpu: ${gpu}`);
-  }
+  yml.set(['model', 'llm', 'gpu'], gpu);
   yml.save();
 }
 
