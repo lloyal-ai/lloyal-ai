@@ -10,7 +10,7 @@ import { initialState, reduce } from "../../src/ui/state.js";
 import type { WorkflowEvent } from "../../src/protocol.js";
 
 const platformEvents = [
-  { type: "install:step", steps: [{ id: "llm", label: "Getting the model", status: "running", got: 1, total: 2 }] },
+  { type: "install:step", steps: [{ id: "llm", label: "Downloading the reasoning model", status: "running", got: 1, total: 2 }] },
   { type: "install:step", steps: [] },
   { type: "trace", event: { type: "pool:agentNudge" } },
   { type: "platform:event-this-harness-has-never-heard-of" },
