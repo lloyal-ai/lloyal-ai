@@ -117,11 +117,16 @@ jobs:
       # `lloyal install` spawns npm too, and was equally dead on Windows. The
       # scaffold above proves `new`; this proves the second command a developer
       # runs. Both go through spawnNpm, and neither was covered before.
+      #
+      # `web` requires the reranker, and a shell with no terminal has nobody to
+      # offer the block to — so the project names it first, the way a developer
+      # reading the refusal would. That proves `models:use` on the way.
       - name: Install an ability into the scaffold
         if: matrix.mode == 'flags'
         shell: bash
         run: |
           cd smoke
+          node ../bin/run.js models:use qwen3-reranker-0.6b-q8 --role reranker
           node ../bin/run.js install lloyal/web
           npx tsc --noEmit
 
