@@ -12,6 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { writeModelField, readModelField } from '../src/scaffold/apply-model.js';
+import { openHarnessYml } from '../src/scaffold/harness-yml.js';
 import { readProjectMarker } from '../src/scaffold/write-marker.js';
 import { DEFAULT_ABILITIES } from '../src/commands/new.js';
 import { presentTargets } from '../src/scaffold/add-target.js';
@@ -219,6 +220,21 @@ describe('models: verbs', () => {
     const text = out.join('');
     expect(text).toContain('qwen3.5-4b');
     expect(text).toMatch(/llm\s+id: qwen3.5-4b/);
+  });
+
+  it('models:list tells an absent block from a present one that selects nothing, and from one whose selection derives', async () => {
+    const dir = await scaffold('l2', 'cli');
+    const yml = openHarnessYml(dir);
+    yml.set(['model', 'vision'], {});
+    yml.set(['model', 'reranker'], {});
+    yml.save();
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s) => (out.push(String(s)), true));
+    expect(await runIn(dir, () => modelsListCommand.run([]))).toBe(0);
+    const text = out.join('');
+    expect(text).toMatch(/vision\s+\(paired with the llm/);
+    expect(text).toMatch(/reranker\s+\(selects nothing — the block is present but names neither model\.reranker\.id nor model\.reranker\.path\)/);
+    expect(text).toMatch(/embedding\s+\(unset — the block is absent/);
   });
 
   it('rejects an unknown --role', async () => {

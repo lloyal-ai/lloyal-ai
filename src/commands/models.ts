@@ -23,11 +23,11 @@ import type { Command } from '../command.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
 import {
   writeModelField,
-  readModelField,
   isModelPath,
   type Role,
 } from '../scaffold/apply-model.js';
-import { MODEL_CATALOG, SERVICES, modelsForRole } from '../scaffold/model-catalog.js';
+import { MODEL_CATALOG, SERVICES, derivesFromLlm, modelsForRole } from '../scaffold/model-catalog.js';
+import { modelSelection } from '../scaffold/model-selection.js';
 import { httpFetch } from '../http.js';
 
 /** The trunk, and every service the platform composes — the mirror's set, so a new service is a new role here too. */
@@ -229,15 +229,16 @@ export const modelsListCommand: Command = {
         out.push(`  ${m.role.padEnd(9)} ${m.id.padEnd(24)} ${m.label}`);
       }
 
-      out.push('', 'Active (harness.yml):');
+      out.push('', 'Active (harness.yml, with harness.json over it):');
       for (const role of ROLES) {
-        const spec = readModelField(root, role);
-        const shown =
-          spec == null
+        const { present, spec } = modelSelection(root, role);
+        const shown = spec
+          ? 'id' in spec ? `id: ${spec.id}` : `path: ${spec.path}`
+          : !present
             ? '(unset — the block is absent, so nothing is loaded; an ability that needs it does not enable)'
-            : 'id' in spec
-              ? `id: ${spec.id}`
-              : `path: ${spec.path}`;
+            : role !== 'llm' && derivesFromLlm(role)
+              ? '(paired with the llm — the block names no id or path, so the catalog pairs one)'
+              : `(selects nothing — the block is present but names neither model.${role}.id nor model.${role}.path)`;
         out.push(`  ${role.padEnd(9)} ${shown}`);
       }
 
