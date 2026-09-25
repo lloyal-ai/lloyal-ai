@@ -51,6 +51,7 @@ const WORKSPACE_PACKAGES: Record<string, string> = {
   '@lloyal-labs/web-ability': 'packages/abilities/web',
   '@lloyal-labs/corpus-ability': 'packages/abilities/corpus',
   '@lloyal-labs/documents-ability': 'packages/abilities/documents',
+  '@lloyal-labs/wikipedia-ability': 'packages/abilities/wikipedia',
 };
 /**
  * Packages that must exist EXACTLY ONCE across the linked tree, resolved from the
