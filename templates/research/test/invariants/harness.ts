@@ -58,8 +58,17 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   return runRig<typeof config, Command, WorkflowEvent>({
     ...rest,
     harness: compose ?? harness,
-    // The app's own table, layered over an empty manifest with the rig's temp dir as the library and `low` effort.
-    config: { table: config, yml: (outputDir) => ({ sources: { outputDir }, defaults: { effort: "low" } }) },
+    // The app's own table over a manifest naming what harness.yml names — the reranker the abilities read and the
+    // projector the trunk sees with — with the rig's temp dir as the library and `low` effort. A scenario without
+    // a service clears its block (`model: { vision: "" }`), the way a harness developer would.
+    config: {
+      table: config,
+      yml: (outputDir) => ({
+        model: { llm: { id: "qwen3.5-4b" }, reranker: { id: "qwen3-reranker-0.6b-q8" }, vision: {} },
+        sources: { outputDir },
+        defaults: { effort: "low" },
+      }),
+    },
     ...(override ? { override } : {}),
     observe: (ev) => { if (ev.type === "ui:plan_review" || ev.type === "ui:clarify") latestRevision = ev.revision; },
   });

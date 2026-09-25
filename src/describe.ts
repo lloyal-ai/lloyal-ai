@@ -72,15 +72,20 @@ const DESCRIBE_SCRIPT = `(async () => {
     const entry = process.env.HARNESS_DESCRIBE_ENTRY;
     const required = JSON.parse(process.env.HARNESS_DESCRIBE_REQUIRED || '[]');
     const { run } = require('effection');
-    // Resolved from the ABILITY's own installed @lloyal-labs/lloyal-agents, whose
-    // version we do not control — so accept both the current name and the one it
-    // replaced. A bare destructure of a name the installed version does not export
-    // yields undefined and throws on .set() below, degrading this to names-only
-    // with a stack trace as the only clue. Both spellings, permanently.
+    // Resolved from the ABILITY's own installed runtime, whose version we do not
+    // control — so accept every spelling a shipped runtime has had. The ability
+    // contract and the services moved from lloyal-agents to rig; before that the
+    // config store context was AppConfigStoreCtx and the reranker rode its own
+    // RerankerCtx. A bare destructure of a name the installed version does not
+    // export yields undefined and throws on .set() below, degrading this to
+    // names-only with a stack trace as the only clue. Every spelling, permanently.
     const agents = require('@lloyal-labs/lloyal-agents');
+    let rig = {};
+    try { rig = require('@lloyal-labs/rig'); } catch {}
+    const ConfigStoreCtx = rig.AbilityConfigStoreCtx || agents.AbilityConfigStoreCtx || agents.AppConfigStoreCtx;
+    if (!ConfigStoreCtx) throw new Error('neither @lloyal-labs/rig nor @lloyal-labs/lloyal-agents exports AbilityConfigStoreCtx');
+    const Services = rig.Services;
     const RerankerCtx = agents.RerankerCtx;
-    const ConfigStoreCtx = agents.AbilityConfigStoreCtx || agents.AppConfigStoreCtx;
-    if (!ConfigStoreCtx) throw new Error('@lloyal-labs/lloyal-agents exports neither AbilityConfigStoreCtx nor AppConfigStoreCtx');
     const mod = require(entry);
     const key = Object.keys(mod).find((k) => /^create[A-Za-z0-9]*(Ability|App)$/.test(k) && typeof mod[k] === 'function');
     if (!key) throw new Error('no create*Ability factory export in ' + entry);
@@ -98,17 +103,19 @@ const DESCRIBE_SCRIPT = `(async () => {
         synth[k] = 'describe-placeholder';
       }
     }
-    // Mock reranker — only construction needs it to exist (tokenizeChunks is
-    // promise-returning per the corpus call site; the rest are never hit at build).
+    // Mock reranker — only construction needs it to exist: corpus tokenizes its
+    // chunks at build (tokenize, tokenizeChunks); nothing scores until a run.
     const reranker = {
+      tokenize: async () => [],
       tokenizeChunks: async () => {},
-      rank: async () => [],
-      score: async () => 0,
-      rerank: async (_q, items) => items,
+      scoreBatch: async (_q, texts) => texts.map(() => 0),
+      score: async function* () {},
+      dispose: () => {},
     };
     const cfgStore = { *get() { return synth; }, *set() {}, *clear() {} };
     const ability = await run(function* () {
-      yield* RerankerCtx.set(reranker);
+      if (Services) yield* Services.set({ reranker });
+      if (RerankerCtx) yield* RerankerCtx.set(reranker);
       yield* ConfigStoreCtx.set(cfgStore);
       return yield* factory();
     });

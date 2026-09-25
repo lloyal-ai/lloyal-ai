@@ -49,8 +49,9 @@ vi.mock('../src/verify', async (importActual) => {
 });
 
 import { installCommand } from '../src/commands/install';
-import { verifyAndVendorAbility, parseAbilitySpec } from '../src/scaffold/vendor-ability';
+import { verifyAndVendorAbility, parseAbilitySpec, RequirementError } from '../src/scaffold/vendor-ability';
 import * as verify from '../src/verify';
+import { buildTarball } from './helpers/tarball';
 
 // ── Test scaffolding ─────────────────────────────────────────────
 
@@ -189,6 +190,124 @@ async function depSpec(): Promise<string | undefined> {
   };
   return pkg.dependencies?.[IMPORT_NAME];
 }
+
+/** Serve THESE bytes as the tarball — a real bundle carrying its own `ability.json` — with the sizes to match. */
+function useTarball(bytes: Uint8Array): void {
+  vi.mocked(global.fetch as unknown as () => unknown).mockImplementation(async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  }) as never);
+  vi.mocked(verify.resolveAbilityVersion).mockReturnValue({
+    version: VERSION, manifestUrl: MANIFEST_URL, tarballUrl: TARBALL_URL, appProtocolVersion: '3.0', sizeBytes: bytes.byteLength, importName: IMPORT_NAME,
+  });
+  vi.mocked(verify.fetchAndVerifyManifest).mockResolvedValue({
+    manifest: { name: SCOPED_NAME, version: VERSION, entry: 'x.tgz', signature: 'stub-sig', integrity: EXPECTED_INTEGRITY, publisherKeyId: 'k', sizeBytes: bytes.byteLength },
+    trustKey: new Uint8Array(32),
+  });
+}
+const requiring = (services: readonly string[]): Uint8Array =>
+  buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'corpus', services }) }]);
+const ymlText = (): Promise<string> => readFile(join(cwd, 'harness.yml'), 'utf-8');
+
+// ── the install gate: can this project select what the ability requires? ─────
+
+describe('the install gate', () => {
+  it('a requirement the project selects nothing for is refused, naming the key — nothing vendored, harness.yml byte-identical', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
+      .rejects.toThrow(/requires a reranker, and this project names none — add `model\.reranker` to harness\.yml \(`model\.reranker\.id: qwen3-reranker-0\.6b-q8` is the catalog's\).*Nothing was installed/);
+    expect(await exists(VENDOR_REL)).toBe(false);
+    expect(await depSpec()).toBeUndefined();
+    expect(await ymlText()).toBe(before);
+  });
+
+  it('a present block is a request the boot settles, so a vision block that names no projector passes the gate', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n');
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a commented-out block counts as unset', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME))).rejects.toBeInstanceOf(RequirementError);
+  });
+
+  it('offered and accepted: the block is written through the model writer, then the install proceeds', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['reranker']));
+    const { writeModelField } = await import('../src/scaffold/apply-model');
+    const offered: unknown[] = [];
+    const v = await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), {
+      settle: async (missing) => { offered.push(missing); writeModelField(cwd, missing.service, { id: missing.suggestion! }); return true; },
+    });
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'reranker', key: 'model.reranker.id', suggestion: 'qwen3-reranker-0.6b-q8' }]);
+    expect(await ymlText()).toBe('model:\n  llm:\n    id: qwen3.5-4b\n  reranker:\n    id: qwen3-reranker-0.6b-q8\n');
+    expect(v.vendorRelPath).toBe(VENDOR_REL);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('offered and declined: refused, harness.yml byte-identical', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => false })).rejects.toBeInstanceOf(RequirementError);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
+  it('asked of the RESOLVED configuration: a selection in harness.json satisfies it without an offer', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    await writeFile(join(cwd, 'harness.json'), JSON.stringify({ version: 2, model: { reranker: { path: '/mine.gguf' } } }));
+    useTarball(requiring(['reranker']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a name no runtime provides is refused outright, and never offered', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['whisper']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires "whisper", which is not a service this platform provides/);
+    expect(offered).toBe(0);
+  });
+
+  it('an ability that requires nothing, or was published before its manifest said, installs as before', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring([]));
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME));
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('the install command in a pipe has nobody to ask: it refuses with the key and exits 1', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['reranker']));
+    const err: string[] = [];
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation((s: unknown) => { err.push(String(s)); return true; });
+    const code = await installCommand.run([SCOPED_NAME]);
+    write.mockRestore();
+    expect(code).toBe(1);
+    expect(err.join('')).toMatch(/add `model\.reranker` to harness\.yml/);
+    expect(recordedNpmCalls()).toEqual([]);
+  });
+});
 
 // ── verifyAndVendorAbility ───────────────────────────────────────────
 

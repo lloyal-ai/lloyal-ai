@@ -11,10 +11,10 @@
  * never the growing transcript; the engine's own fold answers ONE snapshot per
  * (re)load, so a reload seeds from a consistent cut.
  */
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
 import { APP } from "../../src/ui/presentation.js";
 import { join } from "node:path";
-import { createEngine, createWindow, CHANNELS } from "@lloyal-labs/desktop";
+import { createEngine, createWindow, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
@@ -49,14 +49,9 @@ app.whenReady().then(() => {
     win.on("closed", () => { win = null; });
   };
   open();
-  // The session's life, relayed to whichever renderer is alive. The engine owns it; main carries it.
-  engine.onSession((state) => safeSend(CHANNELS.session, state));
-  ipcMain.on(CHANNELS.command, (_e, command: Command) => { engine?.send(command); });
-  ipcMain.handle(CHANNELS.snapshot, () => engine!.snapshot());
-  ipcMain.handle(CHANNELS.sessionNow, () => engine!.session());
-  // A reader asking for a working harness. Here that is a new engine process — the
-  // renderer's own IPC link never dropped, which is why this is not a reload.
-  ipcMain.handle(CHANNELS.recover, () => engine!.restart());
+  // Every channel the preload speaks, answered by the engine: commands in, the snapshot, the session's life
+  // and the install relayed to whichever renderer is alive, a working engine on request, the file dialog.
+  serveEngine(engine, safeSend);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();
   });

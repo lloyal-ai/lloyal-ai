@@ -12,7 +12,19 @@
  * (packages/rig/src/models.ts); adding a row here only widens the picker.
  */
 
-export type ModelRole = 'llm' | 'reranker';
+/**
+ * The services a harness can provide — every model beside the trunk llm, by the name that is also its block in
+ * `harness.yml` (`model.reranker`) and its slot on disk. Mirrors `@lloyal-labs/lloyal-agents`'s `SERVICES`
+ * (packages/agents/src/ability-types.ts), vendored for the same reason the catalog is: a name an ability
+ * requires that is not here is not a service the platform provides.
+ */
+export const SERVICES = ['reranker', 'vision', 'embedding'] as const;
+export type Service = (typeof SERVICES)[number];
+
+/** The model roles a harness provisions: the trunk llm, and every service. */
+export type ModelRole = 'llm' | Service;
+
+export const isService = (name: string): name is Service => (SERVICES as readonly string[]).includes(name);
 
 export interface CatalogModel {
   /** Stable id — what gets written into `harness.yml` `model.<role>.id`. */
@@ -48,6 +60,16 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
     id: 'qwen3-reranker-0.6b-q8',
     role: 'reranker',
     label: 'Qwen3 Reranker 0.6B · Q8_0',
+  },
+  {
+    id: 'nomic-embed-text-v1.5-q4',
+    role: 'embedding',
+    label: 'nomic-embed-text v1.5 · Q4_K_M',
+  },
+  {
+    id: 'qwen3-embedding-0.6b-q8',
+    role: 'embedding',
+    label: 'Qwen3 Embedding 0.6B · Q8_0',
   },
 ];
 

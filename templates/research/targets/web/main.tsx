@@ -7,11 +7,14 @@ import { projectionFor } from "@lloyal-labs/ui";
 import { HarnessApp } from "../../src/ui/App.js";
 import { initialState, reduce } from "../../src/ui/state.js";
 import { installHistory } from "../../src/ui/history.js";
+import { harnessTheme } from "../../src/ui/theme.js";
 
 createRoot(document.getElementById("root")!).render(
-  <HarnessProvider bridge={window.harness} initialState={initialState} reduce={reduce}>
-    <HarnessApp />
-  </HarnessProvider>,
+  <div style={harnessTheme}>
+    <HarnessProvider bridge={window.harness} initialState={initialState} reduce={reduce}>
+      <HarnessApp />
+    </HarnessProvider>
+  </div>,
 );
 
 // The URL rides the fold: '/brief/<docId>' ⇄ activeDocId, back/forward as

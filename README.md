@@ -28,7 +28,9 @@ npm run dev:desktop
 ```
 
 The first launch fetches and verifies three weights: a 4B reasoning model, a 0.6B reranker that scores what the
-agents read, and a vision projector so the model can see. Then ask it something worth investigating.
+agents read, and a vision projector so the model can see. The app shows each step as it happens, with the bytes,
+the rate and the time left, and lets you point a step at a file you already have. Every launch after that opens
+at once. Then ask it something worth investigating.
 
 Watch what appears. The outline drafts itself, line by line, from the planner's own stream — and editing a line
 *is* editing the plan. Sections fill in place, each carrying its line of inquiry: searching, reading, waiting
@@ -177,11 +179,45 @@ fold of state, one binding each, no view holding truth.
 
 `npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template.
 
+## Composition of models
+
+An application is rarely one model. The model that reasons is not the one that judges whether a passage
+answers the question, nor the one that turns a page into something it can look at, nor the one that indexes a
+corpus ahead of the question. Here they are resident together, named in one place, and reached by one call.
+
+```yaml
+# harness.yml
+model:
+  llm:       { id: qwen3.5-4b, context: 32768 }
+  reranker:  { id: qwen3-reranker-0.6b-q8 }
+  vision:    {}                                 # no id: the projector the catalogue pairs with the llm
+  embedding: { id: nomic-embed-text-v1.5-q4 }
+```
+
+Naming a block is enabling that model; removing it is declining it. Your harness reads one with a single line,
+`yield* service("reranker")`, and an ability reads it the same way. What a bound model exposes is its own: the
+reranker scores, the encoder embeds, the projector puts sight on the model itself.
+
+```sh
+npx lloyal-ai@alpha models:list                        # the catalogue, your pins, what is on disk
+npx lloyal-ai@alpha models:use <id> [--role reranker]  # a catalogue model, fetched and verified on the next launch
+npx lloyal-ai@alpha models:add <path.gguf> [--role]    # a local weight you already have
+```
+
+The reasoning model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host;
+the program does not change. The default set runs on a 16 GB laptop.
+
+On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
+every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
+and shared by every harness on the box. For a project you cloned, `npx lloyal-ai@alpha backends:install` does
+the same and writes `model.llm.gpu: cuda` for it.
+
 ## Abilities
 
-An **Ability** is an installed capability: tools, the instructions to use them, configuration, and any models
-it needs. It runs inside the harness and can work with the calling agent's live context. Research ships with
-web, corpus and documents.
+An **Ability** is an installed capability: tools, the instructions to use them, configuration, and a declaration
+of the models it cannot work without. It runs inside the harness and can work with the calling agent's live
+context. The harness provides what an ability declares by naming the model in `harness.yml`; `install` tells you
+when the project names none and offers to write the line. Research ships with web, corpus and documents.
 
 ```sh
 npx lloyal-ai@alpha install <publisher>/<name>   # verified and vendored into the project
@@ -190,22 +226,6 @@ npx lloyal-ai@alpha ability:new my-ability        # start one of your own
 
 Every install is Ed25519-verified against a reviewed catalogue: what you install is what was reviewed. Point the
 corpus at `reports` in `harness.yml` and the app reads what it has written.
-
-## Models
-
-```sh
-npx lloyal-ai@alpha models:list            # the catalogue, your pins, what is on disk
-npx lloyal-ai@alpha models:use <id>        # a catalogue model, fetched and verified on the next launch
-npx lloyal-ai@alpha models:add <path.gguf> # a local weight you already have
-```
-
-The model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host; the
-program does not change. The default set runs on a 16 GB laptop.
-
-On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
-every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
-and shared by every harness on the box. For a project you cloned, `npx lloyal-ai@alpha backends:install` does
-the same and writes `model.llm.gpu: cuda` for it.
 
 ## Requirements
 

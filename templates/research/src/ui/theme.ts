@@ -2,6 +2,7 @@
  *  local-first promise both rule out remote stylesheets). */
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
+import type { CSSProperties } from "react";
 
 export const color = {
   ground: "#F6F6F3",
@@ -49,3 +50,17 @@ export const shadow = {
 } as const;
 
 export const radius = { card: 11, panel: 14, control: 8, pill: 999 } as const;
+
+/** The register as the platform reads it: what `@lloyal-labs/ui` draws with — the installer before the app
+ *  opens — set once on the root, so the platform's screens wear this harness's look and nothing is passed. */
+export const harnessTheme = {
+  "--harness-accent": color.ember,
+  "--harness-fg": color.ink,
+  "--harness-bg": color.card,
+  "--harness-ground": color.ground,
+  "--harness-muted": color.dim,
+  "--harness-faint": color.faint,
+  "--harness-rule": color.line,
+  "--harness-font": font.ui,
+  "--harness-mono": font.mono,
+} as CSSProperties;

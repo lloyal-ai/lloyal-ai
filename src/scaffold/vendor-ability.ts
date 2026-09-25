@@ -33,6 +33,9 @@ import {
 import { readTarEntry, isGzipReadable } from '../tar-read.js';
 import type { AttentionSurface } from '../describe.js';
 import { httpFetch } from '../http.js';
+import { isService, modelsForRole } from './model-catalog.js';
+import type { Service } from './model-catalog.js';
+import { modelSelection } from './model-selection.js';
 
 /**
  * Spec grammar: `<publisher>/<name>[@<semver>]` (post-W) or back-compat
@@ -96,6 +99,24 @@ export interface VendoredApp {
   integrity: string;
 }
 
+/** A service an ability requires that the project selects no model for — with the key that would, and the
+ *  catalog's suggestion for it when there is one. */
+export interface MissingService {
+  ability: string;
+  service: Service;
+  /** `model.<service>.id` */
+  key: string;
+  suggestion?: string;
+}
+
+/** An ability's requirement this project cannot meet, or a name no runtime provides. Nothing was vendored. */
+export class RequirementError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RequirementError';
+  }
+}
+
 export interface VendorOptions {
   /**
    * Print the ability's attention-surface disclosure (what it injects into the
@@ -103,6 +124,50 @@ export interface VendorOptions {
    * command; the scaffolder passes `false` to keep `new` output terse.
    */
   disclose?: boolean;
+  /**
+   * How a requirement the project does not meet is settled — the one place the CLI may write `harness.yml`
+   * for an install: asked, never unasked. Answers true once the block is written, false to leave the file as
+   * it is. Absent — a pipe, `new -y` — there is nobody to ask, and the requirement refuses the install.
+   */
+  settle?: (missing: MissingService) => Promise<boolean>;
+}
+
+/** What the ability requires, read off its own `ability.json` in the verified bytes. A package that carries
+ *  none — published before the manifest said — requires nothing. */
+export async function requiredServicesOf(tarball: Uint8Array): Promise<readonly string[]> {
+  const raw = await readTarEntry(tarball, 'package/ability.json');
+  if (raw === null) return [];
+  let manifest: { services?: unknown };
+  try {
+    manifest = JSON.parse(raw) as { services?: unknown };
+  } catch {
+    return [];
+  }
+  return Array.isArray(manifest.services) ? manifest.services.filter((s): s is string => typeof s === 'string') : [];
+}
+
+/**
+ * Does this project request every service this ability requires? Asked of the RESOLVED configuration — the
+ * local overlay over the manifest — since that is what the boot acts on. A name no runtime provides is refused
+ * outright. A block that is present is a request the boot will satisfy or refuse before a byte is fetched
+ * (a row may derive the model from the llm, which only the platform knows); an absent block is offered to
+ * `settle`, and refused when nobody can answer.
+ */
+export async function assertRequirements(projectDir: string, ability: string, required: readonly string[], settle?: VendorOptions['settle']): Promise<void> {
+  for (const name of required) {
+    if (!isService(name)) {
+      throw new RequirementError(`${ability} requires ${JSON.stringify(name)}, which is not a service this platform provides. Nothing was installed.`);
+    }
+    if (modelSelection(projectDir, name).present) continue;
+    const suggestion = modelsForRole(name)[0]?.id;
+    const missing: MissingService = { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
+    if (settle && (await settle(missing))) continue;
+    throw new RequirementError(
+      `${ability} requires a ${name}, and this project names none — add \`model.${name}\` to harness.yml` +
+        (suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '') +
+        `, then install again. Nothing was installed.`,
+    );
+  }
 }
 
 /**
@@ -170,6 +235,10 @@ export async function verifyAndVendorAbility(
       // disclosure is advisory; a parse/read failure must not fail the install
     }
   }
+
+  // 5c. What the ability requires must be something this project can provide, BEFORE anything is written:
+  // an ability whose service the configuration never selects would install cleanly and never enable.
+  await assertRequirements(projectDir, spec.name, await requiredServicesOf(tarball), opts.settle);
 
   // 6. Write the verified tarball + its signed manifest sidecar into vendor/.
   // The sidecar keeps the bytes re-verifiable offline (signature + keyId live in

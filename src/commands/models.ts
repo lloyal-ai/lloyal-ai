@@ -5,7 +5,7 @@
  * catalog model (rig fetches + digest-verifies, fail-closed, on next run); a
  * `path` is a BYO `.gguf` (trusted by possession). These verbs OWN the write, so
  * the yml is never hand-edited. `<role>` is the trunk `llm` (default) or a
- * `reranker` (the model behind an ability-declared service).
+ * service — `reranker`, `vision`, `embedding` — the model a `model.<service>` block names.
  *
  * `models:download` streams a `.gguf` from a URL into `models/<role>/` with a
  * zero-native-dep fetch (same Apache posture as `install.ts`), NEVER buffering
@@ -27,10 +27,11 @@ import {
   isModelPath,
   type Role,
 } from '../scaffold/apply-model.js';
-import { MODEL_CATALOG, modelsForRole } from '../scaffold/model-catalog.js';
+import { MODEL_CATALOG, SERVICES, modelsForRole } from '../scaffold/model-catalog.js';
 import { httpFetch } from '../http.js';
 
-const ROLES: readonly Role[] = ['llm', 'reranker'];
+/** The trunk, and every service the platform composes — the mirror's set, so a new service is a new role here too. */
+const ROLES: readonly Role[] = ['llm', ...SERVICES];
 
 /** Parse `--role`, defaulting to the trunk `llm`. Throws on an unknown role. */
 function parseRole(value: string | undefined): Role {
@@ -51,7 +52,7 @@ const USE_USAGE = [
   'lloyal models:use — pin a catalog model by id',
   '',
   'Usage:',
-  '  lloyal models:use <id> [--role llm|reranker]',
+  '  lloyal models:use <id> [--role llm|reranker|vision|embedding]',
   '',
   'Writes `model.<role>.id` in harness.yml. The model is fetched + digest-verified',
   'from the catalog on the next run (no API key). For a local .gguf you already',
@@ -99,7 +100,7 @@ const ADD_USAGE = [
   'lloyal models:add — register a local .gguf you already have',
   '',
   'Usage:',
-  '  lloyal models:add <path> [--role llm|reranker]',
+  '  lloyal models:add <path> [--role llm|reranker|vision|embedding]',
   '',
   'Writes `model.<role>.path` in harness.yml. The file is trusted by possession',
   '(not catalog-digest-verified). Relative paths resolve from the project root.',
@@ -145,7 +146,7 @@ const DOWNLOAD_USAGE = [
   'lloyal models:download — fetch a .gguf from a URL into models/<role>/',
   '',
   'Usage:',
-  '  lloyal models:download <url> [--role llm|reranker] [--sha256 <hex>]',
+  '  lloyal models:download <url> [--role llm|reranker|vision|embedding] [--sha256 <hex>]',
   '',
   'Streams the weight to models/<role>/<file>.gguf and pins it as model.<role>.path.',
   'A URL download is TRUSTED BY SOURCE — pass --sha256 to verify the bytes',

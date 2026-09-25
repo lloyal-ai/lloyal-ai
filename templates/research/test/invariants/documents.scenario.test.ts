@@ -131,19 +131,22 @@ test("reopen restores the document; a warm ask stages it again; a cold submit do
   assert.deepEqual(rootPrefills(run.trace), []);
 });
 
-test("a model with no projector still takes a document — sight is asked only of pixels", async () => {
+test("a model with no projector: the documents ability is refused by the block it needs, the harness starts, and the question still completes", async () => {
   const { store, doc } = plant();
   const run = await runHarness({
     attachmentStore: store,
-    instrument: (c) => { c.mockSupportsVision = false; },
+    config: { model: { vision: "" } },
     utterances: [report],
     script: [
       { send: ask("What does the paper find?", [doc]) },
-      { on: (ev) => ev.type === "complete" || ev.type === "ui:error" },
+      { on: (ev) => ev.type === "complete" },   // the boot's toast is expected here, so it is not the stop
     ],
   });
-  assert.equal(run.events.filter((e) => e.type === "ui:error").length, 0, "no vision toast for a document");
-  assert.ok(run.events.some((e) => e.type === "complete"));
+  // `documents` declares `vision` (its page tool projects pages), so without the block it does not enable — and the
+  // diagnostic names the block, not a projector. Nothing else complains: a document needs no sight to ride the question.
+  const toasts = run.events.filter((e): e is Extract<WorkflowEvent, { type: "ui:error" }> => e.type === "ui:error").map((e) => e.message);
+  assert.deepEqual(toasts, ["documents ability disabled: documents requires `vision`, which is not configured — add `model.vision` to harness.yml"]);
+  assert.ok(run.events.some((e) => e.type === "complete"), run.events.map((e) => e.type).join(" → "));
 });
 
 test("an image beside a document is projected exactly once, on the trunk — a warm ask adds nothing", async () => {

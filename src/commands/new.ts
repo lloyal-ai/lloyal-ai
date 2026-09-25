@@ -16,6 +16,7 @@ import { createInterface } from 'node:readline/promises';
 import { describeSnapshot, detectNvidiaGpu, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
 import type { BackendOutcome } from '../scaffold/backend-pack.js';
 import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
+import { offerToWrite } from '../scaffold/offer-model.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
 
 const USAGE = [
@@ -192,7 +193,10 @@ export const newCommand: Command = {
     // never be an implicit consequence of a pipe, of CI, or of --skip-install.
     // Only the explicit --skip-abilities opts out.
     const vendorAbilities = !values['skip-abilities'];
-    return performScaffold(plan, parentDir, { install, vendorAbilities });
+    // A default ability's requirement the scaffolded manifest does not meet is offered a fix in a terminal;
+    // `-y` or a pipe has nobody to ask, and the ability is reported pending with the key to add.
+    const offer = !values.yes && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+    return performScaffold(plan, parentDir, { install, vendorAbilities, offer });
   },
 };
 
@@ -261,7 +265,7 @@ function parseTargets(csv: string | undefined): { targets: Target[] } | { error:
 async function performScaffold(
   plan: ScaffoldPlan,
   parentDir: string,
-  opts: { install: boolean; vendorAbilities: boolean },
+  opts: { install: boolean; vendorAbilities: boolean; offer: boolean },
 ): Promise<number> {
   const dest = join(parentDir, plan.name);
 
@@ -331,7 +335,10 @@ async function performScaffold(
   if (opts.vendorAbilities) {
     for (const rawSpec of defaultAbilities) {
       try {
-        const v = await verifyAndVendorAbility(dest, parseAbilitySpec(rawSpec), { disclose: false });
+        const v = await verifyAndVendorAbility(dest, parseAbilitySpec(rawSpec), {
+          disclose: false,
+          ...(opts.offer ? { settle: (missing) => offerToWrite(dest, missing) } : {}),
+        });
         process.stdout.write(`  vendored ${v.name}@${v.version} → ${v.vendorRelPath}\n`);
       } catch (err) {
         process.stderr.write(

@@ -6,12 +6,13 @@
  * lives in {@link harness-yml}; this file only knows what a model entry means.
  */
 import { openHarnessYml, harnessYmlPath } from './harness-yml.js';
+import type { ModelRole } from './model-catalog.js';
 
 /** A model entry is `id` XOR `path` — a catalog id or a BYO `.gguf` path. */
 export type ModelSpec = { id: string } | { path: string };
 
-/** The roles a harness provisions: the trunk llm + an ability-declared reranker. */
-export type Role = 'llm' | 'reranker';
+/** The roles a harness provisions: the trunk llm, and every service. */
+export type Role = ModelRole;
 
 export interface ModelChoice {
   /**
