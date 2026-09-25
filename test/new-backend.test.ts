@@ -101,7 +101,6 @@ describe('new -y on a box with a B200', () => {
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(true);
     expect(r.yml).toMatch(/^    gpu: cuda$/m);
-    expect(r.yml).not.toMatch(/# gpu: cuda/);
     expect(out).toContain('GPU: CUDA backend pack installed → /cache/9.9.9-linux-x64');
   });
   it('--backend-pack skip: CPU as chosen — nothing fetched, nothing written, and the panel says so', async () => {
@@ -109,7 +108,7 @@ describe('new -y on a box with a B200', () => {
     const r = await scaffold(['--backend-pack', 'skip']);
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
-    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(r.yml).not.toMatch(/gpu: cuda/);
     expect(out).toContain('CPU for now — as chosen');
   });
   it('--backend-pack download in a script: the flag is the yes AND the install, so a Dockerfile gets the whole path', async () => {
@@ -126,7 +125,7 @@ describe('new -y on a box with a B200', () => {
     const r = await scaffold([], []);   // no -y, no flag, no wizard: the GPU is detected, nobody has said yes
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
-    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(r.yml).not.toMatch(/gpu: cuda/);
     expect(out).toContain('CPU for now — the pack was not installed; later: npx lloyal-ai backends:install');
   });
   it('a download that breaks leaves a usable scaffold: the panel prints, CPU with the reason, exit 0', async () => {
@@ -136,7 +135,7 @@ describe('new -y on a box with a B200', () => {
     try { r = await scaffold([]); } finally { delete process.env.FAKE_PACK_FAIL; }
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
-    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(r.yml).not.toMatch(/gpu: cuda/);
     expect(out).toContain('CPU for now — the pack download failed — sha256 mismatch');
     expect(out).toContain('Run it');   // the next-steps panel still came
   });
@@ -157,7 +156,7 @@ describe('new -y on a box with a B200', () => {
     const r = await scaffold(['--backend-pack', 'download']);
     expect(r.code).toBe(0);
     expect(r.ensured).toBe(false);
-    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(r.yml).not.toMatch(/gpu: cuda/);
     expect(out).not.toMatch(/lloyal\.node 9\.9\.9/);   // the addon was never asked
   });
   it('--backend-pack download on a Mac: an ask nothing here can honour is said, and new continues', async () => {
@@ -185,7 +184,7 @@ describe('new -y on a box with a B200', () => {
     gpuOnBox = null;
     const r = await scaffold([]);
     expect(r.ensured).toBe(false);
-    expect(r.yml).toMatch(/# gpu: cuda/);
+    expect(r.yml).not.toMatch(/gpu: cuda/);
     expect(out).not.toMatch(/GPU:|CPU for now/);
   });
 });

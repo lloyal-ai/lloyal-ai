@@ -1,54 +1,20 @@
-# harness.yml — the deployment manifest. Your program lives in src/app.ts.
-# Every surface listed explicitly; only the fields you chose are shown.
-#
-#   cli      a terminal app       (npm start)
-#   desktop  a native window      (npm run dev:desktop)
-#   web      a browser app + host (npm run dev:web starts both; npm run serve is the host alone)
-#
-# One harness over a binding; every surface folds the same reduce.
 targets: [cli, desktop, web]
 
 model:
   llm:
-    id: "qwen3.5-4b"          # add `kvCache:` or `gpu:` below to override
+    id: qwen3.5-4b
     context: 32768
-    branches: 5              # concurrent sequences (nSeqMax). Deliberately modest: a
-    #                        # seat carries its own recurrent state on a hybrid model
-    #                        # and is paid per SESSION, so a served host multiplies it
-    #                        # by its session cap. A plan wider than the seats forks in
-    #                        # waves — the pool seats what the context can hold and
-    #                        # admits the rest as branches come back. Unset ⇒ 32.
-    # imageMinTokens: 1024   # per-image detail floor (grounding tasks want it
-    # imageMaxTokens: 1024   # high); the max is the lever for fitting vision
-    #                        # on a tight machine. Unset ⇒ model metadata.
-    # kvCache: q4_0          # attention KV type
-    # mmproj: <catalog id>   # vision projector; defaults to the one the catalog
-    #                        # pairs with this llm. For a local file, drop it at
-    #                        # models/mmproj/<id>.gguf — no config needed.
-    # gpu: cuda              # backend (default · cuda · vulkan); boot fails if unavailable
-  # The corpus + web abilities score retrievals with a reranker. It's resolved +
-  # digest-verified into models/reranker/ on first run, then created per-boot.
+    branches: 5
   reranker:
-    id: "qwen3-reranker-0.6b-q8"
+    id: qwen3-reranker-0.6b-q8
 
 sources:
-  outputDir: reports         # settled briefs land here — the sidebar's Completed reports
-
-# abilities:                 # per-ability config committed with the deploy
-#   corpus:                  # installed, but OFF until it has a path to read. Uncomment
-#     corpusPath: reports    # these to turn it on: pointed at `reports`, your own settled
-#                            # briefs become searchable ground for the next one.
-#                            # (secrets go in env, e.g. TAVILY_API_KEY, not here)
-
-# Settings changed while the app runs are saved to harness.json — gitignored,
-# layered over this file.
+  outputDir: reports
 
 defaults:
-  effort: low                # the two-agent level: the quickest way to watch a whole
-                             # brief settle end to end. `high` plans up to six and is
-                             # the fuller shape — raise it once you know what this
-                             # machine sustains.
-  guards:                    # the abilities' gates, by name. Sibling agents feed one
-    url_dedup:   { scope: cohort }    # synthesis here, so a URL or query any of them
-    query_dedup: { scope: cohort }    # attended is not fetched again; `false` switches a gate off
-#   reasoningMode: flat      # flat · deep — the shape a new brief starts in
+  effort: low
+  guards:
+    url_dedup:
+      scope: cohort
+    query_dedup:
+      scope: cohort

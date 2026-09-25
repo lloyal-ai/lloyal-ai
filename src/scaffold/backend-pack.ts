@@ -8,9 +8,9 @@
  * The addon never fetches without being asked — this module is where the asking happens.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { openHarnessYml, harnessYmlPath } from './harness-yml.js';
 
 /** What the addon's probe reports — the fields this CLI reads, structurally. */
 export interface PackProbe {
@@ -97,34 +97,19 @@ export function cudaIsServed(probe: PackProbe, packInstalled: boolean): boolean 
 }
 
 /**
- * Write `gpu: cuda` into the live `llm:` block of `<projectDir>/harness.yml`: a live `gpu:` line is
- * rewritten, the template's commented `# gpu: cuda` hint becomes the line, else one is inserted after
- * the model's `id:`/`path:`. The same light line edit `writeModelField` makes; no YAML parse.
+ * Write `gpu: cuda` into the live `llm:` block of `<projectDir>/harness.yml`. `model.llm`, not any
+ * `llm:` — and a commented-out block is not there, so a manifest with its llm commented refuses here
+ * rather than being written into. All YAML goes through `harness-yml`; nothing here knows the file is YAML.
  */
 export function writeGpuField(projectDir: string, gpu: 'cuda'): void {
-  const ymlPath = join(projectDir, 'harness.yml');
-  const lines = readFileSync(ymlPath, 'utf8').split('\n');
-  // `model.llm`, not any `llm:`: the top-level `model:` block, then its live direct child.
-  const modelIdx = lines.findIndex((l) => /^model:\s*$/.test(l));
-  if (modelIdx === -1) throw new Error(`writeGpuField: no \`model:\` block in ${ymlPath}`);
-  let modelEnd = modelIdx + 1;
-  while (modelEnd < lines.length && (lines[modelEnd].trim() === '' || /^\s/.test(lines[modelEnd]))) modelEnd++;
-  const llmIdx = lines.findIndex((l, i) => i > modelIdx && i < modelEnd && /^\s+llm:\s*$/.test(l));
-  if (llmIdx === -1) throw new Error(`writeGpuField: no live \`model.llm:\` block in ${ymlPath}`);
-  const indent = (lines[llmIdx].match(/^(\s+)/)?.[1] ?? '  ') + '  ';
-  let end = llmIdx + 1;
-  while (end < modelEnd && (lines[end].trim() === '' || lines[end].startsWith(indent) || /^\s*#/.test(lines[end]) && lines[end].search(/\S/) >= indent.length)) end++;
-  const live = lines.findIndex((l, i) => i > llmIdx && i < end && new RegExp(`^${indent}gpu:`).test(l));
-  if (live !== -1) { lines[live] = `${indent}gpu: ${gpu}`; }
-  else {
-    const hint = lines.findIndex((l, i) => i > llmIdx && i < end && /^\s*#\s*gpu:/.test(l));
-    if (hint !== -1) lines[hint] = `${indent}gpu: ${gpu}`;
-    else {
-      const anchor = lines.findIndex((l, i) => i > llmIdx && i < end && new RegExp(`^${indent}(?:id|path):`).test(l));
-      lines.splice((anchor === -1 ? llmIdx : anchor) + 1, 0, `${indent}gpu: ${gpu}`);
-    }
+  const yml = openHarnessYml(projectDir);
+  const where = harnessYmlPath(projectDir);
+  if (!yml.has(['model'])) throw new Error(`writeGpuField: no \`model:\` block in ${where}`);
+  if (!yml.has(['model', 'llm'])) {
+    throw new Error(`writeGpuField: no live \`model.llm:\` block in ${where}`);
   }
-  writeFileSync(ymlPath, lines.join('\n'));
+  yml.set(['model', 'llm', 'gpu'], gpu);
+  yml.save();
 }
 
 /** What `new` and `backends:install` did about the GPU, for the panel and the log. */
