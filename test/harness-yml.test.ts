@@ -22,9 +22,15 @@ function fromTemplate(name: 'basic' | 'research' = 'basic'): string {
 
 /** A temp dir holding the given manifest text. */
 function fromText(yml: string): string {
+  const dir = empty();
+  writeFileSync(harnessYmlPath(dir), yml);
+  return dir;
+}
+
+/** A temp dir holding nothing — registered for cleanup like every other. */
+function empty(): string {
   const dir = mkdtempSync(join(tmpdir(), 'hy-'));
   created.push(dir);
-  writeFileSync(harnessYmlPath(dir), yml);
   return dir;
 }
 
@@ -68,7 +74,7 @@ describe('harness.yml — reading', () => {
 
   it('hasHarnessYml answers for the directory', () => {
     expect(hasHarnessYml(fromTemplate())).toBe(true);
-    expect(hasHarnessYml(mkdtempSync(join(tmpdir(), 'hy-none-')))).toBe(false);
+    expect(hasHarnessYml(empty())).toBe(false);
   });
 
   it('refuses a manifest that does not parse, naming the file', () => {
@@ -188,6 +194,27 @@ describe('harness.yml — set', () => {
   it('refuses a scalar where a block is needed, naming where', () => {
     const y = openHarnessYml(fromText('model:\n  llm: oops\n'));
     expect(() => y.set(['model', 'llm', 'id'], 'x')).toThrow(/llm/);
+  });
+});
+
+describe('harness.yml — a list an alias refers to', () => {
+  it('keeps its node on set, so the anchor stays and the alias still resolves — to the new list', () => {
+    const dir = fromText('targets: &surfaces [cli, desktop, web]\napp:\n  surfaces: *surfaces\n');
+    const yml = openHarnessYml(dir);
+    yml.set(['targets'], ['cli']);
+    yml.save();
+    expect(read(dir)).toBe('targets: &surfaces [cli]\napp:\n  surfaces: *surfaces\n');
+    expect(openHarnessYml(dir).get(['app', 'surfaces'])).toEqual(['cli']);
+  });
+
+  it('prepare() renders now and writes only when called', () => {
+    const dir = fromText('targets: [cli, desktop, web]\n');
+    const yml = openHarnessYml(dir);
+    yml.set(['targets'], ['cli']);
+    const write = yml.prepare();
+    expect(read(dir)).toBe('targets: [cli, desktop, web]\n');
+    write();
+    expect(read(dir)).toBe('targets: [cli]\n');
   });
 });
 

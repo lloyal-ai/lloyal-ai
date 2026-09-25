@@ -13,12 +13,21 @@
  * The `targets:` field in `harness.yml` is documentation (nothing reads it at
  * runtime); what makes a target real is its dir + scripts + deps, which is what
  * we remove here.
+ *
+ * THE BOUNDARY, for this verb and its inverse: nothing on disk changes until
+ * every write has been PREPARED — every input parsed and checked, every output
+ * rendered — because a failure found after the target's files are gone leaves
+ * a project whose marker and manifest describe what it no longer has. Parsing
+ * is not enough: a manifest can parse and still refuse to render (an anchor
+ * an edit would drop, an alias left dangling). So each edit answers a `Write`,
+ * computed up front, and the writes land together after the deletes.
  */
 import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHarnessYml, hasHarnessYml } from './harness-yml.js';
 import type { HarnessYml } from './harness-yml.js';
-import { filterJsoncArray } from './jsonc.js';
+import { prepareFilter } from './jsonc.js';
+import type { Write } from './jsonc.js';
 
 export type Target = 'cli' | 'desktop' | 'web';
 export type PrunableTarget = Exclude<Target, 'cli'>;
@@ -155,17 +164,29 @@ function viewDirOf(projectDir: string, template: string | undefined): string | u
 
 /**
  * The project's manifest, open for editing — or nothing, for a project without one. Opened BEFORE a verb
- * deletes or copies anything: a manifest the parser rejects is discovered here, with the project untouched,
- * rather than after a prune that can no longer be finished.
+ * deletes or copies anything, and its write PREPARED before too (see the boundary above): a manifest the
+ * parser rejects, or one whose edit will not render, is discovered with the project untouched.
  */
 export function openManifest(projectDir: string): HarnessYml | undefined {
   return hasHarnessYml(projectDir) ? openHarnessYml(projectDir) : undefined;
 }
 
-/** The project's `package.json`, parsed — read before any mutation, for the same reason as the manifest. */
-export function readPackageJson(projectDir: string): PackageJson {
-  return JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')) as PackageJson;
+/**
+ * A `package.json`, parsed and checked for the shape the verbs edit — read before any mutation, for the same
+ * reason as the manifest. `JSON.parse` accepts `null`, an array, a number; a `scripts` that is a string would
+ * only fail when the first key is written into it, after the target's files were already gone. Refused here,
+ * naming the file and the field, with the project untouched.
+ */
+export function readPackageJson(file: string): PackageJson {
+  const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  if (!isPlainObject(parsed)) throw new Error(`${file}: expected an object at the top level`);
+  for (const field of ['scripts', 'dependencies', 'devDependencies'] as const) {
+    if (parsed[field] !== undefined && !isPlainObject(parsed[field])) throw new Error(`${file}: "${field}" must be an object`);
+  }
+  return parsed as PackageJson;
 }
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 export interface PackageJson {
   name?: string;
@@ -178,8 +199,8 @@ export interface PackageJson {
 /**
  * Reduce `<projectDir>` to `keep`. `keep` MUST include `'cli'`. A no-op when all
  * three targets are kept (beyond normalizing the `harness.yml` `targets:` line).
- * Everything it will rewrite is read first; nothing is deleted until every read
- * has succeeded.
+ * Every write is prepared before anything is deleted; the deletes run; the
+ * writes land.
  */
 export function pruneTargets(
   projectDir: string,
@@ -192,13 +213,40 @@ export function pruneTargets(
   }
   const pruneDesktop = !keepSet.has('desktop');
   const pruneWeb = !keepSet.has('web');
+  const someDom = !pruneDesktop || !pruneWeb; // a DOM target (web or desktop renderer) remains
+  // A template's own view dir, when it has one, outlives either target alone: only a cli-only project has
+  // nothing left to mount it. Same guard `prunePackageJson` uses for the deps.
+  const viewDir = viewDirOf(projectDir, template);
 
+  // ── prepare: every input read and checked, every output computed ──
   const manifest = openManifest(projectDir);
-  const pkg = readPackageJson(projectDir);
+  const pkgPath = join(projectDir, 'package.json');
+  const pkg = readPackageJson(pkgPath);
+  const writes: Write[] = [];
+  if (pruneDesktop || pruneWeb) {
+    writes.push(writeJson(pkgPath, prunePackageJson(pkg, { pruneDesktop, pruneWeb })));
+    const webCfg = join(projectDir, 'tsconfig.web.json');
+    // cli-only: no DOM sources are left to typecheck, and the file goes with them (below) rather than edited.
+    if (existsSync(webCfg) && someDom) {
+      writes.push(prepareFilter(webCfg, 'include', (entry) => !isUnderPruned(entry, pruneDesktop, pruneWeb)));
+    }
+    const nodeCfg = join(projectDir, 'tsconfig.json');
+    if (existsSync(nodeCfg)) {
+      // A view dir matches neither pruned prefix, so it survives a single-target prune on its own — correct,
+      // the dir survives too. Only a cli-only prune deletes it, and then its exclude entry must go too.
+      writes.push(prepareFilter(
+        nodeCfg,
+        'exclude',
+        (entry) =>
+          !isUnderPruned(entry, pruneDesktop, pruneWeb) &&
+          !(!someDom && viewDir !== undefined && entry.startsWith(viewDir)),
+      ));
+    }
+  }
+  writes.push(prepareTargetsLine(manifest, keep));
 
+  // ── mutate: the target's own dir and its exclusive top-level files ──
   const rm = (rel: string): void => rmSync(join(projectDir, rel), { recursive: true, force: true });
-
-  // 1. Dirs + files (the target's own dir + its exclusive top-level files).
   if (pruneDesktop) {
     rm('targets/desktop');
     for (const f of TARGET_FILES.desktop) rm(f);
@@ -207,53 +255,24 @@ export function pruneTargets(
     rm('targets/web');
     for (const f of TARGET_FILES.web) rm(f);
   }
-  // A template's own view dir, when it has one, outlives either target alone:
-  // only a cli-only project has nothing left to mount it. Same guard
-  // `prunePackageJson` uses for the deps below.
-  const viewDir = viewDirOf(projectDir, template);
   if (pruneDesktop && pruneWeb && viewDir) rm(viewDir);
+  if ((pruneDesktop || pruneWeb) && !someDom) rm('tsconfig.web.json');
 
-  // 2. package.json — scripts + deps.
-  if (pruneDesktop || pruneWeb) {
-    prunePackageJson(projectDir, pkg, { pruneDesktop, pruneWeb });
-  }
-
-  // 3. tsconfig split (only when a target was actually removed).
-  if (pruneDesktop || pruneWeb) {
-    const someDom = !pruneDesktop || !pruneWeb; // a DOM target (web or desktop renderer) remains
-    const webCfg = join(projectDir, 'tsconfig.web.json');
-    if (existsSync(webCfg)) {
-      if (!someDom) {
-        rm('tsconfig.web.json'); // cli-only: no DOM sources left to typecheck
-      } else {
-        filterJsoncArray(webCfg, 'include', (entry) => !isUnderPruned(entry, pruneDesktop, pruneWeb));
-      }
-    }
-    const nodeCfg = join(projectDir, 'tsconfig.json');
-    if (existsSync(nodeCfg)) {
-      // A view dir matches neither pruned prefix, so it survives a single-target
-      // prune on its own — correct, the dir survives too. Only a cli-only prune
-      // deletes it, and then its exclude entry must go too or it dangles.
-      filterJsoncArray(
-        nodeCfg,
-        'exclude',
-        (entry) =>
-          !isUnderPruned(entry, pruneDesktop, pruneWeb) &&
-          !(!someDom && viewDir !== undefined && entry.startsWith(viewDir)),
-      );
-    }
-  }
-
-  // 4. harness.yml `targets:` line (documentation).
-  rewriteTargetsLine(manifest, keep);
+  // ── land ──
+  for (const write of writes) write();
 }
 
+/** A JSON file's write, its text computed now. */
+export function writeJson(file: string, value: unknown): Write {
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  return () => writeFileSync(file, text);
+}
+
+/** The package with the pruned targets' scripts, deps and fields removed — pure over the parsed object. */
 function prunePackageJson(
-  projectDir: string,
   pkg: PackageJson,
   { pruneDesktop, pruneWeb }: { pruneDesktop: boolean; pruneWeb: boolean },
-): void {
-  const pkgPath = join(projectDir, 'package.json');
+): PackageJson {
 
   const drop = (obj: Record<string, string> | undefined, keys: string[]): void => {
     if (!obj) return;
@@ -285,8 +304,7 @@ function prunePackageJson(
     if (!pruneDesktop) parts.push('tsc -p tsconfig.electron.json');
     pkg.scripts.typecheck = parts.join(' && ');
   }
-
-  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return pkg;
 }
 
 /** True when a tsconfig path entry lives under a pruned target directory. */
@@ -298,12 +316,13 @@ function isUnderPruned(entry: string, pruneDesktop: boolean, pruneWeb: boolean):
 }
 
 /**
- * Rewrite `targets:` in an open manifest to the given set, in the flow style the
- * templates ship (`[cli, web]`). No manifest or no key: nothing to do. All YAML
- * goes through `harness-yml`.
+ * The write that sets `targets:` in an open manifest to the given set, in the
+ * flow style the templates ship (`[cli, web]`) — rendered now, landed when
+ * called. No manifest or no key: nothing to do. All YAML goes through
+ * `harness-yml`.
  */
-export function rewriteTargetsLine(manifest: HarnessYml | undefined, keep: readonly Target[]): void {
-  if (!manifest?.has(['targets'])) return;
+export function prepareTargetsLine(manifest: HarnessYml | undefined, keep: readonly Target[]): Write {
+  if (!manifest?.has(['targets'])) return () => {};
   manifest.set(['targets'], keep);
-  manifest.save();
+  return manifest.prepare();
 }

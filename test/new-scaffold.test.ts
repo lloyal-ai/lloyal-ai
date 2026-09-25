@@ -5,6 +5,7 @@ import { join, dirname, resolve, relative, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pruneTargets, type Target } from '../src/scaffold/prune-targets.js';
 import { addTarget } from '../src/scaffold/add-target.js';
+import { readJsoncArray } from '../src/scaffold/jsonc.js';
 import { applyModelChoice, isModelPath, readModelField } from '../src/scaffold/apply-model.js';
 import { modelsForRole, MODEL_CATALOG } from '../src/scaffold/model-catalog.js';
 import { newCommand } from '../src/commands/new.js';
@@ -166,8 +167,7 @@ describe('the shared React view outlives either DOM target alone', () => {
 
   /** Entries of a JSONC array field, comments stripped. */
   function jsoncArray(file: string, key: string): string[] {
-    const raw = readFileSync(file, 'utf8').replace(/\/\/.*/g, '');
-    return (JSON.parse(raw) as Record<string, string[]>)[key] ?? [];
+    return readJsoncArray(file, key);
   }
 
   it.each([
@@ -382,6 +382,63 @@ describe('the targets verbs read before they write', () => {
     expect(() => pruneTargets(dir, ['cli'], 'basic')).toThrow();
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
     expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toMatch(/^targets: \[cli, desktop, web\]$/m);
+  });
+
+  // JSON.parse accepts every one of these; only the shape check refuses them, and it must do so before the rm.
+  it.each(['null', '[]', '42', '{ "name": "x", "scripts": "build" }', '{ "name": "x", "scripts": [] }', '{ "name": "x", "dependencies": ["react"] }'])(
+    'pruneTargets refuses a package.json of %s before deleting anything', (text) => {
+      const dir = freshBlankProject();
+      writeFileSync(join(dir, 'package.json'), text);
+      expect(() => pruneTargets(dir, ['cli'], 'basic')).toThrow(/package\.json.*object/);
+      expect(existsSync(join(dir, 'targets/desktop'))).toBe(true);
+      expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toMatch(/^targets: \[cli, desktop, web\]$/m);
+    },
+  );
+
+  // An array section is the quiet failure: JavaScript takes a named property on an array, JSON serialization
+  // drops it, and the verb would report success having saved nothing. So the shape check refuses it, and a
+  // successful addition is asserted to have PERSISTED its scripts and dependencies, not merely returned.
+  it('addTarget persists the scripts, the dependencies and the manifest line it adds', () => {
+    const dir = freshBlankProject();
+    pruneTargets(dir, ['cli'], 'basic');
+    expect(pkg(dir).scripts['serve']).toBeUndefined();
+    expect(addTarget(dir, 'web', 'basic')).toEqual(['cli', 'web']);
+    const after = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    expect(after.scripts.serve).toBeDefined();
+    expect(after.scripts['dev:web']).toBeDefined();
+    // basic's web target owns no runtime dependency of its own; its dev dependencies are what come back.
+    expect(after.devDependencies['@types/ws']).toBeDefined();
+    expect(after.devDependencies.concurrently).toBeDefined();
+    expect(existsSync(join(dir, 'targets/web'))).toBe(true);
+    expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toMatch(/^targets: \[cli, web\]$/m);
+  });
+
+  it.each(['{ "name": "x", "devDependencies": "electron" }', '{ "name": "x", "scripts": [] }', '{ "name": "x", "dependencies": 42 }'])(
+    'addTarget refuses a package.json of %s before copying anything', (text) => {
+      const dir = freshBlankProject();
+      pruneTargets(dir, ['cli'], 'basic');
+      writeFileSync(join(dir, 'package.json'), text);
+      expect(() => addTarget(dir, 'web', 'basic')).toThrow(/package\.json.*must be an object/);
+      expect(existsSync(join(dir, 'targets/web'))).toBe(false);
+      expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toMatch(/^targets: \[cli\]$/m);
+    },
+  );
+
+  it('a manifest whose targets list is anchored and aliased: the prune keeps the anchor, and the alias follows the new list', () => {
+    const dir = freshBlankProject();
+    writeFileSync(join(dir, 'harness.yml'), 'targets: &surfaces [cli, desktop, web]\napp:\n  surfaces: *surfaces\nmodel:\n  llm:\n    id: qwen3.5-4b\n');
+    pruneTargets(dir, ['cli'], 'basic');
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false);
+    expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toContain('targets: &surfaces [cli]\napp:\n  surfaces: *surfaces\n');
+  });
+
+  it('addTarget with a DOM target present but no tsconfig.web.json refuses before copying anything', () => {
+    const dir = freshBlankProject();
+    pruneTargets(dir, ['cli', 'desktop'], 'basic');
+    rmSync(join(dir, 'tsconfig.web.json'));
+    expect(() => addTarget(dir, 'web', 'basic')).toThrow(/tsconfig\.web\.json/);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false);
+    expect(pkg(dir).scripts['serve']).toBeUndefined();
   });
 
   it('addTarget refuses a malformed harness.yml before copying anything', () => {

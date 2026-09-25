@@ -17,7 +17,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseDocument, isMap, isScalar } from 'yaml';
+import { parseDocument, isAlias, isMap, isNode, isScalar, isSeq } from 'yaml';
 
 export const HARNESS_YML = 'harness.yml';
 
@@ -39,17 +39,23 @@ export type YmlValue = string | number | boolean | readonly string[];
 
 /** An open manifest: a document, edited in memory, rendered once on `save`. */
 export interface HarnessYml {
-  /** The value at `path`, or `undefined`. Reads every valid spelling. */
+  /** The value at `path` as plain data — a scalar, a list, a block — or `undefined`. Reads every valid spelling,
+   *  and an alias as what it refers to. */
   get(path: YmlPath): unknown;
   /** Whether an entry exists at `path` — true for an empty block, false for a commented one. */
   has(path: YmlPath): boolean;
-  /** Set `path` to `value`, creating each block on the way. An existing scalar is updated in place. */
+  /** Set `path` to `value`, creating each block on the way. An existing scalar is updated in place; an existing
+   *  list keeps its node — and so its anchor, which an alias elsewhere in the file may still refer to. */
   set(path: YmlPath, value: YmlValue): void;
   /** Remove the entry at `path`. False when there was none. */
   remove(path: YmlPath): boolean;
   /** Rename the key at `path`, keeping its entry where it sits. Throws when `to` already exists beside it. */
   renameKey(path: YmlPath, to: string): void;
-  /** Render and write, only when something changed. Refuses a document the parser rejects. */
+  /** Render the edited document now — refusing one the parser rejects — and answer the write, to land when the
+   *  caller is ready. A verb that changes other files prepares this first, so a manifest that cannot be
+   *  written is found before anything else has changed. */
+  prepare(): () => void;
+  /** `prepare()` and land it: render and write, only when something changed. */
   save(): void;
 }
 
@@ -66,7 +72,11 @@ export function openHarnessYml(projectDir: string): HarnessYml {
   let edited = false;
 
   return {
-    get: (path) => doc.getIn(path),
+    get(path) {
+      const node = doc.getIn(path, true);
+      const value = isAlias(node) ? node.resolve(doc) : node;
+      return isNode(value) ? value.toJSON() : value;
+    },
     has: (path) => doc.hasIn(path),
 
     set(path, value) {
@@ -77,7 +87,14 @@ export function openHarnessYml(projectDir: string): HarnessYml {
         const node = doc.getIn(block, true);
         if (isScalar(node) && node.value === null) doc.setIn(block, doc.createNode({}));
       }
-      doc.setIn(path, Array.isArray(value) ? doc.createNode(value, { flow: true }) : value);
+      const existing = doc.getIn(path, true);
+      if (Array.isArray(value) && isSeq(existing)) {
+        // The sequence node stays — its anchor with it — and only its items change.
+        existing.items = value.map((item) => doc.createNode(item));
+        existing.flow = true;
+      } else {
+        doc.setIn(path, Array.isArray(value) ? doc.createNode(value, { flow: true }) : value);
+      }
       edited = true;
     },
 
@@ -99,15 +116,19 @@ export function openHarnessYml(projectDir: string): HarnessYml {
       edited = true;
     },
 
-    save() {
-      if (!edited) return;
+    prepare() {
+      if (!edited) return () => {};
       const text = doc.toString(RENDER);
-      if (text === original) return;
+      if (text === original) return () => {};
       const check = parseDocument(text);
       if (check.errors.length > 0) {
         throw new Error(`${ymlPath}: refusing to write — the result does not parse: ${check.errors[0].message}`);
       }
-      writeFileSync(ymlPath, text);
+      return () => writeFileSync(ymlPath, text);
+    },
+
+    save() {
+      this.prepare()();
     },
   };
 }
