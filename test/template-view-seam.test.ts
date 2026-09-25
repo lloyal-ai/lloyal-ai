@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
@@ -20,7 +20,8 @@ const walk = (dir: string): string[] =>
 
 describe.each(['basic', 'research'])('the view seam in %s', (template) => {
   const root = join(TEMPLATES, template);
-  const entries = walk(join(root, 'targets')).filter((f) => /\/(view|main)\.tsx$/.test(f));
+  // By basename, not by a `/` in the path: the seam holds on every platform's separator.
+  const entries = walk(join(root, 'targets')).filter((f) => basename(f) === 'view.tsx' || basename(f) === 'main.tsx');
 
   it('every renderer entry mounts HarnessProvider', () => {
     expect(entries.length).toBeGreaterThan(0);

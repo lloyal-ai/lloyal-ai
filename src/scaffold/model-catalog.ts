@@ -14,9 +14,9 @@
 
 /**
  * The services a harness can provide — every model beside the trunk llm, by the name that is also its block in
- * `harness.yml` (`model.reranker`) and its slot on disk. Mirrors `@lloyal-labs/lloyal-agents`'s `SERVICES`
- * (packages/agents/src/ability-types.ts), vendored for the same reason the catalog is: a name an ability
- * requires that is not here is not a service the platform provides.
+ * `harness.yml` (`model.reranker`) and its slot on disk. Mirrors `@lloyal-labs/rig`'s `SERVICES`
+ * (packages/rig/src/services.ts; `test/platform-mirror.test.ts` holds the two equal), vendored for the same
+ * reason the catalog is: a name an ability requires that is not here is not a service the platform provides.
  */
 export const SERVICES = ['reranker', 'vision', 'embedding'] as const;
 export type Service = (typeof SERVICES)[number];

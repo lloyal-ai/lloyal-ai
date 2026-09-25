@@ -201,7 +201,7 @@ reranker scores, the encoder embeds, the projector puts sight on the model itsel
 ```sh
 npx lloyal-ai@alpha models:list                        # the catalogue, your pins, what is on disk
 npx lloyal-ai@alpha models:use <id> [--role reranker]  # a catalogue model, fetched and verified on the next launch
-npx lloyal-ai@alpha models:add <path.gguf> [--role]    # a local weight you already have
+npx lloyal-ai@alpha models:add <path.gguf> [--role reranker]  # a local weight you already have
 ```
 
 The reasoning model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host;

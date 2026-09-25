@@ -103,8 +103,10 @@ const DESCRIBE_SCRIPT = `(async () => {
         synth[k] = 'describe-placeholder';
       }
     }
-    // Mock reranker — only construction needs it to exist: corpus tokenizes its
-    // chunks at build (tokenize, tokenizeChunks); nothing scores until a run.
+    // A stand-in for EVERY service the platform provides, whatever this ability declares: only construction
+    // needs them to exist (corpus tokenizes its chunks at build; nothing scores, sees or embeds until a run),
+    // and an ability that reads a service its manifest declares must find one here or describe degrades to
+    // names-only for a reason that is not the ability's.
     const reranker = {
       tokenize: async () => [],
       tokenizeChunks: async () => {},
@@ -112,9 +114,16 @@ const DESCRIBE_SCRIPT = `(async () => {
       score: async function* () {},
       dispose: () => {},
     };
+    const embedding = {
+      dimension: 2,
+      *embed(texts) { return texts.map(() => new Float32Array(2)); },
+      *tokenize() { return []; },
+      dispose: () => {},
+    };
+    const vision = { artifact: 'describe-placeholder' };
     const cfgStore = { *get() { return synth; }, *set() {}, *clear() {} };
     const ability = await run(function* () {
-      if (Services) yield* Services.set({ reranker });
+      if (Services) yield* Services.set({ reranker, vision, embedding });
       if (RerankerCtx) yield* RerankerCtx.set(reranker);
       yield* ConfigStoreCtx.set(cfgStore);
       return yield* factory();
