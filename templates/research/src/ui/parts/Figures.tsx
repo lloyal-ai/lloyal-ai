@@ -13,13 +13,13 @@
  *  because what the model was given is its text, and a page image is what the
  *  model looks at only when a tool puts one in front of it. */
 import { useState, type CSSProperties, type ReactElement } from "react";
-import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets } from "@lloyal-labs/ui";
+import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin } from "@lloyal-labs/ui";
 import type { Asset, LightboxProps } from "@lloyal-labs/ui";
 import { color, font, radius, shadow } from "../theme.js";
 import { useProjection } from "@lloyal-labs/ui";
 import { selectSeen } from "../select.js";
 import { selectThreadDigests } from "../select.js";
-import { contentOrigin, representationUrl, sourceUrl } from "../content-urls.js";
+import { representationUrl, sourceUrl } from "../content-urls.js";
 import { LIGHTBOX } from "./Prose.js";
 
 export { pageFacts, resolveAsset, useAssets };
@@ -37,7 +37,7 @@ export function Figures(): ReactElement | null {
  *  media, each exchange passes its own — the evidence sits beside the
  *  question that carried it, in thread order. */
 export function FigureStrip({ digests }: { digests: string[] }): ReactElement | null {
-  const origin = contentOrigin();
+  const origin = useContentOrigin();
   const assets = useAssets(digests);
   // Page renders the thread holds — admitted by a tool, persisted with the run —
   // say which pages the model looked at.

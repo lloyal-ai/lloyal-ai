@@ -6,9 +6,9 @@
  *  run. A depth chosen here applies from the next run. */
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
-import { useProjection, useSend } from "@lloyal-labs/ui";
+import { useContentOrigin, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command } from "../../protocol.js";
-import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
+import { ingestMedia, representationUrl } from "../content-urls.js";
 import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
@@ -75,6 +75,7 @@ export function Composer({ shape, placeholder }: {
   placeholder: string;
 }): ReactElement {
   const send = useSend<Command>();
+  const origin = useContentOrigin();
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
@@ -167,7 +168,6 @@ export function Composer({ shape, placeholder }: {
     const chosen = Array.from(files ?? []);
     if (picker.current) picker.current.value = "";
     if (chosen.length === 0) return;
-    const origin = contentOrigin();
     if (origin === null) {
       setImageError("This build cannot accept attachments.");
       return;
