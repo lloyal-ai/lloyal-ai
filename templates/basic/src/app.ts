@@ -24,10 +24,11 @@ import type { Command, WorkflowEvent } from "./protocol.js";
 import { HarnessExit } from "./protocol.js";
 
 /**
- * The Abilities this harness enables. Before enabling, the boot provisions
- * whatever models each ability declares (wikipedia needs nothing; corpus/web
- * need a reranker) — so add an installed ability's factory here and the model it
- * needs is fetched for you. Install more with `lloyal install <ability>`.
+ * The Abilities this harness enables. An ability declares the services it
+ * requires (wikipedia none; corpus and web a reranker), and a service exists
+ * when `harness.yml` names its model — `model.reranker` — so an ability whose
+ * service the file does not name is refused at enable, by name. Install more
+ * with `lloyal install <ability>`; it offers to write the line when one is missing.
  */
 export const abilities = [createWikipediaAbility];
 

@@ -52,7 +52,8 @@ export const shadow = {
 export const radius = { card: 11, panel: 14, control: 8, pill: 999 } as const;
 
 /** The register as the platform reads it: what `@lloyal-labs/ui` draws with — the installer before the app
- *  opens — set once on the root, so the platform's screens wear this harness's look and nothing is passed. */
+ *  opens — set once on the element each target mounts the provider under, so the platform's screens wear this
+ *  harness's look and nothing is passed. */
 export const harnessTheme = {
   "--harness-accent": color.ember,
   "--harness-fg": color.ink,

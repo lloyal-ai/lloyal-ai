@@ -12,6 +12,7 @@ import {
   type VendoredApp,
 } from '../scaffold/vendor-ability.js';
 import { offerToWrite } from '../scaffold/offer-model.js';
+import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
   'lloyal install — install a signed HDK ability from apps.lloyal.ai into the current project',
@@ -102,10 +103,9 @@ export const installCommand: Command = {
     try {
       // A requirement the project does not meet is OFFERED a fix in a terminal — the one write to harness.yml an
       // install may make, and only on a yes. A pipe has nobody to ask, and the requirement refuses the install.
-      const terminal = Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
       vendored = await verifyAndVendorAbility(process.cwd(), spec, {
         disclose: true,
-        ...(terminal ? { settle: (missing) => offerToWrite(process.cwd(), missing) } : {}),
+        ...(interactive() ? { settle: (missing) => offerToWrite(process.cwd(), missing) } : {}),
       });
     } catch (err) {
       process.stderr.write(`lloyal install: ${asMessage(err)}\n`);

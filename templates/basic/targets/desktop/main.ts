@@ -49,8 +49,6 @@ app.whenReady().then(() => {
     win.on("closed", () => { win = null; });
   };
   open();
-  // Every channel the preload speaks, answered by the engine: commands in, the snapshot, the session's life
-  // and the install relayed to whichever renderer is alive, a working engine on request, the file dialog.
   serveEngine(engine, safeSend);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();

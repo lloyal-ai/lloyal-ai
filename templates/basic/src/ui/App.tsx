@@ -216,7 +216,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   const availability = useAvailability();
   const send = useSend<Command>();
   const recover = useRecover();
-  const { bridge } = useHarness();
+  const { bridge } = useHarness<WorkflowEvent, Command, AppState>();
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("");
 
@@ -266,7 +266,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   // the wire said dev. The config table gives the Settings tab its tiers and each key's words; no key of this
   // app's offers a choice below boot, so nothing there sends a command — when one does, the loop serves it.
   return (
-    <DevPane bridge={bridge as Parameters<typeof DevPane>[0]["bridge"]} config={config} framing={FRAMING} title={APP.name}>
+    <DevPane bridge={bridge} config={config} framing={FRAMING} title={APP.name}>
       <div className="wiki">
         <header className="wiki-top">
           <div className="wiki-brand">

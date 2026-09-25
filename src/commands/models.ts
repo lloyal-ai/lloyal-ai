@@ -235,7 +235,9 @@ export const modelsListCommand: Command = {
         const shown = spec
           ? 'id' in spec ? `id: ${spec.id}` : `path: ${spec.path}`
           : !present
-            ? '(unset — the block is absent, so nothing is loaded; an ability that needs it does not enable)'
+            ? role === 'llm'
+              ? '(unset — the block is absent; the boot refuses to start without a reasoning model)'
+              : '(unset — the block is absent, so nothing is loaded; an ability that requires it does not enable)'
             : role !== 'llm' && derivesFromLlm(role)
               ? '(paired with the llm — the block names no id or path, so the catalog pairs one)'
               : `(selects nothing — the block is present but names neither model.${role}.id nor model.${role}.path)`;

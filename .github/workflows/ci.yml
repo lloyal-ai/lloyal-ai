@@ -27,6 +27,10 @@ jobs:
       - run: npm install
       - run: npm run build
       - run: npm run typecheck
+      # The CLI mirrors platform facts it cannot import (service names, the catalog, the presence rule); the
+      # parity tests read the platform off the basic template's own node_modules, so it must be installed here
+      # or those tests skip and the mirror is held to nothing.
+      - run: npm --prefix templates/basic install
       # That the tarball ships exactly the templates git tracks is
       # test/tarball.test.ts, part of this run.
       - run: npm test

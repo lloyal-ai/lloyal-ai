@@ -60,7 +60,11 @@ const MANIFEST_URL = 'https://apps.lloyal.ai/v1/bundles/lloyal__wikipedia-1.0.0.
 const IMPORT_NAME = '@lloyal-labs/wikipedia-ability';
 const SCOPED_NAME = 'lloyal/wikipedia';
 const VERSION = '1.0.0';
-const TARBALL_BYTES = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]); // gzip-magic stub
+/** A real bundle — the gate reads `package/ability.json` off the verified bytes, so a stub that cannot be
+ *  opened is refused, never installed. This one requires nothing. */
+const TARBALL_BYTES = buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'wikipedia', services: [] }) }]);
+/** Bytes no gate can open: gzip magic and nothing behind it. */
+const UNREADABLE_BYTES = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]);
 const EXPECTED_INTEGRITY = 'sha512-abcdef==';
 const VENDOR_REL = 'vendor/lloyal__wikipedia-1.0.0.tgz';
 const FILE_DEP = `file:${VENDOR_REL}`;
@@ -218,7 +222,7 @@ describe('the install gate', () => {
     await writeFile(join(cwd, 'harness.yml'), before);
     useTarball(requiring(['reranker']));
     await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
-      .rejects.toThrow(/requires a reranker, and this project names none — add `model\.reranker` to harness\.yml \(`model\.reranker\.id: qwen3-reranker-0\.6b-q8` is the catalog's\).*Nothing was installed/);
+      .rejects.toThrow(/requires `reranker`, and this project names none — add `model\.reranker` to harness\.yml \(`model\.reranker\.id: qwen3-reranker-0\.6b-q8` is the catalog's\), then `lloyal install lloyal\/wikipedia`\. Nothing was installed/);
     expect(await exists(VENDOR_REL)).toBe(false);
     expect(await depSpec()).toBeUndefined();
     expect(await ymlText()).toBe(before);
@@ -261,7 +265,7 @@ describe('the install gate', () => {
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
     useTarball(requiring(['vision']));
     await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
-      .rejects.toThrow(/requires a vision, and this project names none — add `model\.vision` to harness\.yml \(`model\.vision: \{\}` takes the one paired with your model\)/);
+      .rejects.toThrow(/requires `vision`, and this project names none — add `model\.vision` to harness\.yml \(`model\.vision: \{\}` takes the one paired with your model\)/);
     const { writeModelBlock } = await import('../src/scaffold/apply-model');
     const offered: unknown[] = [];
     await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), {
@@ -303,12 +307,40 @@ describe('the install gate', () => {
     expect(offered).toBe(0);
   });
 
-  it('an ability that requires nothing, or was published before its manifest said, installs as before', async () => {
+  it('an ability whose manifest requires nothing installs as before', async () => {
     await seedProject();
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
     useTarball(requiring([]));
     await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME));
     expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a requirement the gate cannot read is a refusal, never "requires nothing": no ability.json, a package it cannot open, a manifest that does not parse', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    const before = await ymlText();
+    for (const [bytes, why] of [
+      [buildTarball([{ name: 'package/README.md', content: 'no manifest here' }]), /carries no ability\.json, so what it requires is unknown\. Nothing was installed\./],
+      [UNREADABLE_BYTES, /could not be opened .*so what it requires is unknown\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: '{ not json' }]), /ability\.json does not parse, so what it requires is unknown\. Nothing was installed\./],
+    ] as const) {
+      useTarball(bytes);
+      await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME))).rejects.toThrow(why);
+      expect(await exists(VENDOR_REL)).toBe(false);
+      expect(await ymlText()).toBe(before);
+      expect(await depSpec()).toBeUndefined();
+    }
+  });
+
+  it('a project without a package.json is refused before the offer, with nothing written anywhere', async () => {
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    const before = await ymlText();
+    useTarball(requiring(['reranker']));
+    const settle = vi.fn(async () => true);
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle })).rejects.toThrow(/no package\.json in .* — run this inside a harness project\./);
+    expect(settle).not.toHaveBeenCalled();
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
   });
 
   it('the install command in a pipe has nobody to ask: it refuses with the key and exits 1', async () => {

@@ -11,7 +11,7 @@ import {
 } from "../select.js";
 import { paceFor } from "../pace.js";
 import { Lightbox, useAssets } from "./Figures.js";
-import { representationUrl } from "../content-urls.js";
+import { representationUrl } from "@lloyal-labs/media";
 import { APP } from "../presentation.js";
 import { DeleteMe } from "./DeleteMe.js";
 

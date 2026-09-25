@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { run } from "effection";
 import { AbilityConfigStoreCtx, Services, createInMemoryConfigStore } from "@lloyal-labs/rig";
-import type { Reranker } from "@lloyal-labs/rig";
+import { stubReranker } from "@lloyal-labs/rig/testing";
 import { loadYml } from "@lloyal-labs/rig/node";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { config } from "../../src/app.js";
@@ -23,7 +23,7 @@ test("every gate harness.yml names is one the web ability declares", async () =>
     yield* store.set("web", { tavilyKey: "test-key" });
     yield* AbilityConfigStoreCtx.set(store);
     // The ability declares the reranker, so its factory reads one; what it does with it is not this test's.
-    yield* Services.set({ reranker: { scoreBatch: async () => [], tokenize: async () => [], tokenizeChunks: async () => {}, score: async function* () {}, dispose() {} } as unknown as Reranker });
+    yield* Services.set({ reranker: stubReranker });
     return yield* createWebAbility();
   });
   const declared = web.tools.flatMap((t) => t.hooks?.beforeDispatch ?? []).map((g) => g.name);

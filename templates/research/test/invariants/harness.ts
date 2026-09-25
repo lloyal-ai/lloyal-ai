@@ -10,11 +10,16 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadYml } from "@lloyal-labs/rig/node";
 import { runHarness as runRig } from "@lloyal-labs/rig/testing";
 import type { HarnessRun as RigRun, HarnessSpec as RigSpec, Sendable as RigSendable, Step as RigStep } from "@lloyal-labs/rig/testing";
 import { harness, config } from "../../src/app.js";
 import { writeBrief } from "../../src/harness/library.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
+
+/** The scaffold itself — where its harness.yml is. */
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 export type { Utterance } from "@lloyal-labs/rig/testing";
 export { dirs, typesOf, warmDeltas, prunesOf, sessionReleasesOf } from "@lloyal-labs/rig/testing";
@@ -58,13 +63,14 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   return runRig<typeof config, Command, WorkflowEvent>({
     ...rest,
     harness: compose ?? harness,
-    // The app's own table over a manifest naming what harness.yml names — the reranker the abilities read and the
-    // projector the trunk sees with — with the rig's temp dir as the library and `low` effort. A scenario without
-    // a service clears its block (`model: { vision: "" }`), the way a harness developer would.
+    // The app's own table over the scaffold's own harness.yml — the models it names are the ones the scenarios
+    // run against, so a change to the file is a change to the tests — with the rig's temp dir as the library
+    // and `low` effort. A scenario without a service clears its block (`model: { vision: "" }`), the way a
+    // harness developer would.
     config: {
       table: config,
       yml: (outputDir) => ({
-        model: { llm: { id: "qwen3.5-4b" }, reranker: { id: "qwen3-reranker-0.6b-q8" }, vision: {} },
+        ...loadYml(config, ROOT),
         sources: { outputDir },
         defaults: { effort: "low" },
       }),

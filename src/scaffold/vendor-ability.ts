@@ -19,8 +19,10 @@
  * re-verifiable offline (the manifest carries the signature + publisherKeyId,
  * which the catalog version entry does not).
  */
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 import {
   fetchAndVerifyCatalog,
   resolveAbilityVersion,
@@ -135,16 +137,24 @@ export interface VendorOptions {
   settle?: (missing: MissingService) => Promise<boolean>;
 }
 
-/** What the ability requires, read off its own `ability.json` in the verified bytes. A package that carries
- *  none — published before the manifest said — requires nothing. */
-export async function requiredServicesOf(tarball: Uint8Array): Promise<readonly string[]> {
+/** What the ability requires, read off its own `ability.json` in the verified bytes. A requirement the gate
+ *  cannot read — a package it cannot open, one that carries no manifest, a manifest that does not parse — is a
+ *  refusal, never "requires nothing": an ability that would install cleanly and never enable is the failure
+ *  the gate exists to stop. */
+export async function requiredServicesOf(tarball: Uint8Array, ability: string): Promise<readonly string[]> {
   const raw = await readTarEntry(tarball, 'package/ability.json');
-  if (raw === null) return [];
+  if (raw === null) {
+    throw new RequirementError(
+      isGzipReadable(tarball)
+        ? `${ability}'s package carries no ability.json, so what it requires is unknown. Nothing was installed.`
+        : `${ability}'s package could not be opened (not a gzip stream, or larger than the inspect cap), so what it requires is unknown. Nothing was installed.`,
+    );
+  }
   let manifest: { services?: unknown };
   try {
     manifest = JSON.parse(raw) as { services?: unknown };
   } catch {
-    return [];
+    throw new RequirementError(`${ability}'s ability.json does not parse, so what it requires is unknown. Nothing was installed.`);
   }
   return Array.isArray(manifest.services) ? manifest.services.filter((s): s is string => typeof s === 'string') : [];
 }
@@ -169,9 +179,9 @@ export async function assertRequirements(projectDir: string, ability: string, re
       : { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
     if (settle && (await settle(missing))) continue;
     throw new RequirementError(
-      `${ability} requires a ${name}, and this project names none — add \`model.${name}\` to harness.yml` +
+      `${ability} requires \`${name}\`, and this project names none — add \`model.${name}\` to harness.yml` +
         (derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '') +
-        `, then install again. Nothing was installed.`,
+        `, then \`lloyal install ${ability}\`. Nothing was installed.`,
     );
   }
 }
@@ -242,9 +252,13 @@ export async function verifyAndVendorAbility(
     }
   }
 
-  // 5c. What the ability requires must be something this project can provide, BEFORE anything is written:
-  // an ability whose service the configuration never selects would install cleanly and never enable.
-  await assertRequirements(projectDir, spec.name, await requiredServicesOf(tarball), opts.settle);
+  // 5c. Every write prepared before any mutation: the project must be one (a `package.json` the `file:` dep can
+  // land in) and must provide what the ability requires — an ability whose service the configuration never
+  // selects would install cleanly and never enable. The offer to write `harness.yml` comes after the
+  // `package.json` check, so a project that is not a project is refused with nothing touched.
+  const pkgPath = join(projectDir, 'package.json');
+  const pkg = projectPackageJson(pkgPath, projectDir);
+  await assertRequirements(projectDir, spec.name, await requiredServicesOf(tarball, spec.name), opts.settle);
 
   // 6. Write the verified tarball + its signed manifest sidecar into vendor/.
   // The sidecar keeps the bytes re-verifiable offline (signature + keyId live in
@@ -261,8 +275,9 @@ export async function verifyAndVendorAbility(
 
   // 7. Point package.json at the local tarball (npm 12 installs `file:` deps
   // without --allow-remote; `npm ci` reproduces it offline from the committed
-  // tarball).
-  await setFileDependency(projectDir, entry.importName, vendorRelPath);
+  // tarball) — through the one owner of the file.
+  pkg.dependencies = { ...(pkg.dependencies ?? {}), [entry.importName]: `file:${vendorRelPath}` };
+  writeJson(pkgPath, pkg)();
 
   return {
     name: spec.name,
@@ -273,31 +288,17 @@ export async function verifyAndVendorAbility(
   };
 }
 
-/**
- * Set `dependencies[importName] = "file:<relPath>"` in `<projectDir>/package.json`,
- * preserving the rest of the file (parse → merge → 2-space re-stringify). Throws
- * if there is no `package.json` — vendoring only makes sense inside a project.
- */
-async function setFileDependency(
-  projectDir: string,
-  importName: string,
-  vendorRelPath: string,
-): Promise<void> {
-  const pkgPath = join(projectDir, 'package.json');
-  let raw: string;
+/** The project's `package.json`, read and shape-checked before anything is written — vendoring only makes sense
+ *  inside a project, and a missing file says so by name. */
+function projectPackageJson(pkgPath: string, projectDir: string): PackageJson {
   try {
-    raw = await readFile(pkgPath, 'utf-8');
+    return readPackageJson(pkgPath);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(
-        `no package.json in ${projectDir} — run this inside a harness project.`,
-      );
+      throw new Error(`no package.json in ${projectDir} — run this inside a harness project.`);
     }
     throw err;
   }
-  const pkg = JSON.parse(raw) as { dependencies?: Record<string, string> };
-  pkg.dependencies = { ...(pkg.dependencies ?? {}), [importName]: `file:${vendorRelPath}` };
-  await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 /**

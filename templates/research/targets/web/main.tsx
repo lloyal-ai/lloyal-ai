@@ -1,5 +1,5 @@
 // Web renderer entry. The side-effect import runs FIRST — it installs
-// `window.harness` (the wss bridge) before the view mounts and subscribes.
+// `window.harness` (the wss bridge) before the provider connects it and the view mounts.
 import "./boot.js";
 import { createRoot } from "react-dom/client";
 import { HarnessProvider } from "@lloyal-labs/ui";

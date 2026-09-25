@@ -12,6 +12,7 @@ import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
 import { APP } from "../../src/ui/presentation.js";
+import { color } from "../../src/ui/theme.js";
 
 // Before app ready, or it is ignored silently.
 registerContentScheme();
@@ -45,13 +46,11 @@ app.whenReady().then(() => {
       preload: join(__dirname, "../preload/preload.mjs"),
       page: join(__dirname, "../renderer/index.html"),
       title: APP.name,
-      window: { backgroundColor: "#0b0d12" },
+      window: { backgroundColor: color.ground },
     });
     win.on("closed", () => { win = null; });
   };
   open();
-  // Every channel the preload speaks, answered by the engine: commands in, the snapshot, the session's life
-  // and the install relayed to whichever renderer is alive, a working engine on request, the file dialog.
   serveEngine(engine, safeSend);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();

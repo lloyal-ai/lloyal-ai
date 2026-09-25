@@ -20,6 +20,8 @@
   --harness-muted: var(--muted);
   --harness-faint: var(--faint);
   --harness-rule: var(--border);
+  --harness-font: var(--sans);
+  --harness-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --border-soft: #c8ccd1;
   --border-faint: #eaecf0;
   --serif: "Linux Libertine", "Georgia", "Times New Roman", serif;

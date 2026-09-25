@@ -13,13 +13,11 @@
  *  because what the model was given is its text, and a page image is what the
  *  model looks at only when a tool puts one in front of it. */
 import { useState, type CSSProperties, type ReactElement } from "react";
-import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin } from "@lloyal-labs/ui";
+import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection } from "@lloyal-labs/ui";
 import type { Asset, LightboxProps } from "@lloyal-labs/ui";
+import { representationUrl, sourceUrl } from "@lloyal-labs/media";
 import { color, font, radius, shadow } from "../theme.js";
-import { useProjection } from "@lloyal-labs/ui";
-import { selectSeen } from "../select.js";
-import { selectThreadDigests } from "../select.js";
-import { representationUrl, sourceUrl } from "../content-urls.js";
+import { selectSeen, selectThreadDigests } from "../select.js";
 import { LIGHTBOX } from "./Prose.js";
 
 export { pageFacts, resolveAsset, useAssets };

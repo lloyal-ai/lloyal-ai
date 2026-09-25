@@ -15,14 +15,14 @@ export async function offerToWrite(projectDir: string, missing: MissingService):
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
     const answer = (await rl.question(
-      `${missing.ability} needs a ${missing.service} and this project names none. Write \`${line}\` to harness.yml${why}? [y/N] `,
+      `${missing.ability} requires \`${missing.service}\` and this project names none. Write \`${line}\` to harness.yml${why}? [y/N] `,
     )).trim().toLowerCase();
     if (answer !== 'y' && answer !== 'yes') return false;
   } finally {
     rl.close();
   }
-  if (missing.block) writeModelBlock(projectDir, missing.service);
-  else writeModelField(projectDir, missing.service, { id: missing.suggestion! });
+  if (missing.block || !missing.suggestion) writeModelBlock(projectDir, missing.service);
+  else writeModelField(projectDir, missing.service, { id: missing.suggestion });
   process.stderr.write(`lloyal: wrote ${line}\n`);
   return true;
 }

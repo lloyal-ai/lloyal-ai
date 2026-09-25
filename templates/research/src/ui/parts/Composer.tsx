@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, t
 import { color, font, radius, shadow } from "../theme.js";
 import { useContentOrigin, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command } from "../../protocol.js";
-import { ingestMedia, representationUrl } from "../content-urls.js";
+import { ingestMedia, representationUrl } from "@lloyal-labs/media";
 import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
