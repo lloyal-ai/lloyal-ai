@@ -1,7 +1,5 @@
-/** The visual register, as data. Fonts are bundled (the desktop CSP and the
- *  local-first promise both rule out remote stylesheets). */
-import "@fontsource-variable/geist";
-import "@fontsource-variable/geist-mono";
+/** The visual register, as data — imported by the renderers and by the desktop main process alike, so it
+ *  loads nothing: the fonts are the renderer entries' own. */
 import type { CSSProperties } from "react";
 
 export const color = {

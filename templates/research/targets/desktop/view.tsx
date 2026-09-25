@@ -7,6 +7,9 @@ import { HarnessProvider } from "@lloyal-labs/ui";
 import { HarnessApp } from "../../src/ui/App.js";
 import { initialState, reduce } from "../../src/ui/state.js";
 import { harnessTheme } from "../../src/ui/theme.js";
+// The register's fonts, bundled: the desktop CSP and the local-first promise both rule out remote stylesheets.
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 
 createRoot(document.getElementById("root")!).render(
   <div style={harnessTheme}>
