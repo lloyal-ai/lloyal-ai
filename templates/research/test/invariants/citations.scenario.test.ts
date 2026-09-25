@@ -76,6 +76,27 @@ test("a voluntary report's sources are woven into its findings: on the wire, and
   assert.ok(body.includes("[Oslo](https://a.io/oslo)") && body.includes("Sources:"), "the annexure carries the woven findings");
 });
 
+test("a settling pass that cites by number, its links only in a trailing list, settles with those numbers made into links", async () => {
+  // Two inquiries, so there is a settling pass: one inquiry is its own answer and nothing settles it.
+  const twoTasks = JSON.stringify({ intent: "research", tasks: [{ description: "the capital" }, { description: "the second city" }], clarifyQuestions: [] });
+  const run = await runHarness({
+    utterances: [
+      { text: twoTasks, kind: "text" },
+      { text: FINDINGS, kind: "report", sources: SOURCES },
+      { text: FINDINGS, kind: "report", sources: SOURCES },
+      { text: "Oslo is the capital [1]. Bergen is not [2].\n\n## Sources\n\n- [Oslo](https://a.io/oslo)\n- [Bergen](https://a.io/bergen)", kind: "text" },
+    ],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const answer = run.events.find((e) => e.type === "answer") as { text: string | null };
+  assert.ok(answer.text?.includes("Oslo is the capital [1](https://a.io/oslo). Bergen is not [2](https://a.io/bergen)."), `the numbers were not woven: ${answer.text?.slice(0, 120)}`);
+  assert.ok(answer.text?.includes("- [Oslo](https://a.io/oslo)"), "the list stays");
+});
+
 test("a recovered report's sources are woven the same way — the recovery turn passes through the return position", async () => {
   // The agent searches on every turn until the pool reaps it at the turn cap; its recovery turn is the report.
   let recovering = false;
