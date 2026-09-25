@@ -195,7 +195,7 @@ export const newCommand: Command = {
     const vendorAbilities = !values['skip-abilities'];
     // A default ability's requirement the scaffolded manifest does not meet is offered a fix in a terminal;
     // `-y` or a pipe has nobody to ask, and the ability is reported pending with the key to add.
-    const offer = !values.yes && interactive();
+    const offer = !values.yes && interactive(process.stderr);
     return performScaffold(plan, parentDir, { install, vendorAbilities, offer });
   },
 };

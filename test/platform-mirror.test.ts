@@ -76,6 +76,7 @@ describe.skipIf(!installed)('the presence rule, held on both sides', () => {
     { name: 'json v2 null (a clear, as at a key)', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 2, sources: {}, abilities: {}, model: { vision: null } }, want: false },
     { name: 'json v2 null under a yml request (the overlay withdraws only its own word)', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n', json: { version: 2, sources: {}, abilities: {}, model: { vision: null } }, want: true },
     { name: 'json v2 empty block', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 2, sources: {}, abilities: {}, model: { vision: {} } }, want: true },
+    { name: 'json v2 null at a KEY under a yml selection (the overlay clears its own word; the committed id stands)', role: 'reranker', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n  reranker:\n    id: qwen3-reranker-0.6b-q8\n', json: { version: 2, sources: {}, abilities: {}, model: { reranker: { id: null } } }, want: true },
     { name: 'json v2 scalar', role: 'reranker', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 2, sources: {}, abilities: {}, model: { reranker: 'x' } }, want: false },
     { name: 'json version 1 (before alpha.10)', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 1, sources: {}, abilities: {}, model: { mmproj: 'qwen3.5-4b-mmproj' } }, want: 'refused' },
   ];

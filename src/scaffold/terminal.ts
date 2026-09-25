@@ -1,6 +1,8 @@
 /**
- * Whether there is somebody to ask: both ends of the terminal are a TTY. A pipe, CI, or a redirected stream on
- * either side has nobody, so a verb that would ask — a picker, an offer to write `harness.yml` — takes its
- * non-interactive path. The ONE derivation; every verb reads it here.
+ * Whether there is somebody to ask: stdin is a TTY, and so is the stream the question is drawn on. A pipe, CI,
+ * or a redirected stream on either side has nobody, so a verb that would ask takes its non-interactive path.
+ * The picker draws on stdout; an offer to write `harness.yml` draws on stderr, so stdout can stay a clean
+ * pipe — each asks about the stream it uses. The ONE derivation; every verb reads it here.
  */
-export const interactive = (): boolean => Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+export const interactive = (drawnOn: NodeJS.WriteStream = process.stdout): boolean =>
+  Boolean(process.stdin.isTTY) && Boolean(drawnOn.isTTY);

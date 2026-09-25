@@ -323,6 +323,8 @@ describe('the install gate', () => {
       [buildTarball([{ name: 'package/README.md', content: 'no manifest here' }]), /carries no ability\.json, so what it requires is unknown\. Nothing was installed\./],
       [UNREADABLE_BYTES, /could not be opened .*so what it requires is unknown\. Nothing was installed\./],
       [buildTarball([{ name: 'package/ability.json', content: '{ not json' }]), /ability\.json does not parse, so what it requires is unknown\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'x', services: 'reranker' }) }]), /declares `services` as "reranker"; it must be a list of service names\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'x', services: ['reranker', 3] }) }]), /declares `services` as \["reranker",3\]; it must be a list/],
     ] as const) {
       useTarball(bytes);
       await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME))).rejects.toThrow(why);

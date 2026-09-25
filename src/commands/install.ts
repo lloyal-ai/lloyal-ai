@@ -105,7 +105,7 @@ export const installCommand: Command = {
       // install may make, and only on a yes. A pipe has nobody to ask, and the requirement refuses the install.
       vendored = await verifyAndVendorAbility(process.cwd(), spec, {
         disclose: true,
-        ...(interactive() ? { settle: (missing) => offerToWrite(process.cwd(), missing) } : {}),
+        ...(interactive(process.stderr) ? { settle: (missing) => offerToWrite(process.cwd(), missing) } : {}),
       });
     } catch (err) {
       process.stderr.write(`lloyal install: ${asMessage(err)}\n`);

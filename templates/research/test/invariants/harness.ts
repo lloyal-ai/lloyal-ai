@@ -69,11 +69,15 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
     // harness developer would.
     config: {
       table: config,
-      yml: (outputDir) => ({
-        ...loadYml(config, ROOT),
-        sources: { outputDir },
-        defaults: { effort: "low" },
-      }),
+      yml: (outputDir) => {
+        // Everything the file says stands — its guards included — with only the library and the effort replaced.
+        const committed = loadYml(config, ROOT);
+        return {
+          ...committed,
+          sources: { ...committed.sources, outputDir },
+          defaults: { ...committed.defaults, effort: "low" },
+        };
+      },
     },
     ...(override ? { override } : {}),
     observe: (ev) => { if (ev.type === "ui:plan_review" || ev.type === "ui:clarify") latestRevision = ev.revision; },

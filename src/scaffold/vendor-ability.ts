@@ -156,7 +156,14 @@ export async function requiredServicesOf(tarball: Uint8Array, ability: string): 
   } catch {
     throw new RequirementError(`${ability}'s ability.json does not parse, so what it requires is unknown. Nothing was installed.`);
   }
-  return Array.isArray(manifest.services) ? manifest.services.filter((s): s is string => typeof s === 'string') : [];
+  // Omitted is "requires nothing". Present, it must be a list of names — anything else is a declaration the
+  // gate cannot read, and a requirement it cannot read is never "none".
+  const { services } = manifest;
+  if (services === undefined) return [];
+  if (!Array.isArray(services) || !services.every((s): s is string => typeof s === 'string')) {
+    throw new RequirementError(`${ability}'s ability.json declares \`services\` as ${JSON.stringify(services)}; it must be a list of service names. Nothing was installed.`);
+  }
+  return services;
 }
 
 /**
