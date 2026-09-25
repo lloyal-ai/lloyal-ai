@@ -26,6 +26,12 @@ export type ModelRole = 'llm' | Service;
 
 export const isService = (name: string): name is Service => (SERVICES as readonly string[]).includes(name);
 
+/** The services whose provider derives the model from the llm when the block names none — so the remedy for a
+ *  missing one is the empty block, `model.<service>: {}`, never a catalog id. Mirrors the rows of rig's provider
+ *  table that carry a `derive` cell; `test/platform-mirror.test.ts` holds it to them. */
+export const DERIVED_SERVICES = ['vision'] as const;
+export const derivesFromLlm = (name: Service): boolean => (DERIVED_SERVICES as readonly string[]).includes(name);
+
 export interface CatalogModel {
   /** Stable id — what gets written into `harness.yml` `model.<role>.id`. */
   id: string;

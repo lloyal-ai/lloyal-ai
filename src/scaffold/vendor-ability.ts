@@ -33,7 +33,7 @@ import {
 import { readTarEntry, isGzipReadable } from '../tar-read.js';
 import type { AttentionSurface } from '../describe.js';
 import { httpFetch } from '../http.js';
-import { isService, modelsForRole } from './model-catalog.js';
+import { derivesFromLlm, isService, modelsForRole } from './model-catalog.js';
 import type { Service } from './model-catalog.js';
 import { modelSelection } from './model-selection.js';
 
@@ -99,14 +99,17 @@ export interface VendoredApp {
   integrity: string;
 }
 
-/** A service an ability requires that the project selects no model for — with the key that would, and the
- *  catalog's suggestion for it when there is one. */
+/** A service an ability requires that the project selects no model for — with the line that would: the
+ *  catalog's id under `model.<service>.id`, or, for a service whose provider derives the model from the llm,
+ *  the empty block `model.<service>: {}`. */
 export interface MissingService {
   ability: string;
   service: Service;
-  /** `model.<service>.id` */
+  /** `model.<service>.id`, or `model.<service>` when the remedy is the block itself. */
   key: string;
   suggestion?: string;
+  /** The remedy is the empty block: the provider pairs the model from the llm. */
+  block?: true;
 }
 
 /** An ability's requirement this project cannot meet, or a name no runtime provides. Nothing was vendored. */
@@ -159,12 +162,15 @@ export async function assertRequirements(projectDir: string, ability: string, re
       throw new RequirementError(`${ability} requires ${JSON.stringify(name)}, which is not a service this platform provides. Nothing was installed.`);
     }
     if (modelSelection(projectDir, name).present) continue;
-    const suggestion = modelsForRole(name)[0]?.id;
-    const missing: MissingService = { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
+    const derives = derivesFromLlm(name);
+    const suggestion = derives ? undefined : modelsForRole(name)[0]?.id;
+    const missing: MissingService = derives
+      ? { ability, service: name, key: `model.${name}`, block: true }
+      : { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
     if (settle && (await settle(missing))) continue;
     throw new RequirementError(
       `${ability} requires a ${name}, and this project names none — add \`model.${name}\` to harness.yml` +
-        (suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '') +
+        (derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '') +
         `, then install again. Nothing was installed.`,
     );
   }

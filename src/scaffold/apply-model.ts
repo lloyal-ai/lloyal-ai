@@ -81,6 +81,20 @@ export function writeModelField(
 }
 
 /**
+ * Request a service without selecting a model: the empty block, `model.<role>: {}`, which a provider that pairs
+ * from the llm takes as the request it is. A block already there, whatever it holds, is left alone.
+ */
+export function writeModelBlock(projectDir: string, role: Role): void {
+  const yml = openHarnessYml(projectDir);
+  if (!yml.has(['model'])) {
+    throw new Error(`writeModelBlock: no \`model:\` block in ${harnessYmlPath(projectDir)}`);
+  }
+  if (yml.has(['model', role])) return;
+  yml.set(['model', role], {});
+  yml.save();
+}
+
+/**
  * Rewrite the llm entry (+ optional `context`) in `<projectDir>/harness.yml` —
  * the scaffolder's llm-only convenience over {@link writeModelField}.
  */

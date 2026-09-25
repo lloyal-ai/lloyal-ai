@@ -234,9 +234,7 @@ export const modelsListCommand: Command = {
         const spec = readModelField(root, role);
         const shown =
           spec == null
-            ? role === 'reranker'
-              ? '(unset — auto-provisions the catalog default when an ability needs it)'
-              : '(unset)'
+            ? '(unset — the block is absent, so nothing is loaded; an ability that needs it does not enable)'
             : 'id' in spec
               ? `id: ${spec.id}`
               : `path: ${spec.path}`;

@@ -21,7 +21,8 @@ export const V1_MODEL_KEYS: Record<string, [block: string, key: string]> = {
   mmproj: ['vision', 'id'], imageMinTokens: ['vision', 'minTokens'], imageMaxTokens: ['vision', 'maxTokens'],
 };
 
-/** The overlay's model family — one block per model — or null when there is none to read. */
+/** The overlay's model family — one block per model, a bare key read as an empty block, a scalar dropped as any
+ *  local value the key cannot take — or null when there is none to read. */
 export function readLocalModel(projectDir: string): Record<string, Bag> | null {
   const p = join(projectDir, 'harness.json');
   if (!existsSync(p)) return null;
@@ -33,7 +34,7 @@ export function readLocalModel(projectDir: string): Record<string, Bag> | null {
   }
   if (!isBag(parsed) || !isBag(parsed.model)) return null;
   const model = parsed.model;
-  if (parsed.version === 2) return Object.fromEntries(Object.entries(model).filter(([, v]) => isBag(v))) as Record<string, Bag>;
+  if (parsed.version === 2) return Object.fromEntries(Object.entries(model).filter(([, v]) => v === null || isBag(v)).map(([k, v]) => [k, v === null ? {} : v])) as Record<string, Bag>;
   if (parsed.version !== 1) return null;
   const blocks: Record<string, Bag> = {};
   for (const [key, value] of Object.entries(model)) {

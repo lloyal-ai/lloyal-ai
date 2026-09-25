@@ -256,6 +256,22 @@ describe('the install gate', () => {
     expect(await exists(VENDOR_REL)).toBe(true);
   });
 
+  it('a missing service the platform derives from the llm is offered the empty block, and refused naming it', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['vision']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
+      .rejects.toThrow(/requires a vision, and this project names none — add `model\.vision` to harness\.yml \(`model\.vision: \{\}` takes the one paired with your model\)/);
+    const { writeModelBlock } = await import('../src/scaffold/apply-model');
+    const offered: unknown[] = [];
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), {
+      settle: async (missing) => { offered.push(missing); writeModelBlock(cwd, missing.service); return true; },
+    });
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'vision', key: 'model.vision', block: true }]);
+    expect(await ymlText()).toBe('model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n');
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
   it('offered and declined: refused, harness.yml byte-identical', async () => {
     await seedProject();
     const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
