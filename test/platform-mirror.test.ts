@@ -1,8 +1,8 @@
 /**
  * The CLI mirrors three platform facts it cannot import — rig is not a dependency of the Apache CLI: the
- * service names (`SERVICES`), the catalog's ids and roles, and where a version-1 `harness.json` kept each
- * model key. A mirror that drifts fails quietly (an install gate one service behind, a picker offering a model
- * the boot does not know). So each is held to the platform the templates actually install, read off the
+ * service names (`SERVICES`), the catalog's ids and roles, and the presence rule over `harness.yml` and
+ * `harness.json`. A mirror that drifts fails quietly (an install gate one service behind, a picker offering a
+ * model the boot does not know). So each is held to the platform the templates actually install, read off the
  * template's own `node_modules` — the same packages a scaffolded project runs on.
  *
  * Skipped, and said so, where the template has no installed platform to read.
@@ -13,7 +13,6 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { SERVICES, MODEL_CATALOG, DERIVED_SERVICES } from '../src/scaffold/model-catalog.js';
-import { V1_MODEL_KEYS } from '../src/scaffold/harness-json.js';
 
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
 const installed = existsSync(join(TEMPLATE, 'node_modules', '@lloyal-labs', 'rig', 'package.json'));
@@ -37,10 +36,6 @@ describe.skipIf(!installed)('the CLI\'s mirrors of the platform', () => {
     for (const m of MODEL_CATALOG) expect(theirs.get(m.id), `catalog row ${m.id}`).toBe(m.role);
   });
 
-  it('a version-1 harness.json is read at the same blocks the boot reads it at', () => {
-    const rig = platform('@lloyal-labs/rig/node') as { V1_MODEL_KEYS: Record<string, [string, string]> };
-    expect(V1_MODEL_KEYS).toEqual(rig.V1_MODEL_KEYS);
-  });
 });
 
 // ── the presence rule, held on both sides ────────────────────────────────────
@@ -60,13 +55,13 @@ function rigPresence(dir: string, role: string): boolean | 'refused' {
     const { config } = node.loadConfig(modelSettings, node.loadYml(modelSettings, dir), { env: {}, cwd: dir });
     return role in config.model;
   } catch (err) {
-    if (/must be a block/.test(String(err))) return 'refused';
+    if (/must be a block|version 1/.test(String(err))) return 'refused';
     throw err;
   }
 }
 function cliPresence(dir: string, role: string): boolean | 'refused' {
   try { return modelSelection(dir, role as 'reranker' | 'vision').present; }
-  catch (err) { if (/must be a block/.test(String(err))) return 'refused'; throw err; }
+  catch (err) { if (/must be a block|version 1/.test(String(err))) return 'refused'; throw err; }
 }
 
 describe.skipIf(!installed)('the presence rule, held on both sides', () => {
@@ -82,7 +77,7 @@ describe.skipIf(!installed)('the presence rule, held on both sides', () => {
     { name: 'json v2 null under a yml request (the overlay withdraws only its own word)', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n', json: { version: 2, sources: {}, abilities: {}, model: { vision: null } }, want: true },
     { name: 'json v2 empty block', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 2, sources: {}, abilities: {}, model: { vision: {} } }, want: true },
     { name: 'json v2 scalar', role: 'reranker', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 2, sources: {}, abilities: {}, model: { reranker: 'x' } }, want: false },
-    { name: 'json v1 mmproj', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 1, sources: {}, abilities: {}, model: { mmproj: 'qwen3.5-4b-mmproj' } }, want: true },
+    { name: 'json version 1 (before alpha.10)', role: 'vision', yml: 'model:\n  llm:\n    id: qwen3.5-4b\n', json: { version: 1, sources: {}, abilities: {}, model: { mmproj: 'qwen3.5-4b-mmproj' } }, want: 'refused' },
   ];
   for (const c of cases) {
     it(`${c.name} → ${String(c.want)} on both`, () => {
