@@ -463,8 +463,10 @@ export function Composer({ shape, placeholder }: {
             runs exactly one agent to a straight answer, so there is no breadth to
             choose and the minutes would be quoted against a plan that never
             exists. The configured effort still bounds the agent; it is simply not
-            a question worth asking here. */}
-        {!willSkipPlanner && (
+            a question worth asking here. While a brief is live the pills go too: a
+            depth chosen then would only be the next ask's, and its minutes would be
+            quoted against the plan already running. */}
+        {!willSkipPlanner && !live && (
           <div style={S.depths} role="radiogroup" aria-label="Depth">
             {DEPTHS.map((d) => {
               const pace = paceFor(d.depth, shape);
