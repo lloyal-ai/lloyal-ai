@@ -170,7 +170,8 @@ export async function requiredServicesOf(tarball: Uint8Array, ability: string): 
  * Can this project select every service this ability requires? Asked of the RESOLVED configuration — the
  * local overlay over the manifest — since that is what the boot acts on. Every name is checked against the
  * platform before any is offered, so a list with one unknown name is refused outright with nothing written.
- * A block that selects a model, or that the platform derives from the llm, is a request the boot will settle;
+ * A block that selects a model, or that the platform derives from the llm (a reasoning model being selected), is a
+ * request the boot will settle;
  * a block that is absent, or present and naming nothing where nothing derives, is offered to `settle` with the
  * key it lacks, and refused when nobody can answer.
  */
@@ -185,6 +186,10 @@ export async function assertRequirements(projectDir: string, ability: string, re
   for (const name of names) {
     const selection = modelSelection(projectDir, name);
     const derives = derivesFromLlm(name);
+    // A block the platform pairs with the reasoning model pairs with nothing when the project selects none.
+    if (derives && selection.present && modelSelection(projectDir, 'llm').spec === null) {
+      throw new RequirementError(`${ability} requires \`${name}\`, which is paired with the reasoning model, and this project selects none — add \`model.llm.id\` to harness.yml, then \`lloyal install ${ability}\`. Nothing was installed.`);
+    }
     if (selection.present && (selection.spec !== null || derives)) continue;
     const suggestion = derives ? undefined : modelsForRole(name)[0]?.id;
     const missing: MissingService = derives

@@ -264,6 +264,19 @@ describe('the install gate', () => {
     expect(await exists(VENDOR_REL)).toBe(false);
   });
 
+  it('a derived block with no reasoning model to derive from is refused naming `model.llm` — nothing is paired with a model the project does not select', async () => {
+    await seedProject();
+    const before = 'model:\n  vision: {}\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires `vision`, which is paired with the reasoning model, and this project selects none — add `model\.llm\.id` to harness\.yml/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
   it('a commented-out block counts as unset', async () => {
     await seedProject();
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
