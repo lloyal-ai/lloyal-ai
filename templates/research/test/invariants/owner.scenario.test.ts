@@ -45,8 +45,9 @@ test("library search is refused while a run is live, and served once the brief h
 });
 
 test("an ability's settings saved while a run is live apply at once, and the run settles untouched", async () => {
-  // The platform supersedes the ability behind the run: the run keeps the tools it took, the next ask gets
-  // the new ones, and nothing is refused for timing (the rig's invariants hold the registry's side).
+  // The platform supersedes the ability behind the run: the run keeps the tools it took, the next take gets
+  // the new ones, a value a tool reads from its store at the call — the search key — follows the save at
+  // once, and nothing is refused for timing (the rig's invariants hold the registry's side).
   const run = await runHarness({
     utterances: [
       { text: PLAN_JSON, kind: "text" },
