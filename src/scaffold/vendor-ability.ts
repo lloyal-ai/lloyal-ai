@@ -186,8 +186,9 @@ export async function assertRequirements(projectDir: string, ability: string, re
   for (const name of names) {
     const selection = modelSelection(projectDir, name);
     const derives = derivesFromLlm(name);
-    // A block the platform pairs with the reasoning model pairs with nothing when the project selects none.
-    if (derives && selection.present && modelSelection(projectDir, 'llm').spec === null) {
+    // A block the platform pairs with the reasoning model pairs with nothing when the project selects none —
+    // present or offered, since the offer would write a block with nothing to pair.
+    if (derives && modelSelection(projectDir, 'llm').spec === null) {
       throw new RequirementError(`${ability} requires \`${name}\`, which is paired with the reasoning model, and this project selects none — add \`model.llm.id\` to harness.yml, then \`lloyal install ${ability}\`. Nothing was installed.`);
     }
     if (selection.present && (selection.spec !== null || derives)) continue;

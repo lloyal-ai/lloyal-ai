@@ -277,6 +277,18 @@ describe('the install gate', () => {
     expect(await exists(VENDOR_REL)).toBe(false);
   });
 
+  it('an ABSENT derived block is never offered where no reasoning model is selected — the offer would write a block with nothing to pair', async () => {
+    await seedProject();
+    const before = 'sources:\n  outputDir: reports\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/paired with the reasoning model, and this project selects none — add `model\.llm\.id`/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+  });
+
   it('a commented-out block counts as unset', async () => {
     await seedProject();
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
