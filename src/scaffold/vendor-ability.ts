@@ -167,28 +167,36 @@ export async function requiredServicesOf(tarball: Uint8Array, ability: string): 
 }
 
 /**
- * Does this project request every service this ability requires? Asked of the RESOLVED configuration — the
- * local overlay over the manifest — since that is what the boot acts on. A name no runtime provides is refused
- * outright. A block that is present is a request the boot will satisfy or refuse before a byte is fetched
- * (a row may derive the model from the llm, which only the platform knows); an absent block is offered to
- * `settle`, and refused when nobody can answer.
+ * Can this project select every service this ability requires? Asked of the RESOLVED configuration — the
+ * local overlay over the manifest — since that is what the boot acts on. Every name is checked against the
+ * platform before any is offered, so a list with one unknown name is refused outright with nothing written.
+ * A block that selects a model, or that the platform derives from the llm, is a request the boot will settle;
+ * a block that is absent, or present and naming nothing where nothing derives, is offered to `settle` with the
+ * key it lacks, and refused when nobody can answer.
  */
 export async function assertRequirements(projectDir: string, ability: string, required: readonly string[], settle?: VendorOptions['settle']): Promise<void> {
+  const names: Service[] = [];
   for (const name of required) {
     if (!isService(name)) {
       throw new RequirementError(`${ability} requires ${JSON.stringify(name)}, which is not a service this platform provides. Nothing was installed.`);
     }
-    if (modelSelection(projectDir, name).present) continue;
+    names.push(name);
+  }
+  for (const name of names) {
+    const selection = modelSelection(projectDir, name);
     const derives = derivesFromLlm(name);
+    if (selection.present && (selection.spec !== null || derives)) continue;
     const suggestion = derives ? undefined : modelsForRole(name)[0]?.id;
     const missing: MissingService = derives
       ? { ability, service: name, key: `model.${name}`, block: true }
       : { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
     if (settle && (await settle(missing))) continue;
+    const how = derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '';
     throw new RequirementError(
-      `${ability} requires \`${name}\`, and this project names none — add \`model.${name}\` to harness.yml` +
-        (derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '') +
-        `, then \`lloyal install ${ability}\`. Nothing was installed.`,
+      (selection.present
+        ? `${ability} requires \`${name}\`, and this project's \`model.${name}\` names no model — add \`${missing.key}\` to harness.yml`
+        : `${ability} requires \`${name}\`, and this project names none — add \`model.${name}\` to harness.yml`) +
+        how + `, then \`lloyal install ${ability}\`. Nothing was installed.`,
     );
   }
 }

@@ -238,6 +238,32 @@ describe('the install gate', () => {
     expect(await exists(VENDOR_REL)).toBe(true);
   });
 
+  it('a present block that names no model, where nothing derives, is offered the key it lacks — and refused naming it when declined', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n  reranker: {}\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    const offered: unknown[] = [];
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async (missing) => { offered.push(missing); return false; } }))
+      .rejects.toThrow(/`model\.reranker` names no model — add `model\.reranker\.id` to harness\.yml/);
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'reranker', key: 'model.reranker.id', suggestion: 'qwen3-reranker-0.6b-q8' }]);
+    expect(await exists(VENDOR_REL)).toBe(false);
+    expect(await ymlText()).toBe(before);
+  });
+
+  it('every name is known to the platform before any is offered — one unknown name refuses the list with nothing asked and nothing written', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker', 'whisper']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires "whisper", which is not a service this platform provides/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
   it('a commented-out block counts as unset', async () => {
     await seedProject();
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
