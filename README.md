@@ -169,7 +169,7 @@ takes every letter in one batched call per pathway. Its score is an order within
 own yes/no log-odds under the instruction — not a calibrated probability: the platform uses it as top-K within a
 query, and a floor for it is a discrimination signal you measure for your instruction and your model.
 
-### Recipe 3 — Find the rule in force this year, not the one it replaced
+### Recipe 3 — Give the judge your question, and every search returns the rule in force this year, not the one it replaced
 
 Similarity hands you both: a superseded rule answers the question it was superseded on, and the two are
 neighbours in any embedding. Here nothing enters the model's context by distance. A judge is asked a
