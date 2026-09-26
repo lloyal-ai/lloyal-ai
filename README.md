@@ -100,7 +100,7 @@ Stop works in the middle of anything, and why there is almost no teardown code t
 Six things you can program here that cannot be programmed against an API key. Each is the outcome first,
 then the lines that make it; the full version of every one is under Recipes in the generated project's README.
 
-### Recipe 1 — An LLM and a team of specialist models, coordinating in real time
+### Recipe 1 — Give your LLM a team of specialist models it can coordinate with in real-time
 
 The reasoning model is one voice among several. Beside it, resident in the same process, a team of
 specialists, each doing one thing the reasoning model would do slowly or badly: a judge that answers "is this
