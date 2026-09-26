@@ -6,8 +6,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = join(__dirname, '..');
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 describe('the README names files that exist', () => {
   it('every `src/…` and `targets/…` path is in the research template, which the README walks', () => {

@@ -58,7 +58,15 @@ export default defineConfig({
     // the window stays blank. Named here, the optimizer converts them as it would from `node_modules`.
     ...(linked
       ? {
-          optimizeDeps: { include: ["@lloyal-labs/media", "@lloyal-labs/binding", "@lloyal-labs/rig", "@lloyal-labs/lloyal-agents"] },
+          // Everything the renderer reaches that a link resolves OUTSIDE node_modules — Vite prebundles only what is
+          // named here when the package is linked, and a CommonJS entry it did not prebundle reaches the browser
+          // with its named exports missing. The same list the web config keeps.
+          optimizeDeps: {
+            include: [
+              "@lloyal-labs/media", "@lloyal-labs/binding", "@lloyal-labs/rig", "@lloyal-labs/lloyal-agents",
+              "@lloyal-labs/ui", "@lloyal-labs/ui/fold", "@lloyal-labs/ui/prose", "@lloyal-labs/dev-tools/react",
+            ],
+          },
           // A linked `ui` resolves React up its real path, into the workspace's own copy — a second React beside
           // this app's, and hooks refuse to run across two. One React: the project's.
           resolve: { dedupe: ["react", "react-dom"] },
