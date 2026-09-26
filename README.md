@@ -10,16 +10,16 @@ own — a laptop today, your own GPU host when you serve it. No API key on the p
 
 Think of a game engine. You program the behaviour; Lloyal handles the physics underneath.
 
-![An app generated from the research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
+![An app generated from the deep-research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
 
-*An app generated from the research template. What it does is one example of what a harness can do; the
+*An app generated from the deep-research template. What it does is one example of what a harness can do; the
 program underneath is yours to change.*
 
-## An example: thirty seconds to a living brief
+## An example: three commands to a living brief
 
-`new` starts you from a template. There are two: **basic**, a small Wikipedia app, and **research**, a
-grounded multi-agent investigation. Everything in this section is the research template, because it shows the
-most in the least time.
+`new` starts you from a template. There are two: **wiki** (`--template basic`), a small Wikipedia app, and
+**deep-research** (`--template research`), a grounded multi-agent investigation. Everything in this section is
+deep-research, because it shows the most in the least time.
 
 ```sh
 npx lloyal-ai@alpha new my-app --template research
@@ -51,7 +51,7 @@ In this template the journey is four moments, and the same four words name them 
 | --- | --- | --- | --- |
 | ![Ask: one question, and the shape it takes](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/ask.jpg) | ![Frame: the outline, held for your edits](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/frame.jpg) | ![Write: inquiries searching and reading, side by side](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write-searching.jpg) | ![Settle: the brief, its citations and its sources](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/settle.jpg) |
 
-*The research template, from question to settled brief.*
+*The deep-research template, from question to settled brief.*
 
 ## The one idea underneath
 
@@ -92,21 +92,142 @@ Stop works in the middle of anything, and why there is almost no teardown code t
  the findings leave as data; the branches do not outlive the run
 ```
 
+## Recipes
+
+Five things you can program here that cannot be programmed against an API key. Each is the outcome first,
+then the lines that make it; the full version of every one is under Recipes in the generated project's README.
+
+### An LLM and a team of specialist models, coordinating in real time
+
+The reasoning model is one voice among several. Beside it, resident in the same process, a team of
+specialists, each doing one thing the reasoning model would do slowly or badly: a judge that answers "is this
+relevant?" yes or no with a probability, in milliseconds; memory that finds the fifty passages nearest a
+question across ten thousand; sight that puts a page in front of the reasoning model when the text is not
+enough. They coordinate inside a turn. Nothing an agent finds enters the reasoning model's context until the
+judge has scored it; memory recalls while the reasoning model writes; sight projects a page the moment the
+model reaches for it. Four ship today, named in one file:
+
+```yaml
+# harness.yml
+model:
+  llm:       { id: qwen3.5-4b }                 # reasons and writes
+  reranker:  { id: qwen3-reranker-0.6b-q8 }     # the judge: relevant or not, and how sure
+  embedding: { id: nomic-embed-text-v1.5-q4 }   # memory: which of ten thousand passages are near this question
+  vision:    {}                                 # sight: the projector paired with the reasoning model
+```
+
+Coming to the same table: a decision model that routes, scores and classifies without generating a word, in
+one pass; a voice model that hears; a dictation model that turns what was said into clean text. Each will be
+one more block in this file, reached by the same call as the four above, by your code and by every installed
+ability alike.
+
+Naming a block is composing that model: it is fetched and verified before your program runs, and any line of
+your code reaches it with one call. An audit over ten thousand contracts, in the framework's grammar:
+
+```ts
+const memory = yield* service("embedding");
+const judge = yield* service("reranker");
+
+const [q] = yield* memory.embed([question]);
+const nearby = index.nearest(q, 50);                                   // your own index over memory.embed
+const sure = yield* call(() => judge.scoreBatch(question, nearby.map((c) => c.text)));
+const evidence = nearby.filter((_, i) => sure[i] > 0);                // the judge said yes
+```
+
+Hand `evidence` to the reasoning model and it explains; hand it to ten agents and each explains one clause;
+attach the signed pages and sight reads the signatures. Remove a block and that model is gone; an installed
+ability that needs it is refused by name at start, and your program still runs. A kind of model the platform
+does not know yet is one row in its table: [services](https://docs.lloyal.ai/services).
+
+### Triage every referral letter in the clinic, and nothing leaves the building
+
+A choice over a known list is a grammar, not a prompt. The reasoning model picks the pathway by NUMBER and
+cannot answer anything else, so there is nothing to parse and no "the model said something else"; the judge
+beside it says how sure, as a probability you set the threshold on. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) raised forty million
+dollars to sell that shape as an API, priced per token, your letters uploaded to be scored. Here it is, thirty
+lines, on the laptop in the consulting room, and the letter never crosses a network:
+
+```ts
+const pick = defineOutput("pathway", z.number().int().min(0).max(pathways.length));
+const pool = yield* agentPool({
+  systemPrompt: listing,            // the pathways, by number — read once, shared by every letter's agent
+  schema: pick.schema,              // the answer IS a number in range
+  enableThinking: false,
+  acceptFreeText: true,
+  orchestrate: parallel(letters.map((letter) => ({ systemPrompt: "", content: letter }))),
+});
+const pathway = pool.outcomes.map((o) => pick.read(o));
+const judge = yield* service("reranker");
+const sure = yield* call(() => judge.scoreBatch(pathways[0], letters));   // every letter against one pathway: log-odds, sigmoid is P(yes)
+```
+
+A thousand letters get a thousand agents, and the list of pathways is read once for all of them. The judge
+takes every letter in one batched call per pathway, so how sure the filing is costs one pass per pathway, not
+one per letter.
+
+### Tighten the rules while the job is running
+
+A compliance officer changes what the agents may search, or turns the paid source on, and every agent already
+working obeys at its next call. Nothing stops, nothing restarts, no run is lost. A tool reads its ability's
+settings at the call; a knob of your own is declared once and read the same way.
+
+```ts
+// src/config.ts — declared once; harness.yml can commit it, the settings pane saves it
+"answer.words": { yml: "answer.words", integer: true, default: 400, describe: "How long an answer may run." },
+
+// wherever it is used — read at the call, so a save applies at the next one
+const words = config().answer.words;
+```
+
+### No finding without evidence
+
+An agent that tries to report before it has read two sources is refused once and told why; its second report
+stands. The rule is one object handed to the pool of agents, and it is yours. The same five points in a tool
+call's life let you refuse a call, rule that a result does not count, or end an agent early; the pool's bigger
+judgements are one class you subclass for the single decision you care about.
+
+```ts
+const EVIDENCE_FIRST: ToolLifecycleHooks = {
+  onReturn: ({ agent }) => agent.toolCallCount < 2 ? { type: "reject", message: "Use tools first." } : undefined,
+};
+class Patient extends DefaultAgentPolicy {
+  shouldExit(agent: Agent, pressure: ContextPressure) { return pressure.critical; }   // room, never time
+}
+yield* agentPool({ ...spec, hooks: [EVIDENCE_FIRST], policy: new Patient() });
+```
+
+### Give the agents the patient record system
+
+A tool is a class in your program over your own database, with a gate of its own. Add it to the pool's tools
+and every agent can call it. Nothing about it exists outside your process.
+
+```ts
+const oncePerMrn: ToolGuard = { name: "record_once", reject: ({ args, attended }) => attended().some((a) => a.mrn === args.mrn), message: "Already read." };
+
+export class RecordTool extends Tool<{ mrn: string }> {
+  readonly name = "record";
+  readonly description = "The patient's record, by medical record number.";
+  readonly parameters: JsonSchema = { type: "object", properties: { mrn: { type: "string" } }, required: ["mrn"] };
+  readonly hooks: ToolLifecycleHooks = { beforeDispatch: [oncePerMrn] };
+  *execute(args: { mrn: string }): Operation<unknown> { return yield* call(() => records.get(args.mrn)); }
+}
+```
+
 ## Make it yours in three edits
 
-The generated project is source, whichever template it came from. In the research template, three files hold
+The generated project is source, whichever template it came from. In the deep-research template, three files hold
 one concern each, and one folder holds the words — the rest can wait:
 
 ```text
  src/
    ui/presentation.ts         ← what it is called
-   research/instructions.ts   ← what it is for
-   research/research.ts       ← how it investigates: `inquire`, one expression
-   research/prompts/          ← what it says: one Eta file per prompt
+   harness/instructions.ts    ← what it is for
+   harness/research.ts        ← how it investigates: `inquire`, one expression
+   harness/prompts/           ← what it says: one Eta file per prompt
    ───────────────────────────────────────────────────────────────────
    app.ts                     the app: what is installed, the parts, the loop
-   brief/                     a brief's life: asked · framed · written · settled
-   research/                  plan · write · answer, and the prompts
+   harness/brief.ts           a brief's life: asked · framed · written · settled
+   harness/                   plan · write · answer, the library, the prompts
    ui/                        the fold, the selectors, the four moments
 ```
 
@@ -116,7 +237,7 @@ one concern each, and one folder holds the words — the rest can wait:
 export const APP = { name: "Fieldnote", storage: "fieldnote" } as const;
 ```
 
-**What it is for** — `src/research/instructions.ts`. Two sentences, said on every path an answer can take.
+**What it is for** — `src/harness/instructions.ts`. Two sentences, said on every path an answer can take.
 
 ```ts
 export const INSTRUCTIONS = {
@@ -125,7 +246,7 @@ export const INSTRUCTIONS = {
 };
 ```
 
-**How it investigates** — `src/research/research.ts`. The strategy is one stage, `inquire`. Side by side,
+**How it investigates** — `src/harness/research.ts`. The strategy is one stage, `inquire`. Side by side,
 one after another on a growing shared context, a fan-out, a dependency graph, or an orchestrator of your own:
 
 ```ts
@@ -140,13 +261,13 @@ const sideBySide: Research = {
 const brief = briefs({ session, library, run, wire, config: runner.config, research: sideBySide });
 ```
 
-**What it says** — `src/research/prompts/`. Every prompt the app makes is an Eta file there, rendered with
+**What it says** — `src/harness/prompts/`. Every prompt the app makes is an Eta file there, rendered with
 what the stage knows (`it.query`, the sources, the findings); change one and ask the next question. The
 project's README says what each file is and what it is handed.
 
 A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
 app takes care of the rest. `npm test` runs the app's laws against a scripted model in about two seconds, so a
-change is proved without downloading weights. The basic template is the same idea at a smaller size: one
+change is proved without downloading weights. The wiki template is the same idea at a smaller size: one
 harness file, one procedure, the same three surfaces.
 
 ## What it can become
@@ -179,24 +300,9 @@ fold of state, one binding each, no view holding truth.
 
 `npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template.
 
-## Composition of models
+## Models
 
-An application is rarely one model. The model that reasons is not the one that judges whether a passage
-answers the question, nor the one that turns a page into something it can look at, nor the one that indexes a
-corpus ahead of the question. Here they are resident together, named in one place, and reached by one call.
-
-```yaml
-# harness.yml
-model:
-  llm:       { id: qwen3.5-4b, context: 32768 }
-  reranker:  { id: qwen3-reranker-0.6b-q8 }
-  vision:    {}                                 # no id: the projector the catalogue pairs with the llm
-  embedding: { id: nomic-embed-text-v1.5-q4 }
-```
-
-Naming a block is enabling that model; removing it is declining it. Your harness reads one with a single line,
-`yield* service("reranker")`, and an ability reads it the same way. What a bound model exposes is its own: the
-reranker scores, the encoder embeds, the projector puts sight on the model itself.
+The catalogue, your pins and what is on disk, from the project's root:
 
 ```sh
 npx lloyal-ai@alpha models:list                        # the catalogue, your pins, what is on disk
@@ -217,7 +323,7 @@ the same and writes `model.llm.gpu: cuda` for it.
 An **Ability** is an installed capability: tools, the instructions to use them, configuration, and a declaration
 of the models it cannot work without. It runs inside the harness and can work with the calling agent's live
 context. The harness provides what an ability declares by naming the model in `harness.yml`; `install` tells you
-when the project names none and offers to write the line. Research ships with web, corpus and documents.
+when the project names none and offers to write the line. Deep-research ships with web, corpus and documents.
 
 ```sh
 npx lloyal-ai@alpha install <publisher>/<name>   # verified and vendored into the project
