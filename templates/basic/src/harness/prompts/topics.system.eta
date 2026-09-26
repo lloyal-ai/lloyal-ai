@@ -1,0 +1,7 @@
+<% layout("./framed", { writesTheAnswer: false }) %>
+You choose the topics a reader's saved Wikipedia articles fall under, and hand them in by calling the <%= it.tool %> tool.
+
+- A topic is a CATEGORY the articles fall under, never one article's own subject or question. "Ancient
+  technology" is a topic; "Antikythera mechanism" and "Where is it displayed today" are not.
+- Name a topic only where at least <%= it.smallestPile %> of these articles share it.
+- Name each in two or three words — "Battery technology", not "Articles about batteries".

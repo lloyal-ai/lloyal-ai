@@ -8,14 +8,28 @@
  * carries the engine bin) and is never pruned.
  *
  * Edits are surgical: `package.json` is pure JSON (parse → delete keys →
- * re-stringify), while `harness.yml` + the tsconfig files are edited line-wise
- * so their guidance comments survive. The `targets:` field in `harness.yml` is
- * documentation (nothing reads it at runtime); what makes a target real is its
- * dir + scripts + deps, which is what we remove here.
+ * re-stringify), `harness.yml` goes through `harness-yml` (the one seam), and
+ * the tsconfig files are edited line-wise so their guidance comments survive.
+ * The `targets:` field in `harness.yml` is documentation (nothing reads it at
+ * runtime); what makes a target real is its dir + scripts + deps, which is what
+ * we remove here.
+ *
+ * THE BOUNDARY, for this verb and its inverse: nothing on disk changes until
+ * every write has been PREPARED — every input parsed and checked, every output
+ * rendered — because a failure found after the target's files are gone leaves
+ * a project whose marker and manifest describe what it no longer has. Parsing
+ * is not enough: a manifest can parse and still refuse to render (an anchor
+ * an edit would drop, an alias left dangling). So each edit answers a `Write`,
+ * computed up front, and the writes land together after the deletes.
  */
-import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { filterJsoncArray } from './jsonc.js';
+import { openHarnessYml, hasHarnessYml } from './harness-yml.js';
+import type { HarnessYml } from './harness-yml.js';
+import { prepareFilter } from './jsonc.js';
+import type { Write } from './jsonc.js';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 
 export type Target = 'cli' | 'desktop' | 'web';
 export type PrunableTarget = Exclude<Target, 'cli'>;
@@ -43,9 +57,17 @@ export const TARGET_PKG_FIELDS: Record<PrunableTarget, string[]> = {
   desktop: ['main'],
   web: [],
 };
-/** Per-target runtime deps. */
+/**
+ * Per-target runtime deps. The union over both templates — a name absent from a
+ * given template is simply not there to delete, and is never added back.
+ *
+ * `@lloyal-labs/ui` is deliberately NOT here. It reads like a renderer package
+ * and is not one: the fold (`src/ui/state.ts`) and the reducer both import
+ * `foldAgents` from it, and the TERMINAL view folds through those. Pruning it
+ * for a cli-only project breaks the one surface that cannot be pruned.
+ */
 export const TARGET_DEPS: Record<PrunableTarget, string[]> = {
-  desktop: [], // desktop's exclusive deps are all devDeps
+  desktop: ['@lloyal-labs/desktop'],
   web: ['@lloyal-labs/host', 'ws'],
 };
 /** Per-target devDeps. */
@@ -66,62 +88,142 @@ export const TARGET_FILES: Record<PrunableTarget, string[]> = {
  * EITHER desktop or web survives; removed only for a cli-only project. `vite` is
  * here because `electron-vite` lists it as a peerDependency.
  */
-export const SHARED_RENDERER_DEPS = ['react-dom', 'react-markdown', 'remark-gfm'];
+export const SHARED_RENDERER_DEPS = [
+  'react-dom',
+  'react-markdown',
+  'remark-gfm',
+  'remark-math',
+  'rehype-katex',
+  'katex',
+  'zustand',
+  '@fontsource-variable/geist',
+  '@fontsource-variable/geist-mono',
+];
 export const SHARED_RENDERER_DEV_DEPS = ['@vitejs/plugin-react', '@types/react-dom', 'vite'];
 /**
- * The React view itself (`App.tsx` + whatever it pulls in), on exactly the same
- * lifecycle as the deps above — kept while EITHER DOM target survives.
+ * Where a template parks a view directory that belongs to the DOM targets ALONE
+ * — deleted by a cli-only prune, restored with the first DOM target back.
  *
- * It lives in its own dir rather than inside `targets/desktop/` because it is
- * shared: web's `main.tsx` and desktop's `view.tsx` both mount it. Parking it in
- * one target meant pruning that target stranded the other's import, which broke
- * `--targets cli,web` and, worse, broke a WORKING project on
- * `targets:remove desktop`. Do not move it back under a target dir.
+ * It is EMPTY, and that is the decision, not an omission. Both templates now
+ * keep the view under `src/ui/`, beside the fold and the state the TERMINAL view
+ * reads, so in neither does a directory there belong to the DOM targets alone. A
+ * cli-only scaffold keeps those files — inert, not broken — rather than
+ * splitting `src/ui/` in two to save them.
+ *
+ * `basic` parked it at `targets/_shared/` until it took the same composition as
+ * `research`. The entry is gone with the directory; a project scaffolded before
+ * that still has one, which {@link assertSharedViewLayout} names.
  */
-export const SHARED_RENDERER_DIR = 'targets/_shared';
+export const SHARED_VIEW_DIR: Record<string, string | undefined> = {};
 
 /**
- * Refuse to operate on a project laid out the pre-0.9 way (React view still
- * inside `targets/desktop/`).
+ * Refuse to operate on a project whose view is laid out differently from what
+ * its template declares — the tables above are keyed to that layout, so acting
+ * on a mismatch half-applies and reports success.
  *
- * 0.9 is a clean break — there is deliberately no migration. But breaking
- * loudly and breaking silently are different things, and without this check the
- * `targets:` verbs do the latter: `targets:add web` writes a `web/main.tsx`
- * importing `../_shared/App.js` into a project that has no `_shared`, then
- * reports success. Say so instead.
+ * Both templates now keep the view under `src/ui/`, so that directory IS the
+ * test. Every older shape fails it the same way: a pre-0.9 project whose view
+ * sat inside `targets/desktop/`, and a project scaffolded before its template's
+ * view moved, which still carries `targets/_shared/`. Neither has a migration
+ * path; both are cheap to name.
  *
- * A cli-only project legitimately has no `_shared` — nothing mounts the view —
- * so the check keys off a DOM target being present.
+ * The test does NOT ask whether a DOM target is present. It used to, because a
+ * view under `targets/` only existed when a renderer did — but a cli-only
+ * project keeps `src/ui/` too, and an OLD cli-only project had its
+ * `targets/_shared/` pruned away, so there was nothing left to give it away and
+ * `targets:add web` wrote entries for a layout it did not have, reporting
+ * success. A project with no marker declares no template, so there is nothing
+ * for its layout to disagree WITH — {@link viewDirOf} reads the tree for those.
  */
-export function assertSharedViewLayout(projectDir: string): void {
-  const hasDom = (['desktop', 'web'] as const).some((t) =>
-    existsSync(join(projectDir, 'targets', t)),
-  );
-  if (!hasDom || existsSync(join(projectDir, SHARED_RENDERER_DIR))) return;
+export function assertSharedViewLayout(projectDir: string, template: string | undefined): void {
+  if (template === undefined) return;
+  if (existsSync(join(projectDir, 'src', 'ui'))) return;
+  const legacy = existsSync(join(projectDir, 'targets', '_shared'));
   throw new Error(
-    'this project predates lloyal 0.9 — its React view is still inside ' +
-      '`targets/desktop/`, but the `targets:` verbs now expect `targets/_shared/`.\n' +
-      '  0.9 moved the shared view so that removing desktop stops breaking the web build.\n' +
-      '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` ' +
-      'and copy your `harness/` (and your view) across.',
+    'this project predates the move of the React view to `src/ui/`, which both templates ' +
+      'now use.\n' +
+      (legacy
+        ? '  Its view is still at `targets/_shared/`.\n'
+        : '  It has no `src/ui/` at all — its view is still under `targets/`.\n') +
+      '  The `targets:` verbs would write entries importing `src/app.ts` and `src/ui/` into a ' +
+      'project that has neither, and report success.\n' +
+      '  There is no migration path. Scaffold a fresh project with `npx lloyal-ai new` and ' +
+      'copy your harness (and your view) across.',
   );
+}
+
+/**
+ * The view dir this project keeps on the DOM targets' lifecycle: what its
+ * template declares, or — for a project with no marker to name one — what is
+ * actually on disk. Only the legacy `targets/_shared` layout is detectable that
+ * way, and it is the only one such a project can have: a marker-less project
+ * predates the marker, and every layout since has kept its view beside the fold.
+ */
+function viewDirOf(projectDir: string, template: string | undefined): string | undefined {
+  if (template !== undefined) return SHARED_VIEW_DIR[template];
+  return existsSync(join(projectDir, 'targets', '_shared')) ? 'targets/_shared' : undefined;
+}
+
+/**
+ * The project's manifest, open for editing — or nothing, for a project without one. Opened BEFORE a verb
+ * deletes or copies anything, and its write PREPARED before too (see the boundary above): a manifest the
+ * parser rejects, or one whose edit will not render, is discovered with the project untouched.
+ */
+export function openManifest(projectDir: string): HarnessYml | undefined {
+  return hasHarnessYml(projectDir) ? openHarnessYml(projectDir) : undefined;
 }
 
 /**
  * Reduce `<projectDir>` to `keep`. `keep` MUST include `'cli'`. A no-op when all
  * three targets are kept (beyond normalizing the `harness.yml` `targets:` line).
+ * Every write is prepared before anything is deleted; the deletes run; the
+ * writes land.
  */
-export function pruneTargets(projectDir: string, keep: readonly Target[]): void {
+export function pruneTargets(
+  projectDir: string,
+  keep: readonly Target[],
+  template: string | undefined,
+): void {
   const keepSet = new Set(keep);
   if (!keepSet.has('cli')) {
     throw new Error("pruneTargets: 'cli' is mandatory and cannot be pruned");
   }
   const pruneDesktop = !keepSet.has('desktop');
   const pruneWeb = !keepSet.has('web');
+  const someDom = !pruneDesktop || !pruneWeb; // a DOM target (web or desktop renderer) remains
+  // A template's own view dir, when it has one, outlives either target alone: only a cli-only project has
+  // nothing left to mount it. Same guard `prunePackageJson` uses for the deps.
+  const viewDir = viewDirOf(projectDir, template);
 
+  // ── prepare: every input read and checked, every output computed ──
+  const manifest = openManifest(projectDir);
+  const pkgPath = join(projectDir, 'package.json');
+  const pkg = readPackageJson(pkgPath);
+  const writes: Write[] = [];
+  if (pruneDesktop || pruneWeb) {
+    writes.push(writeJson(pkgPath, prunePackageJson(pkg, { pruneDesktop, pruneWeb })));
+    const webCfg = join(projectDir, 'tsconfig.web.json');
+    // cli-only: no DOM sources are left to typecheck, and the file goes with them (below) rather than edited.
+    if (existsSync(webCfg) && someDom) {
+      writes.push(prepareFilter(webCfg, 'include', (entry) => !isUnderPruned(entry, pruneDesktop, pruneWeb)));
+    }
+    const nodeCfg = join(projectDir, 'tsconfig.json');
+    if (existsSync(nodeCfg)) {
+      // A view dir matches neither pruned prefix, so it survives a single-target prune on its own — correct,
+      // the dir survives too. Only a cli-only prune deletes it, and then its exclude entry must go too.
+      writes.push(prepareFilter(
+        nodeCfg,
+        'exclude',
+        (entry) =>
+          !isUnderPruned(entry, pruneDesktop, pruneWeb) &&
+          !(!someDom && viewDir !== undefined && entry.startsWith(viewDir)),
+      ));
+    }
+  }
+  writes.push(prepareTargetsLine(manifest, keep));
+
+  // ── mutate: the target's own dir and its exclusive top-level files ──
   const rm = (rel: string): void => rmSync(join(projectDir, rel), { recursive: true, force: true });
-
-  // 1. Dirs + files (the target's own dir + its exclusive top-level files).
   if (pruneDesktop) {
     rm('targets/desktop');
     for (const f of TARGET_FILES.desktop) rm(f);
@@ -130,57 +232,18 @@ export function pruneTargets(projectDir: string, keep: readonly Target[]): void 
     rm('targets/web');
     for (const f of TARGET_FILES.web) rm(f);
   }
-  // The shared view outlives either target alone; only a cli-only project has
-  // nothing left to mount it. Same guard `prunePackageJson` uses for the deps.
-  if (pruneDesktop && pruneWeb) rm(SHARED_RENDERER_DIR);
+  if (pruneDesktop && pruneWeb && viewDir) rm(viewDir);
+  if ((pruneDesktop || pruneWeb) && !someDom) rm('tsconfig.web.json');
 
-  // 2. package.json — scripts + deps.
-  if (pruneDesktop || pruneWeb) {
-    prunePackageJson(projectDir, { pruneDesktop, pruneWeb });
-  }
-
-  // 3. tsconfig split (only when a target was actually removed).
-  if (pruneDesktop || pruneWeb) {
-    const someDom = !pruneDesktop || !pruneWeb; // a DOM target (web or desktop renderer) remains
-    const webCfg = join(projectDir, 'tsconfig.web.json');
-    if (existsSync(webCfg)) {
-      if (!someDom) {
-        rm('tsconfig.web.json'); // cli-only: no DOM sources left to typecheck
-      } else {
-        filterJsoncArray(webCfg, 'include', (entry) => !isUnderPruned(entry, pruneDesktop, pruneWeb));
-      }
-    }
-    const nodeCfg = join(projectDir, 'tsconfig.json');
-    if (existsSync(nodeCfg)) {
-      // `targets/_shared` matches neither pruned prefix, so it survives a
-      // single-target prune on its own — correct, the dir survives too. Only a
-      // cli-only prune deletes the dir, and then its exclude entry must go with
-      // it or it dangles.
-      filterJsoncArray(
-        nodeCfg,
-        'exclude',
-        (entry) =>
-          !isUnderPruned(entry, pruneDesktop, pruneWeb) &&
-          !(!someDom && entry.startsWith(SHARED_RENDERER_DIR)),
-      );
-    }
-  }
-
-  // 4. harness.yml `targets:` line (documentation).
-  rewriteTargetsLine(projectDir, keep);
+  // ── land ──
+  for (const write of writes) write();
 }
 
+/** The package with the pruned targets' scripts, deps and fields removed — pure over the parsed object. */
 function prunePackageJson(
-  projectDir: string,
+  pkg: PackageJson,
   { pruneDesktop, pruneWeb }: { pruneDesktop: boolean; pruneWeb: boolean },
-): void {
-  const pkgPath = join(projectDir, 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
-    scripts?: Record<string, string>;
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    [k: string]: unknown;
-  };
+): PackageJson {
 
   const drop = (obj: Record<string, string> | undefined, keys: string[]): void => {
     if (!obj) return;
@@ -212,8 +275,7 @@ function prunePackageJson(
     if (!pruneDesktop) parts.push('tsc -p tsconfig.electron.json');
     pkg.scripts.typecheck = parts.join(' && ');
   }
-
-  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return pkg;
 }
 
 /** True when a tsconfig path entry lives under a pruned target directory. */
@@ -224,12 +286,14 @@ function isUnderPruned(entry: string, pruneDesktop: boolean, pruneWeb: boolean):
   );
 }
 
-/** Rewrite the `targets: [...]` line in `harness.yml` to the given set. */
-export function rewriteTargetsLine(projectDir: string, keep: readonly Target[]): void {
-  const ymlPath = join(projectDir, 'harness.yml');
-  if (!existsSync(ymlPath)) return;
-  const text = readFileSync(ymlPath, 'utf8');
-  const rendered = `targets: [${keep.join(', ')}]`;
-  const next = text.replace(/^targets:\s*\[[^\]]*\]/m, rendered);
-  if (next !== text) writeFileSync(ymlPath, next);
+/**
+ * The write that sets `targets:` in an open manifest to the given set, in the
+ * flow style the templates ship (`[cli, web]`) — rendered now, landed when
+ * called. No manifest or no key: nothing to do. All YAML goes through
+ * `harness-yml`.
+ */
+export function prepareTargetsLine(manifest: HarnessYml | undefined, keep: readonly Target[]): Write {
+  if (!manifest?.has(['targets'])) return () => {};
+  manifest.set(['targets'], keep);
+  return manifest.prepare();
 }

@@ -15,6 +15,7 @@
     "bin/",
     "dist/",
     "harness.yml",
+    "src/harness/prompts/",
     "LICENSE",
     "README.md"
   ],
@@ -31,25 +32,28 @@
     "serve": "tsc && node bin/serve.js",
     "dev:web": "concurrently -k -n serve,web -c blue,magenta \"cross-env LLOYAL_DEV=1 npm run serve\" \"vite --config targets/web/vite.web.config.ts\"",
     "dev:web:client": "vite --config targets/web/vite.web.config.ts",
-    "build:web": "vite build --config targets/web/vite.web.config.ts"
+    "build:web": "vite build --config targets/web/vite.web.config.ts",
+    "test": "node --import tsx --test test/invariants/*.test.ts"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
-    "@lloyal-labs/binding": "^0.1.0",
-    "@lloyal-labs/dev-tools": "^0.4.3",
-    "@lloyal-labs/host": "^0.1.0",
-    "@lloyal-labs/lloyal-agents": "^5.5.1",
-    "@lloyal-labs/lloyal.node": "^3.1.0",
-    "@lloyal-labs/rig": "^5.5.0",
-    "@lloyal-labs/sdk": "^3.0.3",
+    "@lloyal-labs/binding": "0.2.0-alpha.11",
+    "@lloyal-labs/desktop": "0.1.0-alpha.11",
+    "@lloyal-labs/dev-tools": "0.5.0-alpha.11",
+    "@lloyal-labs/lloyal-agents": "6.0.0-alpha.11",
+    "@lloyal-labs/lloyal.node": "3.2.0-alpha.10",
+    "@lloyal-labs/rig": "5.6.0-alpha.11",
+    "@lloyal-labs/sdk": "4.0.0-alpha.11",
+    "@lloyal-labs/ui": "0.1.0-alpha.11",
     "effection": "^4.1.0",
+    "eta": "^4.6.0",
     "ink": "^7.1.1",
+    "marked": "^18.0.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "ws": "^8.21.3",
-    "yaml": "^2.9.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

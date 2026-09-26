@@ -1,0 +1,7 @@
+<% layout("./framed", { writesTheAnswer: it.writesTheAnswer }) %>
+<%~ it.preamble %>
+<% if (it.takesSources) { %>
+
+
+<%~ include("./cite") %>
+<% } %>

@@ -32,6 +32,8 @@ export interface WizardResult {
   /** Catalog id OR a BYO `.gguf` path (see `applyModelChoice`). */
   llm: string;
   template: TemplateKind;
+  /** On a box with an NVIDIA GPU: run on it (the CUDA backend pack is installed once) or stay on CPU. */
+  backend: 'gpu' | 'cpu';
 }
 
 /** Flags already provided on the command line — the wizard skips these steps. */
@@ -39,6 +41,9 @@ export interface WizardPrefill {
   template?: TemplateKind;
   targets?: Target[];
   llm?: string;
+  /** The NVIDIA GPU this box reports, when it does; the backend step exists only then. */
+  nvidiaGpu?: string | null;
+  backend?: 'gpu' | 'cpu';
 }
 
 /** Same grammar as the non-interactive path (`new.ts` NAME_RE). */
@@ -185,12 +190,13 @@ export function orderTargets(values: string[]): Target[] {
 }
 
 /** The screens the wizard walks, minus any the flags already answered. */
-type StepId = 'name' | 'targets' | 'model' | 'byo' | 'template';
+export type StepId = 'name' | 'targets' | 'model' | 'byo' | 'backend' | 'template';
 
-function initialQueue(prefill: WizardPrefill): StepId[] {
+export function initialQueue(prefill: WizardPrefill): StepId[] {
   const q: StepId[] = ['name']; // the wizard only mounts when the name is missing
   if (!prefill.targets) q.push('targets');
   if (!prefill.llm) q.push('model');
+  if (prefill.nvidiaGpu && !prefill.backend) q.push('backend'); // only a box with an NVIDIA GPU has the question
   if (!prefill.template) q.push('template');
   return q;
 }
@@ -264,6 +270,7 @@ export function Wizard({
         targets: collected.current.targets ?? prefill.targets ?? DEFAULT_TARGETS,
         llm: collected.current.llm ?? prefill.llm ?? defaultLlm,
         template: collected.current.template ?? prefill.template ?? 'basic',
+        backend: collected.current.backend ?? prefill.backend ?? (prefill.nvidiaGpu ? 'gpu' : 'cpu'),
       });
       exit();
       return;
@@ -315,6 +322,10 @@ export function Wizard({
     setLlm(trimmed);
     setByoError(null);
     advance(queue.slice(1), { llm: trimmed });
+  };
+
+  const submitBackend = (value: string): void => {
+    advance(queue.slice(1), { backend: value as 'gpu' | 'cpu' });
   };
 
   const submitTemplate = (value: string): void => {
@@ -412,13 +423,27 @@ export function Wizard({
           </Box>
         )}
 
+        {step === 'backend' && (
+          <Box flexDirection="column">
+            <Field label="Backend" hint={`${prefill.nvidiaGpu} detected`} />
+            <Text dimColor>{'  Runs on the GPU. Where this GPU needs the signed CUDA backend pack, it is fetched once per box after install and shared by every harness here; where the standard package already serves it, nothing is fetched.'}</Text>
+            <Select
+              options={[
+                { label: 'Recommended — run on the GPU', value: 'gpu' },
+                { label: 'CPU only — nothing fetched', value: 'cpu' },
+              ]}
+              onChange={submitBackend}
+            />
+          </Box>
+        )}
+
         {step === 'template' && (
           <Box flexDirection="column">
             <Field label="Template" hint="the starting point — you own the code either way" />
             <Select
               options={[
-                { label: 'basic — Wikipedia research harness', value: 'basic' },
-                { label: 'research — tuned recon → plan → agents → synth', value: 'research' },
+                { label: 'wiki — Wikipedia research harness', value: 'basic' },
+                { label: 'deep-research — tuned recon → plan → agents → synth', value: 'research' },
               ]}
               onChange={submitTemplate}
             />

@@ -8,9 +8,11 @@
  * views — not basic's.
  *
  * Shares the per-target tables with `prune-targets.ts` (so add-copy ↔
- * prune-delete can't drift) and the JSONC array editing with `jsonc.ts`.
+ * prune-delete can't drift), the JSONC array editing with `jsonc.ts`, and the
+ * boundary `prune-targets.ts` states: every write prepared before anything is
+ * copied, then landed together.
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type Target,
@@ -21,17 +23,21 @@ import {
   TARGET_FILES,
   TARGET_PKG_FIELDS,
   SHARED_RENDERER_DEPS,
-  SHARED_RENDERER_DIR,
   SHARED_RENDERER_DEV_DEPS,
-  rewriteTargetsLine,
+  SHARED_VIEW_DIR,
+  openManifest,
+  prepareTargetsLine,
 } from './prune-targets.js';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 import {
   resolveTemplateDir,
   copyTreeWithSubstitutions,
   copyFileWithSubstitutions,
   buildSubstitutions,
 } from './copy-tree.js';
-import { filterJsoncArray, mergeJsoncArray, readJsoncArray } from './jsonc.js';
+import { prepareFilter, prepareMerge, readJsoncArray } from './jsonc.js';
+import type { Write } from './jsonc.js';
 
 const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
 
@@ -60,63 +66,50 @@ export function addTarget(projectDir: string, target: PrunableTarget, template: 
     throw new Error(`template "${template}" has no targets/${target}/ to copy`);
   }
 
-  const projectName = (readJson(join(projectDir, 'package.json')).name as string) ?? 'harness';
-  const subs = buildSubstitutions(projectName);
+  // ── prepare: every input read and checked, every output computed — a manifest that will not render, a
+  // package that is not the shape this edits, a tsconfig that is not there, all found with the project untouched ──
+  const manifest = openManifest(projectDir);
+  const pkgPath = join(projectDir, 'package.json');
+  const pkg = readPackageJson(pkgPath);
+  const tpl = readPackageJson(join(templateDir, 'package.json'));
+  const subs = buildSubstitutions(pkg.name ?? 'harness');
+  // Both `web` and `desktop` contribute DOM (React) sources to tsconfig.web.json.
+  const domBefore = before.has('web') || before.has('desktop');
+  const hasDesktopAfter = target === 'desktop' || before.has('desktop');
+  // A template's own view dir, when it has one and a cli-only prune removed it, comes back with the FIRST DOM
+  // target, exactly as SHARED_RENDERER_DEPS do — if one is already present the dir is there and must not be
+  // overwritten (the user owns that file; it is their view). A template whose view lives beside the fold
+  // declares none: nothing was pruned, so there is nothing to restore.
+  const viewDir = SHARED_VIEW_DIR[template];
+  const after = ALL_TARGETS.filter((t) => before.has(t) || t === target);
+  const writes: Write[] = [
+    writeJson(pkgPath, restorePackageJson(pkg, tpl, target, { domBefore, hasDesktopAfter })),
+    ...prepareTsconfig(projectDir, templateDir, target, template, domBefore),
+    prepareTargetsLine(manifest, after),
+  ];
 
-  // 1. The target's own dir.
+  // ── mutate: the target's own dir, its exclusive top-level files, the view dir it brings back ──
   copyTreeWithSubstitutions(templateTargetDir, join(projectDir, 'targets', target), subs);
-
-  // 2. Its exclusive top-level files (bin shim / build config).
   for (const rel of TARGET_FILES[target]) {
     const src = join(templateDir, rel);
     if (existsSync(src)) copyFileWithSubstitutions(src, join(projectDir, rel), subs);
   }
-
-  // Both `web` and `desktop` contribute DOM (React) sources to tsconfig.web.json.
-  const domBefore = before.has('web') || before.has('desktop');
-  const hasDesktopAfter = target === 'desktop' || before.has('desktop');
-
-  // 2b. The shared React view, which a cli-only prune removed. It comes back
-  // with the FIRST DOM target, exactly as SHARED_RENDERER_DEPS do below — if one
-  // is already present the dir is there and must not be overwritten (the user
-  // owns that file; it is their view).
-  if (!domBefore) {
-    copyTreeWithSubstitutions(
-      join(templateDir, SHARED_RENDERER_DIR),
-      join(projectDir, SHARED_RENDERER_DIR),
-      subs,
-    );
+  if (!domBefore && viewDir) {
+    copyTreeWithSubstitutions(join(templateDir, viewDir), join(projectDir, viewDir), subs);
   }
 
-  // 3. package.json — restore scripts + deps (add-if-absent, versions from template).
-  restorePackageJson(projectDir, templateDir, target, { domBefore, hasDesktopAfter });
-
-  // 4. tsconfig split.
-  restoreTsconfig(projectDir, templateDir, target, domBefore);
-
-  // 5. harness.yml `targets:` line.
-  const after = ALL_TARGETS.filter((t) => before.has(t) || t === target);
-  rewriteTargetsLine(projectDir, after);
+  // ── land ──
+  for (const write of writes) write();
   return after;
 }
 
-interface PkgShape {
-  name?: string;
-  scripts?: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  [k: string]: unknown;
-}
-
+/** The package with the target's scripts, fields and deps restored from the template — pure over the parsed objects. */
 function restorePackageJson(
-  projectDir: string,
-  templateDir: string,
+  pkg: PackageJson,
+  tpl: PackageJson,
   target: PrunableTarget,
   flags: { domBefore: boolean; hasDesktopAfter: boolean },
-): void {
-  const pkgPath = join(projectDir, 'package.json');
-  const pkg = readJson(pkgPath);
-  const tpl = readJson(join(templateDir, 'package.json'));
+): PackageJson {
   pkg.scripts ??= {};
   pkg.dependencies ??= {};
   pkg.devDependencies ??= {};
@@ -141,7 +134,7 @@ function restorePackageJson(
     if (flags.hasDesktopAfter) parts.push('tsc -p tsconfig.electron.json');
     pkg.scripts.typecheck = parts.join(' && ');
   }
-  writeJson(pkgPath, pkg);
+  return pkg;
 }
 
 /** Copy `keys` from `source` into `target`, add-if-absent (never clobber). */
@@ -156,48 +149,44 @@ function addFromTemplate(
   }
 }
 
-function restoreTsconfig(
+/** The tsconfig edits the target needs, prepared: each file read and its result computed now. */
+function prepareTsconfig(
   projectDir: string,
   templateDir: string,
   target: PrunableTarget,
+  template: string,
   domBefore: boolean,
-): void {
+): Write[] {
   const underTarget = (entry: string): boolean => entry.startsWith(`targets/${target}`);
-  // The shared view's entries belong to whichever DOM target arrives FIRST — it
-  // is not under `targets/<target>/`, so `underTarget` alone would leave it out
-  // and the Node build would then try to compile the React view.
+  // A template's view-dir entries belong to whichever DOM target arrives FIRST — they are not under
+  // `targets/<target>/`, so `underTarget` alone would leave them out and the Node build would then try to
+  // compile the React view.
+  const viewDir = SHARED_VIEW_DIR[template];
   const wanted = (entry: string): boolean =>
-    underTarget(entry) || (!domBefore && entry.startsWith(SHARED_RENDERER_DIR));
+    underTarget(entry) || (!domBefore && viewDir !== undefined && entry.startsWith(viewDir));
+  const writes: Write[] = [];
 
-  // Root tsconfig.json: merge this target's EXCLUDE entries (it always exists;
-  // its `include` is a glob that already covers the new dir).
+  // Root tsconfig.json: merge this target's EXCLUDE entries (it always exists; its `include` is a glob that
+  // already covers the new dir).
   const rootCfg = join(projectDir, 'tsconfig.json');
   if (existsSync(rootCfg)) {
-    const excludeToAdd = readJsoncArray(join(templateDir, 'tsconfig.json'), 'exclude').filter(wanted);
-    mergeJsoncArray(rootCfg, 'exclude', excludeToAdd);
+    writes.push(prepareMerge(rootCfg, 'exclude', readJsoncArray(join(templateDir, 'tsconfig.json'), 'exclude').filter(wanted)));
   }
 
   // tsconfig.web.json holds the DOM sources (web browser + Electron renderer).
   const webCfg = join(projectDir, 'tsconfig.web.json');
+  const templateWebCfg = join(templateDir, 'tsconfig.web.json');
   if (domBefore) {
-    // A DOM target already present → merge this target's include entries.
-    const includeToAdd = readJsoncArray(join(templateDir, 'tsconfig.web.json'), 'include').filter(underTarget);
-    mergeJsoncArray(webCfg, 'include', includeToAdd);
+    // A DOM target already present → merge this target's include entries into the project's own file — which
+    // must be there: a DOM target without it is a project this verb cannot finish, said here.
+    writes.push(prepareMerge(webCfg, 'include', readJsoncArray(templateWebCfg, 'include').filter(underTarget)));
   } else {
-    // cli-only → prune deleted tsconfig.web.json; restore from the template, then
-    // keep harness/* + THIS target's entries + the shared view (dropping only
-    // the other DOM target's). Without the `wanted` widening the shared view's
-    // entry is silently dropped and typecheck stops covering the file both
-    // surviving targets mount.
-    copyFileWithSubstitutions(join(templateDir, 'tsconfig.web.json'), webCfg, {});
-    filterJsoncArray(webCfg, 'include', (entry) => !entry.startsWith('targets/') || wanted(entry));
+    // cli-only → prune deleted tsconfig.web.json; the template's, with the non-target entries + THIS target's
+    // + the view dir (dropping only the other DOM target's), is what the project gets. Without the `wanted`
+    // widening a view-dir entry is silently dropped and typecheck stops covering the file both surviving
+    // targets mount.
+    writes.push(prepareFilter(templateWebCfg, 'include', (entry) => !entry.startsWith('targets/') || wanted(entry), webCfg));
   }
+  return writes;
 }
 
-function readJson(p: string): PkgShape {
-  return JSON.parse(readFileSync(p, 'utf8')) as PkgShape;
-}
-
-function writeJson(p: string, o: unknown): void {
-  writeFileSync(p, `${JSON.stringify(o, null, 2)}\n`);
-}

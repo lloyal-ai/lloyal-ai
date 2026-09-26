@@ -49,8 +49,9 @@ vi.mock('../src/verify', async (importActual) => {
 });
 
 import { installCommand } from '../src/commands/install';
-import { verifyAndVendorAbility, parseAbilitySpec } from '../src/scaffold/vendor-ability';
+import { verifyAndVendorAbility, parseAbilitySpec, RequirementError } from '../src/scaffold/vendor-ability';
 import * as verify from '../src/verify';
+import { buildTarball } from './helpers/tarball';
 
 // ── Test scaffolding ─────────────────────────────────────────────
 
@@ -59,7 +60,11 @@ const MANIFEST_URL = 'https://apps.lloyal.ai/v1/bundles/lloyal__wikipedia-1.0.0.
 const IMPORT_NAME = '@lloyal-labs/wikipedia-ability';
 const SCOPED_NAME = 'lloyal/wikipedia';
 const VERSION = '1.0.0';
-const TARBALL_BYTES = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]); // gzip-magic stub
+/** A real bundle — the gate reads `package/ability.json` off the verified bytes, so a stub that cannot be
+ *  opened is refused, never installed. This one requires nothing. */
+const TARBALL_BYTES = buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'wikipedia', services: [] }) }]);
+/** Bytes no gate can open: gzip magic and nothing behind it. */
+const UNREADABLE_BYTES = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]);
 const EXPECTED_INTEGRITY = 'sha512-abcdef==';
 const VENDOR_REL = 'vendor/lloyal__wikipedia-1.0.0.tgz';
 const FILE_DEP = `file:${VENDOR_REL}`;
@@ -189,6 +194,231 @@ async function depSpec(): Promise<string | undefined> {
   };
   return pkg.dependencies?.[IMPORT_NAME];
 }
+
+/** Serve THESE bytes as the tarball — a real bundle carrying its own `ability.json` — with the sizes to match. */
+function useTarball(bytes: Uint8Array): void {
+  vi.mocked(global.fetch as unknown as () => unknown).mockImplementation(async () => ({
+    ok: true, status: 200, statusText: 'OK',
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  }) as never);
+  vi.mocked(verify.resolveAbilityVersion).mockReturnValue({
+    version: VERSION, manifestUrl: MANIFEST_URL, tarballUrl: TARBALL_URL, appProtocolVersion: '3.0', sizeBytes: bytes.byteLength, importName: IMPORT_NAME,
+  });
+  vi.mocked(verify.fetchAndVerifyManifest).mockResolvedValue({
+    manifest: { name: SCOPED_NAME, version: VERSION, entry: 'x.tgz', signature: 'stub-sig', integrity: EXPECTED_INTEGRITY, publisherKeyId: 'k', sizeBytes: bytes.byteLength },
+    trustKey: new Uint8Array(32),
+  });
+}
+const requiring = (services: readonly string[]): Uint8Array =>
+  buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'corpus', services }) }]);
+const ymlText = (): Promise<string> => readFile(join(cwd, 'harness.yml'), 'utf-8');
+
+// ── the install gate: can this project select what the ability requires? ─────
+
+describe('the install gate', () => {
+  it('a requirement the project selects nothing for is refused, naming the key — nothing vendored, harness.yml byte-identical', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
+      .rejects.toThrow(/requires `reranker`, and this project names none — add `model\.reranker` to harness\.yml \(`model\.reranker\.id: qwen3-reranker-0\.6b-q8` is the catalog's\), then `lloyal install lloyal\/wikipedia`\. Nothing was installed/);
+    expect(await exists(VENDOR_REL)).toBe(false);
+    expect(await depSpec()).toBeUndefined();
+    expect(await ymlText()).toBe(before);
+  });
+
+  it('a present block is a request the boot settles, so a vision block that names no projector passes the gate', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n');
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a present block that names no model, where nothing derives, is offered the key it lacks — and refused naming it when declined', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n  reranker: {}\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    const offered: unknown[] = [];
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async (missing) => { offered.push(missing); return false; } }))
+      .rejects.toThrow(/`model\.reranker` names no model — add `model\.reranker\.id` to harness\.yml/);
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'reranker', key: 'model.reranker.id', suggestion: 'qwen3-reranker-0.6b-q8' }]);
+    expect(await exists(VENDOR_REL)).toBe(false);
+    expect(await ymlText()).toBe(before);
+  });
+
+  it('every name is known to the platform before any is offered — one unknown name refuses the list with nothing asked and nothing written', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker', 'whisper']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires "whisper", which is not a service this platform provides/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
+  it('a derived block with no reasoning model to derive from is refused naming `model.llm` — nothing is paired with a model the project does not select', async () => {
+    await seedProject();
+    const before = 'model:\n  vision: {}\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires `vision`, which is paired with the reasoning model, and this project selects none — add `model\.llm\.id` to harness\.yml/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
+  it('an ABSENT derived block is never offered where no reasoning model is selected — the offer would write a block with nothing to pair', async () => {
+    await seedProject();
+    const before = 'sources:\n  outputDir: reports\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/paired with the reasoning model, and this project selects none — add `model\.llm\.id`/);
+    expect(offered).toBe(0);
+    expect(await ymlText()).toBe(before);
+  });
+
+  it('a projector the project SELECTS needs no reasoning model to derive from — a vision path passes the gate with the llm adopted from its slot', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  vision:\n    path: weights/proj.gguf\n');
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a commented-out block counts as unset', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME))).rejects.toBeInstanceOf(RequirementError);
+  });
+
+  it('offered and accepted: the block is written through the model writer, then the install proceeds', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['reranker']));
+    const { writeModelField } = await import('../src/scaffold/apply-model');
+    const offered: unknown[] = [];
+    const v = await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), {
+      settle: async (missing) => { offered.push(missing); writeModelField(cwd, missing.service, { id: missing.suggestion! }); return true; },
+    });
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'reranker', key: 'model.reranker.id', suggestion: 'qwen3-reranker-0.6b-q8' }]);
+    expect(await ymlText()).toBe('model:\n  llm:\n    id: qwen3.5-4b\n  reranker:\n    id: qwen3-reranker-0.6b-q8\n');
+    expect(v.vendorRelPath).toBe(VENDOR_REL);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a missing service the platform derives from the llm is offered the empty block, and refused naming it', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['vision']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
+      .rejects.toThrow(/requires `vision`, and this project names none — add `model\.vision` to harness\.yml \(`model\.vision: \{\}` takes the one paired with your model\)/);
+    const { writeModelBlock } = await import('../src/scaffold/apply-model');
+    const offered: unknown[] = [];
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), {
+      settle: async (missing) => { offered.push(missing); writeModelBlock(cwd, missing.service); return true; },
+    });
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'vision', key: 'model.vision', block: true }]);
+    expect(await ymlText()).toBe('model:\n  llm:\n    id: qwen3.5-4b\n  vision: {}\n');
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('offered and declined: refused, harness.yml byte-identical', async () => {
+    await seedProject();
+    const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['reranker']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => false })).rejects.toBeInstanceOf(RequirementError);
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
+  it('asked of the RESOLVED configuration: a selection in harness.json satisfies it without an offer', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    await writeFile(join(cwd, 'harness.json'), JSON.stringify({ version: 2, model: { reranker: { path: '/mine.gguf' } } }));
+    useTarball(requiring(['reranker']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a name no runtime provides is refused outright, and never offered', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['whisper']));
+    let offered = 0;
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return true; } }))
+      .rejects.toThrow(/requires "whisper", which is not a service this platform provides/);
+    expect(offered).toBe(0);
+  });
+
+  it('an ability whose manifest requires nothing installs as before', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring([]));
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME));
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a requirement the gate cannot read is a refusal, never "requires nothing": no ability.json, a package it cannot open, a manifest that does not parse', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    const before = await ymlText();
+    for (const [bytes, why] of [
+      [buildTarball([{ name: 'package/README.md', content: 'no manifest here' }]), /carries no ability\.json, so what it requires is unknown\. Nothing was installed\./],
+      [UNREADABLE_BYTES, /could not be opened .*so what it requires is unknown\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: '{ not json' }]), /ability\.json does not parse, so what it requires is unknown\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'x', services: 'reranker' }) }]), /declares `services` as "reranker"; it must be a list of service names\. Nothing was installed\./],
+      [buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'x', services: ['reranker', 3] }) }]), /declares `services` as \["reranker",3\]; it must be a list/],
+    ] as const) {
+      useTarball(bytes);
+      await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME))).rejects.toThrow(why);
+      expect(await exists(VENDOR_REL)).toBe(false);
+      expect(await ymlText()).toBe(before);
+      expect(await depSpec()).toBeUndefined();
+    }
+  });
+
+  it('a project without a package.json is refused before the offer, with nothing written anywhere', async () => {
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    const before = await ymlText();
+    useTarball(requiring(['reranker']));
+    const settle = vi.fn(async () => true);
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle })).rejects.toThrow(/no package\.json in .* — run this inside a harness project\./);
+    expect(settle).not.toHaveBeenCalled();
+    expect(await ymlText()).toBe(before);
+    expect(await exists(VENDOR_REL)).toBe(false);
+  });
+
+  it('the install command in a pipe has nobody to ask: it refuses with the key and exits 1', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['reranker']));
+    const err: string[] = [];
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation((s: unknown) => { err.push(String(s)); return true; });
+    const code = await installCommand.run([SCOPED_NAME]);
+    write.mockRestore();
+    expect(code).toBe(1);
+    expect(err.join('')).toMatch(/add `model\.reranker` to harness\.yml/);
+    expect(recordedNpmCalls()).toEqual([]);
+  });
+});
 
 // ── verifyAndVendorAbility ───────────────────────────────────────────
 

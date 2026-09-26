@@ -12,7 +12,9 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { writeModelField, readModelField } from '../src/scaffold/apply-model.js';
+import { openHarnessYml } from '../src/scaffold/harness-yml.js';
 import { readProjectMarker } from '../src/scaffold/write-marker.js';
+import { DEFAULT_ABILITIES } from '../src/commands/new.js';
 import { presentTargets } from '../src/scaffold/add-target.js';
 import { newCommand } from '../src/commands/new.js';
 import {
@@ -93,37 +95,76 @@ afterEach(() => {
 });
 
 describe('writeModelField / readModelField', () => {
-  it('rewrites the llm id in place, preserving the comment', () => {
+  it('rewrites the llm id in place', () => {
     const dir = freshBlankTree();
     writeModelField(dir, 'llm', { id: 'other-4b' });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toMatch(/id:\s*"other-4b"/);
-    expect(yml).toContain('kvCache'); // trailing guidance comment survives
+    expect(yml).toMatch(/^ {4}id: other-4b$/m);
     expect(readModelField(dir, 'llm')).toEqual({ id: 'other-4b' });
   });
 
-  it('swaps the llm key id <-> path (an entry is id XOR path)', () => {
+  /**
+   * The three ways the SAME document can be spelled. The line reader this
+   * replaced matched only `id: "…"` — a double-quoted value in a block map — so
+   * it reported the other two as unset and, on write, appended a second `id:`
+   * beside the one it could not see. Nothing in the suite covered them, because
+   * the suite was written against what that reader could do.
+   */
+  const SPELLINGS: ReadonlyArray<readonly [string, string]> = [
+    ['inline flow', 'model:\n  llm: { id: "qwen3.5-4b", context: 32768 }\n'],
+    ['unquoted', 'model:\n  llm:\n    id: qwen3.5-4b\n    context: 32768\n'],
+    ['single-quoted', "model:\n  llm:\n    id: 'qwen3.5-4b'\n    context: 32768\n"],
+  ];
+
+  for (const [label, yml] of SPELLINGS) {
+    it(`reads a model spelled ${label}`, () => {
+      const dir = freshBlankTree();
+      writeFileSync(join(dir, 'harness.yml'), yml);
+      expect(readModelField(dir, 'llm')).toEqual({ id: 'qwen3.5-4b' });
+    });
+
+    it(`rewrites a model spelled ${label} in place, never duplicating the key`, () => {
+      const dir = freshBlankTree();
+      writeFileSync(join(dir, 'harness.yml'), yml);
+      writeModelField(dir, 'llm', { id: 'other-4b' });
+      expect(readModelField(dir, 'llm')).toEqual({ id: 'other-4b' });
+      const text = readFileSync(join(dir, 'harness.yml'), 'utf8');
+      expect((text.match(/\bid:/g) ?? []).length).toBe(1);
+    });
+  }
+
+  it('swaps the llm key id <-> path (an entry is id XOR path), keeping the entry above context:', () => {
     const dir = freshBlankTree();
     writeModelField(dir, 'llm', { path: './models/llm/x.gguf' });
     let llm = sliceLlm(dir);
-    expect(llm).toMatch(/path:\s*"\.\/models\/llm\/x\.gguf"/);
+    expect(llm).toMatch(/path: \.\/models\/llm\/x\.gguf/);
     expect(llm).not.toMatch(/\bid:/);
     writeModelField(dir, 'llm', { id: 'back-to-id' });
     llm = sliceLlm(dir);
-    expect(llm).toMatch(/id:\s*"back-to-id"/);
+    expect(llm).toMatch(/id: back-to-id/);
     expect(llm).not.toMatch(/\bpath:/);
   });
 
-  it('INSERTS a live reranker block when the template ships it commented', () => {
+  it('a manifest carrying BOTH id and path: the requested key wins, the other goes', () => {
     const dir = freshBlankTree();
-    // Precondition: basic ships no LIVE reranker (it is commented).
+    writeFileSync(
+      join(dir, 'harness.yml'),
+      'model:\n  llm:\n    id: "a"\n    path: "/tmp/a.gguf"\n    context: 32768\n',
+    );
+    writeModelField(dir, 'llm', { id: 'other' });
+    expect(readModelField(dir, 'llm')).toEqual({ id: 'other' });
+    const text = readFileSync(join(dir, 'harness.yml'), 'utf8');
+    expect((text.match(/\bid:/g) ?? []).length).toBe(1);
+    expect(text).not.toMatch(/\bpath:/);
+  });
+
+  it('creates a reranker block when the template has none', () => {
+    const dir = freshBlankTree();
     expect(readModelField(dir, 'reranker')).toBeNull();
     writeModelField(dir, 'reranker', { id: 'qwen3-reranker-0.6b-q8' });
     expect(readModelField(dir, 'reranker')).toEqual({ id: 'qwen3-reranker-0.6b-q8' });
     const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    // The live block sits inside model:, and the commented guidance survives.
-    expect(yml).toMatch(/^ {2}reranker:\n {4}id: "qwen3-reranker-0\.6b-q8"/m);
-    expect(yml).toContain('#     id: "qwen3-reranker-0.6b-q8"');
+    expect(yml).toMatch(/^ {2}reranker:\n {4}id: qwen3-reranker-0\.6b-q8$/m);
   });
 
   it('rewrites an already-live reranker block in place (no duplicate)', () => {
@@ -133,13 +174,6 @@ describe('writeModelField / readModelField', () => {
     expect(readModelField(dir, 'reranker')).toEqual({ path: './models/reranker/r.gguf' });
     const liveReranker = (readFileSync(join(dir, 'harness.yml'), 'utf8').match(/^ {2}reranker:$/gm) ?? []).length;
     expect(liveReranker).toBe(1); // exactly one live block, not two
-  });
-
-  it('escapes a path with backslashes + quotes into valid double-quoted YAML', () => {
-    const dir = freshBlankTree();
-    writeModelField(dir, 'llm', { path: 'C:\\models\\my "best".gguf' });
-    const yml = readFileSync(join(dir, 'harness.yml'), 'utf8');
-    expect(yml).toContain('path: "C:\\\\models\\\\my \\"best\\".gguf"');
   });
 
   it('round-trips a value with an embedded quote through write -> read', () => {
@@ -186,6 +220,21 @@ describe('models: verbs', () => {
     const text = out.join('');
     expect(text).toContain('qwen3.5-4b');
     expect(text).toMatch(/llm\s+id: qwen3.5-4b/);
+  });
+
+  it('models:list tells an absent block from a present one that selects nothing, and from one whose selection derives', async () => {
+    const dir = await scaffold('l2', 'cli');
+    const yml = openHarnessYml(dir);
+    yml.set(['model', 'vision'], {});
+    yml.set(['model', 'reranker'], {});
+    yml.save();
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s) => (out.push(String(s)), true));
+    expect(await runIn(dir, () => modelsListCommand.run([]))).toBe(0);
+    const text = out.join('');
+    expect(text).toMatch(/vision\s+\(paired with the llm/);
+    expect(text).toMatch(/reranker\s+\(selects nothing — the block is present but names neither model\.reranker\.id nor model\.reranker\.path\)/);
+    expect(text).toMatch(/embedding\s+\(unset — the block is absent/);
   });
 
   it('rejects an unknown --role', async () => {
@@ -254,8 +303,6 @@ describe('targets:add (inverse of prune)', () => {
     expect(existsSync(join(dir, 'targets/web/serve.ts'))).toBe(true);
     expect(existsSync(join(dir, 'bin/serve.js'))).toBe(true);
     const p = pkg(dir);
-    expect(p.dependencies?.['@lloyal-labs/host']).toBeDefined();
-    expect(p.dependencies?.ws).toBeDefined();
     expect(p.scripts.serve).toBeDefined();
     expect(p.scripts.typecheck).toBe('tsc --noEmit && tsc -p tsconfig.web.json');
     // Restored tsconfig.web.json holds ONLY harness/* + web/* (no desktop).
@@ -305,7 +352,7 @@ describe('targets:add (inverse of prune)', () => {
     // The mutation path no scaffold covers. `targets:remove desktop` used to
     // delete the React view out from under a WORKING web build — the sharpest
     // form of this bug, because nothing about it looks destructive.
-    const shared = 'targets/_shared/App.tsx';
+    const shared = 'src/ui/App.tsx';
     const include = (d: string): string[] =>
       JSON.parse(readFileSync(join(d, 'tsconfig.web.json'), 'utf8').replace(/\/\/.*/g, '')).include;
     const exclude = (d: string): string[] =>
@@ -317,37 +364,55 @@ describe('targets:add (inverse of prune)', () => {
     // 1. Drop desktop — web still mounts the view, so it must stay.
     expect(await runIn(dir, () => targetsRemoveCommand.run(['desktop', '--yes']))).toBe(0);
     expect(existsSync(join(dir, shared))).toBe(true);
-    expect(include(dir)).toContain(shared);
+    expect(include(dir)).toContain('src/ui/**/*');
 
-    // 2. Drop web too — now nothing mounts it, so it goes, exclude entry included.
+    // 2. Drop web too — the view STAYS. It sits under `src/ui/` beside the state
+    // the terminal view folds, so nothing there belongs to the DOM targets alone;
+    // a cli-only project carries it unused rather than splitting the directory.
     expect(await runIn(dir, () => targetsRemoveCommand.run(['web', '--yes']))).toBe(0);
-    expect(existsSync(join(dir, 'targets/_shared'))).toBe(false);
-    expect(exclude(dir)).not.toContain('targets/_shared');
+    expect(existsSync(join(dir, shared))).toBe(true);
+    // The Node build must still refuse to compile it, or `tsc` meets React.
+    expect(exclude(dir)).toContain('src/ui/App.tsx');
 
-    // 3. Add web back — the dir AND both tsconfig entries must return, or the
-    // Node build tries to compile the React view and typecheck fails.
+    // 3. Add web back — the web tsconfig returns and covers the view again.
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(0);
     expect(existsSync(join(dir, shared))).toBe(true);
-    expect(include(dir)).toContain(shared);
-    expect(exclude(dir)).toContain('targets/_shared');
+    expect(include(dir)).toContain('src/ui/**/*');
   });
 
-  it('refuses a pre-0.9 layout loudly, without touching the project', async () => {
-    // 0.9 is a clean break with no migration — but breaking loudly and breaking
-    // silently are different. Without the guard, targets:add writes a
-    // web/main.tsx importing ../_shared/App.js into a project with no _shared,
-    // and reports SUCCESS.
-    const dir = await scaffold('t8', 'cli,desktop');
-    // Rewind to the old shape: view back inside desktop/, no _shared.
-    cpSync(join(dir, 'targets/_shared'), join(dir, 'targets/desktop'), { recursive: true });
-    rmSync(join(dir, 'targets/_shared'), { recursive: true, force: true });
+  it('refuses an OLD cli-only project too — it has no `_shared` to give it away', async () => {
+    // The regression the DOM-target early return allowed: a cli-only project
+    // mounts no view under `targets/`, so the guard skipped it entirely — and
+    // `targets:add web` then wrote entries importing `src/app.ts` and `src/ui/`
+    // into a project with neither, reporting success.
+    const dir = await scaffold('t9', 'cli');
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
 
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
     const said = err.mock.calls.map((c) => String(c[0])).join('');
     err.mockRestore();
 
-    expect(said).toMatch(/predates lloyal 0\.9/);
+    expect(said).toMatch(/src\/ui/);
+    expect(existsSync(join(dir, 'targets/web'))).toBe(false); // nothing written
+  });
+
+  it('refuses a project whose view predates the move, without touching it', async () => {
+    // A clean break with no migration — but breaking loudly and breaking silently
+    // are different. Both templates now keep the view under `src/ui/`; a project
+    // scaffolded before that still carries `targets/_shared/`, and targets:add
+    // would write entries for a layout it does not have and report SUCCESS.
+    const dir = await scaffold('t8', 'cli,desktop');
+    // Rewind to the old shape: the view back under `targets/`, no `src/`.
+    cpSync(join(dir, 'src/ui'), join(dir, 'targets/_shared'), { recursive: true });
+    rmSync(join(dir, 'src'), { recursive: true, force: true });
+
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
+    const said = err.mock.calls.map((c) => String(c[0])).join('');
+    err.mockRestore();
+
+    expect(said).toMatch(/src\/ui/);
     expect(said).toMatch(/targets\/_shared/);
     expect(existsSync(join(dir, 'targets/web'))).toBe(false); // nothing written
     expect(existsSync(join(dir, 'targets/desktop'))).toBe(true); // nothing destroyed
@@ -410,7 +475,6 @@ describe('targets:remove + round-trip', () => {
     await runIn(dir, () => targetsRemoveCommand.run(['web', '--yes']));
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(0);
     const p = pkg(dir);
-    for (const dep of ['@lloyal-labs/host', 'ws']) expect(p.dependencies?.[dep]).toBeDefined();
     expect(p.devDependencies?.['@types/ws']).toBeDefined();
     for (const s of ['serve', 'dev:web', 'build:web']) expect(p.scripts[s]).toBeDefined();
     expect(existsSync(join(dir, 'targets/web/serve.ts'))).toBe(true);
@@ -440,8 +504,9 @@ describe('marker', () => {
       template: 'basic',
       targets: ['cli', 'web'],
       // Recorded even under --skip-abilities: the harness still imports them, so
-      // `bin/run.js` needs the specs to name at boot.
-      abilities: ['lloyal/wikipedia@2.0.0'],
+      // `bin/run.js` needs the specs to name at boot. Read from the source, not
+      // copied: the numbers move with every ability release.
+      abilities: DEFAULT_ABILITIES.basic,
     });
   });
 
@@ -451,7 +516,7 @@ describe('marker', () => {
     expect(pkg(dir).harnessdev).toEqual({
       template: 'basic',
       targets: ['cli'],
-      abilities: ['lloyal/wikipedia@2.0.0'],
+      abilities: DEFAULT_ABILITIES.basic,
     });
   });
 });

@@ -10,6 +10,7 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // No Node types here on purpose: if the view starts to need them, something node-only has leaked into it.
     "types": ["vite/client"],
     "strict": true,
     "esModuleInterop": true,
@@ -18,12 +19,16 @@
     "noEmit": true
   },
   "include": [
-    "harness/protocol.ts",
-    "harness/state.ts",
-    "targets/_shared/**/*",
+    "src/protocol.ts",
+    "src/harness/budgets.ts",
+    "src/ui/**/*",
+    "types/**/*",
     "targets/desktop/view.tsx",
     "targets/web/main.tsx",
     "targets/web/boot.ts",
     "targets/web/web-bridge.ts"
-  ]
+  ],
+  // `src/ui/**/*` sweeps the whole view directory, and the terminal view lives
+  // there too — it is Ink, not DOM, and the Node config above owns it.
+  "exclude": ["src/ui/cli.tsx"]
 }

@@ -1,7 +1,7 @@
 {
   "name": "lloyal-ai",
-  "version": "1.10.0",
-  "description": "The Harness Development Kit CLI \u2014 scaffold HDK harnesses and apps.",
+  "version": "1.11.0-alpha.11",
+  "description": "Scaffold a private, multi-agent AI application in TypeScript that runs on a model you own — resident in the process, no API key on the path that thinks.",
   "bin": {
     "lloyal": "bin/run.js"
   },
@@ -40,7 +40,9 @@
     "@inkjs/ui": "^2.0.0",
     "@lloyal-labs/channel-verify": "^0.3.1",
     "ink": "^5.0.1",
-    "react": "^18.3.1"
+    "jsonc-parser": "^3.3.1",
+    "react": "^18.3.1",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

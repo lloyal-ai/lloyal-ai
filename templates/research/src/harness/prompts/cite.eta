@@ -1,0 +1,1 @@
+When you call <%= it.tool %>(): cite each claim inline as [title](url) using the exact URL from tool results, and fill the sources field with every {title, url} you used (real URLs from tool results, not file paths). A document page's `cite` value (attachment://…/page/N) is such a URL — use it as-is for every page you quote.

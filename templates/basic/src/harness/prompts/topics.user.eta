@@ -1,0 +1,10 @@
+Saved articles:
+
+<% it.articles.forEach(function (a) { %><%= a.n %>. <%= a.query %>
+
+
+<%= a.opening %>
+
+
+<% }) %>
+Choose the topics these fall under.

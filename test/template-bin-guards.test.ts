@@ -10,8 +10,9 @@
  * are not installed" for an unbuilt `dist/` or any un-installed dependency,
  * which points the user at a command that cannot help.
  *
- * Fixtures use the `basic` template's copies; `research`'s are byte-identical
- * apart from run.js's dist entry (`.mjs`), which no assertion here depends on.
+ * Fixtures use the `basic` template's copies. `research` carries its own
+ * bin/ (dist entry and serve shim differ); nothing asserted here depends on
+ * those differences — both templates' guards answer the same two questions.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';

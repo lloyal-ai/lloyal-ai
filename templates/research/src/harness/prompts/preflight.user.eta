@@ -1,0 +1,11 @@
+Source to probe: **<%= it.ability.name %>** — <%= it.ability.useWhen %>
+Search tool(s): <%= it.ability.tools.join(", ") %>
+<% if (it.ability.contents) { %>
+Contents:
+<%= it.ability.contents %>
+<% } else { %>
+Contents: (this source has no static contents advert — judge entirely from probe results)
+<% } %>
+The query: "<%= it.query %>"
+
+Probe this source for the query's key entities, then report what you found.

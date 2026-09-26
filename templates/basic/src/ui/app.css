@@ -1,0 +1,627 @@
+/* A Wikipedia-editorial skin — web + desktop share this. `basic` ships the
+   `lloyal/wikipedia` ability, so the harness reads like an encyclopedia article: a
+   Contents rail, serif headings over a sans body, blue links, and the fetched
+   articles floated as captioned figures. It's the floor — reskin it freely. */
+
+:root {
+  --text: #202122;
+  --muted: #54595d;
+  --faint: #72777d;
+  --link: #3366cc;
+  --link-visited: #795cb2;
+  --bg: #ffffff;
+  --panel: #f8f9fa;
+  --border: #a2a9b1;
+  /* What the platform's own screens draw with — the installer before the app opens — in this harness's look. */
+  --harness-accent: var(--link);
+  --harness-fg: var(--text);
+  --harness-bg: var(--bg);
+  --harness-ground: var(--panel);
+  --harness-muted: var(--muted);
+  --harness-faint: var(--faint);
+  --harness-rule: var(--border);
+  --harness-font: var(--sans);
+  --harness-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --border-soft: #c8ccd1;
+  --border-faint: #eaecf0;
+  --serif: "Linux Libertine", "Georgia", "Times New Roman", serif;
+  --sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.wiki {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── header: brand + search ─────────────────────────────────────────────── */
+.wiki-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-soft);
+}
+.wiki-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  flex: none;
+}
+.wiki-brand-name {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+}
+/* The name is the way back to the landing, as a wiki's logo is — a control that still reads as the name. */
+button.wiki-brand-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.wiki-brand-name:disabled {
+  cursor: default;
+}
+.wiki-brand-sub {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+/* The wire's word, when it is not `ready`. It sits between the masthead and the
+   composer because it explains why the composer may not answer — a banner at the
+   page foot would be read after the confusion, not before it. */
+.wiki-wire {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.wiki-wire button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* Where this harness came from — delete with the component. `margin-left: auto` so it sits with the search
+   box on the right; when the wire strip is showing, that claims the space first and these follow it. */
+.wiki-origin {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.wiki-origin a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--faint);
+  text-decoration: none;
+}
+.wiki-origin a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+/* The search box claims the right edge with its own `margin-left: auto`. With two auto margins the free space
+   splits and both drift to the middle, so while these links are here they claim it instead and the box follows
+   on the flex gap. A sibling selector, so deleting the component restores the box's own rule untouched. */
+.wiki-origin + .wiki-search {
+  margin-left: 0;
+}
+
+.wiki-search {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+  width: min(420px, 46vw);
+}
+.wiki-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 2px 0 0 2px;
+  outline: none;
+}
+.wiki-search input:focus {
+  border-color: var(--link);
+  box-shadow: inset 0 0 0 1px var(--link);
+}
+.wiki-search button {
+  flex: none;
+  padding: 6px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--link);
+  border: 1px solid var(--link);
+  border-radius: 0 2px 2px 0;
+  cursor: pointer;
+}
+.wiki-search button:hover {
+  background: #2a4b8d;
+}
+.wiki-search button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── columns: Contents rail + article ───────────────────────────────────── */
+.wiki-cols {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 26px;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 22px 24px 60px;
+}
+@media (max-width: 1000px) {
+  .wiki-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wiki-toc {
+    display: none;
+  }
+}
+
+.wiki-toc {
+  position: sticky;
+  top: 66px;
+  align-self: start;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+  font-size: 13.5px;
+}
+.wiki-toc-head {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.wiki-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--border-faint);
+}
+.wiki-toc li {
+  margin: 0;
+}
+.wiki-toc button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px 0 3px 12px;
+  margin-left: -1px;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--link);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  line-height: 1.35;
+}
+.wiki-toc button:hover {
+  text-decoration: underline;
+  border-left-color: var(--border);
+}
+.wiki-toc-l3 button {
+  padding-left: 26px;
+}
+
+/* ── article ────────────────────────────────────────────────────────────── */
+.wiki-article {
+  max-width: 780px;
+  min-width: 0;
+}
+.wiki-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.25;
+  margin: 0;
+}
+.wiki-rule {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px 0 14px;
+}
+.wiki-lead {
+  color: var(--muted);
+  margin: 0.6em 0;
+}
+.wiki-thinking {
+  margin-top: 10px;
+}
+.wiki-error {
+  color: #d33;
+  border: 1px solid #d33;
+  background: #fee7e6;
+  padding: 8px 12px;
+  border-radius: 2px;
+}
+
+/* fetched articles as a wrapping gallery grid of uniform thumbnail cards */
+.wiki-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 8px 0 22px;
+  clear: both;
+}
+.wiki-fig {
+  margin: 0;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+  min-width: 0;
+}
+.wiki-fig img {
+  display: block;
+  width: 100%;
+  height: 108px;
+  object-fit: cover;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+}
+.wiki-fig figcaption {
+  padding: 6px 3px 2px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wiki-fig figcaption a {
+  font-weight: 600;
+}
+
+/* ── markdown report typography (article + agent findings) ──────────────── */
+.md {
+  font-size: 15px;
+  line-height: 1.65;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md h1,
+.md h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+}
+.md h2 {
+  font-size: 1.5em;
+  margin: 1em 0 0.35em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+.md h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 0.9em 0 0.3em;
+}
+.md h4 {
+  font-size: 1em;
+  font-weight: 700;
+  margin: 0.8em 0 0.2em;
+}
+.md p {
+  margin: 0.55em 0;
+}
+.md a {
+  color: var(--link);
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md a:visited {
+  color: var(--link-visited);
+}
+.md ul,
+.md ol {
+  margin: 0.35em 0 0.6em 1.6em;
+  padding: 0;
+}
+.md li {
+  margin: 0.2em 0;
+}
+.md strong {
+  font-weight: 700;
+}
+.md blockquote {
+  border-left: 4px solid var(--border-soft);
+  margin: 0.7em 0;
+  padding: 0.1em 0 0.1em 14px;
+  color: var(--muted);
+}
+.md code {
+  background: var(--panel);
+  border: 1px solid var(--border-faint);
+  padding: 0.05em 0.35em;
+  border-radius: 2px;
+  font-size: 0.9em;
+}
+.md pre {
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 2px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.95em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border-soft);
+  padding: 5px 9px;
+  text-align: left;
+}
+.md th {
+  background: var(--panel);
+}
+
+/* ── agent log: collapsible agent entries (thinking + streaming report) ── */
+.wiki-agents {
+  clear: both;
+  margin-top: 26px;
+}
+.wiki-agents h2,
+.wiki-refs h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.5em;
+  margin: 1em 0 0.4em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+.wiki-agents-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.wiki-agents-entry {
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  border-radius: 2px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.wiki-agents-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+}
+.wiki-agents-title {
+  font-weight: 700;
+}
+.wiki-agents-status {
+  color: var(--faint);
+}
+.wiki-toggle {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--link);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wiki-toggle:hover {
+  text-decoration: underline;
+}
+.wiki-agents-preview {
+  padding: 0 12px 9px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiki-agents-body {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px 14px 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--border-soft);
+}
+.wiki-agents-think {
+  white-space: pre-wrap;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+.wiki-agents-report {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-soft);
+}
+.wiki-agents-report-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+
+/* ── sources list ───────────────────────────────────────────────────────── */
+.wiki-refs {
+  clear: both;
+}
+.wiki-refs ol {
+  margin: 0.3em 0 0 1.6em;
+  padding: 0;
+  font-size: 14px;
+}
+.wiki-refs li {
+  margin: 0.25em 0;
+}
+.wiki-refs a {
+  color: var(--link);
+  text-decoration: none;
+}
+.wiki-refs a:hover {
+  text-decoration: underline;
+}
+.wiki-refs-host {
+  color: var(--faint);
+}
+
+/* ── status dots + streaming caret ──────────────────────────────────────── */
+.wiki-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+/* Every phase an agent is WORKING in. `phase` has six values and the dot is class-named from it directly, so
+   one missing here is a live agent wearing the faint resting dot. `idle` keeps that dot on purpose: spawned,
+   not yet started. */
+.wiki-dot--active,
+.wiki-dot--thinking,
+.wiki-dot--content,
+.wiki-dot--tool {
+  background: var(--link);
+  animation: pulse 1.3s ease-in-out infinite;
+}
+.wiki-dot--done {
+  background: #14866d;
+}
+.wiki-dot--failed {
+  background: #d33;
+}
+.wiki-caret {
+  color: var(--link);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The shelf: what is already kept, on the landing. The reflow into topics when the model answers is a plain
+   CSS transition — it must never be the reason a frame waits, so the flat list paints first and this moves
+   it. Short and unstyled-feeling on purpose: springy or staggered would read as a toy and undercut the
+   speed it exists to show. */
+.wiki-shelf {
+  margin-top: 2em;
+  clear: both;
+}
+/* A section of the page like any other, so it carries the article's own h2: serif, ruled, full size. Muted and
+   small read as a footnote, which is the wrong claim for a shelf the model just organised. */
+.wiki-shelf h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 1.5em;
+  margin: 1em 0 0.35em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+/* The regroup has to be SEEN, or the model's work reads as a stutter. A `transition` cannot do it: the groups
+   are keyed by topic, so when the answer lands React replaces the nodes rather than moving them, and there is
+   no interpolated value. An animation on mount plays on exactly that replacement. */
+.wiki-shelf-group {
+  animation: shelf-settle 260ms ease-out both;
+}
+@keyframes shelf-settle {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.wiki-shelf-working {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 10px;
+  vertical-align: middle;
+  border: 1.5px solid var(--border-faint);
+  border-top-color: var(--faint);
+  border-radius: 50%;
+  animation: shelf-spin 700ms linear infinite;
+}
+@keyframes shelf-spin {
+  to { transform: rotate(360deg); }
+}
+.wiki-shelf-group h3 {
+  font-size: 14px;
+  margin: 0.9em 0 0.2em;
+}
+.wiki-shelf ul {
+  margin: 0.2em 0 0 1.6em;
+  padding: 0;
+  font-size: 14px;
+}
+.wiki-shelf li {
+  margin: 0.25em 0;
+}
+.wiki-shelf li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--link);
+  text-align: left;
+  cursor: pointer;
+}
+.wiki-shelf li button:hover {
+  text-decoration: underline;
+}
+.wiki-shelf-when {
+  color: var(--faint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wiki-shelf-group,
+  .wiki-shelf-working {
+    animation: none;
+  }
+}
