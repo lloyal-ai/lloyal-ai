@@ -212,6 +212,44 @@ voice, citations woven inline. Every number it obeys is in one file,
 `src/harness/budgets.ts`; the minutes the pickers quote are learned from
 what YOUR machine actually does.
 
+## Budgets
+
+Every limit the writing obeys is one table, `src/harness/budgets.ts`, and the depth picker is its
+first column. What a reader is not shown is the currency: a search is one turn, a page read is one
+turn, a page **viewed as an image** is one turn and a projection, and every line of inquiry has its
+own clock. Twenty-four pages with four figures, asked as a Quick **Ask**, is one agent with a minute
+and a half, so it views one figure and the clock ends it — the picker's "~8 min" was the brief's
+estimate, not that agent's ceiling. That question wants **Thorough**, or **Investigate** so each line
+inherits what the last one saw.
+
+| depth | lines of inquiry | turns each | time each (soft · hard) | retrieval stance |
+| --- | --- | --- | --- | --- |
+| Quick (`low`) | 2 | 10 | 1.5 min · 2.5 min | on-topic from the first turn |
+| Standard (`medium`) | 4 | 10 | 2.5 min · 4 min | explores until 40% of the room is used |
+| Thorough (`high`) | 6 | 10 | 4 min · 6 min | explores until 60% |
+| `ultra` | 10 | 10 | 10 min · 15 min | explores until 75%; sized for a million-token context |
+
+The fixed rows: a source probe gets four turns and two minutes; the settling pass has a turn cap and
+no clock, so it writes for as long as the answer needs; a direct **Ask** keeps whatever it found; and a
+report is accepted only after two tool calls, refused once before that. The soft limit is where an
+agent is told to wind up; the hard limit is where it is stopped and asked for what it has.
+
+**Where the numbers come from.** There is one context, and every agent in a run is a branch of it —
+a line of attention that leases cells from the same shared room ([continuous
+context](https://docs.lloyal.ai/continuous-context)). So the `context` limits in a row are not
+per-agent windows: they are reserves of free cells in that one room, absolute, held back so a reaped
+agent can still report and a sibling can still read. The stance column is the same room read as a
+fraction: an agent explores, scoring what it fetches against its own question, until that much of the
+room is in use, then exploits, scoring against the brief's question so only what governs the answer
+enters. When a line finishes or drifts, its whole branch is pruned and its cells return to the
+siblings mid-run; that is why six lines can run where a request-shaped system would run out
+([agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure)).
+Time and turns are the per-line knobs; the room is the shared one, and the pool watches it for every
+agent at once.
+
+**To change them**: `defaults.effort` in `harness.yml` picks the default row; the rows themselves are
+yours in `budgets.ts`, and the pickers learn their minutes from what your machine actually does.
+
 ## Memory: every brief is ground for the next
 
 Every settled brief is a folder under `reports/`, named by its id:
