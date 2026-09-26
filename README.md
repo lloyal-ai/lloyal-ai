@@ -1,14 +1,14 @@
 # lloyal-ai
 
-**What becomes possible when the model and the program live in the same process?**
+**The model runs inside your program. Your code decides what it thinks about next.**
 
-Most AI code is a client: it sends a request to a model somewhere and waits. Lloyal puts the model *inside* the
-application, so your code has control *through* inference, not only around it. It can fork the model's live
-attention into several agents at once, hand each different evidence, decide what the next stage inherits, and
-commit only what it accepts. Every one of those decisions is ordinary TypeScript, and it runs on hardware you
-own — a laptop today, your own GPU host when you serve it. No API key on the path that thinks.
+`lloyal-ai` generates a TypeScript application with a language model resident in the same process: a harness.
+Because the model is in-process, your code can fork its live attention into several agents at once, hand each
+different evidence, decide what the next stage inherits, and commit only what it accepts. Every one of those
+decisions is ordinary TypeScript, and it runs on hardware you own, a laptop today and your own GPU host when you
+serve it. No API key on the path that thinks.
 
-Think of a game engine. You program the behaviour; Lloyal handles the physics underneath.
+Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
 
 ![An app generated from the deep-research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
 
