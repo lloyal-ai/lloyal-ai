@@ -17,9 +17,12 @@ program underneath is yours to change.*
 
 ## An example: three commands to a living brief
 
-`new` starts you from a template. There are two: **wiki** (`--template basic`), a small Wikipedia app, and
-**deep-research** (`--template research`), a grounded multi-agent investigation. Everything in this section is
-deep-research, because it shows the most in the least time.
+`new` starts you from a template. There are two, and each generated project carries its own README with its
+recipes: **wiki** (`--template basic`, [its README](https://github.com/lloyal-ai/lloyal-ai/blob/main/templates/basic/README.md)),
+a small Wikipedia app, and **deep-research** (`--template research`,
+[its README](https://github.com/lloyal-ai/lloyal-ai/blob/main/templates/research/README.md)), a grounded
+multi-agent investigation. More are coming. Everything in this section is deep-research, because it shows the
+most in the least time.
 
 ```sh
 npx lloyal-ai@alpha new my-app --template research
