@@ -12,7 +12,7 @@ Docker, Ollama, LangGraph, Mastra or vector database required.
 Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
 
 ```sh
-npx lloyal-ai@alpha new my-app
+npx lloyal-ai new my-app
 ```
 
 ![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
@@ -31,7 +31,7 @@ multi-agent investigation. More are coming. Everything in this section is deep-r
 most in the least time.
 
 ```sh
-npx lloyal-ai@alpha new my-app --template research
+npx lloyal-ai new my-app --template research
 cd my-app
 npm run dev:desktop
 ```
@@ -357,16 +357,16 @@ fold of state, one binding each, no view holding truth.
 | A browser | `npm run dev:web` | a host you serve; browsers connect to it |
 | Your terminal | `npm start` | the process itself |
 
-`npx lloyal-ai@alpha new` with no name asks for the name, surfaces, model and template.
+`npx lloyal-ai new` with no name asks for the name, surfaces, model and template.
 
 ## Models
 
 The catalogue, your pins and what is on disk, from the project's root:
 
 ```sh
-npx lloyal-ai@alpha models:list                        # the catalogue, your pins, what is on disk
-npx lloyal-ai@alpha models:use <id> [--role reranker]  # a catalogue model, fetched and verified on the next launch
-npx lloyal-ai@alpha models:add <path.gguf> [--role reranker]  # a local weight you already have
+npx lloyal-ai models:list                        # the catalogue, your pins, what is on disk
+npx lloyal-ai models:use <id> [--role reranker]  # a catalogue model, fetched and verified on the next launch
+npx lloyal-ai models:add <path.gguf> [--role reranker]  # a local weight you already have
 ```
 
 The reasoning model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host;
@@ -374,7 +374,7 @@ the program does not change. The default set runs on a 16 GB laptop.
 
 On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
 every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
-and shared by every harness on the box. For a project you cloned, `npx lloyal-ai@alpha backends:install` does
+and shared by every harness on the box. For a project you cloned, `npx lloyal-ai backends:install` does
 the same and writes `model.llm.gpu: cuda` for it.
 
 ## Abilities
@@ -385,8 +385,8 @@ context. The harness provides what an ability declares by naming the model in `h
 when the project names none and offers to write the line. Deep-research ships with web, corpus and documents.
 
 ```sh
-npx lloyal-ai@alpha install <publisher>/<name>   # verified and vendored into the project
-npx lloyal-ai@alpha ability:new my-ability        # start one of your own
+npx lloyal-ai install <publisher>/<name>   # verified and vendored into the project
+npx lloyal-ai ability:new my-ability        # start one of your own
 ```
 
 Every install is Ed25519-verified against a reviewed catalogue: what you install is what was reviewed. Point the
@@ -395,8 +395,7 @@ corpus at `reports` in `harness.yml` and the app reads what it has written.
 ## Requirements
 
 Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
-offline once the weights are on disk. This is an alpha: `npx lloyal-ai@alpha` pins you to it. Outside an
-interactive terminal, run `npm install` in the project yourself.
+offline once the weights are on disk. Outside an interactive terminal, run `npm install` in the project yourself.
 
 ## Go deeper
 

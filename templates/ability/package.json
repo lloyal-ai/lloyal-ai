@@ -23,13 +23,13 @@
     "test": "echo \"no tests yet \u2014 add them under test/ and switch this to: node --test --import tsx test/\" && exit 0"
   },
   "peerDependencies": {
-    "@lloyal-labs/lloyal-agents": "^5.0.0",
-    "@lloyal-labs/rig": "^5.0.1",
+    "@lloyal-labs/lloyal-agents": "^6.0.0",
+    "@lloyal-labs/rig": "^5.6.0",
     "effection": "^4.0.2"
   },
   "devDependencies": {
-    "@lloyal-labs/lloyal-agents": "^5.0.0",
-    "@lloyal-labs/rig": "^5.0.1",
+    "@lloyal-labs/lloyal-agents": "^6.0.0",
+    "@lloyal-labs/rig": "^5.6.0",
     "@types/node": "^25.3.0",
     "effection": "^4.0.2",
     "tsx": "^4.21.0",

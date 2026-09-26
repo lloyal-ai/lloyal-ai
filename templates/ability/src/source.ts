@@ -1,4 +1,4 @@
-import { Source } from "@lloyal-labs/lloyal-agents";
+import { Source } from "@lloyal-labs/rig";
 import type { Tool } from "@lloyal-labs/lloyal-agents";
 import { __NAME_PASCAL__SearchTool } from "./tools/search";
 import { __NAME_PASCAL__FetchTool } from "./tools/fetch";

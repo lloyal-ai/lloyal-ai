@@ -22,7 +22,7 @@
 export const TARGETS = [
   {
     repo: 'lloyal-ai/hdk',
-    branch: 'feat/mtmd',
+    branch: 'main',
     manifests: [
       'packages/media/package.json',
       'packages/sdk/package.json',
@@ -33,7 +33,7 @@ export const TARGETS = [
   },
   {
     repo: 'lloyal-ai/lloyal-ai',
-    branch: 'feat/research-identity',
+    branch: 'main',
     manifests: ['package.json'],
   },
 ];

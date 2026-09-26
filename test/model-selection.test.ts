@@ -37,10 +37,10 @@ describe('modelSelection', () => {
     expect(modelSelection(dir, 'reranker')).toEqual({ present: true, spec: null });
   });
 
-  it('a version-1 overlay (before alpha.10) is refused by name, as rig refuses it; an unknown version is not read', () => {
+  it('a version-1 overlay (before 1.11) is refused by name, as rig refuses it; an unknown version is not read', () => {
     yml('model:\n  llm:\n    id: qwen3.5-4b\n');
     json({ version: 1, model: { rerankerId: 'r1', reranker: '/r1.gguf' } });
-    expect(() => modelSelection(dir, 'reranker')).toThrow('harness.json is version 1, written before alpha.10 — delete it and relaunch.');
+    expect(() => modelSelection(dir, 'reranker')).toThrow('harness.json is version 1, written before 1.11 — delete it and relaunch.');
     json({ version: 3, model: { reranker: { id: 'future' } } });
     expect(modelSelection(dir, 'reranker')).toEqual({ present: false, spec: null });
   });
