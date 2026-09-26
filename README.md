@@ -1,12 +1,13 @@
 # lloyal-ai
 
-**The model runs inside your program. Your code decides what it thinks about next.**
+**Self-contained, offline-first AI apps in TypeScript. Just your code and the model.**
 
-`lloyal-ai` generates a TypeScript application with a language model resident in the same process: a harness.
-Because the model is in-process, your code can fork its live attention into several agents at once, hand each
-different evidence, decide what the next stage inherits, and commit only what it accepts. Every one of those
-decisions is ordinary TypeScript, and it runs on hardware you own, a laptop today and your own GPU host when you
-serve it. No API key on the path that thinks.
+`lloyal-ai` generates an application that holds the model and the program in one process, with no HTTP boundary
+between them: a harness. Once the model is in-process, its KV cache is a programming surface. Your code can fork
+the model's live attention into several agents at once, hand each different evidence, decide what the next stage
+inherits, and commit only what it accepts. Every one of those decisions is ordinary TypeScript, and it runs on
+hardware you own, a laptop today and your own GPU host when you serve it. No API key on the path that thinks. No
+Docker, Ollama, LangGraph, Mastra or vector database required.
 
 Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
 
