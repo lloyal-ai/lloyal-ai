@@ -82,8 +82,10 @@ const DESCRIBE_SCRIPT = `(async () => {
     const agents = require('@lloyal-labs/lloyal-agents');
     let rig = {};
     try { rig = require('@lloyal-labs/rig'); } catch {}
-    const ConfigStoreCtx = rig.AbilityConfigStoreCtx || agents.AbilityConfigStoreCtx || agents.AppConfigStoreCtx;
-    if (!ConfigStoreCtx) throw new Error('neither @lloyal-labs/rig nor @lloyal-labs/lloyal-agents exports AbilityConfigStoreCtx');
+    // Every DISTINCT spelling is set, not the first found: an ability built against one runtime may sit beside
+    // a newer rig hoisted next to it, and it reads the context of the spelling IT imports.
+    const ConfigStoreCtxs = [...new Set([rig.AbilityConfigStoreCtx, agents.AbilityConfigStoreCtx, agents.AppConfigStoreCtx].filter(Boolean))];
+    if (ConfigStoreCtxs.length === 0) throw new Error('neither @lloyal-labs/rig nor @lloyal-labs/lloyal-agents exports AbilityConfigStoreCtx');
     const Services = rig.Services;
     const RerankerCtx = agents.RerankerCtx;
     const mod = require(entry);
@@ -125,7 +127,7 @@ const DESCRIBE_SCRIPT = `(async () => {
     const ability = await run(function* () {
       if (Services) yield* Services.set({ reranker, vision, embedding });
       if (RerankerCtx) yield* RerankerCtx.set(reranker);
-      yield* ConfigStoreCtx.set(cfgStore);
+      for (const Ctx of ConfigStoreCtxs) yield* Ctx.set(cfgStore);
       return yield* factory();
     });
     const tools = (ability.tools || []).map((t) => ({
