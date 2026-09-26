@@ -125,6 +125,11 @@ and the service is gone; an installed Ability that requires it is refused by nam
 still starts. Vision is the same one line (`vision: {}` takes the projector paired with your model). A new
 KIND of service is one row in the platform's table, not a new wiring — [services](https://docs.lloyal.ai/services).
 
+The question the judge answers is yours too, in the same block: `model.reranker.instruction` carries the
+sentence and a canary pair that refuses the boot if the sentence stops discriminating. The deep-research
+template's README walks one that is measured on this judge, the rule in force on a date against the one it
+superseded.
+
 ### A tool that lives in your harness
 
 A tool is a class with a name, a description, a JSON schema and an `execute`. An Ability ships tools, and so

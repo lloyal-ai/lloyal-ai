@@ -94,7 +94,7 @@ Stop works in the middle of anything, and why there is almost no teardown code t
 
 ## Recipes
 
-Five things you can program here that cannot be programmed against an API key. Each is the outcome first,
+Six things you can program here that cannot be programmed against an API key. Each is the outcome first,
 then the lines that make it; the full version of every one is under Recipes in the generated project's README.
 
 ### An LLM and a team of specialist models, coordinating in real time
@@ -165,6 +165,50 @@ A thousand letters get a thousand agents, and the list of pathways is read once 
 takes every letter in one batched call per pathway. Its score is an order within one question — the model's
 own yes/no log-odds under the instruction — not a calibrated probability: the platform uses it as top-K within a
 query, and a floor for it is a discrimination signal you measure for your instruction and your model.
+
+### Find the rule in force this year, not the one it replaced
+
+Similarity hands you both: a superseded rule answers the question it was superseded on, and the two are
+neighbours in any embedding. Here nothing enters the model's context by distance. A judge is asked a
+question in English about every candidate, and the question is yours, in one place:
+
+```yaml
+# harness.yml — one sentence, and every ability that reads pages or a corpus admits by it
+model:
+  reranker:
+    id: qwen3-reranker-0.6b-q8
+    instruction:
+      text: "Given a question about the rule in force on a date, judge whether the Document states the rule in force on that date."
+      smokeTest:
+        query: "What notice period applies to a rent increase in 2026?"
+        matching: "From 1 January 2026 a landlord must give 90 days' notice of a rent increase."
+        nonMatching: "Until 2020 a landlord was required to give 30 days' notice of a rent increase."
+        minGap: 2
+```
+
+Every `fetch_page` and every corpus search now returns the sections that answer *that* question, verbatim,
+the best few within the query, and the canary pair refuses the boot if the sentence stops discriminating.
+Measured on the shipped 0.6B judge: the rule in force on the date scores 7.2 against 2.1 for the one it
+superseded, a gap of five where the default retrieval question gives three. (A lens that turns on negation, a
+breach or a refutation, is beyond a 0.6B, which scored a complying clause as high as a breaching one; that is a
+bigger judge, one block to swap.)
+
+Then the focus narrows on its own. An agent reading a page scores its sections against what it just asked; as
+the room fills, the policy flips to exploit and a section must also answer the brief's question. The default
+flips at 40% of the room. Make the flip yours:
+
+```ts
+class Focused extends DefaultAgentPolicy {
+  shouldExplore(agent: Agent, pressure: ContextPressure) {
+    return agent.toolCallCount < 2;   // two reads on its own terms, then only what answers the brief
+  }
+}
+```
+
+Most of what looks like a new lens is a new reference string in the query, which costs nothing. A genuinely
+different question is one instruction for the whole reranker, since the sentence is prefilled into its warm
+trunk, and it takes effect at the next launch. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole
+account.
 
 ### Tighten the rules while the job is running
 

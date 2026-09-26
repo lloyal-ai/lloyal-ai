@@ -543,6 +543,51 @@ class Patient extends DefaultAgentPolicy {
 
 Every hook the pool calls, with its default, is [agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure).
 
+### Find the rule in force this year, not the one it replaced
+
+The reranker admits by answering a question, and the question is one line of `harness.yml`. Nothing enters
+the model's context by distance: a superseded rule is a neighbour of the current one in any embedding, and only
+a judge that is asked about the date tells them apart.
+
+```yaml
+# harness.yml — one sentence, and every ability that reads pages or a corpus admits by it
+model:
+  reranker:
+    id: qwen3-reranker-0.6b-q8
+    instruction:
+      text: "Given a question about the rule in force on a date, judge whether the Document states the rule in force on that date."
+      smokeTest:
+        query: "What notice period applies to a rent increase in 2026?"
+        matching: "From 1 January 2026 a landlord must give 90 days' notice of a rent increase."
+        nonMatching: "Until 2020 a landlord was required to give 30 days' notice of a rent increase."
+        minGap: 2
+```
+
+Every `fetch_page` and every corpus search now returns the sections that answer *that* question, verbatim, the
+best few within the query, and the canary pair refuses the boot if the sentence stops discriminating. Measured
+on the shipped 0.6B judge, 2026-09-26: the rule in force scores 7.2 against 2.1 for the one it superseded, a
+gap of five where the default retrieval question gives three. A lens that turns on negation, a breach or a
+refutation, is beyond a 0.6B, which scored a complying clause as high as a breaching one; that is a bigger
+judge, one `id` to swap. The key is boot-tier: it takes effect at the next launch, and `minGap` is a canary,
+not a calibration.
+
+The focus then narrows on its own. An agent reading a page scores its sections against what it just asked;
+as the room fills, the policy flips to exploit and a section must also answer the brief's question, which the
+dev pane's Sources tab shows as "re-ranked against the query". The default flips at 40% of the room; make the
+flip yours by handing the pool a policy:
+
+```ts
+class Focused extends DefaultAgentPolicy {
+  shouldExplore(agent: Agent, pressure: ContextPressure) {
+    return agent.toolCallCount < 2;   // two reads on its own terms, then only what answers the brief
+  }
+}
+```
+
+Most of what looks like a new lens is a new reference string in the query, which costs nothing. A genuinely
+different question is one instruction for the whole reranker, since the sentence is prefilled into its warm
+trunk. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole account.
+
 ### Classify with the resident model, and judge with the reranker
 
 A decision over a known list is a grammar, not a prompt: the agents answer a NUMBER, and cannot answer
