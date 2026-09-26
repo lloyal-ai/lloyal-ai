@@ -12,9 +12,7 @@ Docker, Ollama, LangGraph, Mastra or vector database required.
 Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
 
 ```sh
-npx lloyal-ai@alpha new my-app --template research
-cd my-app
-npm run dev:desktop
+npx lloyal-ai@alpha new my-app
 ```
 
 ![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
