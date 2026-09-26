@@ -61,6 +61,160 @@ Three edits change what this app is:
 
 Then the words themselves: `src/harness/prompts/` holds one `.eta` file per prompt, read from disk each time, so an edit reaches the next question with no restart and no rebuild.
 
+## Recipes
+
+Each one fits on a screen, and each one runs on the model you already have — no key, no hosted service,
+nothing on the network. They are the shape of the framework, shown rather than described.
+
+### Classify anything with the resident model
+
+`src/harness/classify.ts` is a decision model, not a text generator: it files every saved article under a
+topic by answering a NUMBER. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) sells exactly this shape as a hosted service — pick the best answer
+from a list you give it, no freeform text, calibrated, fast. Here it is thirty lines, and all of them are
+already in your scaffold:
+
+```ts
+const pick = defineOutput("topic", z.number().int().min(0).max(topics.length));
+const pool = yield* agentPool({
+  systemPrompt: render("topic.system", { topics }),   // the list, by number, on the spine
+  schema: pick.schema,          // the grammar: the answer IS a number in range
+  enableThinking: false,        // nothing reasons before it
+  acceptFreeText: true,
+  orchestrate: parallel(listings.map((article) => ({ systemPrompt: "", content: render("topic.user", { article }) }))),
+});
+return pool.outcomes.map((outcome) => pick.read(outcome));
+```
+
+The grammar means the model cannot emit anything but a number in range, so there is nothing to parse and no
+"the model said something else". The pool means every item's agent forks from ONE spine that holds the option
+list, so the list is paid for once however many items there are, and they decode together. To classify
+anything else, change three things: the options, the schema (`z.enum([...])` reads as well as a number), and
+what each agent is shown. A calibrated probability beside the pick is a second model's job, and it is one call
+away:
+
+### A second model as a service
+
+Name it in `harness.yml` and it is acquired, digest-verified and bound before your harness runs:
+
+```yaml
+model:
+  llm:
+    id: qwen3.5-4b
+  reranker:
+    id: qwen3-reranker-0.6b-q8
+```
+
+Then read it anywhere in your harness — no plumbing, nothing to declare:
+
+```ts
+import { service } from "@lloyal-labs/rig";
+import { call } from "effection";
+
+export function* howLikely(question: string, candidates: string[]) {
+  const reranker = yield* service("reranker");
+  const logOdds = yield* call(() => reranker.scoreBatch(question, candidates));
+  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // P(yes), per candidate
+}
+```
+
+`scoreBatch` answers the reranker's own yes/no log-odds per candidate, so the sigmoid is a probability you can
+threshold and compare across questions: the calibrated judge, resident, beside the generator. Remove the block
+and the service is gone; an installed Ability that requires it is refused by name at enable, and your harness
+still starts. Vision is the same one line (`vision: {}` takes the projector paired with your model). A new
+KIND of service is one row in the platform's table, not a new wiring — [services](https://docs.lloyal.ai/services).
+
+### A tool that lives in your harness
+
+A tool is a class with a name, a description, a JSON schema and an `execute`. An Ability ships tools, and so
+can `src/harness/`. This one answers a term of art, and carries a gate of its own:
+
+```ts
+import { Tool } from "@lloyal-labs/lloyal-agents";
+import type { JsonSchema, ToolGuard, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Operation } from "effection";
+
+/** Its own gate: the same term is not looked up twice by one agent. */
+const onePerTerm: ToolGuard = {
+  name: "glossary_once",
+  reject: ({ args, attended }) => attended().some((a) => a.term === args.term),
+  message: "You already looked that term up. Use what it said.",
+};
+
+export class GlossaryTool extends Tool<{ term: string }> {
+  readonly name = "glossary";
+  readonly description = "What this organisation means by a term of art.";
+  readonly parameters: JsonSchema = {
+    type: "object",
+    properties: { term: { type: "string", description: "The term, as written" } },
+    required: ["term"],
+  };
+  readonly hooks: ToolLifecycleHooks = { beforeDispatch: [onePerTerm] };
+  constructor(private readonly glossary: Record<string, string>) { super(); }
+  *execute(args: { term: string }): Operation<unknown> {
+    return this.glossary[args.term.toLowerCase()] ?? { error: `no entry for "${args.term}"` };
+  }
+}
+```
+
+Add it to the `tools` array in `src/harness/wiki.ts` and it is on the spine every angle forks from —
+advertised once, callable by every agent:
+
+```ts
+const tools = [...abilities.flatMap((a) => [...a.tools]), new GlossaryTool(GLOSSARY), citedReport.tool];
+```
+
+### Steer the agents with hooks
+
+Every tool call passes through one lifecycle — may it run (`beforeDispatch`), did it count as an
+attempt (`afterExecute`), does its result fit (`beforeAdmit`), it is in (`afterAdmit`), the turn is over
+(`onReturn`) — and a hook is a plain object with an opinion at any of those positions. The tool's own gates
+run first, then the harness's hooks in order, then the framework's defaults; the first concrete decision
+wins, and `undefined` abstains.
+
+`wiki.ts` already carries one:
+
+```ts
+const EVIDENCE_FIRST: ToolLifecycleHooks = {
+  onReturn: ({ agent }) =>
+    agent.toolCallCount < 1 ? { type: "reject", message: EVIDENCE_REJECTION } : undefined,
+};
+// … agentPool({ …, hooks: [EVIDENCE_FIRST] })
+```
+
+An angle that reports before it has read anything is refused once and told why; its second report stands.
+
+The pool's larger decisions — when an agent must stop, whether a tool result is scored against the original
+question or only the agent's own, what becomes of an agent reaped without a result — are an `AgentPolicy`.
+`agentPool` derives one from `budget`; hand it your own instead, overriding the one decision you care about:
+
+```ts
+import { DefaultAgentPolicy } from "@lloyal-labs/lloyal-agents";
+import type { Agent, ContextPressure } from "@lloyal-labs/lloyal-agents";
+
+class Patient extends DefaultAgentPolicy {
+  shouldExit(agent: Agent, pressure: ContextPressure): boolean {
+    return pressure.critical;   // only ever for room, never for time
+  }
+}
+// … agentPool({ …, policy: new Patient() })   — in place of `budget`
+```
+
+Every hook the pool calls, with its default, is [agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure).
+
+### A setting of your own, live
+
+Declare a key in `src/config.ts` and it exists everywhere a setting does: `harness.yml` can commit it, the
+dev pane (`LLOYAL_DEV=1`) lists and saves it, and `config:loaded` reports where its value came from:
+
+```ts
+"answer.words": { yml: "answer.words", integer: true, default: 400, describe: "How long a settled article may run." },
+```
+
+Read it where you use it, not at boot — `runner.config().answer.words`, handed down as a function the way
+`app.ts` hands `article.ts` its `root` — and a save applies at the next read, under a live run, with nothing
+restarted. That is the rule an Ability's settings follow too: a key saved mid-run reaches the next call of
+every agent already running.
+
 ## What it keeps, and what it does not
 
 A settled article is written to `sources.outputDir`: `article.md` first, then a small `article.json` record — and the record's existence is what makes the folder an article, so a crash midway leaves nothing half-kept. Past articles appear on the landing, grouped by topic: the list paints immediately and rearranges when the resident model answers, because nothing on screen waits for a model call. Open one and it is the page again — a question asked there deepens it, with the model's memory rebuilt from the record. The name at the top returns to the landing, where a question starts a new article.

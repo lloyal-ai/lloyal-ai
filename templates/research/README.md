@@ -44,10 +44,10 @@ npm install
 npm start
 ```
 
-Two models are fetched and **digest-verified** on first run — no key: the
+Three models are fetched and **digest-verified** on first run — no key: the
 reasoning LLM into `models/llm/`, the reranker the sources score
 retrievals with into `models/reranker/`, and a vision projector into
-`models/mmproj/` so the model can see. (Prefer your own weight? Drop a
+`models/vision/` so the model can see. (Prefer your own weight? Drop a
 `.gguf` in the role folder, or point a `path:` in `harness.yml` at one.)
 
 The same `harness(ctx, events, commands)` runs on every surface this
@@ -387,6 +387,161 @@ Ordered by ambition — each step is one file:
 9. **A source** — `npx lloyal-ai install <publisher>/<name>`, then add
    its factory to `abilities` in `src/app.ts`. Which ones ship, and what
    installing does, is under "The sources are installed".
+
+## Recipes
+
+Each one fits on a screen, and each one runs on the models you already have — no key, no hosted service,
+nothing on the network. They are the shape of the framework, shown rather than described.
+
+### Change a source's settings under a live brief
+
+Start a brief on the keyless web provider. While it runs, open the web chip's settings under the composer and
+save a Tavily key. The next search of every inquiry already running goes through Tavily; remove the key and
+the next one is keyless again. The brief is never interrupted and nothing restarts. Change the corpus path the
+same way: the running brief keeps the index it started with, the next brief opens the new one, and the old
+index is torn down when the last run holding it ends.
+
+Two rules make that true, and they are the framework's, not this app's: a value a tool reads is read AT THE
+CALL, from the ability's stored config, so a save reaches the tool objects agents already hold; a resource a
+setup builds — an index, a paced provider — is rebuilt by the save and follows it at the next take, while the
+runs holding the old one keep it. The settings never ask whether a run is live.
+
+The same holds outside Abilities. Declare a key of your own in `src/config.ts`:
+
+```ts
+"answer.words": { yml: "answer.words", integer: true, default: 400, describe: "How long a follow-up may run." },
+```
+
+It exists everywhere a setting does — `harness.yml` can commit it, the settings pane lists and saves it — and
+you read it where you use it, not at boot: `config().answer.words` (`brief.ts` takes `config` as a function
+for exactly this). A save applies at the next read. A key's `applies` says when: the default, at the next
+read; `reload`, at the next launch; `boot`, never while running.
+
+### A tool that lives in your harness
+
+A tool is a class with a name, a description, a JSON schema and an `execute`. An Ability ships tools, and so
+can `src/harness/`. This one answers a term of art, and carries a gate of its own:
+
+```ts
+import { Tool } from "@lloyal-labs/lloyal-agents";
+import type { JsonSchema, ToolGuard, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Operation } from "effection";
+
+/** Its own gate: the same term is not looked up twice by one agent. */
+const onePerTerm: ToolGuard = {
+  name: "glossary_once",
+  reject: ({ args, attended }) => attended().some((a) => a.term === args.term),
+  message: "You already looked that term up. Use what it said.",
+};
+
+export class GlossaryTool extends Tool<{ term: string }> {
+  readonly name = "glossary";
+  readonly description = "What this organisation means by a term of art.";
+  readonly parameters: JsonSchema = {
+    type: "object",
+    properties: { term: { type: "string", description: "The term, as written" } },
+    required: ["term"],
+  };
+  readonly hooks: ToolLifecycleHooks = { beforeDispatch: [onePerTerm] };
+  constructor(private readonly glossary: Record<string, string>) { super(); }
+  *execute(args: { term: string }): Operation<unknown> {
+    return this.glossary[args.term.toLowerCase()] ?? { error: `no entry for "${args.term}"` };
+  }
+}
+```
+
+Add it to the `tools` array in `src/harness/research.ts` and it is on the spine every inquiry forks from —
+advertised once, callable by every agent, whichever source the planner routed the task to:
+
+```ts
+const tools = [...sources.flatMap((x) => [...x.tools]), new GlossaryTool(GLOSSARY), s.output.tool];
+```
+
+### Steer the inquiries with hooks
+
+Every tool call passes through one lifecycle — may it run (`beforeDispatch`), did it count as an
+attempt (`afterExecute`), does its result fit (`beforeAdmit`), it is in (`afterAdmit`), the turn is over
+(`onReturn`) — and a hook is a plain object with an opinion at any of those positions. The tool's own gates
+run first, then the harness's hooks in order, then the framework's defaults; the first concrete decision
+wins, and `undefined` abstains.
+
+`research.ts` already carries one, and `harness.yml` already overrides a gate:
+
+```ts
+const EVIDENCE_FIRST: ToolLifecycleHooks = {
+  onReturn: ({ agent }) =>
+    agent.toolCallCount < BUDGETS.evidence ? { type: "reject", message: EVIDENCE_REJECTION } : undefined,
+};
+// … agentPool({ …, hooks: [EVIDENCE_FIRST] })
+```
+
+```yaml
+defaults:
+  guards:
+    url_dedup:
+      scope: cohort      # a page one inquiry read, no sibling reads again
+```
+
+An inquiry that reports before the evidence floor is refused once and told why; its second report stands. A
+gate an Ability declares — `url_dedup`, `query_dedup` — is overridden by name, never rewritten.
+
+The pool's larger decisions — when an agent must stop, whether a tool result is scored against the original
+question or only the agent's own, what becomes of an agent reaped without a result — are an `AgentPolicy`.
+`agentPool` derives one from `budget`; hand it your own instead, overriding the one decision you care about:
+
+```ts
+import { DefaultAgentPolicy } from "@lloyal-labs/lloyal-agents";
+import type { Agent, ContextPressure } from "@lloyal-labs/lloyal-agents";
+
+class Patient extends DefaultAgentPolicy {
+  shouldExit(agent: Agent, pressure: ContextPressure): boolean {
+    return pressure.critical;   // only ever for room, never for time
+  }
+}
+// … agentPool({ …, policy: new Patient() })   — in place of `budget`
+```
+
+Every hook the pool calls, with its default, is [agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure).
+
+### Classify with the resident model, and judge with the reranker
+
+A decision over a known list is a grammar, not a prompt: the agents answer a NUMBER, and cannot answer
+anything else. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) sells this shape as a hosted service; here it is a pool over one spine:
+
+```ts
+const pick = defineOutput("topic", z.number().int().min(0).max(topics.length));
+const pool = yield* agentPool({
+  systemPrompt: `Topics, by number:\n${topics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n0 = none of these.`,
+  schema: pick.schema,          // the grammar: the answer IS a number in range
+  enableThinking: false,        // nothing reasons before it
+  acceptFreeText: true,
+  orchestrate: parallel(items.map((item) => ({ systemPrompt: "", content: item }))),
+});
+return pool.outcomes.map((outcome) => pick.read(outcome));
+```
+
+The calibrated probability beside the pick is the reranker's, and this app already reads it that way — the
+sidebar's library search in `src/harness/library.ts` is `service("reranker")` and `scoreBatch`:
+
+```ts
+import { service } from "@lloyal-labs/rig";
+import { call } from "effection";
+
+export function* howLikely(question: string, candidates: string[]) {
+  const reranker = yield* service("reranker");
+  const logOdds = yield* call(() => reranker.scoreBatch(question, candidates));
+  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // P(yes), per candidate
+}
+```
+
+`scoreBatch` answers the reranker's own yes/no log-odds, so the sigmoid is a probability you can threshold
+and compare across questions. Naming a model in `harness.yml` is the whole of composing it; a new KIND of
+service is one row in the platform's table — [services](https://docs.lloyal.ai/services).
+
+### Add a stage
+
+A stage is a pair of prompt files and one `prompt("my-stage", { … })` where it runs; "Add one" under
+"The prompts are files" below walks it.
 
 ## The prompts are files
 
