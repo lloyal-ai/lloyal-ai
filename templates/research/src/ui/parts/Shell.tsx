@@ -2,7 +2,7 @@
  *  canvas, and the docked composer. Moments render inside the canvas. */
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { color, font, radius, thinking } from "../theme.js";
-import { useAvailability, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
+import { useAvailability, useContentOrigin, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
 import type { Command } from "../../protocol.js";
 import {
   etaOf, selectBanked, selectControls, selectEtaTasks, selectLive, selectMoment,
@@ -11,7 +11,7 @@ import {
 } from "../select.js";
 import { paceFor } from "../pace.js";
 import { Lightbox, useAssets } from "./Figures.js";
-import { contentOrigin, representationUrl } from "../content-urls.js";
+import { representationUrl } from "@lloyal-labs/media";
 import { APP } from "../presentation.js";
 import { DeleteMe } from "./DeleteMe.js";
 
@@ -99,7 +99,7 @@ export function TrustStrip({ detail }: { detail?: string }): ReactElement {
  *  rather than a second one. */
 function Seen(): ReactElement | null {
   const seen = useProjection(selectSeen);
-  const origin = contentOrigin();
+  const origin = useContentOrigin();
   const assets = useAssets(seen);
   const [open, setOpen] = useState<string | null>(null);
   if (seen.length === 0) return null;

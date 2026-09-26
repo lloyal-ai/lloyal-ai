@@ -11,8 +11,8 @@
  * boot — the vendored `file:` deps are the install truth. npm ignores the extra
  * top-level key.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readPackageJson, writeJson } from './package-json.js';
 import type { Target } from './prune-targets.js';
 
 export interface ProjectMarker {
@@ -78,9 +78,9 @@ interface PkgWithMarker {
 }
 
 function readPkg(projectDir: string): PkgWithMarker {
-  return JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')) as PkgWithMarker;
+  return readPackageJson(join(projectDir, 'package.json')) as PkgWithMarker;
 }
 
 function writePkg(projectDir: string, pkg: PkgWithMarker): void {
-  writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+  writeJson(join(projectDir, 'package.json'), pkg)();
 }

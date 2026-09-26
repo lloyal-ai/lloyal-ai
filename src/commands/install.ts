@@ -8,8 +8,11 @@ import {
   parseAbilitySpec,
   verifyAndVendorAbility,
   InvalidAppSpecError,
+  RequirementError,
   type VendoredApp,
 } from '../scaffold/vendor-ability.js';
+import { offerToWrite } from '../scaffold/offer-model.js';
+import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
   'lloyal install — install a signed HDK ability from apps.lloyal.ai into the current project',
@@ -98,7 +101,12 @@ export const installCommand: Command = {
     // tarball can never reach `npm install`.
     let vendored: VendoredApp;
     try {
-      vendored = await verifyAndVendorAbility(process.cwd(), spec, { disclose: true });
+      // A requirement the project does not meet is OFFERED a fix in a terminal — the one write to harness.yml an
+      // install may make, and only on a yes. A pipe has nobody to ask, and the requirement refuses the install.
+      vendored = await verifyAndVendorAbility(process.cwd(), spec, {
+        disclose: true,
+        ...(interactive(process.stderr) ? { settle: (missing) => offerToWrite(process.cwd(), missing) } : {}),
+      });
     } catch (err) {
       process.stderr.write(`lloyal install: ${asMessage(err)}\n`);
       return 1;
@@ -239,6 +247,6 @@ function runNpm(args: readonly string[]): Promise<number> {
 }
 
 function asMessage(err: unknown): string {
-  if (err instanceof BundleVerificationError) return err.message;
+  if (err instanceof BundleVerificationError || err instanceof RequirementError) return err.message;
   return err instanceof Error ? err.message : String(err);
 }

@@ -24,10 +24,11 @@ import type { Command, WorkflowEvent } from "./protocol.js";
 import { HarnessExit } from "./protocol.js";
 
 /**
- * The Abilities this harness enables. Before enabling, the boot provisions
- * whatever models each ability declares (wikipedia needs nothing; corpus/web
- * need a reranker) — so add an installed ability's factory here and the model it
- * needs is fetched for you. Install more with `lloyal install <ability>`.
+ * The Abilities this harness enables. An ability declares the services it
+ * requires (wikipedia none; corpus and web a reranker), and a service exists
+ * when `harness.yml` names its model — `model.reranker` — so an ability whose
+ * service the file does not name is refused at enable, by name. Install more
+ * with `lloyal install <ability>`; it offers to write the line when one is missing.
  */
 export const abilities = [createWikipediaAbility];
 
@@ -35,13 +36,13 @@ export const abilities = [createWikipediaAbility];
 export { config } from "./config.js";
 export type { Config, Origin } from "./config.js";
 
-/** What to CALL the model: whichever selection won. A configured `model.path` outranks the catalog id and
- *  the boot resolves both into `model.path`, so only PROVENANCE tells them apart. */
+/** What to CALL the model: whichever selection won. A configured `model.llm.path` outranks the catalog id and
+ *  the boot resolves both into `model.llm.path`, so only PROVENANCE tells them apart. */
 function modelLabel(
   model: { id?: string; path?: string },
   origin: Record<string, string>,
 ): string {
-  const chosen = origin["model.path"] !== undefined && origin["model.path"] !== "default";
+  const chosen = origin["model.llm.path"] !== undefined && origin["model.llm.path"] !== "default";
   if (chosen && model.path) return basename(model.path);
   return model.id ?? (model.path ? basename(model.path) : "model");
 }
@@ -92,7 +93,7 @@ export function* harness(
   });
 
   // Boot done. Every surface folds this one event, so the header is identical everywhere.
-  const model = runner.config().model as { id?: string; path?: string };
+  const model = runner.config().model.llm ?? {};
   yield* wire.send({
     type: "ready",
     facts: {

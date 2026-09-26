@@ -13,6 +13,43 @@ import { PROMPTS as DIR, prompt, render } from "../../src/harness/prompts.js";
 
 const systemFiles = fs.readdirSync(DIR).filter((f) => f.endsWith(".system.eta")).sort();
 
+/**
+ * Every prompt's input, as its caller gives it: the one table a newcomer reads to know what a file receives.
+ * Rendered under a watcher that throws, so a key a file reads that its input does not name fails HERE — before
+ * any model is loaded — for the rare paths too (a typo in `recovery` is otherwise met only when an agent is
+ * reaped). At run time the same miss is a line in the engine's log and an empty string, never a lost run.
+ */
+const INPUTS: Record<string, Record<string, unknown>> = {
+  "answer.system": {},
+  "clarify": { questions: ["one?", "two?"] },
+  "inquiry.system": { preamble: "the source's preamble", takesSources: true, writesTheAnswer: false, tool: "report" },
+  "plan": { query: "Q?", count: 3, date: "2026-01-01", routingKey: "ability", sources: [{ name: "web", useWhen: "for the web", toc: null }], coverage: null },
+  "plan-flat": { query: "Q?", count: 3, date: "2026-01-01", routingKey: "ability", sources: [], coverage: null },
+  "preflight": { query: "Q?", ability: { name: "web", useWhen: "for the web", tools: ["web_search"], contents: null } },
+  "preflight-recover": { budget: 120 },
+  "recovery": { budget: 120, tool: "report", writesTheAnswer: true },
+  "synthesize": { query: "Q?" },
+  "synthesize-flat": { query: "Q?", findings: [{ task: "the task", body: "what was found" }] },
+};
+const strict = ({ prompt, key }: { prompt: string; key: string }): never => { throw new Error(`${prompt}: input "${key}" is not given`); };
+
+test("every prompt renders from its declared input, and reads no key the input does not name", () => {
+  const files = fs.readdirSync(DIR).filter((f) => f.endsWith(".eta") && !["framed.eta", "cite.eta"].includes(f)).map((f) => f.replace(/\.eta$/, ""));
+  for (const file of files) {
+    const name = file.replace(/\.(system|user)$/, "");
+    const input = INPUTS[file] ?? INPUTS[name];
+    assert.ok(input, `${file} has no declared input in this table`);
+    assert.doesNotThrow(() => render(file, input, { onMissing: strict }), `${file} reads a key its input does not name`);
+  }
+});
+
+test("at run time a missing input is reported and rendered empty — never the word undefined, never a lost run", () => {
+  const misses: string[] = [];
+  const out = render("synthesize.user", {}, { onMissing: ({ prompt, key }) => misses.push(`${prompt}.${key}`) });
+  assert.equal(misses.join(","), "synthesize.user.eta.query");
+  assert.ok(!out.includes("undefined"));
+});
+
 test("every system prompt opens by handing itself to the one frame", () => {
   assert.ok(systemFiles.length >= 8, `expected the system files, found ${systemFiles.length}`);
   for (const f of systemFiles) {

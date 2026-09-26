@@ -35,7 +35,8 @@ export function hasHarnessYml(projectDir: string): boolean {
 export type YmlPath = readonly string[];
 
 /** What an entry may hold. A list is written in flow style — `[cli, web]` — as the templates ship it. */
-export type YmlValue = string | number | boolean | readonly string[];
+/** What a caller may set: a scalar, a flow list, or the empty mapping that requests a block (`vision: {}`). */
+export type YmlValue = string | number | boolean | readonly string[] | Record<string, never>;
 
 /** An open manifest: a document, edited in memory, rendered once on `save`. */
 export interface HarnessYml {
@@ -93,7 +94,8 @@ export function openHarnessYml(projectDir: string): HarnessYml {
         existing.items = value.map((item) => doc.createNode(item));
         existing.flow = true;
       } else {
-        doc.setIn(path, Array.isArray(value) ? doc.createNode(value, { flow: true }) : value);
+        // A list and an empty mapping are created as flow nodes, so they render as they were asked for.
+        doc.setIn(path, Array.isArray(value) || (typeof value === 'object' && value !== null) ? doc.createNode(value, { flow: true }) : value);
       }
       edited = true;
     },

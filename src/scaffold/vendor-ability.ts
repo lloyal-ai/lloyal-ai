@@ -19,8 +19,10 @@
  * re-verifiable offline (the manifest carries the signature + publisherKeyId,
  * which the catalog version entry does not).
  */
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 import {
   fetchAndVerifyCatalog,
   resolveAbilityVersion,
@@ -33,6 +35,9 @@ import {
 import { readTarEntry, isGzipReadable } from '../tar-read.js';
 import type { AttentionSurface } from '../describe.js';
 import { httpFetch } from '../http.js';
+import { derivesFromLlm, isService, modelsForRole } from './model-catalog.js';
+import type { Service } from './model-catalog.js';
+import { modelSelection } from './model-selection.js';
 
 /**
  * Spec grammar: `<publisher>/<name>[@<semver>]` (post-W) or back-compat
@@ -96,6 +101,27 @@ export interface VendoredApp {
   integrity: string;
 }
 
+/** A service an ability requires that the project selects no model for — with the line that would: the
+ *  catalog's id under `model.<service>.id`, or, for a service whose provider derives the model from the llm,
+ *  the empty block `model.<service>: {}`. */
+export interface MissingService {
+  ability: string;
+  service: Service;
+  /** `model.<service>.id`, or `model.<service>` when the remedy is the block itself. */
+  key: string;
+  suggestion?: string;
+  /** The remedy is the empty block: the provider pairs the model from the llm. */
+  block?: true;
+}
+
+/** An ability's requirement this project cannot meet, or a name no runtime provides. Nothing was vendored. */
+export class RequirementError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RequirementError';
+  }
+}
+
 export interface VendorOptions {
   /**
    * Print the ability's attention-surface disclosure (what it injects into the
@@ -103,6 +129,82 @@ export interface VendorOptions {
    * command; the scaffolder passes `false` to keep `new` output terse.
    */
   disclose?: boolean;
+  /**
+   * How a requirement the project does not meet is settled — the one place the CLI may write `harness.yml`
+   * for an install: asked, never unasked. Answers true once the block is written, false to leave the file as
+   * it is. Absent — a pipe, `new -y` — there is nobody to ask, and the requirement refuses the install.
+   */
+  settle?: (missing: MissingService) => Promise<boolean>;
+}
+
+/** What the ability requires, read off its own `ability.json` in the verified bytes. A requirement the gate
+ *  cannot read — a package it cannot open, one that carries no manifest, a manifest that does not parse — is a
+ *  refusal, never "requires nothing": an ability that would install cleanly and never enable is the failure
+ *  the gate exists to stop. */
+export async function requiredServicesOf(tarball: Uint8Array, ability: string): Promise<readonly string[]> {
+  const raw = await readTarEntry(tarball, 'package/ability.json');
+  if (raw === null) {
+    throw new RequirementError(
+      isGzipReadable(tarball)
+        ? `${ability}'s package carries no ability.json, so what it requires is unknown. Nothing was installed.`
+        : `${ability}'s package could not be opened (not a gzip stream, or larger than the inspect cap), so what it requires is unknown. Nothing was installed.`,
+    );
+  }
+  let manifest: { services?: unknown };
+  try {
+    manifest = JSON.parse(raw) as { services?: unknown };
+  } catch {
+    throw new RequirementError(`${ability}'s ability.json does not parse, so what it requires is unknown. Nothing was installed.`);
+  }
+  // Omitted is "requires nothing". Present, it must be a list of names — anything else is a declaration the
+  // gate cannot read, and a requirement it cannot read is never "none".
+  const { services } = manifest;
+  if (services === undefined) return [];
+  if (!Array.isArray(services) || !services.every((s): s is string => typeof s === 'string')) {
+    throw new RequirementError(`${ability}'s ability.json declares \`services\` as ${JSON.stringify(services)}; it must be a list of service names. Nothing was installed.`);
+  }
+  return services;
+}
+
+/**
+ * Can this project select every service this ability requires? Asked of the RESOLVED configuration — the
+ * local overlay over the manifest — since that is what the boot acts on. Every name is checked against the
+ * platform before any is offered, so a list with one unknown name is refused outright with nothing written.
+ * A block that selects a model, or that the platform derives from the llm (a reasoning model being selected), is a
+ * request the boot will settle;
+ * a block that is absent, or present and naming nothing where nothing derives, is offered to `settle` with the
+ * key it lacks, and refused when nobody can answer.
+ */
+export async function assertRequirements(projectDir: string, ability: string, required: readonly string[], settle?: VendorOptions['settle']): Promise<void> {
+  const names: Service[] = [];
+  for (const name of required) {
+    if (!isService(name)) {
+      throw new RequirementError(`${ability} requires ${JSON.stringify(name)}, which is not a service this platform provides. Nothing was installed.`);
+    }
+    names.push(name);
+  }
+  for (const name of names) {
+    const selection = modelSelection(projectDir, name);
+    const derives = derivesFromLlm(name);
+    // A block the platform would pair with the reasoning model — present and naming no model, or offered —
+    // pairs with nothing when the project selects none. One that names its own model needs no pairing.
+    if (derives && selection.spec === null && modelSelection(projectDir, 'llm').spec === null) {
+      throw new RequirementError(`${ability} requires \`${name}\`, which is paired with the reasoning model, and this project selects none — add \`model.llm.id\` to harness.yml, then \`lloyal install ${ability}\`. Nothing was installed.`);
+    }
+    if (selection.present && (selection.spec !== null || derives)) continue;
+    const suggestion = derives ? undefined : modelsForRole(name)[0]?.id;
+    const missing: MissingService = derives
+      ? { ability, service: name, key: `model.${name}`, block: true }
+      : { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
+    if (settle && (await settle(missing))) continue;
+    const how = derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '';
+    throw new RequirementError(
+      (selection.present
+        ? `${ability} requires \`${name}\`, and this project's \`model.${name}\` names no model — add \`${missing.key}\` to harness.yml`
+        : `${ability} requires \`${name}\`, and this project names none — add \`model.${name}\` to harness.yml`) +
+        how + `, then \`lloyal install ${ability}\`. Nothing was installed.`,
+    );
+  }
 }
 
 /**
@@ -171,6 +273,14 @@ export async function verifyAndVendorAbility(
     }
   }
 
+  // 5c. Every write prepared before any mutation: the project must be one (a `package.json` the `file:` dep can
+  // land in) and must provide what the ability requires — an ability whose service the configuration never
+  // selects would install cleanly and never enable. The offer to write `harness.yml` comes after the
+  // `package.json` check, so a project that is not a project is refused with nothing touched.
+  const pkgPath = join(projectDir, 'package.json');
+  const pkg = projectPackageJson(pkgPath, projectDir);
+  await assertRequirements(projectDir, spec.name, await requiredServicesOf(tarball, spec.name), opts.settle);
+
   // 6. Write the verified tarball + its signed manifest sidecar into vendor/.
   // The sidecar keeps the bytes re-verifiable offline (signature + keyId live in
   // the manifest, not in the catalog version entry).
@@ -186,8 +296,9 @@ export async function verifyAndVendorAbility(
 
   // 7. Point package.json at the local tarball (npm 12 installs `file:` deps
   // without --allow-remote; `npm ci` reproduces it offline from the committed
-  // tarball).
-  await setFileDependency(projectDir, entry.importName, vendorRelPath);
+  // tarball) — through the one owner of the file.
+  pkg.dependencies = { ...(pkg.dependencies ?? {}), [entry.importName]: `file:${vendorRelPath}` };
+  writeJson(pkgPath, pkg)();
 
   return {
     name: spec.name,
@@ -198,31 +309,17 @@ export async function verifyAndVendorAbility(
   };
 }
 
-/**
- * Set `dependencies[importName] = "file:<relPath>"` in `<projectDir>/package.json`,
- * preserving the rest of the file (parse → merge → 2-space re-stringify). Throws
- * if there is no `package.json` — vendoring only makes sense inside a project.
- */
-async function setFileDependency(
-  projectDir: string,
-  importName: string,
-  vendorRelPath: string,
-): Promise<void> {
-  const pkgPath = join(projectDir, 'package.json');
-  let raw: string;
+/** The project's `package.json`, read and shape-checked before anything is written — vendoring only makes sense
+ *  inside a project, and a missing file says so by name. */
+function projectPackageJson(pkgPath: string, projectDir: string): PackageJson {
   try {
-    raw = await readFile(pkgPath, 'utf-8');
+    return readPackageJson(pkgPath);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(
-        `no package.json in ${projectDir} — run this inside a harness project.`,
-      );
+      throw new Error(`no package.json in ${projectDir} — run this inside a harness project.`);
     }
     throw err;
   }
-  const pkg = JSON.parse(raw) as { dependencies?: Record<string, string> };
-  pkg.dependencies = { ...(pkg.dependencies ?? {}), [importName]: `file:${vendorRelPath}` };
-  await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 /**

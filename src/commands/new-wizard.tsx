@@ -442,8 +442,8 @@ export function Wizard({
             <Field label="Template" hint="the starting point — you own the code either way" />
             <Select
               options={[
-                { label: 'basic — Wikipedia research harness', value: 'basic' },
-                { label: 'research — tuned recon → plan → agents → synth', value: 'research' },
+                { label: 'wiki — Wikipedia research harness', value: 'basic' },
+                { label: 'deep-research — tuned recon → plan → agents → synth', value: 'research' },
               ]}
               onChange={submitTemplate}
             />

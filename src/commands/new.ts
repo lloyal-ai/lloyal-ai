@@ -15,7 +15,9 @@ import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/pos
 import { createInterface } from 'node:readline/promises';
 import { describeSnapshot, detectNvidiaGpu, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
 import type { BackendOutcome } from '../scaffold/backend-pack.js';
-import { verifyAndVendorAbility, parseAbilitySpec } from '../scaffold/vendor-ability.js';
+import { verifyAndVendorAbility, parseAbilitySpec, RequirementError } from '../scaffold/vendor-ability.js';
+import { offerToWrite } from '../scaffold/offer-model.js';
+import { interactive } from '../scaffold/terminal.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
 
 const USAGE = [
@@ -82,8 +84,8 @@ const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
  * `--skip-abilities` escape hatch, never on `--skip-install` or on being a TTY.
  */
 export const DEFAULT_ABILITIES: Record<TemplateKind, string[]> = {
-  basic: ['lloyal/wikipedia@2.0.4'],
-  research: ['lloyal/corpus@2.0.3', 'lloyal/web@2.0.3', 'lloyal/documents@0.1.1'],
+  basic: ['lloyal/wikipedia@2.1.0'],
+  research: ['lloyal/corpus@2.1.0', 'lloyal/web@2.1.0', 'lloyal/documents@0.2.0'],
 };
 
 interface ScaffoldPlan {
@@ -144,8 +146,7 @@ export const newCommand: Command = {
     // path below — Ink needs BOTH stdin and stdout to be a TTY, else its
     // keyboard/render UX is broken (piped output would get ANSI garbage). Any
     // flags already given pre-seed the picker so it asks only for the rest.
-    const interactive =
-      !name && !values.yes && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+    const picker = !name && !values.yes && interactive();
     // The box answers the backend question: an NVIDIA GPU on linux-x64 means the GPU, unless told CPU.
     // --backend-pack download|skip settles it for a script; -y takes the default, which is the GPU.
     const backendPack = values['backend-pack'];
@@ -160,7 +161,7 @@ export const newCommand: Command = {
     }
     const backend: 'gpu' | 'cpu' | undefined = backendPack === 'skip' ? 'cpu' : backendPack === 'download' ? 'gpu' : undefined;
     let plan: ScaffoldPlan;
-    if (interactive) {
+    if (picker) {
       const result = await runNewWizard({ ...flags, nvidiaGpu, backend });
       if (!result) {
         process.stderr.write('cancelled.\n');
@@ -192,7 +193,10 @@ export const newCommand: Command = {
     // never be an implicit consequence of a pipe, of CI, or of --skip-install.
     // Only the explicit --skip-abilities opts out.
     const vendorAbilities = !values['skip-abilities'];
-    return performScaffold(plan, parentDir, { install, vendorAbilities });
+    // A default ability's requirement the scaffolded manifest does not meet is offered a fix in a terminal;
+    // `-y` or a pipe has nobody to ask, and the ability is reported pending with the key to add.
+    const offer = !values.yes && interactive(process.stderr);
+    return performScaffold(plan, parentDir, { install, vendorAbilities, offer });
   },
 };
 
@@ -261,7 +265,7 @@ function parseTargets(csv: string | undefined): { targets: Target[] } | { error:
 async function performScaffold(
   plan: ScaffoldPlan,
   parentDir: string,
-  opts: { install: boolean; vendorAbilities: boolean },
+  opts: { install: boolean; vendorAbilities: boolean; offer: boolean },
 ): Promise<number> {
   const dest = join(parentDir, plan.name);
 
@@ -331,11 +335,19 @@ async function performScaffold(
   if (opts.vendorAbilities) {
     for (const rawSpec of defaultAbilities) {
       try {
-        const v = await verifyAndVendorAbility(dest, parseAbilitySpec(rawSpec), { disclose: false });
+        const v = await verifyAndVendorAbility(dest, parseAbilitySpec(rawSpec), {
+          disclose: false,
+          ...(opts.offer ? { settle: (missing) => offerToWrite(dest, missing) } : {}),
+        });
         process.stdout.write(`  vendored ${v.name}@${v.version} → ${v.vendorRelPath}\n`);
       } catch (err) {
+        // A requirement the scaffold does not meet was verified and refused, not lost on the way: the message
+        // already names the key and the `lloyal install` that vendors it once the key is there.
+        const message = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `lloyal: could not fetch default ability ${rawSpec}: ${err instanceof Error ? err.message : String(err)}\n`,
+          err instanceof RequirementError
+            ? `lloyal: ${rawSpec} was not vendored: ${message}\n`
+            : `lloyal: could not fetch default ability ${rawSpec}: ${message}\n`,
         );
         pendingAbilities.push(rawSpec);
       }

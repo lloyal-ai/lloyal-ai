@@ -15,16 +15,14 @@ import {
   parallel,
   withSpine,
   DefaultAgentPolicy,
-  AbilityRegistryCtx,
 } from "@lloyal-labs/lloyal-agents";
 import type {
-  Ability,
-  AgentRenderCtx,
   Budget,
   NudgeInput,
   ToolLifecycleHooks,
 } from "@lloyal-labs/lloyal-agents";
-import { citedReport, renderSpine, renderAgentPreamble, taskKey } from "@lloyal-labs/rig";
+import { citedReport, renderSpine, renderAgentPreamble, taskKey, AbilityRegistryCtx } from "@lloyal-labs/rig";
+import type { Ability, AgentRenderCtx } from "@lloyal-labs/rig";
 import { prompt } from "./prompts.js";
 
 const MAX_TURNS = 8;

@@ -6,12 +6,13 @@
  * lives in {@link harness-yml}; this file only knows what a model entry means.
  */
 import { openHarnessYml, harnessYmlPath } from './harness-yml.js';
+import type { ModelRole } from './model-catalog.js';
 
 /** A model entry is `id` XOR `path` — a catalog id or a BYO `.gguf` path. */
 export type ModelSpec = { id: string } | { path: string };
 
-/** The roles a harness provisions: the trunk llm + an ability-declared reranker. */
-export type Role = 'llm' | 'reranker';
+/** The roles a harness provisions: the trunk llm, and every service. */
+export type Role = ModelRole;
 
 export interface ModelChoice {
   /**
@@ -76,6 +77,20 @@ export function writeModelField(
   if (role === 'llm' && opts.context != null) {
     yml.set(['model', 'llm', 'context'], opts.context);
   }
+  yml.save();
+}
+
+/**
+ * Request a service without selecting a model: the empty block, `model.<role>: {}`, which a provider that pairs
+ * from the llm takes as the request it is. A block already there, whatever it holds, is left alone.
+ */
+export function writeModelBlock(projectDir: string, role: Role): void {
+  const yml = openHarnessYml(projectDir);
+  if (!yml.has(['model'])) {
+    throw new Error(`writeModelBlock: no \`model:\` block in ${harnessYmlPath(projectDir)}`);
+  }
+  if (yml.has(['model', role])) return;
+  yml.set(['model', role], {});
   yml.save();
 }
 

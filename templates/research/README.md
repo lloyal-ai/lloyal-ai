@@ -44,10 +44,10 @@ npm install
 npm start
 ```
 
-Two models are fetched and **digest-verified** on first run — no key: the
+Three models are fetched and **digest-verified** on first run — no key: the
 reasoning LLM into `models/llm/`, the reranker the sources score
 retrievals with into `models/reranker/`, and a vision projector into
-`models/mmproj/` so the model can see. (Prefer your own weight? Drop a
+`models/vision/` so the model can see. (Prefer your own weight? Drop a
 `.gguf` in the role folder, or point a `path:` in `harness.yml` at one.)
 
 The same `harness(ctx, events, commands)` runs on every surface this
@@ -211,6 +211,44 @@ scored by the reranker before it enters context → **synthesis** into one
 voice, citations woven inline. Every number it obeys is in one file,
 `src/harness/budgets.ts`; the minutes the pickers quote are learned from
 what YOUR machine actually does.
+
+## Budgets
+
+Every limit the writing obeys is one table, `src/harness/budgets.ts`, and the depth picker is its
+first column. What a reader is not shown is the currency: a search is one turn, a page read is one
+turn, a page **viewed as an image** is one turn and a projection, and every line of inquiry has its
+own clock. Twenty-four pages with four figures, asked as a Quick **Ask**, is one agent with a minute
+and a half, so it views one figure and the clock ends it — the picker's "~8 min" was the brief's
+estimate, not that agent's ceiling. That question wants **Thorough**, or **Investigate** so each line
+inherits what the last one saw.
+
+| depth | lines of inquiry | turns each | time each (soft · hard) | retrieval stance |
+| --- | --- | --- | --- | --- |
+| Quick (`low`) | 2 | 10 | 1.5 min · 2.5 min | on-topic from the first turn |
+| Standard (`medium`) | 4 | 10 | 2.5 min · 4 min | explores until 40% of the room is used |
+| Thorough (`high`) | 6 | 10 | 4 min · 6 min | explores until 60% |
+| `ultra` | 10 | 10 | 10 min · 15 min | explores until 75%; sized for a million-token context |
+
+The fixed rows: a source probe gets four turns and two minutes; the settling pass has a turn cap and
+no clock, so it writes for as long as the answer needs; a direct **Ask** keeps whatever it found; and a
+report is accepted only after two tool calls, refused once before that. The soft limit is where an
+agent is told to wind up; the hard limit is where it is stopped and asked for what it has.
+
+**Where the numbers come from.** There is one context, and every agent in a run is a branch of it —
+a line of attention that leases cells from the same shared room ([continuous
+context](https://docs.lloyal.ai/continuous-context)). So the `context` limits in a row are not
+per-agent windows: they are reserves of free cells in that one room, absolute, held back so a reaped
+agent can still report and a sibling can still read. The stance column is the same room read as a
+fraction: an agent explores, scoring what it fetches against its own question, until that much of the
+room is in use, then exploits, scoring against the brief's question so only what governs the answer
+enters. When a line finishes or drifts, its whole branch is pruned and its cells return to the
+siblings mid-run; that is why six lines can run where a request-shaped system would run out
+([agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure)).
+Time and turns are the per-line knobs; the room is the shared one, and the pool watches it for every
+agent at once.
+
+**To change them**: `defaults.effort` in `harness.yml` picks the default row; the rows themselves are
+yours in `budgets.ts`, and the pickers learn their minutes from what your machine actually does.
 
 ## Memory: every brief is ground for the next
 
@@ -387,6 +425,210 @@ Ordered by ambition — each step is one file:
 9. **A source** — `npx lloyal-ai install <publisher>/<name>`, then add
    its factory to `abilities` in `src/app.ts`. Which ones ship, and what
    installing does, is under "The sources are installed".
+
+## Recipes
+
+Each one fits on a screen, and each one runs on the models you already have — no key, no hosted service,
+nothing on the network. They are the shape of the framework, shown rather than described.
+
+### Change a source's settings under a live brief
+
+Start a brief on the keyless web provider. While it runs, open the web chip's settings under the composer and
+save a Tavily key. The next search of every inquiry already running goes through Tavily; remove the key and
+the next one is keyless again. The brief is never interrupted and nothing restarts. Change the corpus path the
+same way: the running brief keeps the index it started with, the next brief opens the new one, and the old
+index is torn down when the last run holding it ends.
+
+Two rules make that true, and they are the framework's, not this app's: a value a tool reads is read AT THE
+CALL, from the ability's stored config, so a save reaches the tool objects agents already hold; a resource a
+setup builds — an index, a paced provider — is rebuilt by the save and follows it at the next take, while the
+runs holding the old one keep it. The settings never ask whether a run is live.
+
+The same holds outside Abilities. Declare a key of your own in `src/config.ts`:
+
+```ts
+"answer.words": { yml: "answer.words", integer: true, default: 400, describe: "How long a follow-up may run." },
+```
+
+It exists everywhere a setting does — `harness.yml` can commit it, the settings pane lists and saves it — and
+you read it where you use it, not at boot: `config().answer.words` (`brief.ts` takes `config` as a function
+for exactly this). A save applies at the next read. A key's `applies` says when: the default, at the next
+read; `reload`, at the next launch; `boot`, never while running.
+
+### A tool that lives in your harness
+
+A tool is a class with a name, a description, a JSON schema and an `execute`. An Ability ships tools, and so
+can `src/harness/`. This one answers a term of art, and carries a gate of its own:
+
+```ts
+import { Tool } from "@lloyal-labs/lloyal-agents";
+import type { JsonSchema, ToolGuard, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Operation } from "effection";
+
+/** Its own gate: the same term is not looked up twice by one agent. */
+const onePerTerm: ToolGuard = {
+  name: "glossary_once",
+  reject: ({ args, attended }) => attended().some((a) => a.term === args.term),
+  message: "You already looked that term up. Use what it said.",
+};
+
+export class GlossaryTool extends Tool<{ term: string }> {
+  readonly name = "glossary";
+  readonly description = "What this organisation means by a term of art.";
+  readonly parameters: JsonSchema = {
+    type: "object",
+    properties: { term: { type: "string", description: "The term, as written" } },
+    required: ["term"],
+  };
+  readonly hooks: ToolLifecycleHooks = { beforeDispatch: [onePerTerm] };
+  constructor(private readonly glossary: Record<string, string>) { super(); }
+  *execute(args: { term: string }): Operation<unknown> {
+    return this.glossary[args.term.toLowerCase()] ?? { error: `no entry for "${args.term}"` };
+  }
+}
+```
+
+Add it to the `tools` array in `src/harness/research.ts` and it is on the spine every inquiry forks from —
+advertised once, callable by every agent, whichever source the planner routed the task to:
+
+```ts
+const tools = [...sources.flatMap((x) => [...x.tools]), new GlossaryTool(GLOSSARY), s.output.tool];
+```
+
+### Steer the inquiries with hooks
+
+Every tool call passes through one lifecycle — may it run (`beforeDispatch`), did it count as an
+attempt (`afterExecute`), does its result fit (`beforeAdmit`), it is in (`afterAdmit`), the turn is over
+(`onReturn`) — and a hook is a plain object with an opinion at any of those positions. The tool's own gates
+run first, then the harness's hooks in order, then the framework's defaults; the first concrete decision
+wins, and `undefined` abstains.
+
+`research.ts` already carries one, and `harness.yml` already overrides a gate:
+
+```ts
+const EVIDENCE_FIRST: ToolLifecycleHooks = {
+  onReturn: ({ agent }) =>
+    agent.toolCallCount < BUDGETS.evidence ? { type: "reject", message: EVIDENCE_REJECTION } : undefined,
+};
+// … agentPool({ …, hooks: [EVIDENCE_FIRST] })
+```
+
+```yaml
+defaults:
+  guards:
+    url_dedup:
+      scope: cohort      # a page one inquiry read, no sibling reads again
+```
+
+An inquiry that reports before the evidence floor is refused once and told why; its second report stands. A
+gate an Ability declares — `url_dedup`, `query_dedup` — is overridden by name, never rewritten.
+
+The pool's larger decisions — when an agent must stop, whether a tool result is scored against the original
+question or only the agent's own, what becomes of an agent reaped without a result — are an `AgentPolicy`.
+`agentPool` derives one from `budget`; hand it your own instead, overriding the one decision you care about:
+
+```ts
+import { DefaultAgentPolicy } from "@lloyal-labs/lloyal-agents";
+import type { Agent, ContextPressure } from "@lloyal-labs/lloyal-agents";
+
+class Patient extends DefaultAgentPolicy {
+  shouldExit(agent: Agent, pressure: ContextPressure): boolean {
+    // Only ever for room, never for time — and under pressure still the default's one agent a tick, so a
+    // cohort is never reaped together.
+    return pressure.critical && super.shouldExit(agent, pressure);
+  }
+}
+// … agentPool({ …, policy: new Patient() })   — in place of `budget`
+```
+
+Every hook the pool calls, with its default, is [agent policy and context pressure](https://docs.lloyal.ai/agent-policy-and-context-pressure).
+
+### Find the rule in force this year, not the one it replaced
+
+The reranker admits by answering a question, and the question is one line of `harness.yml`. Nothing enters
+the model's context by distance: a superseded rule is a neighbour of the current one in any embedding, and only
+a judge that is asked about the date tells them apart.
+
+```yaml
+# harness.yml — one sentence, and every ability that reads pages or a corpus admits by it
+model:
+  reranker:
+    id: qwen3-reranker-0.6b-q8
+    instruction:
+      text: "Given a question about the rule in force on a date, judge whether the Document states the rule in force on that date."
+      smokeTest:
+        query: "What notice period applies to a rent increase in 2026?"
+        matching: "From 1 January 2026 a landlord must give 90 days' notice of a rent increase."
+        nonMatching: "Until 2020 a landlord was required to give 30 days' notice of a rent increase."
+        minGap: 2
+```
+
+Every `fetch_page` and every corpus search now returns the sections that answer *that* question, verbatim, the
+best few within the query, and the canary pair refuses the boot if the sentence stops discriminating. Measured
+on the shipped 0.6B judge, 2026-09-26: the rule in force scores 7.2 against 2.1 for the one it superseded, a
+gap of five where the default retrieval question gives three. A lens that turns on negation, a breach or a
+refutation, is beyond a 0.6B, which scored a complying clause as high as a breaching one; that is a bigger
+judge, one `id` to swap. The key is boot-tier: it takes effect at the next launch, and `minGap` is a canary,
+not a calibration.
+
+The focus then narrows on its own. An agent reading a page scores its sections against what it just asked;
+as the room fills, the policy flips to exploit and a section must also answer the brief's question, which the
+dev pane's Sources tab shows as "re-ranked against the query". The default flips at 40% of the room; make the
+flip yours by handing the pool a policy:
+
+```ts
+class Focused extends DefaultAgentPolicy {
+  shouldExplore(agent: Agent, pressure: ContextPressure) {
+    return agent.toolCallCount < 2;   // two reads on its own terms, then only what answers the brief
+  }
+}
+```
+
+Most of what looks like a new lens is a new reference string in the query, which costs nothing. A genuinely
+different question is one instruction for the whole reranker, since the sentence is prefilled into its warm
+trunk. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole account.
+
+### Classify with the resident model, and judge with the reranker
+
+A decision over a known list is a grammar, not a prompt: the agents answer a NUMBER, and cannot answer
+anything else. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) sells this shape as a hosted service; here it is a pool over one spine:
+
+```ts
+const pick = defineOutput("topic", z.number().int().min(0).max(topics.length));
+const pool = yield* agentPool({
+  systemPrompt: `Topics, by number:\n${topics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n0 = none of these.`,
+  schema: pick.schema,          // the grammar: the answer IS a number in range
+  enableThinking: false,        // nothing reasons before it
+  acceptFreeText: true,
+  orchestrate: parallel(items.map((item) => ({ systemPrompt: "", content: item }))),
+});
+return pool.outcomes.map((outcome) => pick.read(outcome));
+```
+
+The ranking beside the pick is the reranker's, and this app already reads it that way — the
+sidebar's library search in `src/harness/library.ts` is `service("reranker")` and `scoreBatch`:
+
+```ts
+import { service } from "@lloyal-labs/rig";
+import { call } from "effection";
+
+export function* rankAgainst(question: string, candidates: string[]) {
+  const reranker = yield* service("reranker");
+  const logOdds = yield* call(() => reranker.scoreBatch(question, candidates));
+  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // the model's P(yes) per candidate: an order within this question
+}
+```
+
+`scoreBatch` answers the reranker's own yes/no log-odds, and the sigmoid is the model's own P(yes) under the
+instruction: an order within one question, not a probability comparable across questions. The platform uses
+it as top-K within a query; a floor for it is a discrimination signal you measure for your instruction and
+your model, never a global cutoff. Naming a model in `harness.yml` is the whole of composing it; a new KIND of
+service is one row in the platform's table — [services](https://docs.lloyal.ai/services).
+
+### Add a stage
+
+A stage is a pair of prompt files and one `prompt("my-stage", { … })` where it runs; "Add one" under
+"The prompts are files" below walks it.
 
 ## The prompts are files
 

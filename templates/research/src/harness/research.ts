@@ -13,13 +13,13 @@
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
 import { Ctx, agentPool, useAgent, chain, parallel, withSpine } from "@lloyal-labs/lloyal-agents";
-import type { Ability, Budget, GuardOverrides, NudgeInput, Orchestrator, PoolContext, PromptOf, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Budget, GuardOverrides, NudgeInput, Orchestrator, PoolContext, PromptOf, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Attachment, Descriptor } from "@lloyal-labs/media";
 import {
   PlanTool, abilityToc, citedReport, coverage as probe, participating,
   renderAgentPreamble, renderSpine, singleTaskPlan, taskKey, taskToContent, useWire,
 } from "@lloyal-labs/rig";
-import type { Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloyal-labs/rig";
+import type { Ability, Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloyal-labs/rig";
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
 import { prompt, render } from "./prompts.js";

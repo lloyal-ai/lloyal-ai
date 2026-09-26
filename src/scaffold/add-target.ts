@@ -26,11 +26,10 @@ import {
   SHARED_RENDERER_DEV_DEPS,
   SHARED_VIEW_DIR,
   openManifest,
-  readPackageJson,
   prepareTargetsLine,
-  writeJson,
-  type PackageJson,
 } from './prune-targets.js';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 import {
   resolveTemplateDir,
   copyTreeWithSubstitutions,

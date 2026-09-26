@@ -17,6 +17,35 @@ import { render } from "../../src/harness/prompts.js";
 const DIR = path.join(process.cwd(), "src/harness/prompts");
 const systemFiles = fs.readdirSync(DIR).filter((f) => f.endsWith(".system.eta"));
 
+/**
+ * Every prompt's input, as its caller gives it — the one table that says what a file receives. Rendered under a
+ * watcher that throws, so a key a file reads that its input does not name fails here, before any model loads. At
+ * run time the same miss is a line in the engine's log and an empty string, never a lost run.
+ */
+const INPUTS: Record<string, Record<string, unknown>> = {
+  "synthesize": { query: "Q?", notes: "the notes" },
+  "synthesize-extend": { query: "Q?", notes: "the notes" },
+  "topic": { topics: ["a", "b"], article: "an article" },
+  "topics": { smallestPile: 2, tool: "topics", articles: ["one", "two"] },
+};
+const strict = ({ prompt, key }: { prompt: string; key: string }): never => { throw new Error(`${prompt}: input "${key}" is not given`); };
+
+test("every prompt renders from its declared input, and reads no key the input does not name", () => {
+  const files = fs.readdirSync(DIR).filter((f) => f.endsWith(".eta") && f !== "framed.eta").map((f) => f.replace(/\.eta$/, ""));
+  for (const file of files) {
+    const input = INPUTS[file.replace(/\.(system|user)$/, "")];
+    assert.ok(input, `${file} has no declared input in this table`);
+    assert.doesNotThrow(() => render(file, input, { onMissing: strict }), `${file} reads a key its input does not name`);
+  }
+});
+
+test("at run time a missing input is reported and rendered empty — never the word undefined, never a lost run", () => {
+  const misses: string[] = [];
+  const out = render("synthesize.user", { query: "Q?" }, { onMissing: ({ prompt, key }) => misses.push(`${prompt}.${key}`) });
+  assert.equal(misses.join(","), "synthesize.user.eta.notes");
+  assert.ok(!out.includes("undefined"));
+});
+
 test("every system prompt opens with the frame", () => {
   assert.ok(systemFiles.length > 0, `no *.system.eta found in ${DIR}`);
   for (const file of systemFiles) {

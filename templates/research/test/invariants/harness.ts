@@ -10,11 +10,16 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadYml } from "@lloyal-labs/rig/node";
 import { runHarness as runRig } from "@lloyal-labs/rig/testing";
 import type { HarnessRun as RigRun, HarnessSpec as RigSpec, Sendable as RigSendable, Step as RigStep } from "@lloyal-labs/rig/testing";
 import { harness, config } from "../../src/app.js";
 import { writeBrief } from "../../src/harness/library.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
+
+/** The scaffold itself — where its harness.yml is. */
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 export type { Utterance } from "@lloyal-labs/rig/testing";
 export { dirs, typesOf, warmDeltas, prunesOf, sessionReleasesOf } from "@lloyal-labs/rig/testing";
@@ -58,8 +63,22 @@ export async function runHarness(spec: HarnessSpec = {}): Promise<HarnessRun> {
   return runRig<typeof config, Command, WorkflowEvent>({
     ...rest,
     harness: compose ?? harness,
-    // The app's own table, layered over an empty manifest with the rig's temp dir as the library and `low` effort.
-    config: { table: config, yml: (outputDir) => ({ sources: { outputDir }, defaults: { effort: "low" } }) },
+    // The app's own table over the scaffold's own harness.yml — the models it names are the ones the scenarios
+    // run against, so a change to the file is a change to the tests — with the rig's temp dir as the library
+    // and `low` effort. A scenario without a service clears its block (`model: { vision: "" }`), the way a
+    // harness developer would.
+    config: {
+      table: config,
+      yml: (outputDir) => {
+        // Everything the file says stands — its guards included — with only the library and the effort replaced.
+        const committed = loadYml(config, ROOT);
+        return {
+          ...committed,
+          sources: { ...committed.sources, outputDir },
+          defaults: { ...committed.defaults, effort: "low" },
+        };
+      },
+    },
     ...(override ? { override } : {}),
     observe: (ev) => { if (ev.type === "ui:plan_review" || ev.type === "ui:clarify") latestRevision = ev.revision; },
   });

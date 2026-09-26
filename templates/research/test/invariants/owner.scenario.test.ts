@@ -1,9 +1,10 @@
 /**
  * The execution owner at the seam: one live operation per session, and what the
  * rest of the harness may do beside it. The laws: library search is refused
- * while a run is live and served once it has settled; an ability's settings are
- * refused while a run is live; a change of output directory takes effect for the
- * next brief; `open_doc` during a run moves the canvas and touches no KV.
+ * while a run is live and served once it has settled; an ability's settings
+ * saved while a run is live apply at once and leave the run untouched; a change
+ * of output directory takes effect for the next brief; `open_doc` during a run
+ * moves the canvas and touches no KV.
  *
  * What poisoning does to the owner is the framework's law, not this app's, and
  * forcing it means reaching into a private SDK method. It lives with the owner,
@@ -43,7 +44,10 @@ test("library search is refused while a run is live, and served once the brief h
   assert.ok(searches[0][1] > completeAt, "nothing was served while the run was live");
 });
 
-test("an ability's settings are refused while a run is live: a toast, and the run settles untouched", async () => {
+test("an ability's settings saved while a run is live apply at once, and the run settles untouched", async () => {
+  // The platform supersedes the ability behind the run: the run keeps the tools it took, the next take gets
+  // the new ones, a value a tool reads from its store at the call — the search key — follows the save at
+  // once, and nothing is refused for timing (the rig's invariants hold the registry's side).
   const run = await runHarness({
     utterances: [
       { text: PLAN_JSON, kind: "text" },
@@ -53,13 +57,12 @@ test("an ability's settings are refused while a run is live: a toast, and the ru
       { send: { type: "submit_query", query: "Q?", mode: "flat" } },
       { on: (ev) => ev.type === "ui:plan_review", send: accept },
       { on: (ev) => ev.type === "research:start", send: { type: "set_ability_config", name: "web", values: { topN: 3 } } },
-      { on: (ev) => ev.type === "ui:error" },
+      { on: (ev) => ev.type === "config:updated" },
       { on: (ev) => ev.type === "complete" },
     ],
   });
-  const toast = run.events.find((e) => e.type === "ui:error") as { message: string };
-  assert.match(toast.message, /Wait for the run to finish/);
-  assert.equal(run.events.filter((e) => e.type === "config:updated").length, 0, "nothing was saved");
+  assert.equal(run.events.filter((e) => e.type === "ui:error").length, 0, "nothing was refused");
+  assert.equal(run.events.filter((e) => e.type === "config:updated").length, 1, "saved once");
   assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 0);
 });
 

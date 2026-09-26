@@ -6,9 +6,9 @@
  *  run. A depth chosen here applies from the next run. */
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { color, font, radius, shadow } from "../theme.js";
-import { useProjection, useSend } from "@lloyal-labs/ui";
+import { useContentOrigin, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command } from "../../protocol.js";
-import { contentOrigin, ingestMedia, representationUrl } from "../content-urls.js";
+import { ingestMedia, representationUrl } from "@lloyal-labs/media";
 import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
@@ -75,6 +75,7 @@ export function Composer({ shape, placeholder }: {
   placeholder: string;
 }): ReactElement {
   const send = useSend<Command>();
+  const origin = useContentOrigin();
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
@@ -167,7 +168,6 @@ export function Composer({ shape, placeholder }: {
     const chosen = Array.from(files ?? []);
     if (picker.current) picker.current.value = "";
     if (chosen.length === 0) return;
-    const origin = contentOrigin();
     if (origin === null) {
       setImageError("This build cannot accept attachments.");
       return;
@@ -463,8 +463,10 @@ export function Composer({ shape, placeholder }: {
             runs exactly one agent to a straight answer, so there is no breadth to
             choose and the minutes would be quoted against a plan that never
             exists. The configured effort still bounds the agent; it is simply not
-            a question worth asking here. */}
-        {!willSkipPlanner && (
+            a question worth asking here. While a brief is live the pills go too: a
+            depth chosen then would only be the next ask's, and its minutes would be
+            quoted against the plan already running. */}
+        {!willSkipPlanner && !live && (
           <div style={S.depths} role="radiogroup" aria-label="Depth">
             {DEPTHS.map((d) => {
               const pace = paceFor(d.depth, shape);

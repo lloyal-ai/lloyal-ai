@@ -10,11 +10,11 @@
  * figures) gracefully empty; the layout + the streaming log stay generic. This is
  * the floor — reskin it into your product's own look.
  *
- * It's transport-agnostic: it reads only `window.harness`, a bridge injected by
+ * It's transport-agnostic: it reaches the harness only through `HarnessProvider`'s hooks, over a bridge injected by
  * desktop's preload (IPC) or web's boot (`connectWss`).
  */
 import "./app.css";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DevPane } from "@lloyal-labs/dev-tools/react";
 import { config } from "../config.js";
 import { lastLine, slugify } from "../common/util.js";
@@ -39,8 +39,8 @@ import {
 import { extractStreamingReport, hostOf } from "@lloyal-labs/ui/fold";
 import { RIG_REPORT } from "@lloyal-labs/rig";
 import { headingsOf } from "@lloyal-labs/ui/prose";
-import { availabilityOf, connectProjection } from "@lloyal-labs/binding";
-import type { Availability, SessionState, WireStatus } from "@lloyal-labs/binding";
+import { useAvailability, useHarness, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
+import type { Availability } from "@lloyal-labs/binding";
 import type { Command, DocId, WorkflowEvent } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
 import { DeleteMe } from "./DeleteMe.js";
@@ -195,25 +195,6 @@ function Shelf({ groups, grouping, onOpen }: {
   );
 }
 
-/**
- * The wire and the session as ONE word the view can render. Both planes are
- * optional on a `Bridge`: the desktop's in-process link cannot drop, so it
- * reports no status — absence there means connected, not broken.
- */
-function useAvailability(): Availability {
-  const [wire, setWire] = useState<WireStatus>(
-    window.harness.onStatus ? "connecting" : "connected",
-  );
-  const [session, setSession] = useState<SessionState | null>(null);
-  useEffect(() => {
-    const offs = [window.harness.onStatus?.(setWire), window.harness.onSession?.(setSession)];
-    return () => {
-      for (const off of offs) off?.();
-    };
-  }, []);
-  return availabilityOf(session, wire);
-}
-
 /** What each availability means to a reader, in their terms — never the wire's. */
 const WIRE_WORDS: Record<Availability, string> = {
   connecting: "connecting…",
@@ -224,31 +205,30 @@ const WIRE_WORDS: Record<Availability, string> = {
   lost: "the host is not up — retrying…",
 };
 
+/** The fold, whole: the view derives from it below. */
+const whole = (s: AppState): AppState => s;
+
 export function HarnessApp({ surface }: { surface: string }): ReactElement {
-  // The projection owns the fold: it seeds from the bridge's snapshot, holds
-  // frames until that lands, and RE-SEEDS when the stream's `epoch` changes — a
-  // reconnected socket, or a desktop engine replaced by `recover`. Comparing
-  // `epoch` is what a reconnect changes; `seq` restarts its numbering, so comparing
-  // that alone would silently drop the new stream's frames.
-  const projection = useMemo(
-    () => connectProjection<WorkflowEvent, Command, AppState>(window.harness, initialState, reduce),
-    [],
-  );
-  useEffect(() => () => projection.dispose(), [projection]);
-  const state = useSyncExternalStore(projection.subscribe, projection.getSnapshot);
+  // The provider owns the fold: it seeds from the bridge's snapshot, holds frames until that lands, and
+  // re-seeds when the stream's `epoch` changes — a reconnected socket, or a desktop engine replaced by
+  // `recover`. This view only reads it, and the wire and the session as one word beside it.
+  const state = useProjection<AppState, AppState>(whole);
   const availability = useAvailability();
+  const send = useSend<Command>();
+  const recover = useRecover();
+  const { bridge } = useHarness<WorkflowEvent, Command, AppState>();
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("");
 
   const submit = (): void => {
     const q = query.trim();
     if (!q) return;
-    window.harness.send({ type: "submit_query", query: q });
+    send({ type: "submit_query", query: q });
     setTopic(q);
     setQuery("");
   };
   const openDoc = (docId: DocId | null): void => {
-    window.harness.send({ type: "open_doc", docId });
+    send({ type: "open_doc", docId });
     setTopic("");
   };
 
@@ -286,7 +266,7 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   // the wire said dev. The config table gives the Settings tab its tiers and each key's words; no key of this
   // app's offers a choice below boot, so nothing there sends a command — when one does, the loop serves it.
   return (
-    <DevPane bridge={window.harness} config={config} framing={FRAMING} title={APP.name}>
+    <DevPane bridge={bridge} config={config} framing={FRAMING} title={APP.name}>
       <div className="wiki">
         <header className="wiki-top">
           <div className="wiki-brand">
@@ -303,8 +283,8 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
           {availability !== "ready" && availability !== "connecting" && (
             <span className="wiki-wire" role="status">
               {WIRE_WORDS[availability]}
-              {availability === "ended" && window.harness.recover && (
-                <button type="button" onClick={() => window.harness.recover?.()}>
+              {availability === "ended" && recover && (
+                <button type="button" onClick={recover}>
                   start a new session
                 </button>
               )}

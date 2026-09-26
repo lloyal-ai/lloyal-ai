@@ -1,7 +1,6 @@
-/** The visual register, as data. Fonts are bundled (the desktop CSP and the
- *  local-first promise both rule out remote stylesheets). */
-import "@fontsource-variable/geist";
-import "@fontsource-variable/geist-mono";
+/** The visual register, as data — imported by the renderers and by the desktop main process alike, so it
+ *  loads nothing: the fonts are the renderer entries' own. */
+import type { CSSProperties } from "react";
 
 export const color = {
   ground: "#F6F6F3",
@@ -49,3 +48,18 @@ export const shadow = {
 } as const;
 
 export const radius = { card: 11, panel: 14, control: 8, pill: 999 } as const;
+
+/** The register as the platform reads it: what `@lloyal-labs/ui` draws with — the installer before the app
+ *  opens — set once on the element each target mounts the provider under, so the platform's screens wear this
+ *  harness's look and nothing is passed. */
+export const harnessTheme = {
+  "--harness-accent": color.ember,
+  "--harness-fg": color.ink,
+  "--harness-bg": color.card,
+  "--harness-ground": color.ground,
+  "--harness-muted": color.dim,
+  "--harness-faint": color.faint,
+  "--harness-rule": color.line,
+  "--harness-font": font.ui,
+  "--harness-mono": font.mono,
+} as CSSProperties;

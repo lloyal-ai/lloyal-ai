@@ -12,6 +12,16 @@
   --bg: #ffffff;
   --panel: #f8f9fa;
   --border: #a2a9b1;
+  /* What the platform's own screens draw with — the installer before the app opens — in this harness's look. */
+  --harness-accent: var(--link);
+  --harness-fg: var(--text);
+  --harness-bg: var(--bg);
+  --harness-ground: var(--panel);
+  --harness-muted: var(--muted);
+  --harness-faint: var(--faint);
+  --harness-rule: var(--border);
+  --harness-font: var(--sans);
+  --harness-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --border-soft: #c8ccd1;
   --border-faint: #eaecf0;
   --serif: "Linux Libertine", "Georgia", "Times New Roman", serif;

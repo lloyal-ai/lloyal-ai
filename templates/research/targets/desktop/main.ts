@@ -5,13 +5,14 @@
  * `ipc` binding instead of the terminal view), serves the content plane on the
  * `attachment://` scheme, and owns the window.
  */
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
-import { createEngine, createWindow, registerContentScheme, serveContentScheme, CHANNELS } from "@lloyal-labs/desktop";
+import { createEngine, createWindow, registerContentScheme, serveContentScheme, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
 import { APP } from "../../src/ui/presentation.js";
+import { color } from "../../src/ui/theme.js";
 
 // Before app ready, or it is ignored silently.
 registerContentScheme();
@@ -45,19 +46,12 @@ app.whenReady().then(() => {
       preload: join(__dirname, "../preload/preload.mjs"),
       page: join(__dirname, "../renderer/index.html"),
       title: APP.name,
-      window: { backgroundColor: "#0b0d12" },
+      window: { backgroundColor: color.ground },
     });
     win.on("closed", () => { win = null; });
   };
   open();
-  // The session's life, relayed to whichever renderer is alive. The engine owns it; main carries it.
-  engine.onSession((state) => safeSend(CHANNELS.session, state));
-  ipcMain.on(CHANNELS.command, (_e, command: Command) => { engine?.send(command); });
-  ipcMain.handle(CHANNELS.snapshot, () => engine!.snapshot());
-  ipcMain.handle(CHANNELS.sessionNow, () => engine!.session());
-  // A reader asking for a working harness. Here that is a new engine process — the renderer's own
-  // IPC link never dropped, which is why this is not a reload.
-  ipcMain.handle(CHANNELS.recover, () => engine!.restart());
+  serveEngine(engine, safeSend);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();
   });

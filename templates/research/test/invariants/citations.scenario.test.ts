@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { run } from "effection";
-import { AbilityConfigStoreCtx } from "@lloyal-labs/lloyal-agents";
-import { createInMemoryConfigStore } from "@lloyal-labs/rig";
+import { AbilityConfigStoreCtx, Services, createInMemoryConfigStore } from "@lloyal-labs/rig";
+import { stubReranker } from "@lloyal-labs/rig/testing";
 import { createWebAbility } from "@lloyal-labs/web-ability";
 import { runHarness, docIdOfQuery, accept } from "./harness.js";
 import type { Utterance } from "./harness.js";
@@ -29,6 +29,8 @@ const webSearchProto = await run(function* () {
   const store = createInMemoryConfigStore();
   yield* store.set("web", { tavilyKey: "test-key" });
   yield* AbilityConfigStoreCtx.set(store);
+  // The ability declares the reranker, so its factory reads one; the protocol under test never scores.
+  yield* Services.set({ reranker: stubReranker });
   const web = yield* createWebAbility();
   const tool = web.tools.find((t) => t.name === "web_search");
   if (!tool) throw new Error("the web ability no longer offers a `web_search` tool");

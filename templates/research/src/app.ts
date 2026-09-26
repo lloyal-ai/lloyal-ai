@@ -54,7 +54,7 @@ export function* harness(ctx: SessionContext, events: EventBus<WorkflowEvent>, c
   // What happens when a handler throws, a command has no handler, or the run can no longer be trusted is rig's
   // (`serveDefaults`); what this app gives up on a failed handler is its own: the run in flight.
   if (runner.initialQuery) yield* brief.submit(runner.initialQuery);
-  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })],
+  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, abilities, config })],
     serveDefaults({ wire, run, abandon: brief.abortRun }));
 }
 

@@ -19,13 +19,12 @@ import * as path from "node:path";
 import { ensure } from "effection";
 import type { Channel, Operation } from "effection";
 import { z } from "zod";
-import { Attachments, RerankerCtx, waitUntilSettled } from "@lloyal-labs/lloyal-agents";
-import type { AbilityFactory, AbilityRegistry } from "@lloyal-labs/lloyal-agents";
+import { Attachments, waitUntilSettled } from "@lloyal-labs/lloyal-agents";
 import { asAttachment, MANIFEST_TYPE } from "@lloyal-labs/media";
 import type { Attachment, AttachmentStore, Descriptor } from "@lloyal-labs/media";
 import type { EventBus } from "@lloyal-labs/binding";
-import { abilityToc } from "@lloyal-labs/rig";
-import type { Execution, Handlers } from "@lloyal-labs/rig";
+import { abilityToc, service } from "@lloyal-labs/rig";
+import type { AbilityFactory, AbilityRegistry, Execution, Handlers } from "@lloyal-labs/rig";
 import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs/rig/node";
 import { config } from "../config.js";
 import type { Inputs, Written } from "../harness/research.js";
@@ -294,7 +293,7 @@ export function* openLibrary(
         const entries = q ? records() : [];
         if (!q || entries.length === 0) return yield* wire.send({ type: "library:search", query: q, ranked: [] });
         const texts = entries.map(({ record: r }) => `${r.query}\n\n${r.answer.slice(0, 400)}`);
-        const reranker = yield* RerankerCtx.expect();
+        const reranker = yield* service("reranker");
         let scores: number[];
         try { scores = yield* waitUntilSettled(reranker.scoreBatch(q, texts)); }
         catch (err) { return yield* wire.send({ type: "ui:error", message: `Search failed: ${errorMessage(err)}` }); }

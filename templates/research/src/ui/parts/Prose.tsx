@@ -15,7 +15,7 @@ import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
 import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
-import { parseAttachmentHref, resolvePrefix } from "../content-urls.js";
+import { parseAttachmentHref, resolvePrefix } from "@lloyal-labs/media";
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node

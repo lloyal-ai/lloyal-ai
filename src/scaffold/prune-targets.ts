@@ -22,12 +22,14 @@
  * an edit would drop, an alias left dangling). So each edit answers a `Write`,
  * computed up front, and the writes land together after the deletes.
  */
-import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHarnessYml, hasHarnessYml } from './harness-yml.js';
 import type { HarnessYml } from './harness-yml.js';
 import { prepareFilter } from './jsonc.js';
 import type { Write } from './jsonc.js';
+import { readPackageJson, writeJson } from './package-json.js';
+import type { PackageJson } from './package-json.js';
 
 export type Target = 'cli' | 'desktop' | 'web';
 export type PrunableTarget = Exclude<Target, 'cli'>;
@@ -172,31 +174,6 @@ export function openManifest(projectDir: string): HarnessYml | undefined {
 }
 
 /**
- * A `package.json`, parsed and checked for the shape the verbs edit — read before any mutation, for the same
- * reason as the manifest. `JSON.parse` accepts `null`, an array, a number; a `scripts` that is a string would
- * only fail when the first key is written into it, after the target's files were already gone. Refused here,
- * naming the file and the field, with the project untouched.
- */
-export function readPackageJson(file: string): PackageJson {
-  const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
-  if (!isPlainObject(parsed)) throw new Error(`${file}: expected an object at the top level`);
-  for (const field of ['scripts', 'dependencies', 'devDependencies'] as const) {
-    if (parsed[field] !== undefined && !isPlainObject(parsed[field])) throw new Error(`${file}: "${field}" must be an object`);
-  }
-  return parsed as PackageJson;
-}
-
-const isPlainObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-
-export interface PackageJson {
-  name?: string;
-  scripts?: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  [k: string]: unknown;
-}
-
-/**
  * Reduce `<projectDir>` to `keep`. `keep` MUST include `'cli'`. A no-op when all
  * three targets are kept (beyond normalizing the `harness.yml` `targets:` line).
  * Every write is prepared before anything is deleted; the deletes run; the
@@ -260,12 +237,6 @@ export function pruneTargets(
 
   // ── land ──
   for (const write of writes) write();
-}
-
-/** A JSON file's write, its text computed now. */
-export function writeJson(file: string, value: unknown): Write {
-  const text = `${JSON.stringify(value, null, 2)}\n`;
-  return () => writeFileSync(file, text);
 }
 
 /** The package with the pruned targets' scripts, deps and fields removed — pure over the parsed object. */
