@@ -533,7 +533,9 @@ import type { Agent, ContextPressure } from "@lloyal-labs/lloyal-agents";
 
 class Patient extends DefaultAgentPolicy {
   shouldExit(agent: Agent, pressure: ContextPressure): boolean {
-    return pressure.critical;   // only ever for room, never for time
+    // Only ever for room, never for time — and under pressure still the default's one agent a tick, so a
+    // cohort is never reaped together.
+    return pressure.critical && super.shouldExit(agent, pressure);
   }
 }
 // … agentPool({ …, policy: new Patient() })   — in place of `budget`
@@ -558,22 +560,24 @@ const pool = yield* agentPool({
 return pool.outcomes.map((outcome) => pick.read(outcome));
 ```
 
-The calibrated probability beside the pick is the reranker's, and this app already reads it that way — the
+The ranking beside the pick is the reranker's, and this app already reads it that way — the
 sidebar's library search in `src/harness/library.ts` is `service("reranker")` and `scoreBatch`:
 
 ```ts
 import { service } from "@lloyal-labs/rig";
 import { call } from "effection";
 
-export function* howLikely(question: string, candidates: string[]) {
+export function* rankAgainst(question: string, candidates: string[]) {
   const reranker = yield* service("reranker");
   const logOdds = yield* call(() => reranker.scoreBatch(question, candidates));
-  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // P(yes), per candidate
+  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // the model's P(yes) per candidate: an order within this question
 }
 ```
 
-`scoreBatch` answers the reranker's own yes/no log-odds, so the sigmoid is a probability you can threshold
-and compare across questions. Naming a model in `harness.yml` is the whole of composing it; a new KIND of
+`scoreBatch` answers the reranker's own yes/no log-odds, and the sigmoid is the model's own P(yes) under the
+instruction: an order within one question, not a probability comparable across questions. The platform uses
+it as top-K within a query; a floor for it is a discrimination signal you measure for your instruction and
+your model, never a global cutoff. Naming a model in `harness.yml` is the whole of composing it; a new KIND of
 service is one row in the platform's table — [services](https://docs.lloyal.ai/services).
 
 ### Add a stage

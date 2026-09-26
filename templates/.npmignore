@@ -5,3 +5,5 @@ node_modules
 dist
 dist-web
 out
+# A template install (CI runs one for the mirror suite) writes a lockfile the scaffold must not inherit.
+package-lock.json

@@ -70,7 +70,7 @@ nothing on the network. They are the shape of the framework, shown rather than d
 
 `src/harness/classify.ts` is a decision model, not a text generator: it files every saved article under a
 topic by answering a NUMBER. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) sells exactly this shape as a hosted service — pick the best answer
-from a list you give it, no freeform text, calibrated, fast. Here it is thirty lines, and all of them are
+from a list you give it, no freeform text, fast. Here it is thirty lines, and all of them are
 already in your scaffold:
 
 ```ts
@@ -89,8 +89,8 @@ The grammar means the model cannot emit anything but a number in range, so there
 "the model said something else". The pool means every item's agent forks from ONE spine that holds the option
 list, so the list is paid for once however many items there are, and they decode together. To classify
 anything else, change three things: the options, the schema (`z.enum([...])` reads as well as a number), and
-what each agent is shown. A calibrated probability beside the pick is a second model's job, and it is one call
-away:
+what each agent is shown. Ranking the picks by how well each letter fits its pathway is a second model's job,
+and it is one call away:
 
 ### A second model as a service
 
@@ -110,15 +110,17 @@ Then read it anywhere in your harness — no plumbing, nothing to declare:
 import { service } from "@lloyal-labs/rig";
 import { call } from "effection";
 
-export function* howLikely(question: string, candidates: string[]) {
+export function* rankAgainst(question: string, candidates: string[]) {
   const reranker = yield* service("reranker");
   const logOdds = yield* call(() => reranker.scoreBatch(question, candidates));
-  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // P(yes), per candidate
+  return logOdds.map((s) => 1 / (1 + Math.exp(-s)));   // the model's P(yes) per candidate: an order within this question
 }
 ```
 
-`scoreBatch` answers the reranker's own yes/no log-odds per candidate, so the sigmoid is a probability you can
-threshold and compare across questions: the calibrated judge, resident, beside the generator. Remove the block
+`scoreBatch` answers the reranker's own yes/no log-odds per candidate, and the sigmoid is the model's own
+P(yes) under the instruction: an order within one question, not a probability comparable across questions.
+The platform uses it as top-K within a query; a floor for it is a discrimination signal you measure for your
+instruction and your model, never a global cutoff. The judge, resident, beside the generator. Remove the block
 and the service is gone; an installed Ability that requires it is refused by name at enable, and your harness
 still starts. Vision is the same one line (`vision: {}` takes the projector paired with your model). A new
 KIND of service is one row in the platform's table, not a new wiring — [services](https://docs.lloyal.ai/services).
@@ -193,7 +195,9 @@ import type { Agent, ContextPressure } from "@lloyal-labs/lloyal-agents";
 
 class Patient extends DefaultAgentPolicy {
   shouldExit(agent: Agent, pressure: ContextPressure): boolean {
-    return pressure.critical;   // only ever for room, never for time
+    // Only ever for room, never for time — and under pressure still the default's one agent a tick, so a
+    // cohort is never reaped together.
+    return pressure.critical && super.shouldExit(agent, pressure);
   }
 }
 // … agentPool({ …, policy: new Patient() })   — in place of `budget`

@@ -101,7 +101,7 @@ then the lines that make it; the full version of every one is under Recipes in t
 
 The reasoning model is one voice among several. Beside it, resident in the same process, a team of
 specialists, each doing one thing the reasoning model would do slowly or badly: a judge that answers "is this
-relevant?" yes or no with a probability, in milliseconds; memory that finds the fifty passages nearest a
+relevant?" yes or no, and in what order, in milliseconds; memory that finds the fifty passages nearest a
 question across ten thousand; sight that puts a page in front of the reasoning model when the text is not
 enough. They coordinate inside a turn. Nothing an agent finds enters the reasoning model's context until the
 judge has scored it; memory recalls while the reasoning model writes; sight projects a page the moment the
@@ -111,7 +111,7 @@ model reaches for it. Four ship today, named in one file:
 # harness.yml
 model:
   llm:       { id: qwen3.5-4b }                 # reasons and writes
-  reranker:  { id: qwen3-reranker-0.6b-q8 }     # the judge: relevant or not, and how sure
+  reranker:  { id: qwen3-reranker-0.6b-q8 }     # the judge: which of these is relevant, in order
   embedding: { id: nomic-embed-text-v1.5-q4 }   # memory: which of ten thousand passages are near this question
   vision:    {}                                 # sight: the projector paired with the reasoning model
 ```
@@ -130,8 +130,8 @@ const judge = yield* service("reranker");
 
 const [q] = yield* memory.embed([question]);
 const nearby = index.nearest(q, 50);                                   // your own index over memory.embed
-const sure = yield* call(() => judge.scoreBatch(question, nearby.map((c) => c.text)));
-const evidence = nearby.filter((_, i) => sure[i] > 0);                // the judge said yes
+const scores = yield* call(() => judge.scoreBatch(question, nearby.map((c) => c.text)));
+const evidence = nearby.map((c, i) => ({ c, s: scores[i] })).sort((a, b) => b.s - a.s).slice(0, 10).map((x) => x.c);   // the ten the judge ranks highest
 ```
 
 Hand `evidence` to the reasoning model and it explains; hand it to ten agents and each explains one clause;
@@ -143,7 +143,7 @@ does not know yet is one row in its table: [services](https://docs.lloyal.ai/ser
 
 A choice over a known list is a grammar, not a prompt. The reasoning model picks the pathway by NUMBER and
 cannot answer anything else, so there is nothing to parse and no "the model said something else"; the judge
-beside it says how sure, as a probability you set the threshold on. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) raised forty million
+beside it ranks every letter against the pathway, so the ones to look at first are known. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) raised forty million
 dollars to sell that shape as an API, priced per token, your letters uploaded to be scored. Here it is, thirty
 lines, on the laptop in the consulting room, and the letter never crosses a network:
 
@@ -158,12 +158,13 @@ const pool = yield* agentPool({
 });
 const pathway = pool.outcomes.map((o) => pick.read(o));
 const judge = yield* service("reranker");
-const sure = yield* call(() => judge.scoreBatch(pathways[0], letters));   // every letter against one pathway: log-odds, sigmoid is P(yes)
+const rank = yield* call(() => judge.scoreBatch(pathways[0], letters));   // every letter against one pathway: an ORDER, one pass
 ```
 
 A thousand letters get a thousand agents, and the list of pathways is read once for all of them. The judge
-takes every letter in one batched call per pathway, so how sure the filing is costs one pass per pathway, not
-one per letter.
+takes every letter in one batched call per pathway. Its score is an order within one question — the model's
+own yes/no log-odds under the instruction — not a calibrated probability: the platform uses it as top-K within a
+query, and a floor for it is a discrimination signal you measure for your instruction and your model.
 
 ### Tighten the rules while the job is running
 
@@ -191,7 +192,9 @@ const EVIDENCE_FIRST: ToolLifecycleHooks = {
   onReturn: ({ agent }) => agent.toolCallCount < 2 ? { type: "reject", message: "Use tools first." } : undefined,
 };
 class Patient extends DefaultAgentPolicy {
-  shouldExit(agent: Agent, pressure: ContextPressure) { return pressure.critical; }   // room, never time
+  shouldExit(agent: Agent, pressure: ContextPressure) {
+    return pressure.critical && super.shouldExit(agent, pressure);   // room, never time — and still one agent a tick
+  }
 }
 yield* agentPool({ ...spec, hooks: [EVIDENCE_FIRST], policy: new Patient() });
 ```
