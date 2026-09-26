@@ -213,10 +213,10 @@ different question is one instruction for the whole reranker, since the sentence
 trunk, and it takes effect at the next launch. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole
 account.
 
-### Recipe 4 — Tighten the rules while the job is running
+### Recipe 4 — Steer the agents mid-turn: change a rule while they work, and they obey at the next call
 
-A compliance officer changes what the agents may search, or turns the paid source on, and every agent already
-working obeys at its next call. Nothing stops, nothing restarts, no run is lost. A tool reads its ability's
+Send a new rule while the agents are working — a source switched off, the paid one switched on, a limit
+lowered — and every agent already working obeys at its next call. Nothing stops, nothing restarts, no run is lost. A tool reads its ability's
 settings at the call; a knob of your own is declared once and read the same way.
 
 ```ts
