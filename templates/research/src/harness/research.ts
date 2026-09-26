@@ -19,7 +19,6 @@ import {
   PlanTool, abilityToc, citedReport, coverage as probe, participating,
   renderAgentPreamble, renderSpine, singleTaskPlan, taskKey, taskToContent, useWire,
 } from "@lloyal-labs/rig";
-import { weaveOrdinalCitations } from "@lloyal-labs/rig";
 import type { Ability, Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloyal-labs/rig";
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
@@ -145,7 +144,7 @@ export function* answer(trunk: Branch, ask: Inputs, plan: PlanResult): Operation
   const a = yield* useAgent({ parent: trunk, systemPrompt: render("answer.system"), content: ask.text, budget: BUDGETS.answer, acceptFreeText: true });
   const timeMs = at();
   return {
-    answer: a.result?.trim() ? weaveOrdinalCitations(a.result) : null,   // an answer with no text is no answer; one that cites by number gets its links
+    answer: a.result?.trim() ? a.result : null,   // an answer with no text is no answer
     inquiries: [],
     stats: yield* contextUse(),
     complete: { intent: plan.intent, planTokens: plan.tokenCount, passthroughTokens: a.tokenCount, planMs: Math.round(plan.timeMs), passthroughMs: Math.round(timeMs) },
@@ -179,8 +178,7 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: 
   const timeMs = at();
   const ppl = agent.branch.disposed ? 0 : agent.branch.perplexity;
   yield* wire.send({ type: "synthesize:done", agentId: agent.id, ppl, tokenCount: agent.tokenCount, toolCallCount: agent.toolCallCount, timeMs });
-  // A settling pass told to cite inline may still cite by number with its links in a trailing list: the numbers become the links.
-  return { answer: weaveOrdinalCitations(agent.result || ""), tokens: agent.tokenCount, timeMs, ppl };
+  return { answer: agent.result || "", tokens: agent.tokenCount, timeMs, ppl };
 }
 
 /** A strategy, run as it is, with a note kept of what it commits to the spine. Nothing else can say whether the
