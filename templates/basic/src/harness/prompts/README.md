@@ -27,8 +27,9 @@ the same input. `framed.eta` is the one frame every system prompt hands itself t
 `wiki.ts` or `classify.ts`. The table above is the contract, and `test/invariants/prompts.test.ts` renders every
 file from it, so a key a file reads that its input does not name fails `npm test` before any model loads.
 
-At run time a missing key is not a lost run. It renders as the empty string, never as the word `undefined`,
-and is reported as one line in the engine's log. Inputs can come from the framework, and an edge that misfires
+At run time a missing key is not a lost run. A top-level key the input does not name renders as the empty
+string and is reported as one line in the engine's log (a key under a given object is that object's own, and
+`undefined` there is plain JavaScript). Inputs can come from the framework, and an edge that misfires
 must never cost a reader the run.
 
 ## What you can write
