@@ -100,7 +100,7 @@ Stop works in the middle of anything, and why there is almost no teardown code t
 Six things you can program here that cannot be programmed against an API key. Each is the outcome first,
 then the lines that make it; the full version of every one is under Recipes in the generated project's README.
 
-### An LLM and a team of specialist models, coordinating in real time
+### Recipe 1 — An LLM and a team of specialist models, coordinating in real time
 
 The reasoning model is one voice among several. Beside it, resident in the same process, a team of
 specialists, each doing one thing the reasoning model would do slowly or badly: a judge that answers "is this
@@ -142,7 +142,7 @@ attach the signed pages and sight reads the signatures. Remove a block and that 
 ability that needs it is refused by name at start, and your program still runs. A kind of model the platform
 does not know yet is one row in its table: [services](https://docs.lloyal.ai/services).
 
-### Triage every referral letter in the clinic, and nothing leaves the building
+### Recipe 2 — Triage every referral letter in the clinic, and nothing leaves the building
 
 A choice over a known list is a grammar, not a prompt. The reasoning model picks the pathway by NUMBER and
 cannot answer anything else, so there is nothing to parse and no "the model said something else"; the judge
@@ -169,7 +169,7 @@ takes every letter in one batched call per pathway. Its score is an order within
 own yes/no log-odds under the instruction — not a calibrated probability: the platform uses it as top-K within a
 query, and a floor for it is a discrimination signal you measure for your instruction and your model.
 
-### Find the rule in force this year, not the one it replaced
+### Recipe 3 — Find the rule in force this year, not the one it replaced
 
 Similarity hands you both: a superseded rule answers the question it was superseded on, and the two are
 neighbours in any embedding. Here nothing enters the model's context by distance. A judge is asked a
@@ -213,7 +213,7 @@ different question is one instruction for the whole reranker, since the sentence
 trunk, and it takes effect at the next launch. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole
 account.
 
-### Tighten the rules while the job is running
+### Recipe 4 — Tighten the rules while the job is running
 
 A compliance officer changes what the agents may search, or turns the paid source on, and every agent already
 working obeys at its next call. Nothing stops, nothing restarts, no run is lost. A tool reads its ability's
@@ -227,7 +227,7 @@ settings at the call; a knob of your own is declared once and read the same way.
 const words = config().answer.words;
 ```
 
-### No finding without evidence
+### Recipe 5 — No finding without evidence
 
 An agent that tries to report before it has read two sources is refused once and told why; its second report
 stands. The rule is one object handed to the pool of agents, and it is yours. The same five points in a tool
@@ -246,7 +246,7 @@ class Patient extends DefaultAgentPolicy {
 yield* agentPool({ ...spec, hooks: [EVIDENCE_FIRST], policy: new Patient() });
 ```
 
-### Give the agents the patient record system
+### Recipe 6 — Give the agents the patient record system
 
 A tool is a class in your program over your own database, with a gate of its own. Add it to the pool's tools
 and every agent can call it. Nothing about it exists outside your process.
