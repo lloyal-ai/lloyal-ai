@@ -11,10 +11,17 @@ Docker, Ollama, LangGraph, Mastra or vector database required.
 
 Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
 
-![An app generated from the deep-research template, writing a brief: a section streams in while its inquiry settles it, and the outline fills with the section's headings as they arrive](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
+```sh
+npx lloyal-ai@alpha new my-app --template research
+cd my-app
+npm run dev:desktop
+```
 
-*An app generated from the deep-research template. What it does is one example of what a harness can do; the
-program underneath is yours to change.*
+![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
+
+*Three agents on one model, in the dev pane of an app scaffolded from the deep-research template. The planner
+forks a spine; two researchers inherit it and search at once; the room is 13% used. What the app does is one
+example of what a harness can do; the program underneath is yours to change.*
 
 ## An example: three commands to a living brief
 
