@@ -2,8 +2,8 @@
 
 **Self-contained, offline-first AI apps in TypeScript. Just your code and the model.**
 
-`lloyal-ai` generates an application that holds the model and the program in one process, with no HTTP boundary
-between them: a harness. Once the model is in-process, its KV cache is a programming surface. Your code can fork
+`lloyal-ai` scaffolds a harness: an application that holds the model and the program in one process, with no
+HTTP boundary between them. Once the model is in-process, its KV cache is a programming surface. Your code can fork
 the model's live attention into several agents at once, hand each different evidence, decide what the next stage
 inherits, and commit only what it accepts. Every one of those decisions is ordinary TypeScript, and it runs on
 hardware you own, a laptop today and your own GPU host when you serve it. No API key on the path that thinks. No
