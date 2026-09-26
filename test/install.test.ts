@@ -289,6 +289,16 @@ describe('the install gate', () => {
     expect(await ymlText()).toBe(before);
   });
 
+  it('a projector the project SELECTS needs no reasoning model to derive from — a vision path passes the gate with the llm adopted from its slot', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  vision:\n    path: weights/proj.gguf\n');
+    useTarball(requiring(['vision']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
   it('a commented-out block counts as unset', async () => {
     await seedProject();
     await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n  # reranker:\n  #   id: qwen3-reranker-0.6b-q8\n');
