@@ -14,6 +14,12 @@ settles, the document takes the room — citation chips, a sources grid,
 the deliberation on request — and every settled brief joins a library
 that the next brief can search, cite, and build on.
 
+![A brief being written: the outline on the right fills with headings as they arrive, while a section is written in place below its line of inquiry](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write.jpg)
+
+*A brief writing itself. Each line of the outline is a section filled in
+place by its own line of inquiry, and the outline grows as the headings
+arrive.*
+
 **Two different "multi", and this project has both.** They are worth
 keeping apart, because they solve different problems:
 
@@ -59,10 +65,22 @@ Set `LLOYAL_DEV=1` to dock the dev pane under the web or desktop view: an
 agent timeline with per-token epistemics, the retrieval funnel, compiled
 prompts, and live context, cpu and memory charts.
 
+![The dev pane's timeline: a planner lane ending in a plan, a spine of 794 tokens, and two research lanes forked from it searching at once, over a context meter reading 13% of 32k](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
+
+*Three agents on one model. The planner forks a spine; two lines of
+inquiry inherit it and search at the same time; the room is 13% used.
+Every lane here is a branch of one resident model, not a request.*
+
 ## What it does
 
 A brief is the one thing this app makes, and it lives through four
 moments. The same four words name them in the code.
+
+| Ask | Frame | Write | Settle |
+| --- | --- | --- | --- |
+| ![Ask: one question, and the shape it takes](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/ask.jpg) | ![Frame: the outline, held for your edits](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/frame.jpg) | ![Write: inquiries searching and reading, side by side](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write-searching.jpg) | ![Settle: the brief, its citations and its sources](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/settle.jpg) |
+
+*One question to a settled brief.*
 
 **Ask.** One question, and two choices beside it. The *shape*: **Ask**
 puts one agent over every source for a straight answer; **Survey** plans
@@ -756,8 +774,12 @@ ability runs on a keyless fallback.
 
 ## Licence
 
-This project is yours — add whatever licence your organisation needs.
-The scaffolding that produced it is MIT and imposes nothing on your code.
+This project is yours. Add the licence your organisation needs — a
+`LICENSE` file at the root is what a reader looks for, and this project's
+own source is covered by whatever it says. The scaffolding that produced
+this project is MIT and imposes nothing on your code; the signed Ability
+bundles under `vendor/` come through the channel under their own licences,
+which a licence of yours does not change.
 
 Your use of the HDK runtime (`@lloyal-labs/*`) is covered by the
 Functional Source License plus the
