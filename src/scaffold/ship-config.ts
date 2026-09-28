@@ -88,14 +88,20 @@ export function distributionRefusal(env: NodeJS.ProcessEnv): string | undefined 
     '',
     'Put them in `.env.local`, which git already ignores. These two leave no secret in the file:',
     '',
-    '  CSC_NAME="Developer ID Application: Your Name (TEAMID)"   # the certificate, from your keychain',
+    // The name is the certificate's own, WITHOUT the "Developer ID Application:" that Keychain
+    // Access shows in front of it: the packager picks the kind of certificate itself and refuses a
+    // name carrying that prefix. Everything here is one assignment per line, because this block is
+    // meant to be pasted and a dotenv file reads the rest of the line as the value.
+    '  CSC_NAME="Your Name (TEAMID)"   # your certificate, minus the "Developer ID Application:" part',
     '  APPLE_KEYCHAIN_PROFILE=<name>   # xcrun notarytool store-credentials <name>',
     '',
     'On CI, where there is no keychain to read:',
     '',
     '  CSC_LINK=<base64 of a Developer ID Application .p12>',
     '  CSC_KEY_PASSWORD=<its password>',
-    '  APPLE_API_KEY=<path to AuthKey_XXXX.p8>  APPLE_API_KEY_ID=<id>  APPLE_API_ISSUER=<uuid>',
+    '  APPLE_API_KEY=<path to AuthKey_XXXX.p8>',
+    '  APPLE_API_KEY_ID=<id>',
+    '  APPLE_API_ISSUER=<uuid>',
   ].join('\n');
 }
 

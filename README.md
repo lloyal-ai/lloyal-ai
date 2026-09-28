@@ -376,7 +376,9 @@ the same provisioning screen you did on your first `dev:desktop` run: one row pe
 `harness.yml`, each fetched and digest-verified with the bytes, the rate and the time left, and a
 weight they already have offered as an alternative to downloading it. Everything lands in the
 application's own support directory, never beside your project, and every launch after that opens
-at once. Change a model in `harness.yml` and the next release provisions the new one.
+at once. Change a model in `harness.yml` and a fresh installation provisions the new one; an
+existing installation keeps the manifest it seeded on first launch, along with every edit its
+reader has made to it since.
 
 Without a flag the image is unsigned, which is fast and opens only on the machine that built it.
 `ship --notarize` produces the distributable artifact: signed with your Developer ID under the

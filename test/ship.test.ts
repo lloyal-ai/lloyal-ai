@@ -510,4 +510,41 @@ describe('--notarize is the asking', () => {
     expect(said.indexOf('APPLE_KEYCHAIN_PROFILE')).toBeLessThan(said.indexOf('CSC_LINK'));
     expect(said).toContain('store-credentials');
   });
+
+  /**
+   * Pasted, it has to PARSE. Three assignments shared one line and a dotenv file reads the rest of
+   * a line as the value, so the key id and the issuer silently came out unset — instructions that
+   * look right, produce a half-configured machine, and are then refused for the very thing they
+   * were meant to supply. Round-tripped through the real loader rather than eyeballed.
+   */
+  it('parses as a dotenv file, every name its own assignment', () => {
+    const lines = (distributionRefusal({}) as string)
+      .split('\n')
+      .filter((l) => /^\s*[A-Z_]+=/.test(l));
+    const dir = mkdtempSync(join(tmpdir(), 'refusal-'));
+    created.push(dir);
+    const file = join(dir, '.env.local');
+    writeFileSync(file, lines.join('\n'));
+
+    const before = { ...process.env };
+    try {
+      process.loadEnvFile(file);
+      for (const name of ['CSC_NAME', 'APPLE_KEYCHAIN_PROFILE', 'CSC_LINK', 'CSC_KEY_PASSWORD',
+        'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']) {
+        expect(process.env[name], `${name} did not come back out of the block`).toBeDefined();
+        expect(process.env[name], `${name} swallowed the line after it`).not.toContain('=');
+      }
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in before)) delete process.env[k];
+    }
+  });
+
+  /** The packager refuses a name carrying the prefix Keychain Access displays, so printing one
+   *  would hand the reader a value guaranteed to fail at codesign time. */
+  it('suggests a certificate name the packager will accept', () => {
+    const said = distributionRefusal({}) as string;
+    const csc = said.split('\n').find((l) => l.includes('CSC_NAME=')) as string;
+    expect(csc).not.toMatch(/CSC_NAME="Developer ID Application:/);
+    expect(said).toContain('minus the "Developer ID Application:" part');
+  });
 });
