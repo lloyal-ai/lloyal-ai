@@ -359,6 +359,31 @@ fold of state, one binding each, no view holding truth.
 
 `npx lloyal-ai new` with no name asks for the name, surfaces, model and template.
 
+## Ship your app
+
+`ship` produces a distributable macOS application: a `.dmg` carrying the engine, its dependencies
+and its prompts, ready to install or attach to a release.
+
+```sh
+npx lloyal-ai ship        # from the project root: builds the desktop surface, then packages it
+```
+
+The first run records an application identifier in `harness.yml`; every run after it, and CI, reads
+it from there. Each template ships a replaceable icon at `build/icon.icns`.
+
+Model weights are not bundled — wiki packages to 142 MB, deep-research to 154 MB. Your users meet
+the same provisioning screen you did on your first `dev:desktop` run: one row per model named in
+`harness.yml`, each fetched and digest-verified with the bytes, the rate and the time left, and a
+weight they already have offered as an alternative to downloading it. Everything lands in the
+application's own support directory, never beside your project, and every launch after that opens
+at once. Change a model in `harness.yml` and the next release provisions the new one.
+
+Code signing and notarization are read from the environment rather than committed to the project,
+so one command produces an unsigned build on your machine and a signed, notarized, stapled artifact
+in a release pipeline. An unsigned image is refused by Gatekeeper on every machine but the one that
+built it; `npx lloyal-ai ship --help` names the variables. macOS today; Windows and Linux each need
+their own build host.
+
 ## Models
 
 The catalogue, your pins and what is on disk, from the project's root:
@@ -396,6 +421,7 @@ corpus at `reports` in `harness.yml` and the app reads what it has written.
 
 Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
 offline once the weights are on disk. Outside an interactive terminal, run `npm install` in the project yourself.
+Building a distributable application needs macOS.
 
 ## Go deeper
 

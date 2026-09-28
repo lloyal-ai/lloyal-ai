@@ -34,23 +34,27 @@ import { ENTITLEMENTS, harnessPackaging, notaryArgs, signingFrom, type Signing }
 import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
-  'lloyal ship — package this harness as an application you can hand to someone',
+  'lloyal ship — build a distributable macOS application from this harness',
   '',
   'Usage:',
   '  lloyal ship',
   '',
-  'Builds the desktop surface and wraps it as a macOS disk image in release/. The first run asks for',
-  'an application identifier and, if you have one, an icon, and keeps both in harness.yml; later runs',
-  'ask nothing. No model weights go inside — the app acquires what it needs on first launch.',
+  'Builds the desktop surface and packages it as a disk image in release/. The first run asks for an',
+  'application identifier and, if you have one, an icon, and records both in harness.yml; later runs',
+  'and CI read them from there.',
   '',
-  'Signing is read from the environment rather than a flag, so the same command produces an unsigned',
-  'image on a machine with no Apple account and a notarized one on a machine with credentials:',
+  'Model weights are not bundled. On first launch the installed application provisions every model',
+  'named in harness.yml, digest-verified, into its own support directory.',
+  '',
+  'Code signing and notarization are read from the environment rather than a flag, so one command',
+  'produces an unsigned build locally and a signed, notarized artifact in a release pipeline:',
   '',
   '  CSC_LINK + CSC_KEY_PASSWORD   base64 of a Developer ID Application .p12, and its password',
   '  APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER   an App Store Connect key, to notarize',
   '  APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   the same thing with an Apple ID',
+  '  APPLE_KEYCHAIN_PROFILE        a stored `notarytool` profile, which keeps the secret in the keychain',
   '',
-  'Unsigned is fine for looking at the result on this Mac. Any other Mac needs both.',
+  'An unsigned image is refused by Gatekeeper on every machine but the one that built it.',
 ].join('\n');
 
 /**
@@ -270,8 +274,8 @@ export function report({ product, version, images, signing, icon }: Shipped): st
   const made = images.map((i) => `  ${i.path}  (${Math.round(i.bytes / 1e6)} MB)`);
   const standing = signing.notarize
     ? [
-        'Signed, notarized and stapled. Check it with `xcrun stapler validate` on the path above, then',
-        'hand it over: a Mac that downloads it through a browser will open it.',
+        'Signed, notarized and stapled. Verify it with `xcrun stapler validate` on the path above; a Mac',
+        'that downloads it through a browser will accept it.',
       ]
     : signing.sign
       ? [
@@ -306,7 +310,7 @@ export function report({ product, version, images, signing, icon }: Shipped): st
 
 export const shipCommand: Command = {
   name: 'ship',
-  summary: 'Package this harness as a macOS app you can hand to someone',
+  summary: 'Build a distributable macOS application (.dmg)',
   usage: USAGE,
   async run(argv) {
     const { values } = parseArgs({

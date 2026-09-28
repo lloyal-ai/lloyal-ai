@@ -51,7 +51,7 @@ function printHelp(): void {
       '  lloyal targets:list         Show the surfaces present',
       '',
       'Ship it (in a project, on macOS):',
-      '  lloyal ship                 Package this harness as an app you can hand to someone',
+      '  lloyal ship                 Build a distributable macOS application (.dmg)',
       '',
       'Manage backends (in a project, linux-x64 with an NVIDIA GPU):',
       '  lloyal backends:install [--yes]   Install the signed CUDA backend pack, once per box',
