@@ -263,6 +263,36 @@ describe('what notarytool is authenticated with', () => {
     expect(notaryRoute({})).toBeNull();
   });
 
+  /**
+   * A variable that is SET AND EMPTY, which is what an absent CI secret interpolates to. Under `??`
+   * an empty value counts as an answer, so `CSC_LINK=''` masked a real `CSC_NAME` and turned signing
+   * off, and an empty `APPLE_API_KEY` masked a real key id and issuer and skipped notarization. The
+   * packager reads the same variables with `||`; anything else makes the two disagree.
+   */
+  describe('a variable that is set and empty', () => {
+    it('does not mask the one behind it when deciding to sign', () => {
+      expect(signingFrom({ CSC_LINK: '', CSC_NAME: 'Developer ID Application: Someone (T)' }).sign).toBe(true);
+      expect(signingFrom({ CSC_LINK: '', CSC_NAME: '' }).sign).toBe(false);
+      expect(signingFrom({}).sign).toBe(false);
+    });
+
+    it('does not send an incomplete API key set down another route', () => {
+      expect(notaryRoute({ APPLE_API_KEY: '', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' })).toBe('api-key');
+      // …and being on that route is what makes the missing one get named, rather than silently skipped.
+      expect(() => notaryArgs({ APPLE_API_KEY: '', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' })).toThrow('APPLE_API_KEY');
+    });
+
+    it('does not send an incomplete Apple ID set down another route', () => {
+      expect(notaryRoute({ APPLE_ID: '', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T' })).toBe('apple-id');
+      expect(() => notaryArgs({ APPLE_ID: '', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T' })).toThrow('APPLE_ID');
+    });
+
+    it('is not mistaken for credentials when every one of them is empty', () => {
+      expect(notaryRoute({ APPLE_ID: '', APPLE_API_KEY: '', APPLE_KEYCHAIN_PROFILE: '' })).toBeNull();
+      expect(signingFrom({ CSC_LINK: '', APPLE_API_KEY: '' })).toEqual({ sign: false, notarize: false });
+    });
+  });
+
   it('counts a keychain profile as credentials, so it is not reported as unnotarized', () => {
     expect(signingFrom({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: true, notarize: true });
     expect(signingFrom({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: false, notarize: false });

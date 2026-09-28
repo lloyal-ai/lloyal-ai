@@ -47,7 +47,11 @@ export interface Signing {
  * Notarizing without signing is not a state that exists: there would be nothing to staple.
  */
 export function signingFrom(env: NodeJS.ProcessEnv): Signing {
-  const sign = Boolean(env.CSC_LINK ?? env.CSC_NAME);
+  // `||`, never `??`. A variable that is SET AND EMPTY is the ordinary shape of an absent CI secret —
+  // `CSC_LINK: ${{ secrets.CSC_LINK }}` interpolates to `''` when the secret is not there — and `??`
+  // treats that as a value, so an empty CSC_LINK would mask a perfectly good CSC_NAME and quietly
+  // turn signing off. The packager reads these the same way, and the two must agree.
+  const sign = Boolean(env.CSC_LINK || env.CSC_NAME);
   return { sign, notarize: sign && notaryRoute(env) !== null };
 }
 
@@ -67,8 +71,11 @@ export type NotaryRoute = 'apple-id' | 'api-key' | 'keychain-profile';
  * used the other one by the time this runs.
  */
 export function notaryRoute(env: NodeJS.ProcessEnv): NotaryRoute | null {
-  if (env.APPLE_ID ?? env.APPLE_APP_SPECIFIC_PASSWORD) return 'apple-id';
-  if (env.APPLE_API_KEY ?? env.APPLE_API_KEY_ID ?? env.APPLE_API_ISSUER) return 'api-key';
+  // `||` for the same reason as above, and to the same end: an empty APPLE_API_KEY beside a real key
+  // id and issuer must still be read as "the API key route, incompletely configured" — which `need`
+  // then names — rather than falling through to a different account's credentials.
+  if (env.APPLE_ID || env.APPLE_APP_SPECIFIC_PASSWORD) return 'apple-id';
+  if (env.APPLE_API_KEY || env.APPLE_API_KEY_ID || env.APPLE_API_ISSUER) return 'api-key';
   if (env.APPLE_KEYCHAIN_PROFILE) return 'keychain-profile';
   return null;
 }
