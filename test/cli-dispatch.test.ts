@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { main } from '../src/cli.js';
-import { findCommand } from '../src/commands/index.js';
+import { findCommand, SUBCOMMANDS } from '../src/commands/index.js';
 
 function captureStderr(): { output: () => string; restore: () => void } {
   let buf = '';
@@ -57,6 +57,41 @@ describe('dispatcher — help + version', () => {
     const code = await main(['--version']);
     out.restore();
     expect(code).toBe(0);
+  });
+});
+
+/**
+ * The top-level listing is a hand-written literal, so a command can be registered and never
+ * mentioned — which is how `link-local` came to be missing from it. This row is the boundary: a new
+ * verb either appears in the listing or is named below as one that deliberately does not.
+ */
+describe('the help listing and the registry agree', () => {
+  /** The platform-development verbs: they link a project against a checkout of lloyal itself, so they
+   *  are for people working ON the platform and not part of a harness developer's surface. */
+  const UNLISTED = new Set(['link-local', 'unlink-local']);
+
+  it('mentions every registered command, or says why not', async () => {
+    let out = '';
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      out += chunk.toString();
+      return true;
+    });
+    await main(['--help']);
+    spy.mockRestore();
+    const missing = SUBCOMMANDS.map((c) => c.name).filter((n) => !UNLISTED.has(n) && !out.includes(`lloyal ${n}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('lists `ship`, which is how anybody finds out a harness can become an app', async () => {
+    let out = '';
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      out += chunk.toString();
+      return true;
+    });
+    await main(['--help']);
+    spy.mockRestore();
+    expect(out).toContain('lloyal ship');
+    expect(findCommand('ship')?.name).toBe('ship');
   });
 });
 

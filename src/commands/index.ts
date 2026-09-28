@@ -9,12 +9,14 @@ import { modelsCommands } from './models.js';
 import { targetsCommands } from './targets.js';
 import { backendsInstallCommand } from './backends.js';
 import { linkLocalCommand, unlinkLocalCommand } from './link-local.js';
+import { shipCommand } from './ship.js';
 
 /** Named subcommands, in help-listing order. */
 export const SUBCOMMANDS: readonly Command[] = [
   appCommand,
   ...modelsCommands,
   ...targetsCommands,
+  shipCommand,
   backendsInstallCommand,
   installCommand,
   linkLocalCommand,

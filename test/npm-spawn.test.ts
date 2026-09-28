@@ -10,11 +10,12 @@
  * `npm pack --pack-destination "C:\\Users\\First Last\\…"` by splitting the path.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EventEmitter } from 'node:events';
 
 const mockSpawn = vi.fn(() => ({ on: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn: mockSpawn }));
 
-const { spawnNpm, resolveNpmInvocation, npmCliCandidates, UnsafeWindowsArgumentError } = await import('../src/npm-spawn');
+const { spawnNpm, npmExit, resolveNpmInvocation, npmCliCandidates, UnsafeWindowsArgumentError } = await import('../src/npm-spawn');
 
 const argsOf = () => mockSpawn.mock.calls[0] as unknown as [string, string[], Record<string, unknown>];
 const ORIGINAL = process.env.npm_execpath;
@@ -152,5 +153,56 @@ describe('cmd.exe is avoided when npm\'s JS entry can be found', () => {
     const r = resolveNpmInvocation(['install', spec], 'win32', undefined, NODE_WIN, (p) => p === expected);
     expect(r.shell).toBe(false);
     expect(r.argv).toContain(spec);
+  });
+});
+
+/**
+ * The adapter every verb that must KNOW whether npm succeeded goes through, and the whole matrix of
+ * what a child process can do on the way out. A verb that reads a wrong number here either packages
+ * a build that failed or refuses one that worked.
+ */
+describe('npmExit', () => {
+  const child = (): EventEmitter => {
+    const c = new EventEmitter();
+    mockSpawn.mockReturnValueOnce(c as unknown as { on: typeof vi.fn });
+    return c;
+  };
+
+  it('answers the exit code npm closed with', async () => {
+    const c = child();
+    const code = npmExit(['--version'], '/somewhere');
+    c.emit('close', 0);
+    expect(await code).toBe(0);
+
+    const d = child();
+    const failed = npmExit(['run', 'nope'], '/somewhere');
+    d.emit('close', 3);
+    expect(await failed).toBe(3);
+  });
+
+  /** A process killed by a signal closes with a null code. Nothing ran to completion, so it failed. */
+  it('treats a close with no code as a failure', async () => {
+    const c = child();
+    const code = npmExit(['install'], '/somewhere');
+    c.emit('close', null);
+    expect(await code).toBe(1);
+  });
+
+  /** npm that could not be started at all is indistinguishable, to the caller, from npm that ran badly. */
+  it('treats a failure to spawn as a failure, rather than rejecting', async () => {
+    const c = child();
+    const code = npmExit(['install'], '/somewhere');
+    c.emit('error', new Error('ENOENT'));
+    await expect(code).resolves.toBe(1);
+  });
+
+  it('runs in the directory it was given, with npm\'s own output left visible', async () => {
+    const c = child();
+    const code = npmExit(['install'], '/a/project');
+    c.emit('close', 0);
+    await code;
+    const [, , opts] = mockSpawn.mock.calls[mockSpawn.mock.calls.length - 1] as unknown as [string, string[], Record<string, unknown>];
+    expect(opts.cwd).toBe('/a/project');
+    expect(opts.stdio).toBe('inherit');
   });
 });

@@ -359,6 +359,39 @@ fold of state, one binding each, no view holding truth.
 
 `npx lloyal-ai new` with no name asks for the name, surfaces, model and template.
 
+## Ship your app
+
+`ship` produces a distributable macOS application: a `.dmg` carrying the engine, its dependencies
+and its prompts, ready to install or attach to a release.
+
+```sh
+npx lloyal-ai ship        # from the project root: builds the desktop surface, then packages it
+```
+
+The first run records an application identifier in `harness.yml`; every run after it, and CI, reads
+it from there. Each template ships a replaceable icon at `build/icon.icns`.
+
+Model weights are not bundled — wiki packages to 142 MB, deep-research to 154 MB. Your users meet
+the same provisioning screen you did on your first `dev:desktop` run: one row per model named in
+`harness.yml`, each fetched and digest-verified with the bytes, the rate and the time left, and a
+weight they already have offered as an alternative to downloading it. Everything lands in the
+application's own support directory, never beside your project, and every launch after that opens
+at once. Change a model in `harness.yml` and a fresh installation provisions the new one; an
+existing installation keeps the manifest it seeded on first launch, along with every edit its
+reader has made to it since.
+
+Without a flag the image is unsigned, which is fast and opens only on the machine that built it.
+`ship --notarize` produces the distributable artifact: signed with your Developer ID under the
+hardened runtime, notarized and stapled, so a Mac that downloads it accepts it. Nothing is signed
+unless you ask, and a request that cannot be met is refused before the build rather than quietly
+downgraded to something nobody can install.
+
+Credentials are read from the environment and from `.env.local` in the project, which git already
+ignores — so you ship from your laptop, and CI needs no file because a real environment variable
+wins. Put a certificate already in your keychain and a stored `notarytool` profile there and it
+holds no secrets at all; `ship --notarize` prints the block to paste when it cannot find them.
+macOS today; Windows and Linux each need their own build host.
+
 ## Models
 
 The catalogue, your pins and what is on disk, from the project's root:
@@ -396,6 +429,7 @@ corpus at `reports` in `harness.yml` and the app reads what it has written.
 
 Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
 offline once the weights are on disk. Outside an interactive terminal, run `npm install` in the project yourself.
+Building a distributable application needs macOS.
 
 ## Go deeper
 

@@ -16,6 +16,7 @@ import { openHarnessYml } from '../src/scaffold/harness-yml.js';
 import { readProjectMarker } from '../src/scaffold/write-marker.js';
 import { DEFAULT_ABILITIES } from '../src/commands/new.js';
 import { presentTargets } from '../src/scaffold/add-target.js';
+import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 import { newCommand } from '../src/commands/new.js';
 import {
   modelsUseCommand,
@@ -30,7 +31,7 @@ const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'temp
 const created: string[] = [];
 function freshBlankTree(): string {
   const dir = mkdtempSync(join(tmpdir(), 'mt-tree-'));
-  cpSync(BASIC_TEMPLATE, dir, { recursive: true });
+  copyTreeWithSubstitutions(BASIC_TEMPLATE, dir, {});
   created.push(dir);
   return dir;
 }
@@ -336,6 +337,23 @@ describe('targets:add (inverse of prune)', () => {
     delete p.harnessdev;
     writeFileSync(join(dir, 'package.json'), `${JSON.stringify(p, null, 2)}\n`);
     expect(await runIn(dir, () => targetsAddCommand.run(['web']))).toBe(1);
+  });
+
+  /** The mark belongs to the surface it marks: `build/` is the packager's resources directory and
+   *  nothing but `lloyal ship` reads it, so a cli-only scaffold should not be carrying one. The
+   *  `ship:` block itself stays, because it also holds the identifier the developer chose. */
+  it('the default icon leaves with desktop and comes back with it', async () => {
+    const dir = await scaffold('t6b', 'cli,desktop', 'research');
+    expect(existsSync(join(dir, 'build/icon.icns'))).toBe(true);
+
+    expect(await runIn(dir, () => targetsRemoveCommand.run(['desktop', '--yes']))).toBe(0);
+    expect(existsSync(join(dir, 'build/icon.icns'))).toBe(false);
+    expect(existsSync(join(dir, 'build/icon.png'))).toBe(false);
+    // The declaration stays: it is one block with the application id, which is the developer's own.
+    expect(readFileSync(join(dir, 'harness.yml'), 'utf8')).toContain('icon: build/icon.icns');
+
+    expect(await runIn(dir, () => targetsAddCommand.run(['desktop']))).toBe(0);
+    expect(existsSync(join(dir, 'build/icon.icns'))).toBe(true);
   });
 
   it('restores desktop’s `main` entry point + electron guard on add', async () => {

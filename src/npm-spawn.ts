@@ -152,3 +152,19 @@ export function spawnNpm(
   );
   return spawn(cmd, argv, { ...opts, shell });
 }
+
+/**
+ * Run `npm <args>` to completion and answer its exit code.
+ *
+ * `spawnNpm` returns a process, and a verb that has to know whether npm SUCCEEDED has to wait for
+ * it; a failure to spawn at all is an exit code too, since to the caller there is no difference
+ * between npm not running and npm running badly. Stdio is inherited: npm's own progress and
+ * warnings are the only report of a long install anybody wants.
+ */
+export function npmExit(args: readonly string[], cwd: string): Promise<number> {
+  return new Promise<number>((settle) => {
+    const child = spawnNpm(args, { cwd, stdio: 'inherit' });
+    child.on('error', () => settle(1));
+    child.on('close', (code) => settle(code ?? 1));
+  });
+}

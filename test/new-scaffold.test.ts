@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve, relative, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,13 +9,14 @@ import { readJsoncArray } from '../src/scaffold/jsonc.js';
 import { applyModelChoice, isModelPath, readModelField } from '../src/scaffold/apply-model.js';
 import { modelsForRole, MODEL_CATALOG } from '../src/scaffold/model-catalog.js';
 import { newCommand } from '../src/commands/new.js';
+import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 
 const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
 
 const created: string[] = [];
 function freshBlankProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'harness-scaffold-'));
-  cpSync(BASIC_TEMPLATE, dir, { recursive: true });
+  copyTreeWithSubstitutions(BASIC_TEMPLATE, dir, {});
   created.push(dir);
   return dir;
 }
@@ -282,7 +283,7 @@ describe('pruneTargets — research: the view stays, its DOM deps do not', () =>
 
   function freshResearchProject(): string {
     const dir = mkdtempSync(join(tmpdir(), 'harness-scaffold-r-'));
-    cpSync(RESEARCH_TEMPLATE, dir, { recursive: true });
+    copyTreeWithSubstitutions(RESEARCH_TEMPLATE, dir, {});
     created.push(dir);
     return dir;
   }
