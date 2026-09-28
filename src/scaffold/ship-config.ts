@@ -83,6 +83,11 @@ export function harnessPackaging(input: PackagingInput): Record<string, unknown>
     asarUnpack: ['**/node_modules/@lloyal-labs/lloyal.node*/**'],
     // The binaries are prebuilt; there is nothing here to compile.
     npmRebuild: false,
+    // Refuse to finish unsigned once signing has been asked for. Without this the packager answers a
+    // missing or unusable certificate with a WARNING and produces an unsigned app, and the report
+    // would go on to call it signed on the strength of the environment alone — the worst outcome
+    // available, since the developer would hand out something they believe Gatekeeper will accept.
+    forceCodeSigning: input.sign,
 
     // `out/` is only the window. The engine is this project's own `bin/run.js`, which imports the
     // compiled cli from `dist/`, and the manifest travels as the application's default for a first
@@ -95,6 +100,10 @@ export function harnessPackaging(input: PackagingInput): Record<string, unknown>
     mac: {
       target: ['dmg'],
       category: 'public.app-category.productivity',
+      // Said explicitly, not left to the default. The identity search falls back to a *Mac
+      // Developer* certificate — with only a warning — whenever this key is unset, and that is a
+      // development certificate: it signs, and no other Mac will accept what it signed.
+      type: 'distribution',
       ...(input.icon !== undefined ? { icon: input.icon } : {}),
       // `null` forces an unsigned build; `undefined` lets the packager discover a Developer ID.
       identity: input.sign ? undefined : null,

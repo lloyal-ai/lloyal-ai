@@ -7,6 +7,7 @@
  * the three things that are true of an image depending on what the machine could sign it with.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -14,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 import { openHarnessYml } from '../src/scaffold/harness-yml.js';
 import { notaryArgs, signingFrom } from '../src/scaffold/ship-config.js';
-import { report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
+import { notarizeFailure, report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
 
 const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
 
@@ -39,10 +40,17 @@ function project(edit: (dir: string) => void = () => {}): string {
   return dir;
 }
 
-/** Run the verb in a project, with nobody to ask. */
-async function shipIn(dir: string, argv: string[] = []): Promise<{ code: number; said: string }> {
+/**
+ * Run the verb in a project, with nobody to ask, on a stated platform.
+ *
+ * The platform is stated rather than inherited because the verb refuses on a non-darwin host BEFORE
+ * it looks at anything else, so on a Linux or Windows runner every row about the other refusals
+ * would get the macOS message instead of the one it is about. This suite runs on all three.
+ */
+async function shipIn(dir: string, argv: string[] = [], platform: NodeJS.Platform = 'darwin'): Promise<{ code: number; said: string }> {
   const prevDir = process.cwd();
   const prevTty = process.stdin.isTTY;
+  const prevPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
   let said = '';
   const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
     said += chunk.toString();
@@ -50,9 +58,11 @@ async function shipIn(dir: string, argv: string[] = []): Promise<{ code: number;
   });
   process.chdir(dir);
   (process.stdin as { isTTY?: boolean }).isTTY = false;
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
   try {
     return { code: await shipCommand.run(argv), said };
   } finally {
+    if (prevPlatform) Object.defineProperty(process, 'platform', prevPlatform);
     (process.stdin as { isTTY?: boolean }).isTTY = prevTty;
     process.chdir(prevDir);
     spy.mockRestore();
@@ -160,17 +170,10 @@ describe('refusing before anything is built', () => {
   });
 
   it('says so on a machine that cannot build a macOS application', async () => {
-    const dir = project();
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-    try {
-      const { code, said } = await shipIn(dir);
-      expect(code).toBe(1);
-      expect(said).toContain('only be built on macOS');
-      expect(said).toContain('linux');
-    } finally {
-      if (platform) Object.defineProperty(process, 'platform', platform);
-    }
+    const { code, said } = await shipIn(project(), [], 'linux');
+    expect(code).toBe(1);
+    expect(said).toContain('only be built on macOS');
+    expect(said).toContain('linux');
   });
 
   it('is not a harness project at all', async () => {
@@ -297,5 +300,50 @@ describe('what the report says is true of the image', () => {
       expect(said).toContain('No weights are inside');
       expect(said).toContain('macOS');
     }
+  });
+});
+
+/**
+ * A rejected notarisation must not print the credential that was rejected.
+ *
+ * The submission's argv carries the app-specific password, and `execFileSync` puts the entire
+ * command line into its error message. Building the failure from that message — which is what this
+ * did — wrote the password to stderr and into whatever captured it.
+ */
+describe('a failed notarisation', () => {
+  it('says which phase failed and what it exited with', () => {
+    const said = notarizeFailure('/r/Fieldnote-1.0.0-arm64.dmg', 'xcrun notarytool submit', 2);
+    expect(said).toContain('Fieldnote-1.0.0-arm64.dmg');
+    expect(said).toContain('xcrun notarytool submit');
+    expect(said).toContain('exit 2');
+    // The app inside is already stapled; only the wrapper is not. A reader has to be told which.
+    expect(said).toContain('The application inside the image is notarized');
+  });
+
+  it('says nothing about an exit status it does not have', () => {
+    expect(notarizeFailure('/r/x.dmg', 'xcrun stapler staple', null)).not.toContain('exit');
+  });
+
+  /** The defect, reproduced: a real subprocess failure whose argv holds a password. Only the exit
+   *  status may cross into the message, which is why the function cannot be handed the cause. */
+  it('cannot carry the password out of the subprocess error', () => {
+    const secret = 'abcd-efgh-ijkl-mnop';
+    let status: number | null = null;
+    let raw = '';
+    try {
+      // `--` so node runs the script and the password is an argument to it, exactly as notarytool
+      // would be given one, rather than node rejecting an unknown flag.
+      execFileSync(process.execPath, ['-e', 'process.exit(3)', '--', '--password', secret]);
+    } catch (cause) {
+      raw = (cause as Error).message;
+      const s = (cause as { status?: unknown }).status;
+      status = typeof s === 'number' ? s : null;
+    }
+    // The raw error is what used to be interpolated, and it does hold the secret.
+    expect(raw).toContain(secret);
+    expect(status).toBe(3);
+    const said = notarizeFailure('/r/x.dmg', 'xcrun notarytool submit', status);
+    expect(said).not.toContain(secret);
+    expect(said).toContain('exit 3');
   });
 });

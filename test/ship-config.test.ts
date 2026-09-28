@@ -89,3 +89,34 @@ describe('signingFrom', () => {
     expect(signingFrom({ APPLE_API_KEY: '/k.p8' })).toEqual({ sign: false, notarize: false });
   });
 });
+
+/**
+ * Asking for a signature and getting an unsigned application is the worst outcome available: the
+ * developer hands out something they believe Gatekeeper will accept, and every recipient is refused.
+ * The packager's defaults allow it twice over — a missing certificate is a warning, and an unset
+ * `type` quietly falls back to a *development* certificate — so both are closed here.
+ */
+describe('a requested signature is mandatory, and it is a distribution one', () => {
+  it('forces code signing exactly when signing was asked for', () => {
+    expect(harnessPackaging({ ...identity, sign: true, notarize: false }).forceCodeSigning).toBe(true);
+    expect(harnessPackaging({ ...identity, sign: true, notarize: true }).forceCodeSigning).toBe(true);
+    expect(harnessPackaging({ ...identity, ...unsigned }).forceCodeSigning).toBe(false);
+  });
+
+  /** Unset, the identity search falls back to `Mac Developer` with only a warning. That certificate
+   *  signs, and no other Mac accepts what it signed. */
+  it('never leaves the certificate type to the default', () => {
+    for (const signing of [unsigned, { sign: true, notarize: false }, { sign: true, notarize: true }]) {
+      const mac = harnessPackaging({ ...identity, ...signing }).mac as Record<string, unknown>;
+      expect(mac.type).toBe('distribution');
+    }
+  });
+
+  /** The two can never contradict: an unsigned build sets `identity: null`, and the packager refuses
+   *  a null identity outright when signing is forced. */
+  it('never forces signing and disables the identity at the same time', () => {
+    const c = harnessPackaging({ ...identity, ...unsigned });
+    expect(c.forceCodeSigning).toBe(false);
+    expect((c.mac as Record<string, unknown>).identity).toBeNull();
+  });
+});

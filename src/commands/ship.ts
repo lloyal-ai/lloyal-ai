@@ -180,22 +180,42 @@ function imagesSince(dir: string, since: number): string[] {
 }
 
 /**
+ * What to say when notarizing the image did not finish.
+ *
+ * It takes the phase and the exit status and NOTHING ELSE, which is the point. The submission's
+ * argv carries the app-specific password, and `execFileSync` puts the whole command line into its
+ * error message, so a message built from that error would print the credential to the terminal and
+ * into whatever captured it. A function that never receives the cause cannot leak it.
+ *
+ * Nothing is lost by omitting it: notarytool's own output is inherited straight to the terminal, so
+ * the reason is already on screen, above this line.
+ */
+export function notarizeFailure(image: string, phase: string, status: number | null): string {
+  return (
+    `${basename(image)} was built and signed, and \`${phase}\` did not finish` +
+    `${status === null ? '' : ` (exit ${status})`}. Its own output is above.\n` +
+    'The application inside the image is notarized; the image around it is not, so a Mac that downloads it will refuse it.'
+  );
+}
+
+/**
  * Notarize and staple the disk image itself.
  *
  * The packager has already notarized and stapled the application inside it, which is what lets the
  * app launch. Gatekeeper judges a browser download on the file that was downloaded, which is this
- * one, so it is submitted in its own right. Nothing is echoed: the credentials are argv.
+ * one, so it is submitted in its own right.
  */
 function notarizeImage(image: string, auth: readonly string[]): void {
-  try {
-    execFileSync('xcrun', ['notarytool', 'submit', image, ...auth, '--wait'], { stdio: 'inherit' });
-    execFileSync('xcrun', ['stapler', 'staple', image], { stdio: 'inherit' });
-  } catch (cause) {
-    throw new Error(
-      `${basename(image)} was built and signed, and notarizing it did not finish: ${asMessage(cause)}\n` +
-        'The application inside it is notarized; the image around it is not, so a Mac that downloads it will refuse it.',
-    );
-  }
+  const run = (phase: string, argv: readonly string[]): void => {
+    try {
+      execFileSync('xcrun', [...argv], { stdio: 'inherit' });
+    } catch (cause) {
+      const status = (cause as { status?: unknown }).status;
+      throw new Error(notarizeFailure(image, phase, typeof status === 'number' ? status : null));
+    }
+  };
+  run('xcrun notarytool submit', ['notarytool', 'submit', image, ...auth, '--wait']);
+  run('xcrun stapler staple', ['stapler', 'staple', image]);
 }
 
 /** One image, as the report names it. */
