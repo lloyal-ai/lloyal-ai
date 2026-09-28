@@ -8,14 +8,14 @@
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 import { openHarnessYml } from '../src/scaffold/harness-yml.js';
-import { notaryArgs, signingFrom } from '../src/scaffold/ship-config.js';
-import { notarizeFailure, report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
+import { notaryArgs, notaryRoute, signingFrom } from '../src/scaffold/ship-config.js';
+import { iconRefusal, notarizeFailure, report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
 
 const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
 
@@ -232,13 +232,43 @@ describe('the `ship:` block in the manifest', () => {
 });
 
 describe('what notarytool is authenticated with', () => {
-  it('prefers an App Store Connect key', () => {
+  it('uses an App Store Connect key when that is what the machine has', () => {
     expect(
-      notaryArgs({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS', APPLE_ID: 'a@b.c' }),
+      notaryArgs({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' }),
     ).toEqual(['--key', '/k/AuthKey_X.p8', '--key-id', 'KID', '--issuer', 'ISS']);
   });
 
-  it('falls back to an Apple ID with an app-specific password', () => {
+  /** A stored profile keeps the secret in the keychain, so nothing sensitive reaches a command line. */
+  it('uses a keychain profile, and the keychain holding it when one is named', () => {
+    expect(notaryArgs({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual(['--keychain-profile', 'lloyal']);
+    expect(notaryArgs({ APPLE_KEYCHAIN_PROFILE: 'lloyal', APPLE_KEYCHAIN: '/k/login.keychain-db' }))
+      .toEqual(['--keychain-profile', 'lloyal', '--keychain', '/k/login.keychain-db']);
+  });
+
+  /**
+   * The packager notarizes the application from the same environment and picks in this order. If
+   * this disagreed, a machine holding two sets would ship an app notarized under one account inside
+   * an image notarized under another — working, and invisible when it stopped working.
+   */
+  it('picks in the same order the packager does, so both halves use one account', () => {
+    const all = {
+      APPLE_ID: 'a@b.c', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T',
+      APPLE_API_KEY: '/k/x.p8', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS',
+      APPLE_KEYCHAIN_PROFILE: 'lloyal',
+    };
+    expect(notaryRoute(all)).toBe('apple-id');
+    const { APPLE_ID: _id, APPLE_APP_SPECIFIC_PASSWORD: _pw, ...noAppleId } = all;
+    expect(notaryRoute(noAppleId)).toBe('api-key');
+    expect(notaryRoute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe('keychain-profile');
+    expect(notaryRoute({})).toBeNull();
+  });
+
+  it('counts a keychain profile as credentials, so it is not reported as unnotarized', () => {
+    expect(signingFrom({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: true, notarize: true });
+    expect(signingFrom({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: false, notarize: false });
+  });
+
+  it('uses an Apple ID with an app-specific password', () => {
     expect(notaryArgs({ APPLE_ID: 'a@b.c', APPLE_APP_SPECIFIC_PASSWORD: 'x-y-z', APPLE_TEAM_ID: 'TEAM' })).toEqual([
       '--apple-id', 'a@b.c', '--password', 'x-y-z', '--team-id', 'TEAM',
     ]);
@@ -268,7 +298,9 @@ describe('what the report says is true of the image', () => {
   it('signed and not notarized: a browser download still refuses it', () => {
     const said = said_({ CSC_LINK: 'base64…' });
     expect(said).toContain('not notarized');
-    expect(said).toContain('APPLE_APP_SPECIFIC_PASSWORD');
+    expect(said).toContain('APPLE_API_KEY');
+    // The route that keeps the secret out of a command line is named, not only the one that does not.
+    expect(said).toContain('APPLE_KEYCHAIN_PROFILE');
     expect(said).not.toContain('CSC_LINK');
   });
 
@@ -345,5 +377,51 @@ describe('a failed notarisation', () => {
     const said = notarizeFailure('/r/x.dmg', 'xcrun notarytool submit', status);
     expect(said).not.toContain(secret);
     expect(said).toContain('exit 3');
+  });
+});
+
+/**
+ * An icon that merely exists is not an icon. The `.svg` case is the sharp one: it does not fail, it
+ * ships a blank tile and warns about nothing, so it has to be refused by name rather than left to
+ * the packager.
+ */
+describe('an icon the project names', () => {
+  const dir = (): string => {
+    const d = mkdtempSync(join(tmpdir(), 'icon-'));
+    created.push(d);
+    return d;
+  };
+
+  it('accepts a .icns and a .png', () => {
+    const d = dir();
+    for (const name of ['icon.icns', 'icon.png', 'icon.PNG']) {
+      writeFileSync(join(d, name), 'x');
+      expect(iconRefusal(join(d, name), `build/${name}`)).toBeUndefined();
+    }
+  });
+
+  it('refuses one that is not there, and names it', () => {
+    expect(iconRefusal(join(dir(), 'gone.icns'), 'build/gone.icns')).toContain('build/gone.icns');
+  });
+
+  it('refuses a directory, which an existence check would have passed', () => {
+    const d = dir();
+    mkdirSync(join(d, 'icon.icns'));
+    expect(iconRefusal(join(d, 'icon.icns'), 'build/icon.icns')).toContain('not a file');
+  });
+
+  /** The defect this exists for: it builds, it ships, and the tile is empty. */
+  it('refuses an SVG and says why, since the packager would not', () => {
+    const d = dir();
+    writeFileSync(join(d, 'icon.svg'), '<svg/>');
+    const said = iconRefusal(join(d, 'icon.svg'), 'build/icon.svg');
+    expect(said).toContain('blank tile');
+    expect(said).toContain('512px');
+  });
+
+  it('refuses anything else by saying what an icon may be', () => {
+    const d = dir();
+    writeFileSync(join(d, 'icon.jpg'), 'x');
+    expect(iconRefusal(join(d, 'icon.jpg'), 'build/icon.jpg')).toContain('.icns nor a .png');
   });
 });

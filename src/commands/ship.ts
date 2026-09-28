@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, extname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -91,6 +91,36 @@ export function whatToAdd(slug: string): string {
     'An `icon:` beside it is a .icns or a square .png of at least 512px. The templates ship one at',
     '`build/icon.icns`; replace that file to change it, or name another here.',
   ].join('\n');
+}
+
+/**
+ * Why this icon cannot be used, or nothing.
+ *
+ * Existing is not enough. A directory passes an existence check and fails deep inside the packager;
+ * an `.svg` passes it and is WORSE THAN A FAILURE, because the packager's rasteriser draws paths and
+ * not type, so a mark made of lettering ships as a blank tile with no warning anywhere in the build.
+ * Both are cheap to catch here and expensive to find later — the second only by looking at the Dock.
+ */
+export function iconRefusal(resolved: string, asWritten: string): string | undefined {
+  let file;
+  try {
+    file = statSync(resolved);
+  } catch {
+    return `${HARNESS_YML} names an icon that is not there: ${asWritten}`;
+  }
+  if (!file.isFile()) return `${HARNESS_YML} names an icon that is not a file: ${asWritten}`;
+  const ext = extname(resolved).toLowerCase();
+  if (ext === '.svg') {
+    return (
+      `${asWritten} is an SVG, and the packager rasterises one with a renderer that draws paths and not type.\n` +
+      'A mark made of lettering would ship as a blank tile and nothing would warn you. Render it to a\n' +
+      'square .png of at least 512px, or a .icns, and name that instead.'
+    );
+  }
+  if (ext !== '.icns' && ext !== '.png') {
+    return `${asWritten} is neither a .icns nor a .png, and those are what an application icon may be.`;
+  }
+  return undefined;
 }
 
 /** A value only if it says something. A blank scalar is a key somebody started and left. */
@@ -246,8 +276,8 @@ export function report({ product, version, images, signing, icon }: Shipped): st
     : signing.sign
       ? [
           'Signed with your Developer ID and not notarized, so a Mac that downloads it through a browser',
-          'will still refuse it. Set APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER (or APPLE_ID,',
-          'APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID) and run this again.',
+          'will still refuse it. Set APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER — or a stored',
+          '`notarytool` profile as APPLE_KEYCHAIN_PROFILE — and run this again.',
         ]
       : [
           'Unsigned, which is enough to open it on this Mac and not enough for anyone else\'s. Set CSC_LINK',
@@ -326,8 +356,9 @@ export const shipCommand: Command = {
         icon = asked.icon ?? icon;
       }
       const iconPath = icon === undefined ? undefined : resolve(root, icon);
-      if (iconPath !== undefined && !existsSync(iconPath)) {
-        throw new Error(`${HARNESS_YML} names an icon that is not there: ${icon}`);
+      if (iconPath !== undefined) {
+        const refused = iconRefusal(iconPath, icon as string);
+        if (refused !== undefined) throw new Error(refused);
       }
 
       // Written where nothing keeps it: a packaging config in a developer's repository is the thing

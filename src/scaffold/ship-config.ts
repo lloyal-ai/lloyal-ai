@@ -48,8 +48,29 @@ export interface Signing {
  */
 export function signingFrom(env: NodeJS.ProcessEnv): Signing {
   const sign = Boolean(env.CSC_LINK ?? env.CSC_NAME);
-  const notary = Boolean(env.APPLE_API_KEY ?? (env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD));
-  return { sign, notarize: sign && notary };
+  return { sign, notarize: sign && notaryRoute(env) !== null };
+}
+
+/** The three ways Apple will accept a submission. */
+export type NotaryRoute = 'apple-id' | 'api-key' | 'keychain-profile';
+
+/**
+ * Which credentials this machine has, in the packager's own order of preference.
+ *
+ * The order is copied from it deliberately, and this is the reason: the packager notarizes the
+ * APPLICATION and this command notarizes the IMAGE around it, from the same environment. If the two
+ * disagreed about which credentials to use, a machine holding both an Apple ID and an API key would
+ * ship an application notarized under one account inside an image notarized under another — which
+ * works, and is a thing nobody would ever think to look for when it does not.
+ *
+ * Preferring the safer route here would not make the release safer, because the packager has already
+ * used the other one by the time this runs.
+ */
+export function notaryRoute(env: NodeJS.ProcessEnv): NotaryRoute | null {
+  if (env.APPLE_ID ?? env.APPLE_APP_SPECIFIC_PASSWORD) return 'apple-id';
+  if (env.APPLE_API_KEY ?? env.APPLE_API_KEY_ID ?? env.APPLE_API_ISSUER) return 'api-key';
+  if (env.APPLE_KEYCHAIN_PROFILE) return 'keychain-profile';
+  return null;
 }
 
 /** What the project itself says about the application, plus where its entitlements were written. */
@@ -140,7 +161,18 @@ export function notaryArgs(env: NodeJS.ProcessEnv): string[] {
     if (!value) throw new Error(`${name} is not set, and notarizing needs it.`);
     return value;
   };
-  return env.APPLE_API_KEY
-    ? ['--key', need('APPLE_API_KEY'), '--key-id', need('APPLE_API_KEY_ID'), '--issuer', need('APPLE_API_ISSUER')]
-    : ['--apple-id', need('APPLE_ID'), '--password', need('APPLE_APP_SPECIFIC_PASSWORD'), '--team-id', need('APPLE_TEAM_ID')];
+  switch (notaryRoute(env)) {
+    case 'api-key':
+      return ['--key', need('APPLE_API_KEY'), '--key-id', need('APPLE_API_KEY_ID'), '--issuer', need('APPLE_API_ISSUER')];
+    // A stored profile keeps the secret in the keychain, where a command line cannot expose it.
+    case 'keychain-profile':
+      return ['--keychain-profile', need('APPLE_KEYCHAIN_PROFILE'),
+        ...(env.APPLE_KEYCHAIN ? ['--keychain', env.APPLE_KEYCHAIN] : [])];
+    // The password becomes an argument to `notarytool`, and an argument is readable by anything
+    // running as this user for as long as the submission takes. The packager does the same with it
+    // when notarizing the application, so this is the environment's exposure rather than this
+    // command's, and the way out of it is a key or a stored profile instead.
+    default:
+      return ['--apple-id', need('APPLE_ID'), '--password', need('APPLE_APP_SPECIFIC_PASSWORD'), '--team-id', need('APPLE_TEAM_ID')];
+  }
 }
