@@ -28,7 +28,7 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Command } from '../command.js';
-import { spawnNpm } from '../npm-spawn.js';
+import { npmExit } from '../npm-spawn.js';
 
 /**
  * Platform package → its directory, relative to the hdk workspace root.
@@ -99,15 +99,6 @@ interface PkgManifest {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   [k: string]: unknown;
-}
-
-/** Await a spawned npm's exit code (spawnNpm never rejects on non-zero). */
-function npmExit(args: string[], cwd: string): Promise<number> {
-  return new Promise((resolveExit) => {
-    const child = spawnNpm(args, { cwd, stdio: 'inherit' });
-    child.on('close', (code) => resolveExit(code ?? 1));
-    child.on('error', () => resolveExit(1));
-  });
 }
 
 export const linkLocalCommand: Command = {

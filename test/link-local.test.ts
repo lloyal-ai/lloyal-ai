@@ -6,7 +6,6 @@
  * choreography and the link set, never the network.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { EventEmitter } from 'node:events';
 import {
   existsSync,
   lstatSync,
@@ -20,13 +19,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+/** npm itself is not the subject: what matters is the argv it is given and what the verb does with
+ *  the exit code. The one place npm is run is mocked at the level the verb calls it — `npmExit`,
+ *  whose own wiring from a process to a code is covered in `npm-spawn.test.ts`. */
 const npmMock = vi.hoisted(() => ({ nextCode: 0, calls: [] as string[][] }));
 vi.mock('../src/npm-spawn.js', () => ({
-  spawnNpm: (args: string[]) => {
+  npmExit: (args: string[]) => {
     npmMock.calls.push(args);
-    const child = new EventEmitter();
-    setImmediate(() => child.emit('close', npmMock.nextCode));
-    return child;
+    return Promise.resolve(npmMock.nextCode);
   },
 }));
 

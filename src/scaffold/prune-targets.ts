@@ -80,7 +80,12 @@ export const TARGET_DEV_DEPS: Record<PrunableTarget, string[]> = {
  * bin shim / build config. Deleted on prune, copied back on add.
  */
 export const TARGET_FILES: Record<PrunableTarget, string[]> = {
-  desktop: ['electron.vite.config.ts', 'tsconfig.electron.json', 'bin/ensure-electron.js'],
+  // `build/` is the packager's resources directory and nothing but `lloyal ship` reads it, so the
+  // default mark goes with the surface it marks. The `ship:` block in the manifest STAYS: it also
+  // holds the application identifier, which is the developer's own answer and would be lost on a
+  // remove-then-add. Its `icon:` line points at a file that is absent until desktop returns, which
+  // ship names plainly rather than guessing around.
+  desktop: ['electron.vite.config.ts', 'tsconfig.electron.json', 'bin/ensure-electron.js', 'build/icon.icns', 'build/icon.png'],
   web: ['bin/serve.js'],
 };
 /**

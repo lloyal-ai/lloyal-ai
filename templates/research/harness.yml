@@ -19,3 +19,6 @@ defaults:
       scope: cohort
     query_dedup:
       scope: cohort
+
+ship:
+  icon: build/icon.icns

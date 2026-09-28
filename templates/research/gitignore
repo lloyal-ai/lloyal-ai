@@ -4,9 +4,11 @@ traces/
 trace-*.jsonl
 
 # Build outputs: cli (dist/ above), desktop (electron-vite → out/),
-# web (vite → dist-web/).
+# web (vite → dist-web/). `lloyal ship` wraps out/ into a disk image under
+# release/ — a hundred megabytes and rebuildable, so never committed.
 out/
 dist-web/
+release/
 
 # Model weights are fetched or dropped locally, never committed.
 models/**/*.gguf

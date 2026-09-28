@@ -149,3 +149,37 @@ describe('templates cannot drift from the runtime they pin', () => {
     }
   });
 });
+
+/**
+ * A scaffold ships a mark, and the manifest names it.
+ *
+ * Without one, `lloyal ship` hands a developer an app wearing Electron's logo and nothing anywhere
+ * tells them it was theirs to set — which is exactly how it was found. The two halves can drift
+ * apart in either direction: a mark nobody declares is never used, and a declaration pointing at a
+ * file nobody shipped fails the build. So the RELATIONSHIP is what is asserted, not either half.
+ *
+ * It must be a raster. The packager rasterises a declared `.svg` with a renderer that draws paths
+ * and not type, so an SVG carrying a `<text>` mark ships an app with a blank body and says nothing.
+ */
+describe('every template ships a default icon and declares it', () => {
+  // `templates/` also holds the ability scaffold, which is not a harness and has no surface to mark.
+  // What a harness template is, is that it has a manifest.
+  const harnesses = templates.filter((k) => existsSync(join(templatesDir, k, 'harness.yml')));
+
+  for (const kind of harnesses) {
+    it(`${kind} carries the mark its manifest names`, () => {
+      const manifest = readFileSync(join(templatesDir, kind, 'harness.yml'), 'utf8');
+      const declared = /^\s*icon:\s*(\S+)\s*$/m.exec(manifest)?.[1];
+      expect(declared, `${kind}/harness.yml declares no ship.icon`).toBeDefined();
+      expect(declared).toMatch(/\.(icns|png)$/);
+      expect(existsSync(join(templatesDir, kind, declared as string))).toBe(true);
+    });
+
+    it(`${kind}'s mark is registered as desktop's, so a cli-only scaffold does not carry it`, async () => {
+      const { TARGET_FILES } = await import('../src/scaffold/prune-targets.js');
+      const manifest = readFileSync(join(templatesDir, kind, 'harness.yml'), 'utf8');
+      const declared = /^\s*icon:\s*(\S+)\s*$/m.exec(manifest)?.[1] as string;
+      expect(TARGET_FILES.desktop).toContain(declared);
+    });
+  }
+});
