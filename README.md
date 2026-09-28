@@ -390,7 +390,9 @@ Credentials are read from the environment and from `.env.local` in the project, 
 ignores — so you ship from your laptop, and CI needs no file because a real environment variable
 wins. Put a certificate already in your keychain and a stored `notarytool` profile there and it
 holds no secrets at all; `ship --notarize` prints the block to paste when it cannot find them.
-macOS today; Windows and Linux each need their own build host.
+[Shipping an app](https://docs.lloyal.ai/ship) is the whole account: obtaining a Developer ID, the
+three notary routes, and what actually proves an image will open on someone else's Mac. macOS
+today; Windows and Linux each need their own build host.
 
 ## Models
 
