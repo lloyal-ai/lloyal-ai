@@ -13,6 +13,10 @@ release/
 # Model weights are fetched or dropped locally, never committed.
 models/**/*.gguf
 
+# Local environment overrides — one machine's values, never the project's. `.env.local` is where a
+# signing certificate and notary credentials go, so this line is what keeps them off a branch.
+*.local
+
 *.log
 .DS_Store
 harness.json

@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 import { openHarnessYml } from '../src/scaffold/harness-yml.js';
-import { notaryArgs, notaryRoute, signingFrom } from '../src/scaffold/ship-config.js';
+import { canDistribute, distributionRefusal, hasCertificate, notaryArgs, notaryRoute, signingFrom } from '../src/scaffold/ship-config.js';
 import { iconRefusal, notarizeFailure, report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
 
 const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
@@ -270,10 +270,10 @@ describe('what notarytool is authenticated with', () => {
    * packager reads the same variables with `||`; anything else makes the two disagree.
    */
   describe('a variable that is set and empty', () => {
-    it('does not mask the one behind it when deciding to sign', () => {
-      expect(signingFrom({ CSC_LINK: '', CSC_NAME: 'Developer ID Application: Someone (T)' }).sign).toBe(true);
-      expect(signingFrom({ CSC_LINK: '', CSC_NAME: '' }).sign).toBe(false);
-      expect(signingFrom({}).sign).toBe(false);
+    it('does not mask the one behind it when looking for a certificate', () => {
+      expect(hasCertificate({ CSC_LINK: '', CSC_NAME: 'Developer ID Application: Someone (T)' })).toBe(true);
+      expect(hasCertificate({ CSC_LINK: '', CSC_NAME: '' })).toBe(false);
+      expect(hasCertificate({})).toBe(false);
     });
 
     it('does not send an incomplete API key set down another route', () => {
@@ -289,13 +289,13 @@ describe('what notarytool is authenticated with', () => {
 
     it('is not mistaken for credentials when every one of them is empty', () => {
       expect(notaryRoute({ APPLE_ID: '', APPLE_API_KEY: '', APPLE_KEYCHAIN_PROFILE: '' })).toBeNull();
-      expect(signingFrom({ CSC_LINK: '', APPLE_API_KEY: '' })).toEqual({ sign: false, notarize: false });
+      expect(canDistribute({ CSC_LINK: '', APPLE_API_KEY: '' })).toBe(false);
     });
   });
 
-  it('counts a keychain profile as credentials, so it is not reported as unnotarized', () => {
-    expect(signingFrom({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: true, notarize: true });
-    expect(signingFrom({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ sign: false, notarize: false });
+  it('counts a keychain profile as credentials, so a machine holding one is ready', () => {
+    expect(canDistribute({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(true);
+    expect(canDistribute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(false);
   });
 
   it('uses an Apple ID with an app-specific password', () => {
@@ -313,37 +313,40 @@ describe('what notarytool is authenticated with', () => {
 
 describe('what the report says is true of the image', () => {
   const image = [{ path: 'release/Fieldnote-0.3.1-arm64.dmg', bytes: 127_400_000 }];
-  const said_ = (env: NodeJS.ProcessEnv, icon?: string) =>
-    report({ product: 'Fieldnote', version: '0.3.1', images: image, signing: signingFrom(env), ...(icon !== undefined ? { icon } : {}) });
+  const said_ = (env: NodeJS.ProcessEnv, asked = false, icon?: string) =>
+    report({
+      product: 'Fieldnote', version: '0.3.1', images: image,
+      signing: signingFrom(env, asked), ready: canDistribute(env),
+      ...(icon !== undefined ? { icon } : {}),
+    });
 
-  it('unsigned: where it works, and the two variables that change that', () => {
+  it('unsigned on a machine with nothing: what a distributable build takes', () => {
     const said = said_({});
     expect(said).toContain('release/Fieldnote-0.3.1-arm64.dmg');
     expect(said).toContain('127 MB');
     expect(said).toContain('Unsigned');
-    expect(said).toContain('CSC_LINK');
-    expect(said).toContain('APPLE_API_KEY');
+    expect(said).toContain('--notarize');
   });
 
-  it('signed and not notarized: a browser download still refuses it', () => {
-    const said = said_({ CSC_LINK: 'base64…' });
-    expect(said).toContain('not notarized');
-    expect(said).toContain('APPLE_API_KEY');
-    // The route that keeps the secret out of a command line is named, not only the one that does not.
-    expect(said).toContain('APPLE_KEYCHAIN_PROFILE');
+  /** Forgetting the flag and lacking an Apple account want opposite advice, and the difference is
+   *  knowable, so the report tells them apart rather than reciting variables at both. */
+  it('unsigned on a machine that is ready: the flag, not a list of variables', () => {
+    const said = said_({ CSC_NAME: 'Developer ID Application: Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' });
+    expect(said).toContain('holds the credentials');
+    expect(said).toContain('--notarize');
     expect(said).not.toContain('CSC_LINK');
   });
 
-  it('notarized: how to check it before handing it over', () => {
-    const said = said_({ CSC_LINK: 'base64…', APPLE_API_KEY: '/k/x.p8' });
+  it('notarized: how to check it before it goes out', () => {
+    const said = said_({ CSC_LINK: 'base64…', APPLE_API_KEY: '/k/x.p8', APPLE_API_KEY_ID: 'K', APPLE_API_ISSUER: 'I' }, true);
     expect(said).toContain('stapler validate');
-    expect(said).not.toContain('CSC_LINK');
+    expect(said).not.toContain('--notarize');
   });
 
   /** The icon is the one thing ship completes unasked, so it is the one thing that can surprise a
    *  reader who never chose it. Either way the report says where it came from. */
   it('names the icon it used, and how to change it', () => {
-    const said = said_({}, 'build/icon.icns');
+    const said = said_({}, false, 'build/icon.icns');
     expect(said).toContain('Icon: build/icon.icns');
     expect(said).toContain('ship.icon');
     expect(said).not.toContain('wears Electron');
@@ -453,5 +456,58 @@ describe('an icon the project names', () => {
     const d = dir();
     writeFileSync(join(d, 'icon.jpg'), 'x');
     expect(iconRefusal(join(d, 'icon.jpg'), 'build/icon.jpg')).toContain('.icns nor a .png');
+  });
+});
+
+/**
+ * Nothing is signed unless it was asked for.
+ *
+ * Intent is not in the environment, and inferring it there is how an artifact comes out unsigned
+ * while everyone believes otherwise — one variable left over from another project is enough. So the
+ * flag decides, the environment supplies, and a request that cannot be met is refused rather than
+ * quietly downgraded to the thing nobody can install.
+ */
+describe('--notarize is the asking', () => {
+  const complete = { CSC_NAME: 'Developer ID Application: Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+
+  it('signs nothing when it was not asked, however well the machine is set up', () => {
+    expect(signingFrom(complete, false)).toEqual({ sign: false, notarize: false });
+    expect(canDistribute(complete)).toBe(true);
+  });
+
+  it('signs and notarizes together when it was asked and can be met', () => {
+    expect(signingFrom(complete, true)).toEqual({ sign: true, notarize: true });
+  });
+
+  /** Apple's notary service only accepts a submission already signed, so there is no third state to
+   *  reach: asked-but-incomplete is refused by the command before this is consulted. */
+  it('never claims one without the other', () => {
+    for (const env of [{}, { CSC_NAME: 'x' }, { APPLE_KEYCHAIN_PROFILE: 'l' }, complete]) {
+      for (const asked of [true, false]) {
+        const { sign, notarize } = signingFrom(env, asked);
+        expect(sign).toBe(notarize);
+      }
+    }
+  });
+
+  it('is content when the machine has both', () => {
+    expect(distributionRefusal(complete)).toBeUndefined();
+  });
+
+  it('names what is missing, one or both', () => {
+    expect(distributionRefusal({})).toContain('a Developer ID certificate and notary credentials');
+    expect(distributionRefusal({})).toContain('neither');
+    expect(distributionRefusal({ CSC_NAME: 'x' })).toContain('notary credentials');
+    expect(distributionRefusal({ CSC_NAME: 'x' })).toContain('none');
+    expect(distributionRefusal({ APPLE_KEYCHAIN_PROFILE: 'l' })).toContain('a Developer ID certificate');
+  });
+
+  /** The refusal is the documentation: no scaffold gains an example file nobody opens, and the
+   *  routes that leave no secret on disk are the ones printed first. */
+  it('is the thing to paste, secret-free routes first', () => {
+    const said = distributionRefusal({}) as string;
+    expect(said).toContain('.env.local');
+    expect(said.indexOf('APPLE_KEYCHAIN_PROFILE')).toBeLessThan(said.indexOf('CSC_LINK'));
+    expect(said).toContain('store-credentials');
   });
 });

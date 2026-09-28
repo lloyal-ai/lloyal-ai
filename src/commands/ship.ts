@@ -30,14 +30,14 @@ import { npmExit } from '../npm-spawn.js';
 import { HARNESS_YML, openHarnessYml } from '../scaffold/harness-yml.js';
 import { readPackageJson } from '../scaffold/package-json.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
-import { ENTITLEMENTS, harnessPackaging, notaryArgs, signingFrom, type Signing } from '../scaffold/ship-config.js';
+import { ENTITLEMENTS, canDistribute, distributionRefusal, harnessPackaging, notaryArgs, signingFrom, type Signing } from '../scaffold/ship-config.js';
 import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
   'lloyal ship — build a distributable macOS application from this harness',
   '',
   'Usage:',
-  '  lloyal ship',
+  '  lloyal ship [--notarize]',
   '',
   'Builds the desktop surface and packages it as a disk image in release/. The first run asks for an',
   'application identifier and, if you have one, an icon, and records both in harness.yml; later runs',
@@ -46,8 +46,13 @@ const USAGE = [
   'Model weights are not bundled. On first launch the installed application provisions every model',
   'named in harness.yml, digest-verified, into its own support directory.',
   '',
-  'Code signing and notarization are read from the environment rather than a flag, so one command',
-  'produces an unsigned build locally and a signed, notarized artifact in a release pipeline:',
+  'Without --notarize the image is unsigned: fast, and openable only on the machine that built it.',
+  '',
+  '--notarize produces the distributable artifact — signed with your Developer ID under the hardened',
+  'runtime, notarized and stapled, so a Mac that downloads it accepts it. Nothing is signed unless it',
+  'is asked for, and a request that cannot be met is refused before the build rather than quietly',
+  'downgraded. Credentials are read from the environment and from `.env.local` in the project, which',
+  'git ignores; a real environment variable wins, so CI needs no file:',
   '',
   '  CSC_LINK + CSC_KEY_PASSWORD   base64 of a Developer ID Application .p12, and its password',
   '  APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER   an App Store Connect key, to notarize',
@@ -267,10 +272,14 @@ export interface Shipped {
   signing: Signing;
   /** The icon as the manifest names it, or absent when the app wears Electron's. */
   icon?: string;
+  /** Whether this machine could have produced a distributable artifact. An unsigned build on a
+   *  machine that is already set up is somebody forgetting the flag, not somebody without an
+   *  Apple account, and the two want opposite advice. */
+  ready?: boolean;
 }
 
 /** What was made, and what is true of it — including what it cannot do yet. */
-export function report({ product, version, images, signing, icon }: Shipped): string {
+export function report({ product, version, images, signing, icon, ready }: Shipped): string {
   const made = images.map((i) => `  ${i.path}  (${Math.round(i.bytes / 1e6)} MB)`);
   const standing = signing.notarize
     ? [
@@ -283,11 +292,16 @@ export function report({ product, version, images, signing, icon }: Shipped): st
           'will still refuse it. Set APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER — or a stored',
           '`notarytool` profile as APPLE_KEYCHAIN_PROFILE — and run this again.',
         ]
-      : [
-          'Unsigned, which is enough to open it on this Mac and not enough for anyone else\'s. Set CSC_LINK',
-          '(base64 of a Developer ID Application .p12) and CSC_KEY_PASSWORD to sign it, and APPLE_API_KEY,',
-          'APPLE_API_KEY_ID and APPLE_API_ISSUER to notarize it as well.',
-        ];
+      : ready === true
+        ? [
+            'Unsigned, which is enough to open it on this Mac and not enough for anyone else\'s — and this',
+            'machine holds the credentials to change that. Run it again with `--notarize`.',
+          ]
+        : [
+            'Unsigned, which is enough to open it on this Mac and not enough for anyone else\'s. A',
+            'distributable build takes a Developer ID and notary credentials, and `--notarize` says what',
+            'to put where.',
+          ];
   // The icon is the one thing ship can complete without being asked, so it is the one thing a reader
   // can be surprised by. Say which file it came from, or that none was found and where to put one.
   const mark = icon === undefined
@@ -315,7 +329,7 @@ export const shipCommand: Command = {
   async run(argv) {
     const { values } = parseArgs({
       args: [...argv],
-      options: { help: { type: 'boolean', short: 'h' } },
+      options: { help: { type: 'boolean', short: 'h' }, notarize: { type: 'boolean' } },
       allowPositionals: false,
     });
     if (values.help) {
@@ -330,6 +344,12 @@ export const shipCommand: Command = {
             'The harness itself runs here — `npm start`, `npm run dev:desktop` — and Windows and Linux images are not built yet.',
         );
       }
+      // The project's own machine-local values, before anything reads the environment. A real
+      // environment variable still wins, which is what a CI runner needs; the file is for a laptop.
+      // `loadEnvFile` throws on a file that is not there, so the question is asked first.
+      const localEnv = join(root, '.env.local');
+      if (existsSync(localEnv)) process.loadEnvFile(localEnv);
+
       const pkg = readPackageJson(join(root, 'package.json'));
       const name = asText(pkg.name);
       const version = asText(pkg.version);
@@ -372,7 +392,13 @@ export const shipCommand: Command = {
       const work = mkdtempSync(join(tmpdir(), 'lloyal-ship-'));
       const entitlements = join(work, 'entitlements.plist');
       writeFileSync(entitlements, ENTITLEMENTS);
-      const signing = signingFrom(process.env);
+      // Refused before the desktop build rather than after it: a missing variable is a sentence, and
+      // finding it out at the end costs the whole build.
+      if (values.notarize === true) {
+        const refused = distributionRefusal(process.env);
+        if (refused !== undefined) throw new Error(refused);
+      }
+      const signing = signingFrom(process.env, values.notarize === true);
       const config = harnessPackaging({
         productName: product,
         appId,
@@ -415,6 +441,7 @@ export const shipCommand: Command = {
         version,
         images: images.map((p) => ({ path: relative(root, p), bytes: statSync(p).size })),
         signing,
+        ready: canDistribute(process.env),
         ...(icon !== undefined ? { icon } : {}),
       })}\n`);
       return 0;

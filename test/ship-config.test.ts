@@ -77,16 +77,21 @@ describe('the entitlements', () => {
 });
 
 describe('signingFrom', () => {
-  it('reads the environment, so the same config builds signed or not with no edit', () => {
-    expect(signingFrom({})).toEqual({ sign: false, notarize: false });
-    expect(signingFrom({ CSC_LINK: 'x' })).toEqual({ sign: true, notarize: false });
-    expect(signingFrom({ CSC_NAME: 'Developer ID' })).toEqual({ sign: true, notarize: false });
-    expect(signingFrom({ CSC_LINK: 'x', APPLE_API_KEY: '/k.p8' })).toEqual({ sign: true, notarize: true });
-    expect(signingFrom({ CSC_LINK: 'x', APPLE_ID: 'a@b', APPLE_APP_SPECIFIC_PASSWORD: 'p' })).toEqual({ sign: true, notarize: true });
+  /** The asking is the caller's and the secrets are the environment's. A machine that is fully set
+   *  up still builds unsigned until somebody says otherwise, because a leftover variable from
+   *  another project is not a decision to sign. */
+  it('signs only what was asked for, and only when the machine can', () => {
+    const ready = { CSC_LINK: 'x', APPLE_API_KEY: '/k.p8', APPLE_API_KEY_ID: 'K', APPLE_API_ISSUER: 'I' };
+    expect(signingFrom(ready, false)).toEqual({ sign: false, notarize: false });
+    expect(signingFrom(ready, true)).toEqual({ sign: true, notarize: true });
+    expect(signingFrom({}, true)).toEqual({ sign: false, notarize: false });
   });
 
+  /** Apple's notary service only accepts a submission already signed, so a half-configured machine
+   *  has no third state to land in — the command refuses it before this is ever consulted. */
   it('never notarizes without signing — there would be nothing to staple', () => {
-    expect(signingFrom({ APPLE_API_KEY: '/k.p8' })).toEqual({ sign: false, notarize: false });
+    expect(signingFrom({ APPLE_API_KEY: '/k.p8' }, true)).toEqual({ sign: false, notarize: false });
+    expect(signingFrom({ CSC_LINK: 'x' }, true)).toEqual({ sign: false, notarize: false });
   });
 });
 

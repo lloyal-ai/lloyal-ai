@@ -41,18 +41,62 @@ export interface Signing {
 }
 
 /**
- * Read the environment rather than a flag, so one config builds an unsigned disk image on a machine
- * with no Apple account and a notarized one on a machine with credentials, unchanged.
+ * What a build will do about signing: the ASKING is the caller's, the secrets are the environment's.
  *
- * Notarizing without signing is not a state that exists: there would be nothing to staple.
+ * Intent cannot be inferred from the environment, and inferring it is how an artifact comes out
+ * unsigned while everyone believes otherwise — a variable left over from another project is enough.
+ * So nothing is signed unless it was asked for, and something asked for and not possible is refused
+ * ({@link distributionRefusal}) rather than quietly downgraded.
+ *
+ * The two fields always agree today, because notarizing without signing is not a state that exists:
+ * Apple's notary service only accepts a submission already signed with a Developer ID. They stay
+ * two because they drive two different keys, and because Windows signs and never notarizes.
  */
-export function signingFrom(env: NodeJS.ProcessEnv): Signing {
-  // `||`, never `??`. A variable that is SET AND EMPTY is the ordinary shape of an absent CI secret —
-  // `CSC_LINK: ${{ secrets.CSC_LINK }}` interpolates to `''` when the secret is not there — and `??`
-  // treats that as a value, so an empty CSC_LINK would mask a perfectly good CSC_NAME and quietly
-  // turn signing off. The packager reads these the same way, and the two must agree.
-  const sign = Boolean(env.CSC_LINK || env.CSC_NAME);
-  return { sign, notarize: sign && notaryRoute(env) !== null };
+export function signingFrom(env: NodeJS.ProcessEnv, asked: boolean): Signing {
+  const able = asked && hasCertificate(env) && notaryRoute(env) !== null;
+  return { sign: able, notarize: able };
+}
+
+/**
+ * Is there a Developer ID to sign with?
+ *
+ * `||`, never `??`. A variable that is SET AND EMPTY is the ordinary shape of an absent CI secret —
+ * `CSC_LINK: ${{ secrets.CSC_LINK }}` interpolates to `''` when the secret is not there — and `??`
+ * treats that as a value, so an empty CSC_LINK would mask a perfectly good CSC_NAME. The packager
+ * reads these the same way, and the two must agree.
+ */
+export const hasCertificate = (env: NodeJS.ProcessEnv): boolean => Boolean(env.CSC_LINK || env.CSC_NAME);
+
+/** Could this machine produce a distributable artifact if it were asked to? */
+export const canDistribute = (env: NodeJS.ProcessEnv): boolean => hasCertificate(env) && notaryRoute(env) !== null;
+
+/**
+ * Why a distributable build cannot happen here, said as the thing to paste, or nothing.
+ *
+ * The refusal IS the documentation. A scaffold gains no example file nobody opens, and the names
+ * arrive at the one moment they are wanted. The routes that leave no secret in the file come first,
+ * because the file is the reason to prefer them.
+ */
+export function distributionRefusal(env: NodeJS.ProcessEnv): string | undefined {
+  const missing = [
+    ...(hasCertificate(env) ? [] : ['a Developer ID certificate']),
+    ...(notaryRoute(env) === null ? ['notary credentials'] : []),
+  ];
+  if (missing.length === 0) return undefined;
+  return [
+    `--notarize needs ${missing.join(' and ')}; this machine has ${missing.length > 1 ? 'neither' : 'none'}.`,
+    '',
+    'Put them in `.env.local`, which git already ignores. These two leave no secret in the file:',
+    '',
+    '  CSC_NAME="Developer ID Application: Your Name (TEAMID)"   # the certificate, from your keychain',
+    '  APPLE_KEYCHAIN_PROFILE=<name>   # xcrun notarytool store-credentials <name>',
+    '',
+    'On CI, where there is no keychain to read:',
+    '',
+    '  CSC_LINK=<base64 of a Developer ID Application .p12>',
+    '  CSC_KEY_PASSWORD=<its password>',
+    '  APPLE_API_KEY=<path to AuthKey_XXXX.p8>  APPLE_API_KEY_ID=<id>  APPLE_API_ISSUER=<uuid>',
+  ].join('\n');
 }
 
 /** The three ways Apple will accept a submission. */

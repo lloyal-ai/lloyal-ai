@@ -378,11 +378,17 @@ weight they already have offered as an alternative to downloading it. Everything
 application's own support directory, never beside your project, and every launch after that opens
 at once. Change a model in `harness.yml` and the next release provisions the new one.
 
-Code signing and notarization are read from the environment rather than committed to the project,
-so one command produces an unsigned build on your machine and a signed, notarized, stapled artifact
-in a release pipeline. An unsigned image is refused by Gatekeeper on every machine but the one that
-built it; `npx lloyal-ai ship --help` names the variables. macOS today; Windows and Linux each need
-their own build host.
+Without a flag the image is unsigned, which is fast and opens only on the machine that built it.
+`ship --notarize` produces the distributable artifact: signed with your Developer ID under the
+hardened runtime, notarized and stapled, so a Mac that downloads it accepts it. Nothing is signed
+unless you ask, and a request that cannot be met is refused before the build rather than quietly
+downgraded to something nobody can install.
+
+Credentials are read from the environment and from `.env.local` in the project, which git already
+ignores — so you ship from your laptop, and CI needs no file because a real environment variable
+wins. Put a certificate already in your keychain and a stored `notarytool` profile there and it
+holds no secrets at all; `ship --notarize` prints the block to paste when it cannot find them.
+macOS today; Windows and Linux each need their own build host.
 
 ## Models
 
