@@ -174,11 +174,11 @@ function Banner(): ReactElement {
       <Box width="100%" justifyContent="space-between" marginTop={1}>
         <Box gap={2}>
           <GradientWord text="lloyal" bold />
-          <Text dimColor>rails new for agentic AI abilities</Text>
+          <Text dimColor>ship apps that think and act</Text>
         </Box>
         <Text dimColor>v{VERSION}</Text>
       </Box>
-      <Text dimColor>the model lives inside your app — no API key</Text>
+      <Text dimColor>program live attention, coordinate agents, compose models — in TypeScript</Text>
     </Box>
   );
 }

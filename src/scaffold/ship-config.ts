@@ -15,6 +15,8 @@
  * Proven against `reasoning.run.desktop`, which ships a signed, notarized dmg on this shape.
  */
 
+import { execFileSync } from 'node:child_process';
+
 /** The three hardened-runtime exemptions a harness needs, and nothing else.
  *
  *  JIT and unsigned executable memory are the model itself — V8 and the inference runtime both write
@@ -67,41 +69,190 @@ export function signingFrom(env: NodeJS.ProcessEnv, asked: boolean): Signing {
  */
 export const hasCertificate = (env: NodeJS.ProcessEnv): boolean => Boolean(env.CSC_LINK || env.CSC_NAME);
 
-/** Could this machine produce a distributable artifact if it were asked to? */
-export const canDistribute = (env: NodeJS.ProcessEnv): boolean => hasCertificate(env) && notaryRoute(env) !== null;
+/**
+ * Could this machine produce a distributable artifact if it were asked to?
+ *
+ * It is the checklist being complete, and nothing else. `hasCertificate` only asked whether
+ * `CSC_NAME` was SET, so a name matching nothing installed read as ready — and the unsigned report
+ * would tell a reader to run `--notarize`, which then refused. Re-deriving the rule here is what
+ * let the two drift, so this asks the refusal's own question instead of a similar one.
+ */
+export const canDistribute = (env: NodeJS.ProcessEnv, identities: readonly DeveloperIdentity[]): boolean =>
+  signingChecklist(env, identities).every((step) => step.done);
+
+/** A Developer ID Application certificate this Mac can sign with. */
+export interface DeveloperIdentity {
+  /** The name WITHOUT the `Developer ID Application:` prefix — what `CSC_NAME` wants. */
+  readonly name: string;
+  /** The team, which `notarytool store-credentials` also wants, so it is never looked up twice. */
+  readonly teamId: string;
+}
 
 /**
- * Why a distributable build cannot happen here, said as the thing to paste, or nothing.
+ * The Developer ID certificates already installed here.
  *
- * The refusal IS the documentation. A scaffold gains no example file nobody opens, and the names
- * arrive at the one moment they are wanted. The routes that leave no secret in the file come first,
- * because the file is the reason to prefer them.
+ * Asked of the machine rather than of the reader. Both values a signing setup needs are sitting in
+ * the keychain, and the alternative is a message that tells somebody to go and find a string it
+ * could have printed. It also disambiguates: an `Apple Development:` certificate sits beside the
+ * Developer ID one and is the wrong answer, so matching on the prefix is the whole check.
+ *
+ * Never throws. No `security`, no keychain, a non-zero exit or unreadable output all mean the same
+ * thing — nothing found — and the refusal falls back to describing what to obtain.
  */
-export function distributionRefusal(env: NodeJS.ProcessEnv): string | undefined {
-  const missing = [
-    ...(hasCertificate(env) ? [] : ['a Developer ID certificate']),
-    ...(notaryRoute(env) === null ? ['notary credentials'] : []),
-  ];
-  if (missing.length === 0) return undefined;
+export function developerIdentities(
+  run: () => string = () => execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' }),
+): DeveloperIdentity[] {
+  let out: string;
+  try {
+    out = run();
+  } catch {
+    return [];
+  }
+  return [...out.matchAll(/"Developer ID Application: (.+?) \((\w+)\)"/g)]
+    .map((m) => ({ name: `${m[1]} (${m[2]})`, teamId: m[2] }));
+}
+
+/** One thing a distributable build needs, and whether it is here. */
+export interface SigningStep {
+  readonly done: boolean;
+  readonly title: string;
+  /** Lines shown under an unfinished step: what to run, or what to paste. */
+  readonly detail: readonly string[];
+}
+
+/** The profile name suggested when there is none — short, and its own reminder of what made it. */
+export const PROFILE = 'lloyal';
+
+/**
+ * What a distributable build needs, each marked with whether it is here.
+ *
+ * **Every tick is something this read, never something it inferred.** Two come from the keychain
+ * and the environment; nothing is deduced from something else being true. That rule is what decides
+ * the steps: membership of the Apple Developer Program is not a row, because owning a certificate
+ * only implies it, and a stored notary profile is not a row either, because the keychain does not
+ * list profiles back under any stable service — so the closest observable fact, that this project
+ * NAMES one, is the row, and creating it is that row's instruction.
+ *
+ * Nothing here is particular to a machine. The certificate name and team come from whatever
+ * `security` reports, and the placeholders stand in when it reports nothing.
+ */
+/** The prefix `security` prints in front of a Developer ID name, and the packager matches against. */
+const DEVELOPER_ID = 'Developer ID Application: ';
+
+/**
+ * The installed certificates `CSC_NAME` selects — by the packager's rule, not a stricter one.
+ *
+ * electron-builder 26.15.3 does `line.includes(qualifier)` against each `security find-identity`
+ * line (`codeSign/macCodeSign.js:227`), so `CSC_NAME` is a SUBSTRING selector: `Acme Pty Ltd`
+ * selects `Developer ID Application: Acme Pty Ltd (T3AMID9999)` and is a supported setup. Requiring
+ * the whole name here refused a configuration the packager accepts.
+ *
+ * `CSC_LINK` selects nothing installed: the packager imports that `.p12` into a temporary keychain
+ * it makes at build time, so this Mac's certificates say nothing about it.
+ */
+export function selectedIdentities(
+  env: NodeJS.ProcessEnv,
+  identities: readonly DeveloperIdentity[],
+): readonly DeveloperIdentity[] {
+  if (env.CSC_LINK) return [];
+  const selector = env.CSC_NAME;
+  if (!selector) return identities;
+  return identities.filter((i) => `${DEVELOPER_ID}${i.name}`.includes(selector));
+}
+
+/**
+ * Which certificate this build will sign with, when that is knowable at all.
+ *
+ * Not `identities[0]`. The team printed into a `store-credentials` command has to belong to the
+ * certificate the build uses, and the first one the keychain happens to list need not be it — a
+ * wrong command, presented as something read from the machine, is worse than no command.
+ *
+ * `undefined` means exactly that: nobody knows yet, so the caller shows a placeholder or asks. A
+ * selector matching SEVERAL certificates is one of those cases — the packager will pick one, but
+ * which team it belongs to is not something this can claim.
+ */
+export function configuredIdentity(
+  env: NodeJS.ProcessEnv,
+  identities: readonly DeveloperIdentity[],
+): DeveloperIdentity | undefined {
+  const chosen = selectedIdentities(env, identities);
+  return chosen.length === 1 ? chosen[0] : undefined;
+}
+
+export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly DeveloperIdentity[]): SigningStep[] {
+  const cert = configuredIdentity(env, identities);
+  // A certificate the packager will import is a certificate, and it is the only one a CI runner
+  // ever has: there is no keychain there to find an installed one in.
+  const supplied = cert === undefined && Boolean(env.CSC_LINK);
+  // Named a certificate? Then THAT certificate has to be here — an unrelated one being installed
+  // says nothing about the one the build will ask for. Ticking on "some identity exists" let a
+  // doomed build start and fail minutes later inside the packager.
+  // Presence is the packager's question — does the selector match anything installed — and it is
+  // a different question from which team to print, which needs exactly one answer.
+  const chosen = selectedIdentities(env, identities);
+  const missing = Boolean(env.CSC_NAME) && chosen.length === 0 && !env.CSC_LINK;
   return [
-    `--notarize needs ${missing.join(' and ')}; this machine has ${missing.length > 1 ? 'neither' : 'none'}.`,
+    {
+      done: Boolean(env.CSC_LINK) || chosen.length > 0,
+      title: supplied
+        ? 'A Developer ID certificate supplied as CSC_LINK, for the packager to import'
+        : missing
+          ? `CSC_NAME names "${env.CSC_NAME}", which is not a Developer ID certificate on this Mac`
+          : cert
+            ? `A Developer ID certificate on this Mac — ${cert.name}`
+            : 'A Developer ID certificate on this Mac',
+      detail: [
+        'Needs Apple Developer Program membership (US$99/year) — a free Apple ID',
+        'cannot issue one, and Apple refuses notarization without it. Enrol at',
+        'developer.apple.com/programs, create the certificate under Certificates,',
+        'then open the download to install it. Check it landed:',
+        '  security find-identity -v -p codesigning',
+      ],
+    },
+    {
+      done: hasCertificate(env),
+      title: 'That certificate named for this build, in .env.local — git already ignores it',
+      detail: [`  CSC_NAME="${cert?.name ?? 'Your Name (TEAMID)'}"`],
+    },
+    {
+      done: notaryRoute(env) !== null,
+      title: 'A notary credential named there too',
+      detail: [
+        'A stored profile keeps the secret in your keychain. Make an app-specific',
+        'password at account.apple.com, under Sign-In and Security, then once:',
+        `  xcrun notarytool store-credentials ${PROFILE} \\`,
+        `    --apple-id <your Apple ID> --team-id ${cert?.teamId ?? '<your Team ID>'}`,
+        'and name it:',
+        `  APPLE_KEYCHAIN_PROFILE=${PROFILE}`,
+      ],
+    },
+  ];
+}
+
+/**
+ * Why a distributable build cannot happen here, as where the reader has got to.
+ *
+ * This used to print every variable the command reads, because there was nowhere to send anybody.
+ * There is now — so the CI route, which wants six of those variables and a keychain that does not
+ * exist there, is one line to the page that explains it rather than half the message.
+ */
+export function distributionRefusal(
+  env: NodeJS.ProcessEnv,
+  identities: readonly DeveloperIdentity[] = [],
+): string | undefined {
+  const steps = signingChecklist(env, identities).map((s, i) => ({ ...s, n: i + 1 }));
+  if (steps.every((s) => s.done)) return undefined;
+  const found = steps.filter((s) => s.done);
+  const todo = steps.filter((s) => !s.done);
+  return [
+    found.length === 0
+      ? `--notarize needs ${steps.length} things, and none of them is here yet.`
+      : `--notarize needs ${steps.length} things. ${found.length} of them ${found.length === 1 ? 'is' : 'are'} already here.`,
+    ...(found.length > 0 ? ['', 'Found', ...found.map((s) => `  ${s.n} ✓  ${s.title}`)] : []),
     '',
-    'Put them in `.env.local`, which git already ignores. These two leave no secret in the file:',
-    '',
-    // The name is the certificate's own, WITHOUT the "Developer ID Application:" that Keychain
-    // Access shows in front of it: the packager picks the kind of certificate itself and refuses a
-    // name carrying that prefix. Everything here is one assignment per line, because this block is
-    // meant to be pasted and a dotenv file reads the rest of the line as the value.
-    '  CSC_NAME="Your Name (TEAMID)"   # your certificate, minus the "Developer ID Application:" part',
-    '  APPLE_KEYCHAIN_PROFILE=<name>   # xcrun notarytool store-credentials <name>',
-    '',
-    'On CI, where there is no keychain to read:',
-    '',
-    '  CSC_LINK=<base64 of a Developer ID Application .p12>',
-    '  CSC_KEY_PASSWORD=<its password>',
-    '  APPLE_API_KEY=<path to AuthKey_XXXX.p8>',
-    '  APPLE_API_KEY_ID=<id>',
-    '  APPLE_API_ISSUER=<uuid>',
+    'Remaining',
+    ...todo.flatMap((s) => [`  ${s.n}    ${s.title}`, ...s.detail.map((d) => `     ${d}`), '']),
+    'Signing on CI instead, where there is no keychain: https://docs.lloyal.ai/ship',
   ].join('\n');
 }
 
@@ -201,18 +352,27 @@ export function harnessPackaging(input: PackagingInput): Record<string, unknown>
   };
 }
 
+/** What the notary service is authenticated with, in the shape `@electron/notarize` accepts. */
+export type NotaryCredentials =
+  | { readonly appleApiKey: string; readonly appleApiKeyId: string; readonly appleApiIssuer: string }
+  | { readonly keychainProfile: string; readonly keychain?: string }
+  | { readonly appleId: string; readonly appleIdPassword: string; readonly teamId: string };
+
 /**
- * What `xcrun notarytool` authenticates a submission with, read from the same variables
- * electron-builder reads to notarize the application inside the image.
+ * The credentials for one submission, read from the same variables electron-builder reads to
+ * notarize the application inside the image.
  *
  * The disk image is submitted separately, by {@link ../commands/ship}, after the packager has
- * finished: the packager notarizes and staples the app, which is what lets it launch, and leaves the
- * image around it unstapled, which is what a browser download is judged on.
+ * finished: the packager notarizes and staples the app, which is what lets it launch, and leaves
+ * the image around it unstapled, which is what a browser download is judged on. One route is
+ * chosen and only that route's fields are handed over — the library rejects a mixture outright,
+ * which is the same rule {@link notaryRoute} exists to enforce.
  *
- * A missing variable is named here rather than passed through empty. Notarytool's own answer to an
- * empty issuer is a generic authentication failure, and it arrives at the end of a long build.
+ * A missing variable is named here rather than passed through empty. The notary service's own
+ * answer to an empty issuer is a generic authentication failure, and it arrives at the end of a
+ * long build.
  */
-export function notaryArgs(env: NodeJS.ProcessEnv): string[] {
+export function notaryCredentials(env: NodeJS.ProcessEnv): NotaryCredentials {
   const need = (name: string): string => {
     const value = env[name];
     if (!value) throw new Error(`${name} is not set, and notarizing needs it.`);
@@ -220,16 +380,15 @@ export function notaryArgs(env: NodeJS.ProcessEnv): string[] {
   };
   switch (notaryRoute(env)) {
     case 'api-key':
-      return ['--key', need('APPLE_API_KEY'), '--key-id', need('APPLE_API_KEY_ID'), '--issuer', need('APPLE_API_ISSUER')];
-    // A stored profile keeps the secret in the keychain, where a command line cannot expose it.
+      return { appleApiKey: need('APPLE_API_KEY'), appleApiKeyId: need('APPLE_API_KEY_ID'), appleApiIssuer: need('APPLE_API_ISSUER') };
+    // A stored profile keeps the secret in the keychain, where no command line can expose it.
     case 'keychain-profile':
-      return ['--keychain-profile', need('APPLE_KEYCHAIN_PROFILE'),
-        ...(env.APPLE_KEYCHAIN ? ['--keychain', env.APPLE_KEYCHAIN] : [])];
-    // The password becomes an argument to `notarytool`, and an argument is readable by anything
+      return { keychainProfile: need('APPLE_KEYCHAIN_PROFILE'), ...(env.APPLE_KEYCHAIN ? { keychain: env.APPLE_KEYCHAIN } : {}) };
+    // The password becomes an argument to `notarytool` inside the library, readable by anything
     // running as this user for as long as the submission takes. The packager does the same with it
-    // when notarizing the application, so this is the environment's exposure rather than this
-    // command's, and the way out of it is a key or a stored profile instead.
+    // a moment earlier, so this is the environment's exposure rather than this command's, and the
+    // way out of it is a key or a stored profile instead.
     default:
-      return ['--apple-id', need('APPLE_ID'), '--password', need('APPLE_APP_SPECIFIC_PASSWORD'), '--team-id', need('APPLE_TEAM_ID')];
+      return { appleId: need('APPLE_ID'), appleIdPassword: need('APPLE_APP_SPECIFIC_PASSWORD'), teamId: need('APPLE_TEAM_ID') };
   }
 }

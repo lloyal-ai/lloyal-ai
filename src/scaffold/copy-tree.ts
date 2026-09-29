@@ -51,11 +51,23 @@ const DOTFILES: Record<string, string> = {
 };
 
 /**
- * Never part of a template, whatever the directory holds. A checkout whose
- * template has been `link-local`ed carries a `node_modules` of symlinks and
- * binaries; scaffolding it would hand every developer that tree.
+ * Never part of a template, whatever the directory holds — files as well as
+ * directories, because this repository is also somewhere templates are RUN.
+ *
+ * A checkout whose template has been `link-local`ed carries a `node_modules`
+ * of symlinks and binaries; scaffolding it would hand every developer that
+ * tree. The same is true of what a template run leaves behind that belongs to
+ * one machine: `.env.local` is where a signing certificate and notary
+ * credentials go, and `harness.json` is the local overlay, written 0600
+ * because it can carry a credential. Copying either into somebody's new
+ * project would hand them ours.
  */
-const NEVER_COPIED = new Set(['node_modules']);
+const NEVER_COPIED = new Set(['node_modules', 'harness.json']);
+
+/** …and the whole class the repository ignores, not one filename of it. `.gitignore` draws the
+ *  boundary at `*.local`, so `credentials.local` left by a template run is machine-local too —
+ *  naming only `.env.local` here would have copied it into every scaffold. */
+const neverCopied = (name: string): boolean => NEVER_COPIED.has(name) || name.endsWith('.local');
 
 /** Strict decoder: a file that is not valid UTF-8 is a binary and is copied
  *  byte-for-byte — substitution is for text, and a text round trip turns a
@@ -70,12 +82,14 @@ export function copyTreeWithSubstitutions(
 ): void {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src, { withFileTypes: true })) {
+    // Asked before anything else, and of every entry: the check used to sit inside the directory
+    // branch, so no FILE was ever filtered by it.
+    if (neverCopied(entry.name)) continue;
     const fromPath = join(src, entry.name);
     const toName = DOTFILES[entry.name] ?? applySubstitutions(entry.name, substitutions);
     const toPath = join(dest, toName);
 
     if (entry.isDirectory()) {
-      if (NEVER_COPIED.has(entry.name)) continue;
       copyTreeWithSubstitutions(fromPath, toPath, substitutions);
       continue;
     }

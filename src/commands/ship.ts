@@ -18,19 +18,19 @@
  * macOS only, and said rather than discovered: Windows and Linux each need their own machine to
  * build on and their own signing story.
  */
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, extname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Command } from '../command.js';
-import { npmExit } from '../npm-spawn.js';
+import { Interrupted, createRun, runNpmStep, runStep, type Running, type StepResult } from '../npm-spawn.js';
 import { HARNESS_YML, openHarnessYml } from '../scaffold/harness-yml.js';
 import { readPackageJson } from '../scaffold/package-json.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
-import { ENTITLEMENTS, canDistribute, distributionRefusal, harnessPackaging, notaryArgs, signingFrom, type Signing } from '../scaffold/ship-config.js';
+import { ENTITLEMENTS, PROFILE, canDistribute, configuredIdentity, developerIdentities, distributionRefusal, harnessPackaging, notaryCredentials, notaryRoute, signingFrom, type DeveloperIdentity, type Signing } from '../scaffold/ship-config.js';
+import { showSteps } from '../scaffold/steps.js';
 import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
@@ -238,24 +238,142 @@ export function notarizeFailure(image: string, phase: string, status: number | n
 }
 
 /**
- * Notarize and staple the disk image itself.
+ * The environments the two credential-bearing children get, neither of them inherited whole.
  *
- * The packager has already notarized and stapled the application inside it, which is what lets the
- * app launch. Gatekeeper judges a browser download on the file that was downloaded, which is this
- * one, so it is submitted in its own right.
+ * `debug` decides what to print from `DEBUG` at import time, and `@electron/notarize` — which the
+ * packager uses for the application and which this command uses for the image — catches a failed
+ * log fetch and logs the RAW error. That error carries `spawnargs`, and on the Apple-ID route the
+ * argv holds the app-specific password. Removing the namespace is what makes that unreachable.
  */
-function notarizeImage(image: string, auth: readonly string[]): void {
-  const run = (phase: string, argv: readonly string[]): void => {
-    try {
-      execFileSync('xcrun', [...argv], { stdio: 'inherit' });
-    } catch (cause) {
-      const status = (cause as { status?: unknown }).status;
-      throw new Error(notarizeFailure(image, phase, typeof status === 'number' ? status : null));
+const withoutDebug = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const { DEBUG: _debug, NODE_DEBUG: _nodeDebug, ...rest } = env;
+  return rest;
+};
+
+/** The notarize adapter is handed its credentials on stdin, so it inherits none of them. */
+const withoutCredentials = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv =>
+  Object.fromEntries(Object.entries(withoutDebug(env)).filter(([name]) => !/^(APPLE_|CSC_)/.test(name)));
+
+/**
+ * Set up a notary credential without leaving the command.
+ *
+ * Apple has no API that mints an app-specific password, so a browser is unavoidable — but a second
+ * run of `ship` is not. The credential is created, written down, and the build carries on, all in
+ * the one invocation.
+ *
+ * **The password never enters this process.** `notarytool` puts up its own secure prompt when it is
+ * given an Apple ID and a team and no `--password`, so the terminal is handed to it and the paste
+ * goes keyboard → notarytool → keychain. Passing the password as an argument instead would put it
+ * where `ps` can read it, and reading it into a masked field of ours would put it one careless
+ * formatter away from a log. `--validate` is on by default, so a wrong paste fails against Apple
+ * in seconds rather than at the end of a build.
+ */
+async function offerNotaryProfile(root: string, identities: readonly DeveloperIdentity[]): Promise<void> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    process.stderr.write(
+      'Notarizing needs a credential, and this machine has none.\n\n' +
+      'Apple issues an app-specific password. `notarytool` keeps it in the keychain and this project\n' +
+      'only ever names it, so no secret lands in a file. Setting one up takes a minute in a browser.\n\n',
+    );
+    if (!/^y?$/i.test((await rl.question('  set one up now? [Y/n] ')).trim())) {
+      process.stderr.write('\n');
+      return;
     }
-  };
-  run('xcrun notarytool submit', ['notarytool', 'submit', image, ...auth, '--wait']);
-  run('xcrun stapler staple', ['stapler', 'staple', image]);
+
+    // Opened before anything is asked, because signing in and making the password is the slow part
+    // and the questions below can be answered while that page loads. The generic account page is
+    // deliberate: the section is behind a sign-in, so the steps are written out rather than linked.
+    runStep('open', ['https://account.apple.com'], { cwd: root }).join().catch(() => undefined);
+    process.stderr.write(
+      '\nOpening account.apple.com. Once signed in:\n\n' +
+      '  1.  Sign-In and Security\n' +
+      '  2.  App-Specific Passwords\n' +
+      '  3.  Generate an app-specific password, name it `notarytool`, and copy it\n\n',
+    );
+
+    const appleId = (await rl.question('  your Apple ID: ')).trim();
+    if (appleId === '') return;
+    // The team belongs to the certificate the build will use. When that is not knowable — two
+    // installed and nothing choosing between them, or a `.p12` the packager will import into a
+    // keychain of its own — it is asked for rather than guessed.
+    const known = configuredIdentity(process.env, identities)?.teamId;
+    const teamId = known ?? (await rl.question('  your Team ID (developer.apple.com/account, top right): ')).trim();
+    if (teamId === '') return;
+    rl.close();
+
+    process.stderr.write('\nPaste the password below. It is not echoed, and it goes to the keychain.\n\n');
+    const stored = await runStep(
+      'xcrun',
+      ['notarytool', 'store-credentials', PROFILE, '--apple-id', appleId, '--team-id', teamId],
+      { cwd: root, stdin: 'terminal' },
+    ).join();
+    if (stored.code !== 0) {
+      process.stderr.write('\nApple did not accept that credential, so nothing was stored.\n\n');
+      return;
+    }
+
+    // Written down so the next run asks nothing, and read back into THIS run so the build goes
+    // ahead. Appended, because the file already holds the certificate name.
+    const file = join(root, '.env.local');
+    const held = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const line = `APPLE_KEYCHAIN_PROFILE=${PROFILE}\n`;
+    writeFileSync(file, held === '' || held.endsWith('\n') ? `${held}${line}` : `${held}\n${line}`, { mode: 0o600 });
+    // The profile only. The Apple ID must NOT reach the environment: `notaryRoute` would then pick
+    // the Apple-ID route over the profile just stored, and ask for a password all over again.
+    process.env.APPLE_KEYCHAIN_PROFILE = PROFILE;
+    process.stderr.write(`\nStored as \`${PROFILE}\`, and named in .env.local.\n\n`);
+  } finally {
+    rl.close();
+  }
 }
+
+/**
+ * The packager's `key=value` tail, split without assuming values are one word.
+ *
+ * `identity=Zuhair Naqvi (GXB6ZZPDWJ)` has spaces in it, so splitting on whitespace loses most of
+ * the name. The keys are the only reliable boundary, so the slices between them are the values.
+ */
+function fields(rest: string): Record<string, string> {
+  const marks: Array<{ key: string; from: number; to: number }> = [];
+  const re = /(\w+)=/g;
+  for (let m = re.exec(rest); m !== null; m = re.exec(rest)) marks.push({ key: m[1], from: m.index, to: re.lastIndex });
+  const out: Record<string, string> = {};
+  marks.forEach((mark, i) => {
+    out[mark.key] = rest.slice(mark.to, i + 1 < marks.length ? marks[i + 1].from : rest.length).trim();
+  });
+  return out;
+}
+
+/**
+ * One line of the packager's log as a phase of the work, or nothing when it is not one.
+ *
+ * Reading a vendor's log is usually a way to be wrong quietly, and this is the case where it is
+ * not: `PACKAGER` is pinned to an exact version, never a range, so the format is pinned exactly as
+ * tightly as the packager. A version bump is a deliberate act, and this is part of what it has to
+ * re-check.
+ *
+ * It is additive by construction. An unrecognised line adds nothing, so a format that moves loses
+ * DETAIL and never truth — whether the step succeeded is the exit code's answer, not this one's.
+ */
+export function packagerPhase(line: string): { label: string; detail?: string } | undefined {
+  const bullet = /^\s*•\s+(.*)$/.exec(line);
+  if (bullet === null) return undefined;
+  const rest = bullet[1];
+  const at = rest.search(/\s\w+=/);
+  const marker = (at === -1 ? rest : rest.slice(0, at)).trim();
+  const f = fields(at === -1 ? '' : rest.slice(at));
+
+  if (marker === 'packaging') {
+    return { label: 'packaged', detail: [f.platform, f.arch].filter(Boolean).join(' ') + (f.electron ? ` · electron ${f.electron}` : '') };
+  }
+  if (marker === 'signing') return { label: 'signed', ...(f.identity ? { detail: f.identity } : {}) };
+  if (marker === 'building' && f.target !== undefined) return { label: 'built the disk image' };
+  return undefined;
+}
+
+/** Where the adapter compiled to, found from this module rather than from the working directory. */
+const ADAPTER = fileURLToPath(new URL('../notarize-image.js', import.meta.url));
 
 /** One image, as the report names it. */
 export interface ShippedImage {
@@ -283,8 +401,11 @@ export function report({ product, version, images, signing, icon, ready }: Shipp
   const made = images.map((i) => `  ${i.path}  (${Math.round(i.bytes / 1e6)} MB)`);
   const standing = signing.notarize
     ? [
-        'Signed, notarized and stapled. Verify it with `xcrun stapler validate` on the path above; a Mac',
-        'that downloads it through a browser will accept it.',
+        'Signed, notarized and stapled. A Mac that downloads it through a browser will accept it.',
+        'To see that for yourself, open the image and ask Gatekeeper about the app inside:',
+        '  spctl -a -vvv -t exec /Volumes/<name>/<app>.app   → source=Notarized Developer ID',
+        '`stapler validate` on the image is not that check: it falls back to asking Apple, so it',
+        'passes whether or not the ticket ever reached the file.',
       ]
     : signing.sign
       ? [
@@ -395,7 +516,13 @@ export const shipCommand: Command = {
       // Refused before the desktop build rather than after it: a missing variable is a sentence, and
       // finding it out at the end costs the whole build.
       if (values.notarize === true) {
-        const refused = distributionRefusal(process.env);
+        const identities = developerIdentities();
+        // Offered only when there is nobody half-way through another route: a partly-configured
+        // API key is a mistake to finish, not a reason to create a second credential beside it.
+        if (interactive(process.stderr) && notaryRoute(process.env) === null) {
+          await offerNotaryProfile(root, identities);
+        }
+        const refused = distributionRefusal(process.env, identities);
         if (refused !== undefined) throw new Error(refused);
       }
       const signing = signingFrom(process.env, values.notarize === true);
@@ -408,32 +535,87 @@ export const shipCommand: Command = {
       });
       const configFile = join(work, 'electron-builder.json');
       writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
-      // Credentials, if any, are read straight from the environment by the packager. Ask for them
-      // here too, before a long build, so a missing issuer is a sentence rather than a rejection.
-      const auth = signing.notarize ? notaryArgs(process.env) : [];
+      // Credentials, if any, are read straight from the environment by the packager. Read here too
+      // and BEFORE the long build, so a missing issuer is a sentence now rather than a rejection
+      // at the end of it. The same object is what the adapter is handed later.
+      const credentials = signing.notarize ? notaryCredentials(process.env) : undefined;
 
-      process.stdout.write(`Building ${product}'s desktop surface.\n\n`);
-      if ((await npmExit(['run', 'build:desktop'], root)) !== 0) {
-        throw new Error('`npm run build:desktop` failed — the output above says why. Nothing was packaged.');
-      }
+      // The wizard draws on stderr so that stdout carries the report and nothing else; a pipe has
+      // no spinner to protect, so it gets the children's output as it arrives instead.
+      const echo = !interactive(process.stderr);
+      const labels = [
+        `Building ${product}'s desktop surface`,
+        signing.sign ? 'Packaging, signing and notarizing the application' : 'Packaging the application',
+        ...(signing.notarize ? ['Notarizing and stapling the disk image — this waits on Apple'] : []),
+      ];
+      const view = showSteps(labels);
+      const run = createRun();
+      // The packager's own phases, and only those. Nothing is inferred from one marker about work
+      // no marker mentions: what is on screen is what the packager said it did.
+      const packagerProgress = (line: string): void => {
+        const phase = packagerPhase(line);
+        if (phase !== undefined) view.phase(1, phase);
+      };
+      // The child is created by the RUN, not by the caller: passing an already-spawned process
+      // would start it before anything could check whether cancelling had begun.
+      const step = async (index: number, start: () => Running): Promise<StepResult> => {
+        view.start(index);
+        const settled = await run.step(start);
+        view.settle(index, settled.code === 0);
+        return settled;
+      };
+      // A detached child is out of the terminal's foreground group, so Ctrl-C no longer reaches it
+      // and stopping the tree is this command's job. 130 is what a shell reports for an interrupt.
+      // SIGINT is Ctrl-C; SIGTERM is CI cancelling the job, `kill`, or the machine shutting down.
+      // Both matter equally here: every child is DETACHED, so it is not in this terminal's process
+      // group and the default handling — exit and leave — would orphan a build or a notarization.
+      const stopOn = (code: number) => (): void => {
+        void (async () => {
+          await run.cancel();   // raises the gate synchronously, then waits for the tree to go
+          view.stop();
+          process.exit(code);
+        })();
+      };
+      const onInterrupt = stopOn(130);
+      const onTerminate = stopOn(143);
+      process.once('SIGINT', onInterrupt);
+      process.once('SIGTERM', onTerminate);
 
-      const startedAt = Date.now() - 1000;   // filesystem timestamps are coarser than this clock
-      process.stdout.write(`\nPackaging with ${PACKAGER}, fetched on demand the first time.\n\n`);
-      const packed = await npmExit(
-        // `--publish never`: an artifact leaves this machine when somebody sends it, never as a side
-        // effect of building it.
-        ['exec', '--yes', '--package', PACKAGER, '--', 'electron-builder', '--mac', '--config', configFile, '--publish', 'never'],
-        root,
-      );
-      if (packed !== 0) throw new Error('the packager failed — the output above says why.');
+      let images: string[];
+      try {
+        const built = await step(0, () => runNpmStep(['run', 'build:desktop'], { cwd: root, env: withoutCredentials(process.env), echo }));
+        if (built.code !== 0) throw new Error(`\`npm run build:desktop\` failed. Nothing was packaged.\n\n${built.output}`);
 
-      const images = imagesSince(join(root, OUTPUT), startedAt);
-      if (images.length === 0) throw new Error(`the packager reported success and left no disk image in ${OUTPUT}/.`);
-      if (signing.notarize) {
-        for (const image of images) {
-          process.stdout.write(`\nNotarizing ${basename(image)}. This waits on Apple, which takes minutes.\n`);
-          notarizeImage(image, auth);
+        const startedAt = Date.now() - 1000;   // filesystem timestamps are coarser than this clock
+        const packed = await step(1, () => runNpmStep(
+          // `--publish never`: an artifact leaves this machine when somebody sends it, never as a
+          // side effect of building it.
+          ['exec', '--yes', '--package', PACKAGER, '--', 'electron-builder', '--mac', '--config', configFile, '--publish', 'never'],
+          { cwd: root, env: withoutDebug(process.env), echo, onLine: packagerProgress },
+        ));
+        if (packed.code !== 0) throw new Error(`the packager failed.\n\n${packed.output}`);
+
+        images = imagesSince(join(root, OUTPUT), startedAt);
+        if (images.length === 0) throw new Error(`the packager reported success and left no disk image in ${OUTPUT}/.`);
+
+        if (signing.notarize) {
+          for (const image of images) {
+            const done = await step(2, () => runStep(process.execPath, [ADAPTER], {
+              cwd: root,
+              env: withoutCredentials(process.env),
+              stdin: 'payload',
+              payload: JSON.stringify({ appPath: image, ...credentials }),
+              echo,
+            }));
+            // Output FIRST: the message says its output is above, and on a terminal the child was
+            // never echoed, so the other order left that sentence pointing at nothing.
+            if (done.code !== 0) throw new Error(`${done.output}\n${notarizeFailure(image, 'notarizing the disk image', done.code)}`);
+          }
         }
+      } finally {
+        process.removeListener('SIGINT', onInterrupt);
+        process.removeListener('SIGTERM', onTerminate);
+        view.stop();
       }
 
       process.stdout.write(`\n${report({
@@ -441,11 +623,14 @@ export const shipCommand: Command = {
         version,
         images: images.map((p) => ({ path: relative(root, p), bytes: statSync(p).size })),
         signing,
-        ready: canDistribute(process.env),
+        ready: canDistribute(process.env, developerIdentities()),
         ...(icon !== undefined ? { icon } : {}),
       })}\n`);
       return 0;
     } catch (err) {
+      // An interrupt already has its own exit path and its own code; it is not a failure to
+      // narrate. The handler is normally what exits, and this is the backstop if it does not.
+      if (err instanceof Interrupted) return 130;
       process.stderr.write(`lloyal ship: ${asMessage(err)}\n`);
       return 1;
     }

@@ -16,6 +16,12 @@ templates/*/traces/
 templates/*/*.log
 templates/*/models/**/*.gguf
 
+# Machine-local values, anywhere in this repo. Templates are RUN here, so testing
+# `ship --notarize` inside templates/<t> writes a `.env.local` holding a signing
+# certificate — and this is a public repository. The scaffolds ignore the same
+# pattern; npm needs its own exclusion, which `files` in package.json carries.
+*.local
+
 # In-place template development (lloyal link-local inside templates/<t>):
 # runtime residue only — the link mutates nothing tracked.
 templates/*/node_modules/

@@ -168,3 +168,256 @@ export function npmExit(args: readonly string[], cwd: string): Promise<number> {
     child.on('close', (code) => settle(code ?? 1));
   });
 }
+
+/** What a finished child said and how it ended. `output` is stdout and stderr in arrival order. */
+export interface StepResult {
+  readonly code: number | null;
+  readonly signal: NodeJS.Signals | null;
+  readonly output: string;
+}
+
+/** A child this process owns: it can be waited on, and it can be stopped with its descendants. */
+export interface Running {
+  join(): Promise<StepResult>;
+  /** Stop this child AND everything it started, then resolve once it is gone. */
+  cancel(): Promise<void>;
+}
+
+/**
+ * How a step's stdin is wired, which is not one answer.
+ *
+ * - `ignore` — the npm children. Nothing to say to them.
+ * - `payload` — the notarize adapter. `stdin` must be a pipe or `child.stdin` is `null` and the
+ *   child takes EOF before it has read anything.
+ * - `terminal` — `notarytool store-credentials`, which puts up its own secure password prompt. It
+ *   has to BE the foreground process group to read the tty, so this mode is the one that is not
+ *   detached: a detached child gets SIGTTIN instead of the keystrokes.
+ */
+export type StdinMode = 'ignore' | 'payload' | 'terminal';
+
+export interface RunOptions {
+  readonly cwd: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly stdin?: StdinMode;
+  /** Written to the child and then closed, for `stdin: 'payload'`. */
+  readonly payload?: string;
+  /** Forward the child's output as it arrives, for a run nobody is drawing a spinner over. */
+  readonly echo?: boolean;
+  /**
+   * Called with each COMPLETE line as it arrives, for a caller showing what the child is up to.
+   *
+   * Lines, not chunks, because a `data` event is an arbitrary slice of the stream: a marker can
+   * arrive as `  • packa` and `ging  platform=darwin…` in two events, and a caller splitting each
+   * chunk on its own would see neither. Proven — a valid line emitted in two writes produced no
+   * phase at all. Buffering belongs here so no caller has to remember it.
+   */
+  readonly onLine?: (line: string) => void;
+  /** How long a SIGTERM has to work before the group is killed outright. */
+  readonly graceMs?: number;
+  /** Owned by {@link resolveNpmInvocation}, never by a caller — see {@link spawnNpm}. */
+  readonly shell?: boolean;
+}
+
+const GRACE_MS = 5_000;
+/** How long SIGKILL gets to be observed before `cancel` gives up waiting for the group. */
+const KILL_CONFIRM_MS = 2_000;
+
+/**
+ * Signal a child AND its descendants.
+ *
+ * `child.kill()` signals the child alone, and npm's children are the ones doing the work: killing
+ * `npm run build:desktop` leaves electron-vite running. Measured — a child that spawns a grandchild
+ * leaves the grandchild orphaned, while signalling the GROUP reaps both. Windows has no process
+ * groups, so the tree is walked by `taskkill /T`.
+ */
+function killTree(pid: number, signal: NodeJS.Signals): void {
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(pid), '/T', ...(signal === 'SIGKILL' ? ['/F'] : [])], { stdio: 'ignore' });
+      return;
+    }
+    process.kill(-pid, signal);
+  } catch {
+    /* already gone, and its exit has already been delivered or is on its way */
+  }
+}
+
+/**
+ * Is anything still running in this child's process group?
+ *
+ * Signal 0 delivers nothing and only asks the question, and asking it of `-pid` asks it of the
+ * whole group — which is the thing that has to be empty before a cancel can claim to have worked.
+ * Windows has no groups, so `taskkill /T` is both the question and the answer there.
+ */
+function groupAlive(pid: number): boolean {
+  if (process.platform === 'win32') return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Run one step of a long command, owning it for as long as it lives.
+ *
+ * Asynchronous throughout, which the synchronous alternative is not: `execFileSync` blocks the loop
+ * a spinner is drawn on — 1547 ms of a 1500 ms child, with ZERO timer ticks, measured — and dies
+ * with ENOBUFS once a child says more than 2 MB. Both pipes are drained here instead, so a noisy
+ * packager cannot terminate its own step.
+ *
+ * `detached` is what makes the tree killable, and it is also what takes the child OUT of the
+ * terminal's foreground group — so Ctrl-C no longer reaches it and signalling becomes this module's
+ * job rather than the tty's. That is the whole reason cancellation lives here and not in the view.
+ */
+/**
+ * Which file descriptors a step's child gets.
+ *
+ * **fd 1 is never handed to a child.** It carries the report, and a caller may be piping it —
+ * `ship --notarize | cat` must yield the report and nothing else. Terminal mode keeps OUR stdin so
+ * `notarytool` can put up its own secure password prompt, but sends both of its outputs to stderr;
+ * `'inherit'` would have been `[0, 1, 2]` and put credential-setup chatter into the piped report.
+ */
+export const stdioFor = (mode: StdinMode): Array<'pipe' | 'ignore' | number> =>
+  mode === 'terminal' ? [0, 2, 2] : [mode === 'payload' ? 'pipe' : 'ignore', 'pipe', 'pipe'];
+
+export function runStep(cmd: string, argv: readonly string[], opts: RunOptions): Running {
+  const mode = opts.stdin ?? 'ignore';
+  const owned = mode !== 'terminal';
+  const child = spawn(cmd, [...argv], {
+    cwd: opts.cwd,
+    ...(opts.env ? { env: opts.env } : {}),
+    shell: opts.shell === true,
+    detached: owned,
+    stdio: stdioFor(mode),
+  });
+
+  const chunks: string[] = [];
+  // One buffer per stream: stdout and stderr interleave, and a half-line of one must not be
+  // completed by the next line of the other.
+  const partial = { out: '', err: '' };
+  const consume = (where: 'out' | 'err', text: string): void => {
+    if (opts.onLine === undefined) return;
+    const lines = (partial[where] + text).split('\n');
+    partial[where] = lines.pop() ?? '';   // whatever follows the last newline is not a line yet
+    for (const line of lines) opts.onLine(line);
+  };
+  const flush = (): void => {
+    for (const where of ['out', 'err'] as const) {
+      if (partial[where] !== '') { opts.onLine?.(partial[where]); partial[where] = ''; }
+    }
+  };
+  for (const [where, stream] of [['out', child.stdout], ['err', child.stderr]] as const) {
+    stream?.on('data', (d: Buffer) => {
+      const text = d.toString();
+      chunks.push(text);
+      if (opts.echo === true) process.stderr.write(text);
+      consume(where, text);
+    });
+  }
+  if (mode === 'payload') {
+    child.stdin?.end(opts.payload ?? '');
+  }
+
+  const ended = new Promise<StepResult>((settle) => {
+    // A failure to spawn is an ending too: to the caller there is no difference between a command
+    // that could not start and one that started and failed.
+    child.on('error', (err) => { flush(); settle({ code: 1, signal: null, output: `${chunks.join('')}${err.message}\n` }); });
+    child.on('close', (code, signal) => { flush(); settle({ code, signal, output: chunks.join('') }); });
+  });
+
+  return {
+    join: () => ended,
+    async cancel() {
+      const { pid } = child;
+      if (pid === undefined || !owned) {
+        // A terminal-mode child is in the foreground group, so the tty has already signalled it.
+        await ended;
+        return;
+      }
+      const grace = opts.graceMs ?? GRACE_MS;
+      const deadline = Date.now() + grace;
+      killTree(pid, 'SIGTERM');
+
+      // What has to be gone is the GROUP, not the child we happen to hold. A child that exits
+      // promptly on SIGTERM while something it started ignores it would otherwise leave that
+      // descendant running and this call would report success.
+      let timer: NodeJS.Timeout | undefined;
+      const lapsed = new Promise<void>((r) => { timer = setTimeout(r, grace); timer.unref?.(); });
+      await Promise.race([ended, lapsed]);
+      if (timer) clearTimeout(timer);
+      while (groupAlive(pid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+      if (groupAlive(pid)) {
+        killTree(pid, 'SIGKILL');
+        // And WAIT for it. `ended` is the direct child's, and in the survivor case it resolved long
+        // ago — returning on it would report an empty tree the instant SIGKILL was sent rather than
+        // once it landed. `cancel()` promises the group is gone, so it has to look.
+        const hard = Date.now() + KILL_CONFIRM_MS;
+        while (groupAlive(pid) && Date.now() < hard) await new Promise((r) => setTimeout(r, 25));
+      }
+      await ended;
+    },
+  };
+}
+
+/** {@link runStep} for npm, through the one invocation path this module exists to get right. */
+export function runNpmStep(args: readonly string[], opts: RunOptions): Running {
+  // `shell` travels with the resolution and is not the caller's to choose: on the last-resort
+  // Windows path npm is `npm.cmd`, which cannot be spawned without it.
+  const { cmd, argv, shell } = resolveNpmInvocation(args, process.platform, process.env.npm_execpath);
+  return runStep(cmd, argv, { ...opts, shell });
+}
+
+/** Thrown by {@link Run.step} once cancellation has begun. */
+export class Interrupted extends Error {
+  constructor() {
+    super('interrupted');
+    this.name = 'Interrupted';
+  }
+}
+
+/** The steps of one command, in order, under one cancellation. */
+export interface Run {
+  readonly cancelled: boolean;
+  /** Start one step and wait for it. Throws {@link Interrupted} if cancelling has begun. */
+  step(start: () => Running): Promise<StepResult>;
+  /** Begin cancelling: nothing further starts, and whatever is live is stopped and awaited. */
+  cancel(): Promise<void>;
+}
+
+/**
+ * Sequence steps so an interrupt cannot be overtaken by the next one.
+ *
+ * The gate matters BETWEEN steps as much as during them. An interrupt signals whatever is live and
+ * then waits for it — but that child can exit ZERO, because handling SIGTERM and leaving cleanly is
+ * what well-behaved tools do. The sequence then reads success and starts the NEXT child, moments
+ * after the handler finished collecting everything it intended to kill. Measured: the build was
+ * cancelled, the packager started anyway, the command exited 130, and the packager was still
+ * running.
+ *
+ * So `cancel` raises the flag SYNCHRONOUSLY, before it signals anything, and a step checks it on
+ * both sides of its wait.
+ */
+export function createRun(): Run {
+  let stopped = false;
+  let live: Running | undefined;
+  return {
+    get cancelled(): boolean {
+      return stopped;
+    },
+    async step(start: () => Running): Promise<StepResult> {
+      if (stopped) throw new Interrupted();
+      live = start();
+      const settled = await live.join();
+      live = undefined;
+      if (stopped) throw new Interrupted();
+      return settled;
+    },
+    async cancel(): Promise<void> {
+      stopped = true;
+      await live?.cancel();
+      live = undefined;
+    },
+  };
+}

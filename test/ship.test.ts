@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyTreeWithSubstitutions } from '../src/scaffold/copy-tree.js';
 import { openHarnessYml } from '../src/scaffold/harness-yml.js';
-import { canDistribute, distributionRefusal, hasCertificate, notaryArgs, notaryRoute, signingFrom } from '../src/scaffold/ship-config.js';
+import { canDistribute, developerIdentities, distributionRefusal, hasCertificate, notaryCredentials, notaryRoute, signingChecklist, signingFrom } from '../src/scaffold/ship-config.js';
 import { iconRefusal, notarizeFailure, report, shipCommand, slugOf, validAppId, whatToAdd } from '../src/commands/ship.js';
 
 const BASIC_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
@@ -234,15 +234,15 @@ describe('the `ship:` block in the manifest', () => {
 describe('what notarytool is authenticated with', () => {
   it('uses an App Store Connect key when that is what the machine has', () => {
     expect(
-      notaryArgs({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' }),
-    ).toEqual(['--key', '/k/AuthKey_X.p8', '--key-id', 'KID', '--issuer', 'ISS']);
+      notaryCredentials({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' }),
+    ).toEqual({ appleApiKey: '/k/AuthKey_X.p8', appleApiKeyId: 'KID', appleApiIssuer: 'ISS' });
   });
 
   /** A stored profile keeps the secret in the keychain, so nothing sensitive reaches a command line. */
   it('uses a keychain profile, and the keychain holding it when one is named', () => {
-    expect(notaryArgs({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual(['--keychain-profile', 'lloyal']);
-    expect(notaryArgs({ APPLE_KEYCHAIN_PROFILE: 'lloyal', APPLE_KEYCHAIN: '/k/login.keychain-db' }))
-      .toEqual(['--keychain-profile', 'lloyal', '--keychain', '/k/login.keychain-db']);
+    expect(notaryCredentials({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toEqual({ keychainProfile: 'lloyal' });
+    expect(notaryCredentials({ APPLE_KEYCHAIN_PROFILE: 'lloyal', APPLE_KEYCHAIN: '/k/login.keychain-db' }))
+      .toEqual({ keychainProfile: 'lloyal', keychain: '/k/login.keychain-db' });
   });
 
   /**
@@ -279,44 +279,46 @@ describe('what notarytool is authenticated with', () => {
     it('does not send an incomplete API key set down another route', () => {
       expect(notaryRoute({ APPLE_API_KEY: '', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' })).toBe('api-key');
       // …and being on that route is what makes the missing one get named, rather than silently skipped.
-      expect(() => notaryArgs({ APPLE_API_KEY: '', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' })).toThrow('APPLE_API_KEY');
+      expect(() => notaryCredentials({ APPLE_API_KEY: '', APPLE_API_KEY_ID: 'KID', APPLE_API_ISSUER: 'ISS' })).toThrow('APPLE_API_KEY');
     });
 
     it('does not send an incomplete Apple ID set down another route', () => {
       expect(notaryRoute({ APPLE_ID: '', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T' })).toBe('apple-id');
-      expect(() => notaryArgs({ APPLE_ID: '', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T' })).toThrow('APPLE_ID');
+      expect(() => notaryCredentials({ APPLE_ID: '', APPLE_APP_SPECIFIC_PASSWORD: 'x', APPLE_TEAM_ID: 'T' })).toThrow('APPLE_ID');
     });
 
     it('is not mistaken for credentials when every one of them is empty', () => {
       expect(notaryRoute({ APPLE_ID: '', APPLE_API_KEY: '', APPLE_KEYCHAIN_PROFILE: '' })).toBeNull();
-      expect(canDistribute({ CSC_LINK: '', APPLE_API_KEY: '' })).toBe(false);
+      expect(canDistribute({ CSC_LINK: '', APPLE_API_KEY: '' }, [])).toBe(false);
     });
   });
 
   it('counts a keychain profile as credentials, so a machine holding one is ready', () => {
-    expect(canDistribute({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(true);
-    expect(canDistribute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(false);
+    expect(canDistribute({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' }, [])).toBe(true);
+    expect(canDistribute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' }, [])).toBe(false);
   });
 
   it('uses an Apple ID with an app-specific password', () => {
-    expect(notaryArgs({ APPLE_ID: 'a@b.c', APPLE_APP_SPECIFIC_PASSWORD: 'x-y-z', APPLE_TEAM_ID: 'TEAM' })).toEqual([
-      '--apple-id', 'a@b.c', '--password', 'x-y-z', '--team-id', 'TEAM',
-    ]);
+    expect(notaryCredentials({ APPLE_ID: 'a@b.c', APPLE_APP_SPECIFIC_PASSWORD: 'x-y-z', APPLE_TEAM_ID: 'TEAM' }))
+      .toEqual({ appleId: 'a@b.c', appleIdPassword: 'x-y-z', teamId: 'TEAM' });
   });
 
   /** Half a set of credentials is the expensive failure: it arrives at the end of a long build. */
   it('names the variable that is missing rather than passing an empty one', () => {
-    expect(() => notaryArgs({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID' })).toThrow('APPLE_API_ISSUER');
-    expect(() => notaryArgs({ APPLE_ID: 'a@b.c' })).toThrow('APPLE_APP_SPECIFIC_PASSWORD');
+    expect(() => notaryCredentials({ APPLE_API_KEY: '/k/AuthKey_X.p8', APPLE_API_KEY_ID: 'KID' })).toThrow('APPLE_API_ISSUER');
+    expect(() => notaryCredentials({ APPLE_ID: 'a@b.c' })).toThrow('APPLE_APP_SPECIFIC_PASSWORD');
   });
 });
 
 describe('what the report says is true of the image', () => {
   const image = [{ path: 'release/Fieldnote-0.3.1-arm64.dmg', bytes: 127_400_000 }];
+  // Readiness is identity-aware now, so these rows describe a machine: one Developer ID installed,
+  // which is what the `CSC_NAME` below selects.
+  const onThisMac = [{ name: 'Someone (T)', teamId: 'T' }];
   const said_ = (env: NodeJS.ProcessEnv, asked = false, icon?: string) =>
     report({
       product: 'Fieldnote', version: '0.3.1', images: image,
-      signing: signingFrom(env, asked), ready: canDistribute(env),
+      signing: signingFrom(env, asked), ready: canDistribute(env, onThisMac),
       ...(icon !== undefined ? { icon } : {}),
     });
 
@@ -468,11 +470,13 @@ describe('an icon the project names', () => {
  * quietly downgraded to the thing nobody can install.
  */
 describe('--notarize is the asking', () => {
-  const complete = { CSC_NAME: 'Developer ID Application: Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+  // The name WITHOUT the `Developer ID Application:` prefix, which is the form the packager
+  // accepts and the form the keychain reports — so it matches the identity these rows pass in.
+  const complete = { CSC_NAME: 'Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
 
   it('signs nothing when it was not asked, however well the machine is set up', () => {
     expect(signingFrom(complete, false)).toEqual({ sign: false, notarize: false });
-    expect(canDistribute(complete)).toBe(true);
+    expect(canDistribute(complete, [{ name: 'Someone (T)', teamId: 'T' }])).toBe(true);
   });
 
   it('signs and notarizes together when it was asked and can be met', () => {
@@ -490,25 +494,30 @@ describe('--notarize is the asking', () => {
     }
   });
 
-  it('is content when the machine has both', () => {
-    expect(distributionRefusal(complete)).toBeUndefined();
+  it('is content when everything it checks is there', () => {
+    expect(distributionRefusal(complete, [{ name: 'Someone (T)', teamId: 'T' }])).toBeUndefined();
   });
 
-  it('names what is missing, one or both', () => {
-    expect(distributionRefusal({})).toContain('a Developer ID certificate and notary credentials');
-    expect(distributionRefusal({})).toContain('neither');
-    expect(distributionRefusal({ CSC_NAME: 'x' })).toContain('notary credentials');
-    expect(distributionRefusal({ CSC_NAME: 'x' })).toContain('none');
-    expect(distributionRefusal({ APPLE_KEYCHAIN_PROFILE: 'l' })).toContain('a Developer ID certificate');
+  it('says how much is left, and lists only that', () => {
+    const bare = distributionRefusal({}, []) as string;
+    expect(bare).toContain('none of them is here yet');
+    expect(bare).not.toContain('Found');
+    const some = distributionRefusal({ CSC_NAME: 'x' }, []) as string;
+    expect(some).toContain('1 of them is already here');
+    expect(some).toContain('Found');
   });
 
   /** The refusal is the documentation: no scaffold gains an example file nobody opens, and the
    *  routes that leave no secret on disk are the ones printed first. */
-  it('is the thing to paste, secret-free routes first', () => {
-    const said = distributionRefusal({}) as string;
+  /** The route that leaves no secret on disk is the only one offered here; the key-based one needs
+   *  six variables and a machine with no keychain, which is the docs page's job now. */
+  it('offers the stored profile, and sends CI to the page', () => {
+    const said = distributionRefusal({}, []) as string;
     expect(said).toContain('.env.local');
-    expect(said.indexOf('APPLE_KEYCHAIN_PROFILE')).toBeLessThan(said.indexOf('CSC_LINK'));
     expect(said).toContain('store-credentials');
+    expect(said).toContain('keeps the secret in your keychain');
+    expect(said).not.toContain('CSC_LINK');
+    expect(said).toContain('https://docs.lloyal.ai/ship');
   });
 
   /**
@@ -518,7 +527,7 @@ describe('--notarize is the asking', () => {
    * were meant to supply. Round-tripped through the real loader rather than eyeballed.
    */
   it('parses as a dotenv file, every name its own assignment', () => {
-    const lines = (distributionRefusal({}) as string)
+    const lines = (distributionRefusal({}, []) as string)
       .split('\n')
       .filter((l) => /^\s*[A-Z_]+=/.test(l));
     const dir = mkdtempSync(join(tmpdir(), 'refusal-'));
@@ -529,8 +538,7 @@ describe('--notarize is the asking', () => {
     const before = { ...process.env };
     try {
       process.loadEnvFile(file);
-      for (const name of ['CSC_NAME', 'APPLE_KEYCHAIN_PROFILE', 'CSC_LINK', 'CSC_KEY_PASSWORD',
-        'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']) {
+      for (const name of ['CSC_NAME', 'APPLE_KEYCHAIN_PROFILE']) {
         expect(process.env[name], `${name} did not come back out of the block`).toBeDefined();
         expect(process.env[name], `${name} swallowed the line after it`).not.toContain('=');
       }
@@ -542,9 +550,189 @@ describe('--notarize is the asking', () => {
   /** The packager refuses a name carrying the prefix Keychain Access displays, so printing one
    *  would hand the reader a value guaranteed to fail at codesign time. */
   it('suggests a certificate name the packager will accept', () => {
-    const said = distributionRefusal({}) as string;
-    const csc = said.split('\n').find((l) => l.includes('CSC_NAME=')) as string;
-    expect(csc).not.toMatch(/CSC_NAME="Developer ID Application:/);
-    expect(said).toContain('minus the "Developer ID Application:" part');
+    for (const ids of [[], [{ name: 'Acme (T9)', teamId: 'T9' }]]) {
+      const csc = (distributionRefusal({}, ids) as string).split('\n').find((l) => l.includes('CSC_NAME=')) as string;
+      expect(csc).not.toMatch(/CSC_NAME="Developer ID Application:/);
+    }
+  });
+});
+
+/**
+ * The setup message is the point most people stop, so it reads the machine rather than reciting
+ * variable names. Two rules hold it honest: nothing about any particular machine is written down,
+ * and every tick is something that was read — never something deduced from something else.
+ */
+describe('reading the signing setup off the machine', () => {
+  const SECURITY_OUTPUT = [
+    '  1) AAAA "Apple Development: Someone Else (WM6NZPRWKG)"',
+    '  2) BBBB "Developer ID Application: Acme Pty Ltd (T3AMID9999)"',
+    '     2 valid identities found',
+  ].join('\n');
+
+  it('takes the Developer ID certificate and leaves the development one', () => {
+    expect(developerIdentities(() => SECURITY_OUTPUT)).toEqual([{ name: 'Acme Pty Ltd (T3AMID9999)', teamId: 'T3AMID9999' }]);
+  });
+
+  it('finds nothing rather than throwing when there is no security command at all', () => {
+    expect(developerIdentities(() => { throw new Error('spawnSync security ENOENT'); })).toEqual([]);
+    expect(developerIdentities(() => '   0 valid identities found')).toEqual([]);
+  });
+
+  /** The values in the message come from what was read, so a different machine says different
+   *  things. Nothing here is written for the machine this was developed on. */
+  it('prints whatever certificate the machine has, not one it was written with', () => {
+    const said = distributionRefusal({}, developerIdentities(() => SECURITY_OUTPUT)) as string;
+    expect(said).toContain('Acme Pty Ltd (T3AMID9999)');
+    expect(said).toContain('--team-id T3AMID9999');
+    expect(said).toContain('CSC_NAME="Acme Pty Ltd (T3AMID9999)"');
+    // The prefix the packager refuses is stripped, wherever the name came from.
+    expect(said).not.toContain('CSC_NAME="Developer ID Application:');
+  });
+
+  it('falls back to placeholders, never to a name, when the machine has none', () => {
+    const said = distributionRefusal({}, []) as string;
+    expect(said).toContain('Your Name (TEAMID)');
+    expect(said).toContain('--team-id <your Team ID>');
+    expect(said).toContain('developer.apple.com/programs');
+  });
+
+  /** The unsigned report and the `--notarize` refusal answer the same question, so they cannot
+   *  disagree: readiness used to tick on `CSC_NAME` merely being SET, and would tell a reader to
+   *  run `--notarize` — which then refused, because the name matched nothing installed. */
+  it('never reports ready for a machine the refusal would turn away', () => {
+    const installed = developerIdentities(() => SECURITY_OUTPUT);   // Acme Pty Ltd
+    for (const env of [
+      { CSC_NAME: 'Nobody At All', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { CSC_NAME: 'Acme Pty Ltd', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { CSC_LINK: 'p12', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+    ]) {
+      expect(canDistribute(env, installed)).toBe(distributionRefusal(env, installed) === undefined);
+    }
+  });
+
+  /** A CI runner has no keychain, so an installed identity is the one thing it can never have —
+   *  and it is exactly the route where the packager imports the certificate itself. Requiring one
+   *  refused a machine that was completely configured, under a message pointing at CI. */
+  it('does not refuse a CI machine that has everything it needs', () => {
+    const ci = {
+      CSC_LINK: 'base64-of-a-p12',
+      CSC_KEY_PASSWORD: 'its password',
+      APPLE_API_KEY: '/keys/AuthKey_XXXX.p8',
+      APPLE_API_KEY_ID: 'KEYID00000',
+      APPLE_API_ISSUER: 'issuer-uuid',
+    };
+    expect(canDistribute(ci, [])).toBe(true);
+    expect(distributionRefusal(ci, [])).toBeUndefined();
+  });
+
+  /** Naming a certificate that is not here is not the same as having one. Ticking on "some
+   *  identity exists" let all three rows go green with a notary profile present, so the refusal
+   *  passed and the packager failed minutes later looking for a certificate by name. */
+  it('does not accept an unrelated certificate for one CSC_NAME actually names', () => {
+    const installed = developerIdentities(() => SECURITY_OUTPUT);   // Acme Pty Ltd
+    const env = { CSC_NAME: 'Someone Else (NOSUCH0000)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+
+    const [certificate] = signingChecklist(env, installed);
+    expect(certificate.done).toBe(false);
+    expect(certificate.title).toContain('Someone Else (NOSUCH0000)');
+    expect(distributionRefusal(env, installed)).toBeDefined();
+
+    // Unnamed, and one is installed: that is still a certificate on this Mac.
+    expect(signingChecklist({ APPLE_KEYCHAIN_PROFILE: 'lloyal' }, installed)[0].done).toBe(true);
+    // Supplied for import: the keychain is not asked at all.
+    expect(signingChecklist({ CSC_NAME: 'Someone Else (NOSUCH0000)', CSC_LINK: 'p12' }, installed)[0].done).toBe(true);
+  });
+
+  it('credits a supplied certificate without claiming it saw one in the keychain', () => {
+    const [certificate] = signingChecklist({ CSC_LINK: 'base64-of-a-p12' }, []);
+    expect(certificate.done).toBe(true);
+    expect(certificate.title).toContain('CSC_LINK');
+    expect(certificate.title).not.toContain('on this Mac');
+  });
+
+  const TWO_IDENTITIES = [
+    '  1) AAAA "Developer ID Application: First Team (TEAMAAAA11)"',
+    '  2) BBBB "Developer ID Application: Second Team (TEAMBBBB22)"',
+    '     2 valid identities found',
+  ].join('\n');
+
+  /**
+   * `CSC_NAME` is a SUBSTRING selector, not a full name. electron-builder does
+   * `line.includes(qualifier)` against each `security find-identity` line
+   * (`codeSign/macCodeSign.js:227`), so a company name with no team suffix is a supported setup
+   * and refusing it broke a configuration that works.
+   */
+  it('accepts the partial names the packager accepts', () => {
+    const one = developerIdentities(() => SECURITY_OUTPUT);       // Acme Pty Ltd (T3AMID9999)
+    const rowFor = (name: string, ids = one) => signingChecklist({ CSC_NAME: name, APPLE_KEYCHAIN_PROFILE: 'l' }, ids);
+
+    // The company name alone: what the packager matches, and what used to be refused here.
+    expect(rowFor('Acme Pty Ltd')[0].done).toBe(true);
+    expect(rowFor('Acme Pty Ltd')[2].detail.join('\n')).toContain('--team-id T3AMID9999');
+    // The whole name, and the form carrying the prefix the keychain prints.
+    expect(rowFor('Acme Pty Ltd (T3AMID9999)')[0].done).toBe(true);
+    expect(rowFor('Developer ID Application: Acme')[0].done).toBe(true);
+    // Matching nothing installed is still refused — that is a different thing from being partial.
+    expect(rowFor('Nobody At All')[0].done).toBe(false);
+  });
+
+  /** A selector matching several is a certificate the packager can find and a team this cannot
+   *  name: the row passes, the suggestion stays a placeholder. */
+  it('accepts an ambiguous selector without inventing a team for it', () => {
+    const two = developerIdentities(() => TWO_IDENTITIES);        // First Team / Second Team
+    const rows = signingChecklist({ CSC_NAME: 'Team', APPLE_KEYCHAIN_PROFILE: 'l' }, two);
+    expect(rows[0].done).toBe(true);
+    expect(rows[2].detail.join('\n')).toContain('--team-id <your Team ID>');
+  });
+
+  /** The team is pasted into a command the reader runs, so it has to belong to the certificate the
+   *  build will use. Anything less certain than that prints a placeholder instead of a wrong team. */
+  it('takes the team from the configured certificate, and declines to guess otherwise', () => {
+    const two = developerIdentities(() => TWO_IDENTITIES);
+    const teamLine = (env: NodeJS.ProcessEnv, identities = two): string =>
+      signingChecklist(env, identities)[2].detail.join('\n');
+
+    // Named explicitly: that certificate's team, not whichever the keychain listed first.
+    expect(teamLine({ CSC_NAME: 'Second Team (TEAMBBBB22)' })).toContain('--team-id TEAMBBBB22');
+    // Named, but no such certificate is installed — the other one's team would be a wrong command.
+    expect(teamLine({ CSC_NAME: 'Nobody (NOSUCH0000)' })).toContain('--team-id <your Team ID>');
+    // Imported by the packager into a keychain it creates, so what is installed here says nothing.
+    expect(teamLine({ CSC_LINK: 'base64-of-a-p12' })).toContain('--team-id <your Team ID>');
+    // Two installed and nothing choosing between them.
+    expect(teamLine({})).toContain('--team-id <your Team ID>');
+    // The ordinary laptop: exactly one installed, nothing explicit.
+    expect(teamLine({}, developerIdentities(() => SECURITY_OUTPUT))).toContain('--team-id T3AMID9999');
+  });
+
+  it('ticks only what it read: the keychain for one, the environment for the others', () => {
+    const one = signingChecklist({}, developerIdentities(() => SECURITY_OUTPUT));
+    expect(one.map((s) => s.done)).toEqual([true, false, false]);
+
+    const named = { CSC_NAME: 'Acme Pty Ltd (T3AMID9999)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+    expect(signingChecklist(named, []).map((s) => s.done)).toEqual([false, true, true]);
+  });
+
+  /** Owning a certificate implies Developer Program membership and naming a profile implies making
+   *  one. Neither was read, so neither is a row — a tick nobody can trust is worse than no tick. */
+  it('has a row for nothing it cannot observe', () => {
+    const titles = signingChecklist({}, []).map((s) => s.title.toLowerCase());
+    expect(titles.some((t) => t.includes('developer program'))).toBe(false);
+    expect(titles.filter((t) => t.includes('notary')).length).toBe(1);
+  });
+
+  it('says nothing is left once everything was read', () => {
+    const env = { CSC_NAME: 'Acme Pty Ltd (T3AMID9999)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+    expect(distributionRefusal(env, developerIdentities(() => SECURITY_OUTPUT))).toBeUndefined();
+  });
+
+  it('counts what is found and what is left, and points CI at the page', () => {
+    const said = distributionRefusal({ CSC_NAME: 'Acme Pty Ltd (T3AMID9999)' }, developerIdentities(() => SECURITY_OUTPUT)) as string;
+    expect(said).toContain('3 things. 2 of them are already here');
+    expect(said).toContain('Found');
+    expect(said).toContain('Remaining');
+    expect(said).toContain('https://docs.lloyal.ai/ship');
+    // The six-variable CI block is gone; the page carries it now.
+    expect(said).not.toContain('APPLE_API_ISSUER');
   });
 });
