@@ -51,11 +51,14 @@ describe('copyTreeWithSubstitutions', () => {
     writeFileSync(join(src, 'targets', 'desktop', '.env.local'), 'CSC_KEY_PASSWORD=SYNTHETIC\n');
     writeFileSync(join(src, 'targets', 'desktop', '.env'), '# committed, and holds no secret\n');
     writeFileSync(join(src, 'harness.json'), '{"note":"SYNTHETIC"}\n');
+    writeFileSync(join(src, 'credentials.local'), 'token=SYNTHETIC\n');
     writeFileSync(join(src, 'harness.yml'), 'name: demo\n');
     copyTreeWithSubstitutions(src, dest, buildSubstitutions('demo'));
 
     expect(existsSync(join(dest, 'targets', 'desktop', '.env.local'))).toBe(false);
     expect(existsSync(join(dest, 'harness.json'))).toBe(false);
+    // The boundary is `*.local`, which is where `.gitignore` draws it — not one filename of it.
+    expect(existsSync(join(dest, 'credentials.local'))).toBe(false);
     // And the committed pair still travels: excluding a credential must not take the file that
     // documents where the credential goes with it.
     expect(existsSync(join(dest, 'targets', 'desktop', '.env'))).toBe(true);

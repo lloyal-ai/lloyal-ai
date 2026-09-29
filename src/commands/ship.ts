@@ -566,18 +566,24 @@ export const shipCommand: Command = {
       };
       // A detached child is out of the terminal's foreground group, so Ctrl-C no longer reaches it
       // and stopping the tree is this command's job. 130 is what a shell reports for an interrupt.
-      const interrupted = (): void => {
+      // SIGINT is Ctrl-C; SIGTERM is CI cancelling the job, `kill`, or the machine shutting down.
+      // Both matter equally here: every child is DETACHED, so it is not in this terminal's process
+      // group and the default handling — exit and leave — would orphan a build or a notarization.
+      const stopOn = (code: number) => (): void => {
         void (async () => {
           await run.cancel();   // raises the gate synchronously, then waits for the tree to go
           view.stop();
-          process.exit(130);
+          process.exit(code);
         })();
       };
-      process.once('SIGINT', interrupted);
+      const onInterrupt = stopOn(130);
+      const onTerminate = stopOn(143);
+      process.once('SIGINT', onInterrupt);
+      process.once('SIGTERM', onTerminate);
 
       let images: string[];
       try {
-        const built = await step(0, () => runNpmStep(['run', 'build:desktop'], { cwd: root, env: withoutDebug(process.env), echo }));
+        const built = await step(0, () => runNpmStep(['run', 'build:desktop'], { cwd: root, env: withoutCredentials(process.env), echo }));
         if (built.code !== 0) throw new Error(`\`npm run build:desktop\` failed. Nothing was packaged.\n\n${built.output}`);
 
         const startedAt = Date.now() - 1000;   // filesystem timestamps are coarser than this clock
@@ -605,7 +611,8 @@ export const shipCommand: Command = {
           }
         }
       } finally {
-        process.removeListener('SIGINT', interrupted);
+        process.removeListener('SIGINT', onInterrupt);
+        process.removeListener('SIGTERM', onTerminate);
         view.stop();
       }
 

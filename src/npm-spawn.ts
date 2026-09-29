@@ -219,6 +219,8 @@ export interface RunOptions {
 }
 
 const GRACE_MS = 5_000;
+/** How long SIGKILL gets to be observed before `cancel` gives up waiting for the group. */
+const KILL_CONFIRM_MS = 2_000;
 
 /**
  * Signal a child AND its descendants.
@@ -346,7 +348,14 @@ export function runStep(cmd: string, argv: readonly string[], opts: RunOptions):
       await Promise.race([ended, lapsed]);
       if (timer) clearTimeout(timer);
       while (groupAlive(pid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
-      if (groupAlive(pid)) killTree(pid, 'SIGKILL');
+      if (groupAlive(pid)) {
+        killTree(pid, 'SIGKILL');
+        // And WAIT for it. `ended` is the direct child's, and in the survivor case it resolved long
+        // ago — returning on it would report an empty tree the instant SIGKILL was sent rather than
+        // once it landed. `cancel()` promises the group is gone, so it has to look.
+        const hard = Date.now() + KILL_CONFIRM_MS;
+        while (groupAlive(pid) && Date.now() < hard) await new Promise((r) => setTimeout(r, 25));
+      }
       await ended;
     },
   };

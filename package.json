@@ -57,7 +57,7 @@
     "bin/run.js",
     "dist/**/*.js",
     "templates/**/*",
-    "!templates/**/.env.local",
+    "!templates/**/*.local",
     "!templates/**/harness.json",
     "LICENSE"
   ]

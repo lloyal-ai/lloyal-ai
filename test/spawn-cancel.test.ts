@@ -120,7 +120,8 @@ describe('runStep owns the process tree it starts', () => {
     expect(living(m)).toBeGreaterThanOrEqual(2);
 
     await step.cancel();
-    await settle();
+    // No settle: `cancel()` promises the GROUP is gone once it resolves, so the assertion is
+    // made the moment it does — sleeping here would hide the window this row exists for.
     expect(living(m)).toBe(0);
   });
 
@@ -152,7 +153,8 @@ describe('runStep owns the process tree it starts', () => {
     expect(living(m)).toBeGreaterThanOrEqual(2);
 
     await step.cancel();
-    await settle();
+    // No settle: `cancel()` promises the GROUP is gone once it resolves, so the assertion is
+    // made the moment it does — sleeping here would hide the window this row exists for.
     expect(living(m)).toBe(0);
   });
 

@@ -51,9 +51,12 @@ describe('the tarball ships the templates git tracks', () => {
   it("leaves a machine's credentials behind, even sitting inside a template", { timeout: 30_000 }, () => {
     const local = 'templates/research/targets/desktop/.env.local';
     const overlay = 'templates/research/harness.json';
+    // `*.local` is the whole class the repository ignores; `files` has to mirror it, because it
+    // overrides `.gitignore` and would otherwise publish anything else ending that way.
+    const other = 'templates/research/credentials.local';
 
     // The repository boundary. `check-ignore` exits non-zero when a path would NOT be ignored.
-    for (const path of [local, overlay]) {
+    for (const path of [local, overlay, other]) {
       expect(() => run('git', ['check-ignore', '-q', path])).not.toThrow();
     }
 
@@ -67,6 +70,7 @@ describe('the tarball ships the templates git tracks', () => {
       writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'packing-rules', version: '0.0.0', files }));
       writeFileSync(join(dir, local), 'CSC_KEY_PASSWORD=SYNTHETIC-CREDENTIAL\n');
       writeFileSync(join(dir, overlay), '{"note":"SYNTHETIC-CREDENTIAL"}\n');
+      writeFileSync(join(dir, other), 'token=SYNTHETIC-CREDENTIAL\n');
       writeFileSync(join(dir, 'templates/research/targets/web/.env'), 'PORT=8787\n');
 
       const packed = (JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'],
@@ -75,6 +79,7 @@ describe('the tarball ships the templates git tracks', () => {
 
       expect(packed.some((f) => f.endsWith('.env.local'))).toBe(false);
       expect(packed.some((f) => f.endsWith('harness.json'))).toBe(false);
+      expect(packed.some((f) => f.endsWith('.local'))).toBe(false);
       // …and the committed file that documents where credentials go still ships.
       expect(packed).toContain('templates/research/targets/web/.env');
     } finally {
