@@ -29,6 +29,10 @@ try {
   // The MESSAGE only, and deliberately: the library builds its own failures by interpolating what
   // the child said, which is safe, while everything unsafe lives on the error's PROPERTIES. The
   // object is never inspected, serialised or logged — not here, and not by whoever reads this.
+  // Set the code and let Node leave on its own — never exit eagerly. stderr is a PIPE to the
+  // parent, so the write is asynchronous and leaving early truncates it at one buffer —
+  // measured: 200,007 characters written, 65,536 delivered. Apple's rejection log is exactly the
+  // long message that would be lost, and it is the reason this adapter exists at all.
   process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 }

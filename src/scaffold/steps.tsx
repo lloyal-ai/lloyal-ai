@@ -76,10 +76,12 @@ function Phases({ phases }: { phases: readonly Phase[] }): ReactElement | null {
 function Settled({ step }: { step: Step }): ReactElement {
   return (
     <Box flexDirection="column">
-      <Text>
+      <Box gap={1}>
         <Text color={step.state === 'done' ? 'green' : 'red'}>{step.state === 'done' ? '✓' : '✗'}</Text>
-        {' '}{step.label}
-      </Text>
+        <Text>{step.label}</Text>
+        {/* The record is the point: how long it took is part of what happened, so it stays. */}
+        {step.seconds === undefined || step.seconds < 3 ? null : <Text dimColor>{elapsed(step.seconds)}</Text>}
+      </Box>
       <Phases phases={step.phases ?? []} />
     </Box>
   );

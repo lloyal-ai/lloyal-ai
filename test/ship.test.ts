@@ -289,13 +289,13 @@ describe('what notarytool is authenticated with', () => {
 
     it('is not mistaken for credentials when every one of them is empty', () => {
       expect(notaryRoute({ APPLE_ID: '', APPLE_API_KEY: '', APPLE_KEYCHAIN_PROFILE: '' })).toBeNull();
-      expect(canDistribute({ CSC_LINK: '', APPLE_API_KEY: '' })).toBe(false);
+      expect(canDistribute({ CSC_LINK: '', APPLE_API_KEY: '' }, [])).toBe(false);
     });
   });
 
   it('counts a keychain profile as credentials, so a machine holding one is ready', () => {
-    expect(canDistribute({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(true);
-    expect(canDistribute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' })).toBe(false);
+    expect(canDistribute({ CSC_LINK: 'x', APPLE_KEYCHAIN_PROFILE: 'lloyal' }, [])).toBe(true);
+    expect(canDistribute({ APPLE_KEYCHAIN_PROFILE: 'lloyal' }, [])).toBe(false);
   });
 
   it('uses an Apple ID with an app-specific password', () => {
@@ -312,10 +312,13 @@ describe('what notarytool is authenticated with', () => {
 
 describe('what the report says is true of the image', () => {
   const image = [{ path: 'release/Fieldnote-0.3.1-arm64.dmg', bytes: 127_400_000 }];
+  // Readiness is identity-aware now, so these rows describe a machine: one Developer ID installed,
+  // which is what the `CSC_NAME` below selects.
+  const onThisMac = [{ name: 'Someone (T)', teamId: 'T' }];
   const said_ = (env: NodeJS.ProcessEnv, asked = false, icon?: string) =>
     report({
       product: 'Fieldnote', version: '0.3.1', images: image,
-      signing: signingFrom(env, asked), ready: canDistribute(env),
+      signing: signingFrom(env, asked), ready: canDistribute(env, onThisMac),
       ...(icon !== undefined ? { icon } : {}),
     });
 
@@ -473,7 +476,7 @@ describe('--notarize is the asking', () => {
 
   it('signs nothing when it was not asked, however well the machine is set up', () => {
     expect(signingFrom(complete, false)).toEqual({ sign: false, notarize: false });
-    expect(canDistribute(complete)).toBe(true);
+    expect(canDistribute(complete, [{ name: 'Someone (T)', teamId: 'T' }])).toBe(true);
   });
 
   it('signs and notarizes together when it was asked and can be met', () => {
@@ -593,6 +596,21 @@ describe('reading the signing setup off the machine', () => {
     expect(said).toContain('developer.apple.com/programs');
   });
 
+  /** The unsigned report and the `--notarize` refusal answer the same question, so they cannot
+   *  disagree: readiness used to tick on `CSC_NAME` merely being SET, and would tell a reader to
+   *  run `--notarize` — which then refused, because the name matched nothing installed. */
+  it('never reports ready for a machine the refusal would turn away', () => {
+    const installed = developerIdentities(() => SECURITY_OUTPUT);   // Acme Pty Ltd
+    for (const env of [
+      { CSC_NAME: 'Nobody At All', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { CSC_NAME: 'Acme Pty Ltd', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { CSC_LINK: 'p12', APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+      { APPLE_KEYCHAIN_PROFILE: 'lloyal' },
+    ]) {
+      expect(canDistribute(env, installed)).toBe(distributionRefusal(env, installed) === undefined);
+    }
+  });
+
   /** A CI runner has no keychain, so an installed identity is the one thing it can never have —
    *  and it is exactly the route where the packager imports the certificate itself. Requiring one
    *  refused a machine that was completely configured, under a message pointing at CI. */
@@ -604,7 +622,7 @@ describe('reading the signing setup off the machine', () => {
       APPLE_API_KEY_ID: 'KEYID00000',
       APPLE_API_ISSUER: 'issuer-uuid',
     };
-    expect(canDistribute(ci)).toBe(true);
+    expect(canDistribute(ci, [])).toBe(true);
     expect(distributionRefusal(ci, [])).toBeUndefined();
   });
 

@@ -69,8 +69,16 @@ export function signingFrom(env: NodeJS.ProcessEnv, asked: boolean): Signing {
  */
 export const hasCertificate = (env: NodeJS.ProcessEnv): boolean => Boolean(env.CSC_LINK || env.CSC_NAME);
 
-/** Could this machine produce a distributable artifact if it were asked to? */
-export const canDistribute = (env: NodeJS.ProcessEnv): boolean => hasCertificate(env) && notaryRoute(env) !== null;
+/**
+ * Could this machine produce a distributable artifact if it were asked to?
+ *
+ * It is the checklist being complete, and nothing else. `hasCertificate` only asked whether
+ * `CSC_NAME` was SET, so a name matching nothing installed read as ready — and the unsigned report
+ * would tell a reader to run `--notarize`, which then refused. Re-deriving the rule here is what
+ * let the two drift, so this asks the refusal's own question instead of a similar one.
+ */
+export const canDistribute = (env: NodeJS.ProcessEnv, identities: readonly DeveloperIdentity[]): boolean =>
+  signingChecklist(env, identities).every((step) => step.done);
 
 /** A Developer ID Application certificate this Mac can sign with. */
 export interface DeveloperIdentity {

@@ -607,7 +607,9 @@ export const shipCommand: Command = {
               payload: JSON.stringify({ appPath: image, ...credentials }),
               echo,
             }));
-            if (done.code !== 0) throw new Error(`${notarizeFailure(image, 'notarizing the disk image', done.code)}\n\n${done.output}`);
+            // Output FIRST: the message says its output is above, and on a terminal the child was
+            // never echoed, so the other order left that sentence pointing at nothing.
+            if (done.code !== 0) throw new Error(`${done.output}\n${notarizeFailure(image, 'notarizing the disk image', done.code)}`);
           }
         }
       } finally {
@@ -621,7 +623,7 @@ export const shipCommand: Command = {
         version,
         images: images.map((p) => ({ path: relative(root, p), bytes: statSync(p).size })),
         signing,
-        ready: canDistribute(process.env),
+        ready: canDistribute(process.env, developerIdentities()),
         ...(icon !== undefined ? { icon } : {}),
       })}\n`);
       return 0;

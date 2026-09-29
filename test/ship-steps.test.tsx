@@ -3,6 +3,9 @@
  * prove a reader can see what is happening to them.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'ink-testing-library';
 import { Steps, elapsed } from '../src/scaffold/steps.js';
 import { packagerPhase } from '../src/commands/ship.js';
@@ -53,6 +56,15 @@ describe('the steps a reader sees', () => {
 
   /** The phase still running when a step fails is the phase that failed. Ticking it would put a
    *  green ✓ signed inside a red ✗ packaging step, pointing away from the cause. */
+  /** The list is a record of what happened, and how long it took is part of that — it used to
+   *  vanish the instant a step settled, so the finished screen could not show it. */
+  it('keeps the duration on a step that has settled', () => {
+    const { lastFrame } = render(<Steps steps={[{ label: 'Packaging the application', state: 'done', seconds: 242 }]} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('✓ Packaging the application');
+    expect(frame).toContain('4m 02s');
+  });
+
   it('marks the phase that was running when the step failed', () => {
     const { lastFrame } = render(
       <Steps steps={[{
@@ -119,5 +131,32 @@ describe('the steps a reader sees', () => {
         expect(packagerPhase(line)).toBeUndefined();
       }
     });
+  });
+});
+
+/**
+ * Guards on the shipping path that are about the SOURCE, not a value it computes — the same shape
+ * as this repo's "no raw npm spawn outside npm-spawn" CI check.
+ */
+describe('what the shipping path pins and promises', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+  /** The adapter's credential-safety and error shape were read from one exact release. Consumers
+   *  install from the registry, not this lockfile, so a range would let a later 3.x replace the
+   *  implementation that was audited — which is why the packager is pinned exactly too. */
+  it('pins the notarization library exactly, like the packager', () => {
+    const { dependencies } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(dependencies['@electron/notarize']).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  /** stderr is a pipe to the parent, so `process.exit()` truncates at one buffer — measured at
+   *  65,536 of 200,007 characters. Apple's rejection log is the long message that would be lost,
+   *  and it is the only reason this adapter runs a library instead of `xcrun`. */
+  it('never exits the notarize adapter before its diagnostic drains', () => {
+    const source = readFileSync(join(root, 'src/notarize-image.ts'), 'utf8');
+    expect(source).toContain('process.exitCode');
+    expect(source).not.toMatch(/process\.exit\(/);
   });
 });
