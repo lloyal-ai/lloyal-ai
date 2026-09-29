@@ -8,7 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { runStep } from '../src/npm-spawn.js';
+import { Interrupted, createRun, runStep, stdioFor, type Running } from '../src/npm-spawn.js';
 
 const NODE = process.execPath;
 const posix = process.platform !== 'win32';
@@ -21,6 +21,9 @@ const marker = (what: string): string => {
   return m;
 };
 
+/** How many processes still carry this marker. `pgrep -f` matches any command line containing
+ *  it, so a sibling test's cleanup can be caught in the count for a moment — the assertion that
+ *  has to be exact is the one AFTER cancelling, which is zero. */
 const living = (m: string): number => {
   try {
     return execFileSync('pgrep', ['-f', m], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).length;
@@ -114,7 +117,7 @@ describe('runStep owns the process tree it starts', () => {
       { cwd: tmpdir() },
     );
     await settle();
-    expect(living(m)).toBe(2);
+    expect(living(m)).toBeGreaterThanOrEqual(2);
 
     await step.cancel();
     await settle();
@@ -129,7 +132,7 @@ describe('runStep owns the process tree it starts', () => {
       { cwd: tmpdir(), graceMs: 300 },
     );
     await settle();
-    expect(living(m)).toBe(1);
+    expect(living(m)).toBeGreaterThanOrEqual(1);
 
     await step.cancel();
     expect(living(m)).toBe(0);
@@ -146,10 +149,62 @@ describe('runStep owns the process tree it starts', () => {
       { cwd: tmpdir(), graceMs: 300 },
     );
     await settle();
-    expect(living(m)).toBe(2);
+    expect(living(m)).toBeGreaterThanOrEqual(2);
 
     await step.cancel();
     await settle();
     expect(living(m)).toBe(0);
+  });
+
+  /**
+   * fd 1 carries the report and is never a child's. `'inherit'` is `[0, 1, 2]`, so credential
+   * setup would have written into a piped report — `ship --notarize | cat` is the case.
+   */
+  it('never gives a child the stream the report goes out on', () => {
+    expect(stdioFor('terminal')).toEqual([0, 2, 2]);
+    expect(stdioFor('payload')).toEqual(['pipe', 'pipe', 'pipe']);
+    expect(stdioFor('ignore')).toEqual(['ignore', 'pipe', 'pipe']);
+    for (const mode of ['terminal', 'payload', 'ignore'] as const) {
+      expect(stdioFor(mode).slice(1)).not.toContain(1);
+    }
+  });
+});
+
+describe('a run cannot be overtaken by the step after it', () => {
+  const settled = (): Running => ({
+    join: async () => ({ code: 0, signal: null, output: '' }),
+    cancel: async () => {},
+  });
+
+  /**
+   * The window this closes: an interrupt signals whatever is live, that child exits ZERO because
+   * handling SIGTERM cleanly is what good tools do, the sequence reads success — and starts the
+   * next child, just after the handler finished collecting what it meant to kill. Measured on the
+   * compiled command: build cancelled, packager started, exit 130, packager still running.
+   */
+  it('starts nothing once cancelling has begun', async () => {
+    const run = createRun();
+    const started: string[] = [];
+    const step = (name: string) => () => { started.push(name); return settled(); };
+
+    await run.step(step('build'));
+    await run.cancel();
+
+    await expect(run.step(step('package'))).rejects.toBeInstanceOf(Interrupted);
+    expect(started).toEqual(['build']);
+    expect(run.cancelled).toBe(true);
+  });
+
+  /** Cancelling raises the gate BEFORE it signals, so a child that exits zero on its way out
+   *  cannot be read as a step that succeeded. */
+  it('refuses the result of a step that was cancelled mid-flight', async () => {
+    const run = createRun();
+    const slow: Running = {
+      join: () => new Promise((r) => setTimeout(() => r({ code: 0, signal: null, output: '' }), 60)),
+      cancel: async () => {},
+    };
+    const inFlight = run.step(() => slow);
+    await run.cancel();
+    await expect(inFlight).rejects.toBeInstanceOf(Interrupted);
   });
 });

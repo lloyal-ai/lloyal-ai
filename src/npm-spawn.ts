@@ -269,6 +269,17 @@ function groupAlive(pid: number): boolean {
  * terminal's foreground group — so Ctrl-C no longer reaches it and signalling becomes this module's
  * job rather than the tty's. That is the whole reason cancellation lives here and not in the view.
  */
+/**
+ * Which file descriptors a step's child gets.
+ *
+ * **fd 1 is never handed to a child.** It carries the report, and a caller may be piping it —
+ * `ship --notarize | cat` must yield the report and nothing else. Terminal mode keeps OUR stdin so
+ * `notarytool` can put up its own secure password prompt, but sends both of its outputs to stderr;
+ * `'inherit'` would have been `[0, 1, 2]` and put credential-setup chatter into the piped report.
+ */
+export const stdioFor = (mode: StdinMode): Array<'pipe' | 'ignore' | number> =>
+  mode === 'terminal' ? [0, 2, 2] : [mode === 'payload' ? 'pipe' : 'ignore', 'pipe', 'pipe'];
+
 export function runStep(cmd: string, argv: readonly string[], opts: RunOptions): Running {
   const mode = opts.stdin ?? 'ignore';
   const owned = mode !== 'terminal';
@@ -277,7 +288,7 @@ export function runStep(cmd: string, argv: readonly string[], opts: RunOptions):
     ...(opts.env ? { env: opts.env } : {}),
     shell: opts.shell === true,
     detached: owned,
-    stdio: mode === 'terminal' ? 'inherit' : [mode === 'payload' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    stdio: stdioFor(mode),
   });
 
   const chunks: string[] = [];
@@ -347,4 +358,57 @@ export function runNpmStep(args: readonly string[], opts: RunOptions): Running {
   // Windows path npm is `npm.cmd`, which cannot be spawned without it.
   const { cmd, argv, shell } = resolveNpmInvocation(args, process.platform, process.env.npm_execpath);
   return runStep(cmd, argv, { ...opts, shell });
+}
+
+/** Thrown by {@link Run.step} once cancellation has begun. */
+export class Interrupted extends Error {
+  constructor() {
+    super('interrupted');
+    this.name = 'Interrupted';
+  }
+}
+
+/** The steps of one command, in order, under one cancellation. */
+export interface Run {
+  readonly cancelled: boolean;
+  /** Start one step and wait for it. Throws {@link Interrupted} if cancelling has begun. */
+  step(start: () => Running): Promise<StepResult>;
+  /** Begin cancelling: nothing further starts, and whatever is live is stopped and awaited. */
+  cancel(): Promise<void>;
+}
+
+/**
+ * Sequence steps so an interrupt cannot be overtaken by the next one.
+ *
+ * The gate matters BETWEEN steps as much as during them. An interrupt signals whatever is live and
+ * then waits for it — but that child can exit ZERO, because handling SIGTERM and leaving cleanly is
+ * what well-behaved tools do. The sequence then reads success and starts the NEXT child, moments
+ * after the handler finished collecting everything it intended to kill. Measured: the build was
+ * cancelled, the packager started anyway, the command exited 130, and the packager was still
+ * running.
+ *
+ * So `cancel` raises the flag SYNCHRONOUSLY, before it signals anything, and a step checks it on
+ * both sides of its wait.
+ */
+export function createRun(): Run {
+  let stopped = false;
+  let live: Running | undefined;
+  return {
+    get cancelled(): boolean {
+      return stopped;
+    },
+    async step(start: () => Running): Promise<StepResult> {
+      if (stopped) throw new Interrupted();
+      live = start();
+      const settled = await live.join();
+      live = undefined;
+      if (stopped) throw new Interrupted();
+      return settled;
+    },
+    async cancel(): Promise<void> {
+      stopped = true;
+      await live?.cancel();
+      live = undefined;
+    },
+  };
 }

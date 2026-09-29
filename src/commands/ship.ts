@@ -25,7 +25,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Command } from '../command.js';
-import { runNpmStep, runStep, type Running, type StepResult } from '../npm-spawn.js';
+import { Interrupted, createRun, runNpmStep, runStep, type Running, type StepResult } from '../npm-spawn.js';
 import { HARNESS_YML, openHarnessYml } from '../scaffold/harness-yml.js';
 import { readPackageJson } from '../scaffold/package-json.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
@@ -549,18 +549,18 @@ export const shipCommand: Command = {
         ...(signing.notarize ? ['Notarizing and stapling the disk image — this waits on Apple'] : []),
       ];
       const view = showSteps(labels);
+      const run = createRun();
       // The packager's own phases, and only those. Nothing is inferred from one marker about work
       // no marker mentions: what is on screen is what the packager said it did.
       const packagerProgress = (line: string): void => {
         const phase = packagerPhase(line);
         if (phase !== undefined) view.phase(1, phase);
       };
-      let live: Running | undefined;
-      const step = async (index: number, running: Running): Promise<StepResult> => {
-        live = running;
+      // The child is created by the RUN, not by the caller: passing an already-spawned process
+      // would start it before anything could check whether cancelling had begun.
+      const step = async (index: number, start: () => Running): Promise<StepResult> => {
         view.start(index);
-        const settled = await running.join();
-        live = undefined;
+        const settled = await run.step(start);
         view.settle(index, settled.code === 0);
         return settled;
       };
@@ -568,7 +568,7 @@ export const shipCommand: Command = {
       // and stopping the tree is this command's job. 130 is what a shell reports for an interrupt.
       const interrupted = (): void => {
         void (async () => {
-          await live?.cancel();
+          await run.cancel();   // raises the gate synchronously, then waits for the tree to go
           view.stop();
           process.exit(130);
         })();
@@ -577,11 +577,11 @@ export const shipCommand: Command = {
 
       let images: string[];
       try {
-        const built = await step(0, runNpmStep(['run', 'build:desktop'], { cwd: root, env: withoutDebug(process.env), echo, }));
+        const built = await step(0, () => runNpmStep(['run', 'build:desktop'], { cwd: root, env: withoutDebug(process.env), echo }));
         if (built.code !== 0) throw new Error(`\`npm run build:desktop\` failed. Nothing was packaged.\n\n${built.output}`);
 
         const startedAt = Date.now() - 1000;   // filesystem timestamps are coarser than this clock
-        const packed = await step(1, runNpmStep(
+        const packed = await step(1, () => runNpmStep(
           // `--publish never`: an artifact leaves this machine when somebody sends it, never as a
           // side effect of building it.
           ['exec', '--yes', '--package', PACKAGER, '--', 'electron-builder', '--mac', '--config', configFile, '--publish', 'never'],
@@ -594,7 +594,7 @@ export const shipCommand: Command = {
 
         if (signing.notarize) {
           for (const image of images) {
-            const done = await step(2, runStep(process.execPath, [ADAPTER], {
+            const done = await step(2, () => runStep(process.execPath, [ADAPTER], {
               cwd: root,
               env: withoutCredentials(process.env),
               stdin: 'payload',
@@ -619,6 +619,9 @@ export const shipCommand: Command = {
       })}\n`);
       return 0;
     } catch (err) {
+      // An interrupt already has its own exit path and its own code; it is not a failure to
+      // narrate. The handler is normally what exits, and this is the backstop if it does not.
+      if (err instanceof Interrupted) return 130;
       process.stderr.write(`lloyal ship: ${asMessage(err)}\n`);
       return 1;
     }
