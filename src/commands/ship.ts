@@ -30,7 +30,7 @@ import { npmExit } from '../npm-spawn.js';
 import { HARNESS_YML, openHarnessYml } from '../scaffold/harness-yml.js';
 import { readPackageJson } from '../scaffold/package-json.js';
 import { harnessProjectRoot } from '../scaffold/project.js';
-import { ENTITLEMENTS, canDistribute, distributionRefusal, harnessPackaging, notaryArgs, signingFrom, type Signing } from '../scaffold/ship-config.js';
+import { ENTITLEMENTS, canDistribute, developerIdentities, distributionRefusal, harnessPackaging, notaryArgs, signingFrom, type Signing } from '../scaffold/ship-config.js';
 import { interactive } from '../scaffold/terminal.js';
 
 const USAGE = [
@@ -395,7 +395,7 @@ export const shipCommand: Command = {
       // Refused before the desktop build rather than after it: a missing variable is a sentence, and
       // finding it out at the end costs the whole build.
       if (values.notarize === true) {
-        const refused = distributionRefusal(process.env);
+        const refused = distributionRefusal(process.env, developerIdentities());
         if (refused !== undefined) throw new Error(refused);
       }
       const signing = signingFrom(process.env, values.notarize === true);
