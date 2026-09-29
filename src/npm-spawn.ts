@@ -168,3 +168,162 @@ export function npmExit(args: readonly string[], cwd: string): Promise<number> {
     child.on('close', (code) => settle(code ?? 1));
   });
 }
+
+/** What a finished child said and how it ended. `output` is stdout and stderr in arrival order. */
+export interface StepResult {
+  readonly code: number | null;
+  readonly signal: NodeJS.Signals | null;
+  readonly output: string;
+}
+
+/** A child this process owns: it can be waited on, and it can be stopped with its descendants. */
+export interface Running {
+  join(): Promise<StepResult>;
+  /** Stop this child AND everything it started, then resolve once it is gone. */
+  cancel(): Promise<void>;
+}
+
+/**
+ * How a step's stdin is wired, which is not one answer.
+ *
+ * - `ignore` — the npm children. Nothing to say to them.
+ * - `payload` — the notarize adapter. `stdin` must be a pipe or `child.stdin` is `null` and the
+ *   child takes EOF before it has read anything.
+ * - `terminal` — `notarytool store-credentials`, which puts up its own secure password prompt. It
+ *   has to BE the foreground process group to read the tty, so this mode is the one that is not
+ *   detached: a detached child gets SIGTTIN instead of the keystrokes.
+ */
+export type StdinMode = 'ignore' | 'payload' | 'terminal';
+
+export interface RunOptions {
+  readonly cwd: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly stdin?: StdinMode;
+  /** Written to the child and then closed, for `stdin: 'payload'`. */
+  readonly payload?: string;
+  /** Forward the child's output as it arrives, for a run nobody is drawing a spinner over. */
+  readonly echo?: boolean;
+  /** Called with each chunk as it arrives, for a caller showing what the child is up to. */
+  readonly onData?: (chunk: string) => void;
+  /** How long a SIGTERM has to work before the group is killed outright. */
+  readonly graceMs?: number;
+  /** Owned by {@link resolveNpmInvocation}, never by a caller — see {@link spawnNpm}. */
+  readonly shell?: boolean;
+}
+
+const GRACE_MS = 5_000;
+
+/**
+ * Signal a child AND its descendants.
+ *
+ * `child.kill()` signals the child alone, and npm's children are the ones doing the work: killing
+ * `npm run build:desktop` leaves electron-vite running. Measured — a child that spawns a grandchild
+ * leaves the grandchild orphaned, while signalling the GROUP reaps both. Windows has no process
+ * groups, so the tree is walked by `taskkill /T`.
+ */
+function killTree(pid: number, signal: NodeJS.Signals): void {
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(pid), '/T', ...(signal === 'SIGKILL' ? ['/F'] : [])], { stdio: 'ignore' });
+      return;
+    }
+    process.kill(-pid, signal);
+  } catch {
+    /* already gone, and its exit has already been delivered or is on its way */
+  }
+}
+
+/**
+ * Is anything still running in this child's process group?
+ *
+ * Signal 0 delivers nothing and only asks the question, and asking it of `-pid` asks it of the
+ * whole group — which is the thing that has to be empty before a cancel can claim to have worked.
+ * Windows has no groups, so `taskkill /T` is both the question and the answer there.
+ */
+function groupAlive(pid: number): boolean {
+  if (process.platform === 'win32') return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Run one step of a long command, owning it for as long as it lives.
+ *
+ * Asynchronous throughout, which the synchronous alternative is not: `execFileSync` blocks the loop
+ * a spinner is drawn on — 1547 ms of a 1500 ms child, with ZERO timer ticks, measured — and dies
+ * with ENOBUFS once a child says more than 2 MB. Both pipes are drained here instead, so a noisy
+ * packager cannot terminate its own step.
+ *
+ * `detached` is what makes the tree killable, and it is also what takes the child OUT of the
+ * terminal's foreground group — so Ctrl-C no longer reaches it and signalling becomes this module's
+ * job rather than the tty's. That is the whole reason cancellation lives here and not in the view.
+ */
+export function runStep(cmd: string, argv: readonly string[], opts: RunOptions): Running {
+  const mode = opts.stdin ?? 'ignore';
+  const owned = mode !== 'terminal';
+  const child = spawn(cmd, [...argv], {
+    cwd: opts.cwd,
+    ...(opts.env ? { env: opts.env } : {}),
+    shell: opts.shell === true,
+    detached: owned,
+    stdio: mode === 'terminal' ? 'inherit' : [mode === 'payload' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+  });
+
+  const chunks: string[] = [];
+  for (const stream of [child.stdout, child.stderr]) {
+    stream?.on('data', (d: Buffer) => {
+      const text = d.toString();
+      chunks.push(text);
+      if (opts.echo === true) process.stderr.write(text);
+      opts.onData?.(text);
+    });
+  }
+  if (mode === 'payload') {
+    child.stdin?.end(opts.payload ?? '');
+  }
+
+  const ended = new Promise<StepResult>((settle) => {
+    // A failure to spawn is an ending too: to the caller there is no difference between a command
+    // that could not start and one that started and failed.
+    child.on('error', (err) => settle({ code: 1, signal: null, output: `${chunks.join('')}${err.message}\n` }));
+    child.on('close', (code, signal) => settle({ code, signal, output: chunks.join('') }));
+  });
+
+  return {
+    join: () => ended,
+    async cancel() {
+      const { pid } = child;
+      if (pid === undefined || !owned) {
+        // A terminal-mode child is in the foreground group, so the tty has already signalled it.
+        await ended;
+        return;
+      }
+      const grace = opts.graceMs ?? GRACE_MS;
+      const deadline = Date.now() + grace;
+      killTree(pid, 'SIGTERM');
+
+      // What has to be gone is the GROUP, not the child we happen to hold. A child that exits
+      // promptly on SIGTERM while something it started ignores it would otherwise leave that
+      // descendant running and this call would report success.
+      let timer: NodeJS.Timeout | undefined;
+      const lapsed = new Promise<void>((r) => { timer = setTimeout(r, grace); timer.unref?.(); });
+      await Promise.race([ended, lapsed]);
+      if (timer) clearTimeout(timer);
+      while (groupAlive(pid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+      if (groupAlive(pid)) killTree(pid, 'SIGKILL');
+      await ended;
+    },
+  };
+}
+
+/** {@link runStep} for npm, through the one invocation path this module exists to get right. */
+export function runNpmStep(args: readonly string[], opts: RunOptions): Running {
+  // `shell` travels with the resolution and is not the caller's to choose: on the last-resort
+  // Windows path npm is `npm.cmd`, which cannot be spawned without it.
+  const { cmd, argv, shell } = resolveNpmInvocation(args, process.platform, process.env.npm_execpath);
+  return runStep(cmd, argv, { ...opts, shell });
+}

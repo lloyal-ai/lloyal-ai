@@ -113,7 +113,7 @@ export interface SigningStep {
 }
 
 /** The profile name suggested when there is none — short, and its own reminder of what made it. */
-const PROFILE = 'lloyal';
+export const PROFILE = 'lloyal';
 
 /**
  * What a distributable build needs, each marked with whether it is here.
@@ -128,16 +128,48 @@ const PROFILE = 'lloyal';
  * Nothing here is particular to a machine. The certificate name and team come from whatever
  * `security` reports, and the placeholders stand in when it reports nothing.
  */
+/**
+ * Which certificate this build will actually sign with, when that is knowable at all.
+ *
+ * Not `identities[0]`. The team printed into a `store-credentials` command has to belong to the
+ * certificate the build uses, and the first one the keychain happens to list need not be it — a
+ * wrong command, presented as something read from the machine, is worse than no command.
+ *
+ * Each branch is a refusal to guess, and `undefined` means exactly that: nobody knows yet, so the
+ * caller shows a placeholder or asks, rather than printing a plausible wrong answer.
+ */
+export function configuredIdentity(
+  env: NodeJS.ProcessEnv,
+  identities: readonly DeveloperIdentity[],
+): DeveloperIdentity | undefined {
+  // Named explicitly: that one or none. Falling back to "the only certificate here" would print a
+  // team belonging to a certificate this build is not going to use.
+  if (env.CSC_NAME) return identities.find((i) => i.name === env.CSC_NAME);
+  // Supplied as a .p12: the packager imports it into a temporary keychain it makes at build time,
+  // so the certificate doing the signing need not be installed on this Mac at all.
+  if (env.CSC_LINK) return undefined;
+  // The ordinary laptop. Two installed and nothing chosen between them is not a guess worth making.
+  return identities.length === 1 ? identities[0] : undefined;
+}
+
 export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly DeveloperIdentity[]): SigningStep[] {
-  const cert = identities[0];
-  const team = cert?.teamId ?? '<TEAMID>';
+  const cert = configuredIdentity(env, identities);
+  // A certificate the packager will import is a certificate, and it is the only one a CI runner
+  // ever has: there is no keychain there to find an installed one in.
+  const supplied = cert === undefined && Boolean(env.CSC_LINK);
   return [
     {
-      done: identities.length > 0,
-      title: cert ? `A Developer ID certificate on this Mac — ${cert.name}` : 'A Developer ID certificate on this Mac',
+      done: identities.length > 0 || Boolean(env.CSC_LINK),
+      title: supplied
+        ? 'A Developer ID certificate supplied as CSC_LINK, for the packager to import'
+        : cert
+          ? `A Developer ID certificate on this Mac — ${cert.name}`
+          : 'A Developer ID certificate on this Mac',
       detail: [
-        'Create one at developer.apple.com/account, under Certificates, then open',
-        'the download to install it. Check it landed:',
+        'Needs Apple Developer Program membership (US$99/year) — a free Apple ID',
+        'cannot issue one, and Apple refuses notarization without it. Enrol at',
+        'developer.apple.com/programs, create the certificate under Certificates,',
+        'then open the download to install it. Check it landed:',
         '  security find-identity -v -p codesigning',
       ],
     },
@@ -151,9 +183,9 @@ export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly De
       title: 'A notary credential named there too',
       detail: [
         'A stored profile keeps the secret in your keychain. Make an app-specific',
-        'password at appleid.apple.com, under Sign-In and Security, then once:',
+        'password at account.apple.com, under Sign-In and Security, then once:',
         `  xcrun notarytool store-credentials ${PROFILE} \\`,
-        `    --apple-id <your Apple ID> --team-id ${team}`,
+        `    --apple-id <your Apple ID> --team-id ${cert?.teamId ?? '<your Team ID>'}`,
         'and name it:',
         `  APPLE_KEYCHAIN_PROFILE=${PROFILE}`,
       ],
@@ -284,18 +316,27 @@ export function harnessPackaging(input: PackagingInput): Record<string, unknown>
   };
 }
 
+/** What the notary service is authenticated with, in the shape `@electron/notarize` accepts. */
+export type NotaryCredentials =
+  | { readonly appleApiKey: string; readonly appleApiKeyId: string; readonly appleApiIssuer: string }
+  | { readonly keychainProfile: string; readonly keychain?: string }
+  | { readonly appleId: string; readonly appleIdPassword: string; readonly teamId: string };
+
 /**
- * What `xcrun notarytool` authenticates a submission with, read from the same variables
- * electron-builder reads to notarize the application inside the image.
+ * The credentials for one submission, read from the same variables electron-builder reads to
+ * notarize the application inside the image.
  *
  * The disk image is submitted separately, by {@link ../commands/ship}, after the packager has
- * finished: the packager notarizes and staples the app, which is what lets it launch, and leaves the
- * image around it unstapled, which is what a browser download is judged on.
+ * finished: the packager notarizes and staples the app, which is what lets it launch, and leaves
+ * the image around it unstapled, which is what a browser download is judged on. One route is
+ * chosen and only that route's fields are handed over — the library rejects a mixture outright,
+ * which is the same rule {@link notaryRoute} exists to enforce.
  *
- * A missing variable is named here rather than passed through empty. Notarytool's own answer to an
- * empty issuer is a generic authentication failure, and it arrives at the end of a long build.
+ * A missing variable is named here rather than passed through empty. The notary service's own
+ * answer to an empty issuer is a generic authentication failure, and it arrives at the end of a
+ * long build.
  */
-export function notaryArgs(env: NodeJS.ProcessEnv): string[] {
+export function notaryCredentials(env: NodeJS.ProcessEnv): NotaryCredentials {
   const need = (name: string): string => {
     const value = env[name];
     if (!value) throw new Error(`${name} is not set, and notarizing needs it.`);
@@ -303,16 +344,15 @@ export function notaryArgs(env: NodeJS.ProcessEnv): string[] {
   };
   switch (notaryRoute(env)) {
     case 'api-key':
-      return ['--key', need('APPLE_API_KEY'), '--key-id', need('APPLE_API_KEY_ID'), '--issuer', need('APPLE_API_ISSUER')];
-    // A stored profile keeps the secret in the keychain, where a command line cannot expose it.
+      return { appleApiKey: need('APPLE_API_KEY'), appleApiKeyId: need('APPLE_API_KEY_ID'), appleApiIssuer: need('APPLE_API_ISSUER') };
+    // A stored profile keeps the secret in the keychain, where no command line can expose it.
     case 'keychain-profile':
-      return ['--keychain-profile', need('APPLE_KEYCHAIN_PROFILE'),
-        ...(env.APPLE_KEYCHAIN ? ['--keychain', env.APPLE_KEYCHAIN] : [])];
-    // The password becomes an argument to `notarytool`, and an argument is readable by anything
+      return { keychainProfile: need('APPLE_KEYCHAIN_PROFILE'), ...(env.APPLE_KEYCHAIN ? { keychain: env.APPLE_KEYCHAIN } : {}) };
+    // The password becomes an argument to `notarytool` inside the library, readable by anything
     // running as this user for as long as the submission takes. The packager does the same with it
-    // when notarizing the application, so this is the environment's exposure rather than this
-    // command's, and the way out of it is a key or a stored profile instead.
+    // a moment earlier, so this is the environment's exposure rather than this command's, and the
+    // way out of it is a key or a stored profile instead.
     default:
-      return ['--apple-id', need('APPLE_ID'), '--password', need('APPLE_APP_SPECIFIC_PASSWORD'), '--team-id', need('APPLE_TEAM_ID')];
+      return { appleId: need('APPLE_ID'), appleIdPassword: need('APPLE_APP_SPECIFIC_PASSWORD'), teamId: need('APPLE_TEAM_ID') };
   }
 }

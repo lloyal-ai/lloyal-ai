@@ -1,0 +1,104 @@
+/**
+ * What the wizard actually puts on screen. The runner's rows prove the processes are owned; these
+ * prove a reader can see what is happening to them.
+ */
+import { describe, it, expect } from 'vitest';
+import { render } from 'ink-testing-library';
+import { Steps, elapsed } from '../src/scaffold/steps.js';
+import { packagerPhase } from '../src/commands/ship.js';
+
+describe('the steps a reader sees', () => {
+  it('ticks what is finished and spins on what is not', () => {
+    const { lastFrame } = render(
+      <Steps steps={[
+        { label: 'Building the desktop surface', state: 'done' },
+        { label: 'Packaging the application', state: 'running' },
+        { label: 'Notarizing the disk image', state: 'waiting' },
+      ]} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('✓ Building the desktop surface');
+    expect(frame).toContain('Packaging the application');
+    // A step nobody has reached is not drawn at all: a list of pending work is noise.
+    expect(frame).not.toContain('Notarizing the disk image');
+  });
+
+  it('marks a failed step, so the list says which one stopped', () => {
+    const { lastFrame } = render(<Steps steps={[{ label: 'Packaging the application', state: 'failed' }]} />);
+    expect(lastFrame() ?? '').toContain('✗ Packaging the application');
+  });
+
+  /** The packager runs for minutes. Without this the wizard is the firehose's opposite mistake:
+   *  nothing on screen at all, and no way to tell working from hung. */
+  it('keeps what happened inside a step as a record, not a status', () => {
+    const { lastFrame } = render(
+      <Steps steps={[{
+        label: 'Packaging the application',
+        state: 'running',
+        seconds: 95,
+        phases: [
+          { label: 'packaged', detail: 'darwin arm64 · electron 44.4.5', state: 'done' },
+          { label: 'signed', detail: 'Zuhair Naqvi (GXB6ZZPDWJ)', state: 'running' },
+        ],
+      }]} />,
+    );
+    const frame = lastFrame() ?? '';
+    // Both are on screen: the earlier one did not scroll away when the next began.
+    expect(frame).toContain('packaged');
+    expect(frame).toContain('darwin arm64 · electron 44.4.5');
+    expect(frame).toContain('signed');
+    expect(frame).toContain('Zuhair Naqvi (GXB6ZZPDWJ)');
+    expect(frame).toContain('1m 35s');
+  });
+
+  it('says nothing about the clock until a step has run long enough to need one', () => {
+    const { lastFrame } = render(<Steps steps={[{ label: 'Packaging', state: 'running', seconds: 1 }]} />);
+    expect(lastFrame() ?? '').not.toContain('1s');
+  });
+
+  it('reads a duration without making anyone decode it', () => {
+    expect(elapsed(9)).toBe('9s');
+    expect(elapsed(59)).toBe('59s');
+    expect(elapsed(60)).toBe('1m 00s');
+    expect(elapsed(605)).toBe('10m 05s');
+  });
+
+  /**
+   * Read from a real captured run of the pinned packager (26.15.3), not from invented samples.
+   *
+   * Only what the packager SAYS becomes a phase. Nothing is inferred from one marker about work
+   * that no marker mentions — the packager announces signing and then says nothing at all while
+   * Apple notarizes the application, and that silence stays silent rather than being narrated.
+   */
+  describe('the packager\'s own phases', () => {
+    it('reads the markers it actually emits', () => {
+      expect(packagerPhase('  • packaging       platform=darwin arch=arm64 electron=44.4.5 appOutDir=release/mac-arm64'))
+        .toEqual({ label: 'packaged', detail: 'darwin arm64 · electron 44.4.5' });
+      expect(packagerPhase('  • building        target=DMG arch=arm64 file=release/fieldnote-0.1.0-arm64.dmg'))
+        .toEqual({ label: 'built the disk image' });
+    });
+
+    /** An identity has spaces in it, so splitting the tail on whitespace would keep one word. */
+    it('keeps a value that contains spaces whole', () => {
+      expect(packagerPhase('  • signing         file=fieldnote.app identity=Zuhair Naqvi (GXB6ZZPDWJ) provisioningProfile=none'))
+        .toEqual({ label: 'signed', detail: 'Zuhair Naqvi (GXB6ZZPDWJ)' });
+    });
+
+    /** Additive by construction: an unrecognised line contributes nothing, so a format that moves
+     *  loses detail and never truth. These are all real lines from the same run. */
+    it('adds nothing for a line it does not recognise', () => {
+      for (const line of [
+        '  • electron-builder  version=26.15.3 os=25.3.0',
+        '  • loaded configuration  file=/tmp/lloyal-ship-QJgBh8/electron-builder.json',
+        '  • skipped dependencies rebuild  reason=npmRebuild is set to false',
+        '  • skipped macOS code signing  reason=identity explicitly is set to null',
+        '  • building block map  blockMapFile=release/fieldnote-0.1.0-arm64.dmg.blockmap',
+        `  • duplicate dependency references  dependencies=["${'x'.repeat(6000)}"]`,
+        'vite v7.1.5 building for production...',
+        '',
+      ]) {
+        expect(packagerPhase(line)).toBeUndefined();
+      }
+    });
+  });
+});
