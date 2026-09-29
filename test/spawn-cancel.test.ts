@@ -8,6 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { basename } from 'node:path';
 import { Interrupted, createRun, runStep, stdioFor, type Running } from '../src/npm-spawn.js';
 
 const NODE = process.execPath;
@@ -21,14 +22,24 @@ const marker = (what: string): string => {
   return m;
 };
 
-/** How many processes still carry this marker. `pgrep -f` matches any command line containing
- *  it, so a sibling test's cleanup can be caught in the count for a moment — the assertion that
- *  has to be exact is the one AFTER cancelling, which is zero. */
+/**
+ * How many of OUR processes still carry this marker.
+ *
+ * Not `pgrep -f`: the marker is an argument, so on some systems `pgrep` matches its own command
+ * line and a sibling's `pkill` cleanup, and the count comes back one too high — which is exactly
+ * how a reviewer failed to get a green suite twice. Reading `ps` and filtering here keeps the
+ * matcher out of its own answer, and requiring the node binary in the line excludes the
+ * `pkill`/`pgrep` invocations that legitimately carry the marker too.
+ */
+const NODE_BIN = basename(NODE);
 const living = (m: string): number => {
   try {
-    return execFileSync('pgrep', ['-f', m], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).length;
+    return execFileSync('ps', ['-Ao', 'pid=,command='], { encoding: 'utf8' })
+      .split('\n')
+      .filter((line) => line.includes(m) && line.includes(NODE_BIN))
+      .length;
   } catch {
-    return 0;   // pgrep exits non-zero when nothing matches
+    return 0;
   }
 };
 

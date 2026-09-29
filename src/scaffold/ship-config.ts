@@ -128,28 +128,47 @@ export const PROFILE = 'lloyal';
  * Nothing here is particular to a machine. The certificate name and team come from whatever
  * `security` reports, and the placeholders stand in when it reports nothing.
  */
+/** The prefix `security` prints in front of a Developer ID name, and the packager matches against. */
+const DEVELOPER_ID = 'Developer ID Application: ';
+
 /**
- * Which certificate this build will actually sign with, when that is knowable at all.
+ * The installed certificates `CSC_NAME` selects — by the packager's rule, not a stricter one.
+ *
+ * electron-builder 26.15.3 does `line.includes(qualifier)` against each `security find-identity`
+ * line (`codeSign/macCodeSign.js:227`), so `CSC_NAME` is a SUBSTRING selector: `Acme Pty Ltd`
+ * selects `Developer ID Application: Acme Pty Ltd (T3AMID9999)` and is a supported setup. Requiring
+ * the whole name here refused a configuration the packager accepts.
+ *
+ * `CSC_LINK` selects nothing installed: the packager imports that `.p12` into a temporary keychain
+ * it makes at build time, so this Mac's certificates say nothing about it.
+ */
+export function selectedIdentities(
+  env: NodeJS.ProcessEnv,
+  identities: readonly DeveloperIdentity[],
+): readonly DeveloperIdentity[] {
+  if (env.CSC_LINK) return [];
+  const selector = env.CSC_NAME;
+  if (!selector) return identities;
+  return identities.filter((i) => `${DEVELOPER_ID}${i.name}`.includes(selector));
+}
+
+/**
+ * Which certificate this build will sign with, when that is knowable at all.
  *
  * Not `identities[0]`. The team printed into a `store-credentials` command has to belong to the
  * certificate the build uses, and the first one the keychain happens to list need not be it — a
  * wrong command, presented as something read from the machine, is worse than no command.
  *
- * Each branch is a refusal to guess, and `undefined` means exactly that: nobody knows yet, so the
- * caller shows a placeholder or asks, rather than printing a plausible wrong answer.
+ * `undefined` means exactly that: nobody knows yet, so the caller shows a placeholder or asks. A
+ * selector matching SEVERAL certificates is one of those cases — the packager will pick one, but
+ * which team it belongs to is not something this can claim.
  */
 export function configuredIdentity(
   env: NodeJS.ProcessEnv,
   identities: readonly DeveloperIdentity[],
 ): DeveloperIdentity | undefined {
-  // Named explicitly: that one or none. Falling back to "the only certificate here" would print a
-  // team belonging to a certificate this build is not going to use.
-  if (env.CSC_NAME) return identities.find((i) => i.name === env.CSC_NAME);
-  // Supplied as a .p12: the packager imports it into a temporary keychain it makes at build time,
-  // so the certificate doing the signing need not be installed on this Mac at all.
-  if (env.CSC_LINK) return undefined;
-  // The ordinary laptop. Two installed and nothing chosen between them is not a guess worth making.
-  return identities.length === 1 ? identities[0] : undefined;
+  const chosen = selectedIdentities(env, identities);
+  return chosen.length === 1 ? chosen[0] : undefined;
 }
 
 export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly DeveloperIdentity[]): SigningStep[] {
@@ -160,11 +179,13 @@ export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly De
   // Named a certificate? Then THAT certificate has to be here — an unrelated one being installed
   // says nothing about the one the build will ask for. Ticking on "some identity exists" let a
   // doomed build start and fail minutes later inside the packager.
-  const named = Boolean(env.CSC_NAME);
-  const missing = named && cert === undefined && !env.CSC_LINK;
+  // Presence is the packager's question — does the selector match anything installed — and it is
+  // a different question from which team to print, which needs exactly one answer.
+  const chosen = selectedIdentities(env, identities);
+  const missing = Boolean(env.CSC_NAME) && chosen.length === 0 && !env.CSC_LINK;
   return [
     {
-      done: Boolean(env.CSC_LINK) || (named ? cert !== undefined : identities.length > 0),
+      done: Boolean(env.CSC_LINK) || chosen.length > 0,
       title: supplied
         ? 'A Developer ID certificate supplied as CSC_LINK, for the packager to import'
         : missing

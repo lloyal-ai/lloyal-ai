@@ -639,6 +639,35 @@ describe('reading the signing setup off the machine', () => {
     '     2 valid identities found',
   ].join('\n');
 
+  /**
+   * `CSC_NAME` is a SUBSTRING selector, not a full name. electron-builder does
+   * `line.includes(qualifier)` against each `security find-identity` line
+   * (`codeSign/macCodeSign.js:227`), so a company name with no team suffix is a supported setup
+   * and refusing it broke a configuration that works.
+   */
+  it('accepts the partial names the packager accepts', () => {
+    const one = developerIdentities(() => SECURITY_OUTPUT);       // Acme Pty Ltd (T3AMID9999)
+    const rowFor = (name: string, ids = one) => signingChecklist({ CSC_NAME: name, APPLE_KEYCHAIN_PROFILE: 'l' }, ids);
+
+    // The company name alone: what the packager matches, and what used to be refused here.
+    expect(rowFor('Acme Pty Ltd')[0].done).toBe(true);
+    expect(rowFor('Acme Pty Ltd')[2].detail.join('\n')).toContain('--team-id T3AMID9999');
+    // The whole name, and the form carrying the prefix the keychain prints.
+    expect(rowFor('Acme Pty Ltd (T3AMID9999)')[0].done).toBe(true);
+    expect(rowFor('Developer ID Application: Acme')[0].done).toBe(true);
+    // Matching nothing installed is still refused — that is a different thing from being partial.
+    expect(rowFor('Nobody At All')[0].done).toBe(false);
+  });
+
+  /** A selector matching several is a certificate the packager can find and a team this cannot
+   *  name: the row passes, the suggestion stays a placeholder. */
+  it('accepts an ambiguous selector without inventing a team for it', () => {
+    const two = developerIdentities(() => TWO_IDENTITIES);        // First Team / Second Team
+    const rows = signingChecklist({ CSC_NAME: 'Team', APPLE_KEYCHAIN_PROFILE: 'l' }, two);
+    expect(rows[0].done).toBe(true);
+    expect(rows[2].detail.join('\n')).toContain('--team-id <your Team ID>');
+  });
+
   /** The team is pasted into a command the reader runs, so it has to belong to the certificate the
    *  build will use. Anything less certain than that prints a placeholder instead of a wrong team. */
   it('takes the team from the configured certificate, and declines to guess otherwise', () => {
