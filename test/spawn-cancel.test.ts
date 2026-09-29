@@ -53,18 +53,45 @@ describe('runStep owns the process tree it starts', () => {
     expect(output.length).toBeGreaterThan(4_000_000);
   });
 
-  /** The spinner's dim tail is fed from here, so a step that says something has to be heard while
-   *  it is still running — not only once it has finished. */
-  it('reports what the child says as it says it', async () => {
+  /** The wizard's phases are fed from here, so a line has to arrive whole and while it is still
+   *  running — not only once the child has finished. */
+  it('reports whole lines as the child says them', async () => {
     const heard: string[] = [];
     const step = runStep(
       NODE,
       ['-e', 'process.stdout.write("first\\n");setTimeout(()=>process.stdout.write("second\\n"),80)'],
-      { cwd: tmpdir(), onData: (chunk) => heard.push(chunk) },
+      { cwd: tmpdir(), onLine: (line) => heard.push(line) },
     );
-    const { output } = await step.join();
-    expect(heard.length).toBeGreaterThanOrEqual(2);
-    expect(heard.join('')).toBe(output);
+    await step.join();
+    expect(heard).toEqual(['first', 'second']);
+  });
+
+  /** A `data` event is an arbitrary slice of the stream, not a line. Splitting each chunk on its
+   *  own dropped markers depending on pipe timing — a valid line emitted in two writes produced
+   *  nothing at all, which is how a packaging phase silently vanished from the wizard. */
+  it('joins a line that arrives in two chunks', async () => {
+    const heard: string[] = [];
+    const step = runStep(
+      NODE,
+      ['-e', 'process.stdout.write("  • packa");setTimeout(()=>process.stdout.write("ging  platform=darwin\\n"),100)'],
+      { cwd: tmpdir(), onLine: (line) => heard.push(line) },
+    );
+    await step.join();
+    expect(heard).toEqual(['  • packa' + 'ging  platform=darwin']);
+  });
+
+  /** stdout and stderr interleave, so a half-line of one must not be completed by the other. */
+  it("keeps each stream's partial line to itself, and flushes what has no newline", async () => {
+    const heard: string[] = [];
+    const step = runStep(
+      NODE,
+      ['-e', 'process.stdout.write("out-half");process.stderr.write("err-whole\\n");setTimeout(()=>process.stdout.write("-done"),60)'],
+      { cwd: tmpdir(), onLine: (line) => heard.push(line) },
+    );
+    await step.join();
+    expect(heard).toContain('err-whole');
+    // No trailing newline: the child still said it, so it is delivered at close.
+    expect(heard).toContain('out-half-done');
   });
 
   /** `stdio: ['ignore', …]` makes `child.stdin` null and the child reads EOF, so the payload mode

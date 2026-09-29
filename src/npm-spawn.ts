@@ -203,8 +203,15 @@ export interface RunOptions {
   readonly payload?: string;
   /** Forward the child's output as it arrives, for a run nobody is drawing a spinner over. */
   readonly echo?: boolean;
-  /** Called with each chunk as it arrives, for a caller showing what the child is up to. */
-  readonly onData?: (chunk: string) => void;
+  /**
+   * Called with each COMPLETE line as it arrives, for a caller showing what the child is up to.
+   *
+   * Lines, not chunks, because a `data` event is an arbitrary slice of the stream: a marker can
+   * arrive as `  • packa` and `ging  platform=darwin…` in two events, and a caller splitting each
+   * chunk on its own would see neither. Proven — a valid line emitted in two writes produced no
+   * phase at all. Buffering belongs here so no caller has to remember it.
+   */
+  readonly onLine?: (line: string) => void;
   /** How long a SIGTERM has to work before the group is killed outright. */
   readonly graceMs?: number;
   /** Owned by {@link resolveNpmInvocation}, never by a caller — see {@link spawnNpm}. */
@@ -274,12 +281,26 @@ export function runStep(cmd: string, argv: readonly string[], opts: RunOptions):
   });
 
   const chunks: string[] = [];
-  for (const stream of [child.stdout, child.stderr]) {
+  // One buffer per stream: stdout and stderr interleave, and a half-line of one must not be
+  // completed by the next line of the other.
+  const partial = { out: '', err: '' };
+  const consume = (where: 'out' | 'err', text: string): void => {
+    if (opts.onLine === undefined) return;
+    const lines = (partial[where] + text).split('\n');
+    partial[where] = lines.pop() ?? '';   // whatever follows the last newline is not a line yet
+    for (const line of lines) opts.onLine(line);
+  };
+  const flush = (): void => {
+    for (const where of ['out', 'err'] as const) {
+      if (partial[where] !== '') { opts.onLine?.(partial[where]); partial[where] = ''; }
+    }
+  };
+  for (const [where, stream] of [['out', child.stdout], ['err', child.stderr]] as const) {
     stream?.on('data', (d: Buffer) => {
       const text = d.toString();
       chunks.push(text);
       if (opts.echo === true) process.stderr.write(text);
-      opts.onData?.(text);
+      consume(where, text);
     });
   }
   if (mode === 'payload') {
@@ -289,8 +310,8 @@ export function runStep(cmd: string, argv: readonly string[], opts: RunOptions):
   const ended = new Promise<StepResult>((settle) => {
     // A failure to spawn is an ending too: to the caller there is no difference between a command
     // that could not start and one that started and failed.
-    child.on('error', (err) => settle({ code: 1, signal: null, output: `${chunks.join('')}${err.message}\n` }));
-    child.on('close', (code, signal) => settle({ code, signal, output: chunks.join('') }));
+    child.on('error', (err) => { flush(); settle({ code: 1, signal: null, output: `${chunks.join('')}${err.message}\n` }); });
+    child.on('close', (code, signal) => { flush(); settle({ code, signal, output: chunks.join('') }); });
   });
 
   return {

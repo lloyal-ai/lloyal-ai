@@ -467,7 +467,9 @@ describe('an icon the project names', () => {
  * quietly downgraded to the thing nobody can install.
  */
 describe('--notarize is the asking', () => {
-  const complete = { CSC_NAME: 'Developer ID Application: Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+  // The name WITHOUT the `Developer ID Application:` prefix, which is the form the packager
+  // accepts and the form the keychain reports — so it matches the identity these rows pass in.
+  const complete = { CSC_NAME: 'Someone (T)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
 
   it('signs nothing when it was not asked, however well the machine is set up', () => {
     expect(signingFrom(complete, false)).toEqual({ sign: false, notarize: false });
@@ -606,6 +608,24 @@ describe('reading the signing setup off the machine', () => {
     expect(distributionRefusal(ci, [])).toBeUndefined();
   });
 
+  /** Naming a certificate that is not here is not the same as having one. Ticking on "some
+   *  identity exists" let all three rows go green with a notary profile present, so the refusal
+   *  passed and the packager failed minutes later looking for a certificate by name. */
+  it('does not accept an unrelated certificate for one CSC_NAME actually names', () => {
+    const installed = developerIdentities(() => SECURITY_OUTPUT);   // Acme Pty Ltd
+    const env = { CSC_NAME: 'Someone Else (NOSUCH0000)', APPLE_KEYCHAIN_PROFILE: 'lloyal' };
+
+    const [certificate] = signingChecklist(env, installed);
+    expect(certificate.done).toBe(false);
+    expect(certificate.title).toContain('Someone Else (NOSUCH0000)');
+    expect(distributionRefusal(env, installed)).toBeDefined();
+
+    // Unnamed, and one is installed: that is still a certificate on this Mac.
+    expect(signingChecklist({ APPLE_KEYCHAIN_PROFILE: 'lloyal' }, installed)[0].done).toBe(true);
+    // Supplied for import: the keychain is not asked at all.
+    expect(signingChecklist({ CSC_NAME: 'Someone Else (NOSUCH0000)', CSC_LINK: 'p12' }, installed)[0].done).toBe(true);
+  });
+
   it('credits a supplied certificate without claiming it saw one in the keychain', () => {
     const [certificate] = signingChecklist({ CSC_LINK: 'base64-of-a-p12' }, []);
     expect(certificate.done).toBe(true);
@@ -660,7 +680,7 @@ describe('reading the signing setup off the machine', () => {
   });
 
   it('counts what is found and what is left, and points CI at the page', () => {
-    const said = distributionRefusal({ CSC_NAME: 'x' }, developerIdentities(() => SECURITY_OUTPUT)) as string;
+    const said = distributionRefusal({ CSC_NAME: 'Acme Pty Ltd (T3AMID9999)' }, developerIdentities(() => SECURITY_OUTPUT)) as string;
     expect(said).toContain('3 things. 2 of them are already here');
     expect(said).toContain('Found');
     expect(said).toContain('Remaining');

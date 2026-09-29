@@ -551,11 +551,9 @@ export const shipCommand: Command = {
       const view = showSteps(labels);
       // The packager's own phases, and only those. Nothing is inferred from one marker about work
       // no marker mentions: what is on screen is what the packager said it did.
-      const packagerProgress = (chunk: string): void => {
-        for (const line of chunk.split('\n')) {
-          const phase = packagerPhase(line);
-          if (phase !== undefined) view.phase(1, phase);
-        }
+      const packagerProgress = (line: string): void => {
+        const phase = packagerPhase(line);
+        if (phase !== undefined) view.phase(1, phase);
       };
       let live: Running | undefined;
       const step = async (index: number, running: Running): Promise<StepResult> => {
@@ -587,7 +585,7 @@ export const shipCommand: Command = {
           // `--publish never`: an artifact leaves this machine when somebody sends it, never as a
           // side effect of building it.
           ['exec', '--yes', '--package', PACKAGER, '--', 'electron-builder', '--mac', '--config', configFile, '--publish', 'never'],
-          { cwd: root, env: withoutDebug(process.env), echo, onData: packagerProgress },
+          { cwd: root, env: withoutDebug(process.env), echo, onLine: packagerProgress },
         ));
         if (packed.code !== 0) throw new Error(`the packager failed.\n\n${packed.output}`);
 

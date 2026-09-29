@@ -157,14 +157,21 @@ export function signingChecklist(env: NodeJS.ProcessEnv, identities: readonly De
   // A certificate the packager will import is a certificate, and it is the only one a CI runner
   // ever has: there is no keychain there to find an installed one in.
   const supplied = cert === undefined && Boolean(env.CSC_LINK);
+  // Named a certificate? Then THAT certificate has to be here — an unrelated one being installed
+  // says nothing about the one the build will ask for. Ticking on "some identity exists" let a
+  // doomed build start and fail minutes later inside the packager.
+  const named = Boolean(env.CSC_NAME);
+  const missing = named && cert === undefined && !env.CSC_LINK;
   return [
     {
-      done: identities.length > 0 || Boolean(env.CSC_LINK),
+      done: Boolean(env.CSC_LINK) || (named ? cert !== undefined : identities.length > 0),
       title: supplied
         ? 'A Developer ID certificate supplied as CSC_LINK, for the packager to import'
-        : cert
-          ? `A Developer ID certificate on this Mac — ${cert.name}`
-          : 'A Developer ID certificate on this Mac',
+        : missing
+          ? `CSC_NAME names "${env.CSC_NAME}", which is not a Developer ID certificate on this Mac`
+          : cert
+            ? `A Developer ID certificate on this Mac — ${cert.name}`
+            : 'A Developer ID certificate on this Mac',
       detail: [
         'Needs Apple Developer Program membership (US$99/year) — a free Apple ID',
         'cannot issue one, and Apple refuses notarization without it. Enrol at',

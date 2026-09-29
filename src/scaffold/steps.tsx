@@ -33,7 +33,7 @@ export type StepState = 'waiting' | 'running' | 'done' | 'failed';
 export interface Phase {
   readonly label: string;
   readonly detail?: string;
-  readonly state: 'running' | 'done';
+  readonly state: 'running' | 'done' | 'failed';
   /** Waiting on somebody else — the one distinction worth a mark, since it is the only wait the
    *  developer cannot shorten and it is an order of magnitude longer than the rest. */
   readonly waiting?: boolean;
@@ -59,7 +59,9 @@ function Phases({ phases }: { phases: readonly Phase[] }): ReactElement | null {
       {phases.map((phase) => (
         <Box key={phase.label} gap={1}>
           <Text>{'  '}</Text>
-          {phase.state === 'done' ? <Text color="green">✓</Text> : <Spinner />}
+          {phase.state === 'done' ? <Text color="green">✓</Text>
+            : phase.state === 'failed' ? <Text color="red">✗</Text>
+            : <Spinner />}
           <Text>{phase.label.padEnd(width)}</Text>
           {phase.detail === undefined ? null : (
             <Text dimColor={phase.waiting !== true}>{phase.detail}</Text>
@@ -174,9 +176,14 @@ export function showSteps(labels: readonly string[], stream: NodeJS.WriteStream 
     },
     settle: (i, ok) => {
       stopClock();
+      // The phase that was still running when the step failed is the phase that FAILED. Marking
+      // every phase done would print a green ✓ signed inside a red ✗ packaging step — the one
+      // line a reader would use to decide where to look, pointing away from the cause.
       put(i, {
         state: ok ? 'done' : 'failed',
-        phases: (steps[i].phases ?? []).map((p) => ({ ...p, state: 'done' as const })),
+        phases: (steps[i].phases ?? []).map((p) =>
+          p.state === 'running' ? { ...p, state: ok ? ('done' as const) : ('failed' as const) } : p,
+        ),
       });
       paint();
     },

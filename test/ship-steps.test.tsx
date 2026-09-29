@@ -51,6 +51,25 @@ describe('the steps a reader sees', () => {
     expect(frame).toContain('1m 35s');
   });
 
+  /** The phase still running when a step fails is the phase that failed. Ticking it would put a
+   *  green ✓ signed inside a red ✗ packaging step, pointing away from the cause. */
+  it('marks the phase that was running when the step failed', () => {
+    const { lastFrame } = render(
+      <Steps steps={[{
+        label: 'Packaging the application',
+        state: 'failed',
+        phases: [
+          { label: 'packaged', detail: 'darwin arm64', state: 'done' },
+          { label: 'signed', state: 'failed' },
+        ],
+      }]} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('✓ packaged');
+    expect(frame).toContain('✗ signed');
+    expect(frame).not.toContain('✓ signed');
+  });
+
   it('says nothing about the clock until a step has run long enough to need one', () => {
     const { lastFrame } = render(<Steps steps={[{ label: 'Packaging', state: 'running', seconds: 1 }]} />);
     expect(lastFrame() ?? '').not.toContain('1s');
