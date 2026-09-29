@@ -41,6 +41,27 @@ describe('copyTreeWithSubstitutions', () => {
     expect(statSync(join(dest, 'bin', 'tool')).mode & 0o111).not.toBe(0);
   });
 
+  /** This repository is also somewhere templates are RUN, so testing `ship --notarize` inside
+   *  `templates/<t>` leaves a real signing certificate in `.env.local`, and any run leaves the
+   *  local overlay. The exclusion used to be consulted only inside the directory branch, so no
+   *  FILE was ever filtered by it and both would have been copied into every new project. */
+  it("never scaffolds one machine's credentials, at any depth", () => {
+    const { src, dest } = fixture();
+    mkdirSync(join(src, 'targets', 'desktop'), { recursive: true });
+    writeFileSync(join(src, 'targets', 'desktop', '.env.local'), 'CSC_KEY_PASSWORD=SYNTHETIC\n');
+    writeFileSync(join(src, 'targets', 'desktop', '.env'), '# committed, and holds no secret\n');
+    writeFileSync(join(src, 'harness.json'), '{"note":"SYNTHETIC"}\n');
+    writeFileSync(join(src, 'harness.yml'), 'name: demo\n');
+    copyTreeWithSubstitutions(src, dest, buildSubstitutions('demo'));
+
+    expect(existsSync(join(dest, 'targets', 'desktop', '.env.local'))).toBe(false);
+    expect(existsSync(join(dest, 'harness.json'))).toBe(false);
+    // And the committed pair still travels: excluding a credential must not take the file that
+    // documents where the credential goes with it.
+    expect(existsSync(join(dest, 'targets', 'desktop', '.env'))).toBe(true);
+    expect(existsSync(join(dest, 'harness.yml'))).toBe(true);
+  });
+
   it('never scaffolds a node_modules the template happens to carry', () => {
     const { src, dest } = fixture();
     copyTreeWithSubstitutions(src, dest, buildSubstitutions('demo'));

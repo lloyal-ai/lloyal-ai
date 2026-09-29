@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,5 +33,32 @@ describe('the tarball ships the templates git tracks', () => {
 
     expect(tracked.length).toBeGreaterThan(0);
     expect(packed).toEqual(tracked);
+  });
+
+  /** The relationship above only fails when the file is actually THERE — and a credentials file is
+   *  there exactly when somebody has been testing `--notarize` inside `templates/`, which is the
+   *  case nobody runs the suite in. So put one there on purpose. Three independent mechanisms have
+   *  to hold: `.gitignore` for the branch, `files` for the tarball (it overrides `.gitignore`, so
+   *  saying it once is not saying it twice), and the copier for the next developer's project. */
+  it("leaves a machine's credentials behind, even sitting inside a template", { timeout: 30_000 }, () => {
+    const local = join(root, 'templates/research/targets/desktop/.env.local');
+    const overlay = join(root, 'templates/research/harness.json');
+    writeFileSync(local, 'CSC_KEY_PASSWORD=SYNTHETIC-CREDENTIAL\n');
+    writeFileSync(overlay, '{"note":"SYNTHETIC-CREDENTIAL"}\n');
+    try {
+      const packed = (JSON.parse(run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'])) as
+        Array<{ files: Array<{ path: string }> }>)[0].files.map((f) => f.path);
+
+      expect(packed.some((p) => p.endsWith('.env.local'))).toBe(false);
+      expect(packed.some((p) => p.endsWith('harness.json'))).toBe(false);
+      // The committed file that documents where credentials go still ships.
+      expect(packed).toContain('templates/research/targets/web/.env');
+      // And git would not have taken them either. `check-ignore` exits non-zero when it would.
+      expect(() => run('git', ['check-ignore', '-q', local])).not.toThrow();
+      expect(() => run('git', ['check-ignore', '-q', overlay])).not.toThrow();
+    } finally {
+      rmSync(local, { force: true });
+      rmSync(overlay, { force: true });
+    }
   });
 });
