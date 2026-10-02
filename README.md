@@ -1,5 +1,8 @@
 # lloyal-ai
 
+<a href="https://www.producthunt.com/products/lloyal?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-lloyal" target="_blank" rel="noopener noreferrer"><img alt="Lloyal - Turn open-weight models into AI apps people can download | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1265797&amp;theme=light&amp;t=1790951877977"></a>
+
+
 **Self-contained, offline-first AI apps in TypeScript. Just your code and the model.**
 
 `lloyal-ai` scaffolds a harness: an application that holds the model and the program in one process, with no
