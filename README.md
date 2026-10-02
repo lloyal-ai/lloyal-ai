@@ -18,6 +18,8 @@ Think of a game engine. You program the behaviour; lloyal handles the physics un
 npx lloyal-ai new my-app
 ```
 
+New to it? Build your first harness step by step: [docs.lloyal.ai/build-your-first-harness](https://docs.lloyal.ai/build-your-first-harness).
+
 ![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
 
 *Three agents on one model, in the dev pane of an app scaffolded from the deep-research template. The planner
