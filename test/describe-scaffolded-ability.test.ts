@@ -72,7 +72,7 @@ beforeAll(async () => {
 
     // 2 + 3. Install and build. The ability's peer deps — effection,
     //        @lloyal-labs/lloyal-agents, @lloyal-labs/rig — are public on npm;
-    //        only AgentApps are off-registry.
+    //        only abilities are off-registry.
     execFileSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: abilityDir, stdio: 'pipe' });
     execFileSync('npm', ['run', 'build'], { cwd: abilityDir, stdio: 'pipe' });
 

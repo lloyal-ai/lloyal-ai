@@ -3,7 +3,7 @@
  *
  * `{ template, targets, abilities }` records the facts nothing else in the project
  * carries: which template's target subtree `targets:add` should copy back, which
- * surfaces are present, and the `lloyal install` specs of the AgentApps the
+ * surfaces are present, and the `lloyal install` specs of the abilities the
  * template's `harness/harness.ts` imports. The filesystem `targets/<t>/` dirs
  * stay the runtime truth; this marker is the declared record, stamped by `new`
  * and kept in sync by the `targets:` verbs (they already rewrite `package.json`).
@@ -21,7 +21,7 @@ export interface ProjectMarker {
   /** Run surfaces present, kept in sync by `targets:add`/`targets:remove`. */
   targets: Target[];
   /**
-   * `lloyal install` specs of the AgentApps this harness imports (e.g.
+   * `lloyal install` specs of the abilities this harness imports (e.g.
    * `lloyal/web@1.3.0`). Empty on a pre-`abilities` marker — treated as "unknown",
    * never as "none", so nothing infers that a harness needs no abilities.
    */

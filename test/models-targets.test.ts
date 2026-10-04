@@ -39,7 +39,7 @@ function freshBlankTree(): string {
 /**
  * Scaffold a real project (template copied, pruned, model + marker written).
  * `--skip-abilities` keeps this hermetic — `new` otherwise fetches the template's
- * default AgentApps from apps.lloyal.ai, which these tests neither need nor
+ * default abilities from apps.lloyal.ai, which these tests neither need nor
  * should depend on.
  */
 async function scaffold(name: string, targets: string, template = 'basic'): Promise<string> {
