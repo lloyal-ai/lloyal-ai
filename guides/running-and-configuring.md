@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-## One program, three surfaces
+## Deployment surfaces
 
 The same `harness(ctx, events, commands)` runs unmodified in a terminal, a native window and a browser. One
 fold of state, one binding each, no view holding truth.

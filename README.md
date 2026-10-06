@@ -28,10 +28,6 @@
   </a>
 </p>
 
-<p align="center">
-  <sub>Fieldnote, built with Lloyal. Illustrated application and inference views.</sub>
-</p>
-
 <br />
 
 ## Program the model's working memory
@@ -359,7 +355,7 @@ tools are application code built on the runtime above.
 [Read its source](https://github.com/lloyal-ai/fieldnote) ·
 [Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
-## One application, three surfaces
+## Deployment surfaces
 
 The same TypeScript harness runs across three interfaces:
 
