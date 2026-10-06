@@ -1,4 +1,40 @@
-# lloyal-ai
+<div align="center">
+  <br />
+  <a href="https://lloyal.ai">
+    <img src=".github/readme/lloyal-emblem.png" width="190" height="190" alt="Lloyal Labs [LL] emblem" />
+  </a>
+  <br />
+</div>
+
+<h1 align="center">Agents without an API</h1>
+
+<p align="center">
+  The complete intelligence runtime you can ship inside your app.
+</p>
+
+<p align="center">
+  <a href="https://lloyal.ai">Website</a>
+  &nbsp;·&nbsp;
+  <a href="https://docs.lloyal.ai/build-your-first-harness">Quickstart</a>
+  &nbsp;·&nbsp;
+  <a href="https://www.youtube.com/watch?v=KV-cfvyLds8">Demo</a>
+</p>
+
+<br />
+
+<p align="center">
+  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
+    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Fieldnote, built with Lloyal. Illustrated application and inference views.</sub>
+</p>
+
+<br />
+
+## Why Lloyal?
 
 **Self-contained, offline-first AI apps in TypeScript. Just your code and the model.**
 
@@ -14,12 +50,6 @@ Think of a game engine. You program the behaviour; lloyal handles the physics un
 ```sh
 npx lloyal-ai new my-app
 ```
-
-![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/three-agents-one-model.jpg)
-
-*Three agents on one model, in the dev pane of an app scaffolded from the deep-research template. The planner
-forks a spine; two researchers inherit it and search at once; the room is 13% used. What the app does is one
-example of what a harness can do; the program underneath is yours to change.*
 
 ## An example: three commands to a living brief
 
@@ -56,9 +86,35 @@ Every settled brief joins a library the next brief can search, cite and build on
 In this template the journey is four moments, and the same four words name them in its code: **Ask · Frame
 · Write · Settle.**
 
-| Ask | Frame | Write | Settle |
-| --- | --- | --- | --- |
-| ![Ask: one question, and the shape it takes](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/ask.jpg) | ![Frame: the outline, held for your edits](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/frame.jpg) | ![Write: inquiries searching and reading, side by side](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/write-searching.jpg) | ![Settle: the brief, its citations and its sources](https://raw.githubusercontent.com/lloyal-ai/lloyal-ai/main/.github/readme/settle.jpg) |
+### Ask
+
+One question, and the shape it takes.
+
+![Ask: one question, and the shape it takes](.github/readme/ask.jpg)
+
+<br />
+
+### Frame
+
+The outline, held for your edits.
+
+![Frame: the outline, held for your edits](.github/readme/frame.jpg)
+
+<br />
+
+### Write
+
+Inquiries searching and reading, side by side.
+
+![Write: inquiries searching and reading, side by side](.github/readme/write-searching.jpg)
+
+<br />
+
+### Settle
+
+The brief, its citations and its sources.
+
+![Settle: the brief, its citations and its sources](.github/readme/settle.jpg)
 
 *The deep-research template, from question to settled brief.*
 
@@ -68,6 +124,12 @@ An agent in Lloyal is a **branch** of the model's live state, not a request. For
 read the evidence and every agent forked from it attends the same cells: an image projected once is seen by all
 of them; a shared header is paid for once however many agents run. The runtime decodes every active branch in
 one pass and reclaims the whole working tree when the work that owned it ends.
+
+![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](.github/readme/three-agents-one-model.jpg)
+
+*Three agents on one model, in the dev pane of an app scaffolded from the deep-research template. The planner
+forks a spine; two researchers inherit it and search at once; the room is 13% used. What the app does is one
+example of what a harness can do; the program underneath is yours to change.*
 
 ```text
  against an endpoint                      inside lloyal
