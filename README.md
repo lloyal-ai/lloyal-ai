@@ -17,7 +17,7 @@
   &nbsp;·&nbsp;
   <a href="https://docs.lloyal.ai/build-your-first-harness">Quickstart</a>
   &nbsp;·&nbsp;
-  <a href="https://www.youtube.com/watch?v=KV-cfvyLds8">Demo</a>
+  <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
 
 <br />
@@ -34,31 +34,33 @@
 
 <br />
 
-## Why Lloyal?
+## Program the model's working memory
 
-**Self-contained, offline-first AI apps in TypeScript. Just your code and the model.**
+Lloyal is an intelligence runtime for TypeScript applications. Your program and the model run in the same
+process, so application code can hold handles to live inference state. The model's working memory becomes
+something your application can program.
 
-`lloyal-ai` scaffolds a harness: an application that holds the model and the program in one process, with no
-HTTP boundary between them. Once the model is in-process, its KV cache is a programming surface. Your code can fork
-the model's live attention into several agents at once, hand each different evidence, decide what the next stage
-inherits, and commit only what it accepts. Every one of those decisions is ordinary TypeScript, and it runs on
-hardware you own, a laptop today and your own GPU host when you serve it. No API key on the path that thinks. No
-Docker, Ollama, LangGraph, Mastra or vector database required.
+**An agent in Lloyal is a branch of the model's live state, not a request.** Fork a branch that has already
+read the evidence and its children inherit that attention state. They continue independently from the same
+starting point. If that lineage includes a projected image, each child inherits the attention state of that
+same projection. The shared prefix does not need to be processed again.
 
-Think of a game engine. You program the behaviour; lloyal handles the physics underneath.
+That gives your application three capabilities:
 
-```sh
-npx lloyal-ai new my-app
-```
+- **Compose resident models.** Give a reasoning model retrieval, reranking, and vision through specialists
+  that live alongside it. Your code and the model's tools can call those services during a task.
+- **Control agents during inference.** Choose which state an agent inherits, what evidence enters its
+  context, how work branches, and when it stops. Inspect the execution while it is happening.
+- **Ship the whole application.** Use the same TypeScript harness in a desktop app, a CLI, or a web app
+  served from your infrastructure. First launch provisions the models your application needs.
 
-## An example: three commands to a living brief
+The [inference kernel](https://github.com/lloyal-ai/liblloyal) exposes the underlying fork, prune, merge,
+and replay operations. [Continuous Context](https://docs.lloyal.ai/continuous-context) explains how that
+state remains available to application code throughout a run.
 
-`new` starts you from a template. There are two, and each generated project carries its own README with its
-recipes: **wiki** (`--template basic`, [its README](https://github.com/lloyal-ai/lloyal-ai/blob/main/templates/basic/README.md)),
-a small Wikipedia app, and **deep-research** (`--template research`,
-[its README](https://github.com/lloyal-ai/lloyal-ai/blob/main/templates/research/README.md)), a grounded
-multi-agent investigation. More are coming. Everything in this section is deep-research, because it shows the
-most in the least time.
+## Get started
+
+Start with a working deep-research application:
 
 ```sh
 npx lloyal-ai new my-app --template research
@@ -66,445 +68,180 @@ cd my-app
 npm run dev:desktop
 ```
 
-The first launch fetches and verifies three weights: a 4B reasoning model, a 0.6B reranker that scores what the
-agents read, and a vision projector so the model can see. The app shows each step as it happens, with the bytes,
-the rate and the time left, and lets you point a step at a file you already have. Every launch after that opens
-at once. Then ask it something worth investigating.
+Use **Node.js 24 or newer**. For the default models, **16 GB memory is recommended**; allow about **4.5 GB
+for research model files**, plus project dependencies. See [system requirements](https://docs.lloyal.ai/system-requirements)
+for supported platforms and GPU backends. Producing a signed desktop download currently requires macOS.
 
-Watch what appears. The outline drafts itself, line by line, from the planner's own stream — and editing a line
-*is* editing the plan. Sections fill in place, each carrying its line of inquiry: searching, reading, waiting
-honestly through a rate limit, writing. Click any inquiry open to watch the model think. Hold the run, drop a
-line, or close the brief early and keep what it has. When it settles, the document takes the room: citation
-chips, a sources grid, the deliberation on request. Ask a follow-up and it answers from a context that is still
-warm.
+First launch downloads and verifies a 4B reasoning model, a 0.6B reranker, and the paired vision projector.
+Subsequent launches use the installed weights. Inference requires no API key or separate model server.
 
-Drop a PDF on it. The text is searched and read; a page the model needs to *look at* is projected only when it
-reaches for it; and every citation points at a page you can open. Ask about a figure.
+Run `npx lloyal-ai new` without a name for the interactive model, template, and surface choices. The
+[wiki template](templates/basic/README.md) provides a smaller starting point. Both generate application
+source you can change and distribute.
 
-Every settled brief joins a library the next brief can search, cite and build on.
+[Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
+[Commercial-use permissions](#licence)
 
-In this template the journey is four moments, and the same four words name them in its code: **Ask · Frame
-· Write · Settle.**
+## How it works
 
-### Ask
+### Compose resident models
 
-One question, and the shape it takes.
-
-![Ask: one question, and the shape it takes](.github/readme/ask.jpg)
-
-<br />
-
-### Frame
-
-The outline, held for your edits.
-
-![Frame: the outline, held for your edits](.github/readme/frame.jpg)
-
-<br />
-
-### Write
-
-Inquiries searching and reading, side by side.
-
-![Write: inquiries searching and reading, side by side](.github/readme/write-searching.jpg)
-
-<br />
-
-### Settle
-
-The brief, its citations and its sources.
-
-![Settle: the brief, its citations and its sources](.github/readme/settle.jpg)
-
-*The deep-research template, from question to settled brief.*
-
-## The one idea underneath
-
-An agent in Lloyal is a **branch** of the model's live state, not a request. Fork the branch that has already
-read the evidence and every agent forked from it attends the same cells: an image projected once is seen by all
-of them; a shared header is paid for once however many agents run. The runtime decodes every active branch in
-one pass and reclaims the whole working tree when the work that owned it ends.
-
-![Three agents on one model: the planner's lane ends in a plan, a spine of 794 tokens forks from it, and two research agents inherit the spine and search at once, while the context meter reads 13% of a 32k room](.github/readme/three-agents-one-model.jpg)
-
-*Three agents on one model, in the dev pane of an app scaffolded from the deep-research template. The planner
-forks a spine; two researchers inherit it and search at once; the room is 13% used. What the app does is one
-example of what a harness can do; the program underneath is yours to change.*
-
-```text
- against an endpoint                      inside lloyal
-
- agent 1  ▐ evidence ▐ task ▌             evidence ──┬── agent 1: task
- agent 2  ▐ evidence ▐ task ▌                        ├── agent 2: task
- agent 3  ▐ evidence ▐ task ▌                        └── agent 3: task
-
- the evidence is sent, and paid for,     the evidence is read once; each agent
- once per agent                           forks the attention that read it
-```
-
-> Post-training produces a tendency. A harness produces a procedure.
-
-The model supplies language, judgement and learned competence. Your program supplies what exists, what evidence
-enters it, when work changes course, what counts as done, and what becomes durable. That program is a
-generator: read `function*` as `async function` and `yield*` as `await`, and what you gain is ownership —
-whatever a piece of work starts is finished or cleaned up when that work ends, however it ends. That is why a
-Stop works in the middle of anything, and why there is almost no teardown code to write.
-
-```text
- session                     the model, resident
- └── harness                 your program; lives exactly as long as the session
-     └── run                 one at a time: Stop reaches whatever is here
-         └── spine           one shared line of attention: the header, the tools, the evidence
-             ├── agent 1     a fork of the spine, with its own task
-             ├── agent 2     …
-             └── agent N     one more fork, reading what the others found
-
- whatever a line starts is finished or cleaned up when that line ends:
- the findings leave as data; the branches do not outlive the run
-```
-
-## Recipes
-
-Six things you can program here that cannot be programmed against an API key. If you have read OpenAI's guide
-to its latest model, some of them are familiar by name — mid-turn steering, async tool calling, a team of agents
-coordinated inside one turn. There they are features of an API you call. Here they are lines in a program you
-own. Each recipe is the outcome first, then the lines that make it; the full version of every one is under
-Recipes in the generated project's README.
-
-### Recipe 1 — Model composition: give your LLM a team of specialist models it can coordinate with in real-time
-
-The reasoning model is one voice among several. Beside it, resident in the same process, a team of
-specialists, each doing one thing the reasoning model would do slowly or badly: a judge that answers "is this
-relevant?" yes or no, and in what order, in milliseconds; memory that finds the fifty passages nearest a
-question across ten thousand; sight that puts a page in front of the reasoning model when the text is not
-enough. They coordinate inside a turn. Nothing an agent finds enters the reasoning model's context until the
-judge has scored it; memory recalls while the reasoning model writes; sight projects a page the moment the
-model reaches for it. Four ship today, named in one file:
+Declare the models your application needs in `harness.yml`:
 
 ```yaml
-# harness.yml
 model:
-  llm:       { id: qwen3.5-4b }                 # reasons and writes
-  reranker:  { id: qwen3-reranker-0.6b-q8 }     # the judge: which of these is relevant, in order
-  embedding: { id: nomic-embed-text-v1.5-q4 }   # memory: which of ten thousand passages are near this question
-  vision:    {}                                 # sight: the projector paired with the reasoning model
+  llm:       { id: qwen3.5-4b }
+  reranker:  { id: qwen3-reranker-0.6b-q8 }
+  embedding: { id: nomic-embed-text-v1.5-q4 }
+  vision:    {} # use the catalog's projector pairing for this reasoning model
 ```
 
-Coming to the same table: a decision model that routes, scores and classifies without generating a word, in
-one pass; a voice model that hears; a dictation model that turns what was said into clean text. Each will be
-one more block in this file, reached by the same call as the four above, by your code and by every installed
-ability alike.
+The runtime acquires and binds them before the harness runs. A tool can recall candidate passages with an
+embedding model, score them with the reranker, and return selected evidence to the reasoning model. The
+reasoning model can invoke that tool as part of its own work. Vision projects an image or document page
+into its attention when needed.
 
-Naming a block is composing that model: it is fetched and verified before your program runs, and any line of
-your code reaches it with one call. An audit over ten thousand contracts, in the framework's grammar:
+The reranker and embedding model have their own contexts. Shared attention belongs to agents forked from
+the same reasoning-model lineage; it is not one context shared by every model in the application.
+
+An [ability](https://docs.lloyal.ai/abilities) bundles tools, instructions, settings, and required services.
+Deep-research includes web, document, and corpus abilities. You can install another or write your own tools
+over local files, databases, and application state. [Services](https://docs.lloyal.ai/services) covers model
+composition and access from both harness code and abilities.
+
+### Fork agents from live state
+
+Inside a running harness, pass a live branch that already holds the evidence to an operation like this:
 
 ```ts
-const memory = yield* service("embedding");
-const judge = yield* service("reranker");
+import type { Branch } from "@lloyal-labs/sdk";
+import { agentPool, parallel } from "@lloyal-labs/lloyal-agents";
 
-const [q] = yield* memory.embed([question]);
-const nearby = index.nearest(q, 50);                                   // your own index over memory.embed
-const scores = yield* call(() => judge.scoreBatch(question, nearby.map((c) => c.text)));
-const evidence = nearby.map((c, i) => ({ c, s: scores[i] })).sort((a, b) => b.s - a.s).slice(0, 10).map((x) => x.c);   // the ten the judge ranks highest
-```
-
-Hand `evidence` to the reasoning model and it explains; hand it to ten agents and each explains one clause;
-attach the signed pages and sight reads the signatures. Remove a block and that model is gone; an installed
-ability that needs it is refused by name at start, and your program still runs. A kind of model the platform
-does not know yet is one row in its table: [services](https://docs.lloyal.ai/services).
-
-### Recipe 2 — Structured choice, on your premises: triage every referral letter in the clinic, and nothing leaves the building
-
-A choice over a known list is a grammar, not a prompt. The reasoning model picks the pathway by NUMBER and
-cannot answer anything else, so there is nothing to parse and no "the model said something else"; the judge
-beside it ranks every letter against the pathway, so the ones to look at first are known. [Jev](https://boringbot.substack.com/p/the-hype-of-jev-explained-a-deep) raised forty million
-dollars to sell that shape as an API, priced per token, your letters uploaded to be scored. Here it is, thirty
-lines, on the laptop in the consulting room, and the letter never crosses a network:
-
-```ts
-const pick = defineOutput("pathway", z.number().int().min(0).max(pathways.length));
-const pool = yield* agentPool({
-  systemPrompt: listing,            // the pathways, by number — read once, shared by every letter's agent
-  schema: pick.schema,              // the answer IS a number in range
-  enableThinking: false,
-  acceptFreeText: true,
-  orchestrate: parallel(letters.map((letter) => ({ systemPrompt: "", content: letter }))),
-});
-const pathway = pool.outcomes.map((o) => pick.read(o));
-const judge = yield* service("reranker");
-const rank = yield* call(() => judge.scoreBatch(pathways[0], letters));   // every letter against one pathway: an ORDER, one pass
-```
-
-A thousand letters get a thousand agents, and the list of pathways is read once for all of them. The judge
-takes every letter in one batched call per pathway. Its score is an order within one question — the model's
-own yes/no log-odds under the instruction — not a calibrated probability: the platform uses it as top-K within a
-query, and a floor for it is a discrimination signal you measure for your instruction and your model.
-
-### Recipe 3 — The focal lens: give the judge your question, and every search returns the rule in force this year, not the one it replaced
-
-Similarity hands you both: a superseded rule answers the question it was superseded on, and the two are
-neighbours in any embedding. Here nothing enters the model's context by distance. A judge is asked a
-question in English about every candidate, and the question is yours, in one place:
-
-```yaml
-# harness.yml — one sentence, and every ability that reads pages or a corpus admits by it
-model:
-  reranker:
-    id: qwen3-reranker-0.6b-q8
-    instruction:
-      text: "Given a question about the rule in force on a date, judge whether the Document states the rule in force on that date."
-      smokeTest:
-        query: "What notice period applies to a rent increase in 2026?"
-        matching: "From 1 January 2026 a landlord must give 90 days' notice of a rent increase."
-        nonMatching: "Until 2020 a landlord was required to give 30 days' notice of a rent increase."
-        minGap: 2
-```
-
-Every `fetch_page` and every corpus search now returns the sections that answer *that* question, verbatim,
-the best few within the query, and the canary pair refuses the boot if the sentence stops discriminating.
-Measured on the shipped 0.6B judge: the rule in force on the date scores 7.2 against 2.1 for the one it
-superseded, a gap of five where the default retrieval question gives three. (A lens that turns on negation, a
-breach or a refutation, is beyond a 0.6B, which scored a complying clause as high as a breaching one; that is a
-bigger judge, one block to swap.)
-
-Then the focus narrows on its own. An agent reading a page scores its sections against what it just asked; as
-the room fills, the policy flips to exploit and a section must also answer the brief's question. The default
-flips at 40% of the room. Make the flip yours:
-
-```ts
-class Focused extends DefaultAgentPolicy {
-  shouldExplore(agent: Agent, pressure: ContextPressure) {
-    return agent.toolCallCount < 2;   // two reads on its own terms, then only what answers the brief
-  }
+export function* review(parent: Branch) {
+  const pool = yield* agentPool({
+    parent,
+    acceptFreeText: true,
+    budget: { maxTurns: 4 },
+    orchestrate: parallel([
+      { systemPrompt: "", content: "Check the technical assumptions." },
+      { systemPrompt: "", content: "Identify contradictory evidence." },
+    ]),
+  });
+  return pool.outcomes;
 }
 ```
 
-Most of what looks like a new lens is a new reference string in the query, which costs nothing. A genuinely
-different question is one instruction for the whole reranker, since the sentence is prefilled into its warm
-trunk, and it takes effect at the next launch. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole
-account.
+Both agents inherit the parent's processed context and add their own continuations. The runtime batches
+active branches together; new continuations still consume memory and computation. Results return as data,
+including whether each agent failed, so the harness can choose what to accept.
 
-### Recipe 4 — Mid-turn steering: change a rule while the agents work, and they obey at the next call
+Use `parallel`, `chain`, `fanout`, or `dag`, or write a custom orchestrator. A tool can start a pool from the
+calling agent's branch, allowing delegation during reasoning. Findings committed to a shared branch become
+available to agents forked from it afterwards; existing siblings do not automatically share new findings.
 
-Send a new rule while the agents are working — a source switched off, the paid one switched on, a limit
-lowered — and every agent already working obeys at its next call. Nothing stops, nothing restarts, no run is lost. A tool reads its ability's
-settings at the call; a knob of your own is declared once and read the same way.
+The generator syntax uses [structured concurrency](https://docs.lloyal.ai/structured-concurrency):
+`yield*` runs an operation whose lifetime belongs to its enclosing scope. Stopping that scope cleans up
+the work it started. See [agents and orchestration](https://docs.lloyal.ai/agents) for complete examples.
 
-```ts
-// src/config.ts — declared once; harness.yml can commit it, the settings pane saves it
-"answer.words": { yml: "answer.words", integer: true, default: 400, describe: "How long an answer may run." },
+## Inspect and intervene
 
-// wherever it is used — read at the call, so a save applies at the next one
-const words = config().answer.words;
-```
+DevTools exposes the execution behind the app:
 
-### Recipe 5 — Policy at the boundaries: no finding without evidence
+- **Agent timelines:** follow branching work, tool calls, waiting, and completion; cancel an individual lane.
+- **Epistemics:** inspect entropy and surprisal during generation. These are generation signals, not factual-confidence scores.
+- **Context admission:** see retrieved candidates, reranking, and what each agent actually receives.
+- **Live controls:** pause a run, change applicable settings, or ask it to finish with its current findings.
 
-An agent that tries to report before it has read two sources is refused once and told why; its second report
-stands. The rule is one object handed to the pool of agents, and it is yours. The same five points in a tool
-call's life let you refuse a call, rule that a result does not count, or end an agent early; the pool's bigger
-judgements are one class you subclass for the single decision you care about.
+![A planner and two research agents sharing one model's attention state, with tool events and context usage visible](.github/readme/three-agents-one-model.jpg)
 
-```ts
-const EVIDENCE_FIRST: ToolLifecycleHooks = {
-  onReturn: ({ agent }) => agent.toolCallCount < 2 ? { type: "reject", message: "Use tools first." } : undefined,
-};
-class Patient extends DefaultAgentPolicy {
-  shouldExit(agent: Agent, pressure: ContextPressure) {
-    return pressure.critical && super.shouldExit(agent, pressure);   // room, never time — and still one agent a tick
-  }
-}
-yield* agentPool({ ...spec, hooks: [EVIDENCE_FIRST], policy: new Patient() });
-```
+*A real run from the deep-research template: the planner finishes, then two researchers fork from a shared
+prefix and search independently.*
 
-### Recipe 6 — Tools inside your process: give the agents the patient record system
+The desktop and web development commands enable tracing. The same events feed the live pane and a
+session JSONL file containing prompts, tool calls, results, and branch lifecycle events.
+[Debug with traces](https://docs.lloyal.ai/traces) explains how to inspect the recording.
+[The focal lens](https://docs.lloyal.ai/focal-lens) explains how the reranker's instruction governs evidence admission.
 
-A tool is a class in your program over your own database, with a gate of its own. Add it to the pool's tools
-and every agent can call it. Nothing about it exists outside your process.
+## Built with Lloyal
 
-```ts
-const oncePerMrn: ToolGuard = { name: "record_once", reject: ({ args, attended }) => attended().some((a) => a.mrn === args.mrn), message: "Already read." };
+**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
+individual stops, and follow-ups that continue from warm context. Its research strategy is application
+code you can replace. The same runtime can support a spreadsheet that enriches rows, document review,
+or an assistant working with your application's own data and tools.
 
-export class RecordTool extends Tool<{ mrn: string }> {
-  readonly name = "record";
-  readonly description = "The patient's record, by medical record number.";
-  readonly parameters: JsonSchema = { type: "object", properties: { mrn: { type: "string" } }, required: ["mrn"] };
-  readonly hooks: ToolLifecycleHooks = { beforeDispatch: [oncePerMrn] };
-  *execute(args: { mrn: string }): Operation<unknown> { return yield* call(() => records.get(args.mrn)); }
-}
-```
+[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
+[Read its source](https://github.com/lloyal-ai/fieldnote) ·
+[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
-## Make it yours in three edits
+## One application, three surfaces
 
-The generated project is source, whichever template it came from. In the deep-research template, three files hold
-one concern each, and one folder holds the words — the rest can wait:
+The same harness runs across three interfaces. The application decides where inference lives:
 
-```text
- src/
-   ui/presentation.ts         ← what it is called
-   harness/instructions.ts    ← what it is for
-   harness/research.ts        ← how it investigates: `inquire`, one expression
-   harness/prompts/           ← what it says: one Eta file per prompt
-   ───────────────────────────────────────────────────────────────────
-   app.ts                     the app: what is installed, the parts, the loop
-   harness/brief.ts           a brief's life: asked · framed · written · settled
-   harness/                   plan · write · answer, the library, the prompts
-   ui/                        the fold, the selectors, the four moments
-```
-
-**What it is called** — `src/ui/presentation.ts`. Every surface reads it: sidebar, window, tab, terminal, host.
-
-```ts
-export const APP = { name: "Fieldnote", storage: "fieldnote" } as const;
-```
-
-**What it is for** — `src/harness/instructions.ts`. Two sentences, said on every path an answer can take.
-
-```ts
-export const INSTRUCTIONS = {
-  purpose: "You help maintenance engineers investigate equipment failures.",
-  answers: "Lead with the likely cause. Always name the part number.",
-};
-```
-
-**How it investigates** — `src/harness/research.ts`. The strategy is one stage, `inquire`. Side by side,
-one after another on a growing shared context, a fan-out, a dependency graph, or an orchestrator of your own:
-
-```ts
-// src/app.ts — hand the brief another strategy; everything else stands
-const sideBySide: Research = {
-  ...research,
-  write: (trunk, ask, plan) =>
-    research.write(trunk, ask, plan, {
-      inquire: (ask, tasks, spec) => parallel(tasks.map((task, i) => spec(task, i, true))),
-    }),
-};
-const brief = briefs({ session, library, run, wire, config: runner.config, research: sideBySide });
-```
-
-**What it says** — `src/harness/prompts/`. Every prompt the app makes is an Eta file there, rendered with
-what the stage knows (`it.query`, the sources, the findings); change one and ask the next question. The
-project's README says what each file is and what it is handed.
-
-A planner, a settling pass or the whole writer can be replaced the same way: each returns a value, and the
-app takes care of the rest. `npm test` runs the app's laws against a scripted model in about two seconds, so a
-change is proved without downloading weights. The wiki template is the same idea at a smaller size: one
-harness file, one procedure, the same three surfaces.
-
-## What it can become
-
-A spreadsheet that researches each row. A maintenance app that investigates competing explanations for a fault
-and keeps the minority lineage alive when its evidence is material. A document app that reads, inspects the
-diagrams, and keeps working through follow-ups. An analysis that admits a source only when it governs the
-relevant date, so a superseded rule cannot win on relevance alone.
-
-None of these is a mode of the framework, and none is the research template with a different name. Each is a
-procedure written in TypeScript over the same primitives — which is what makes a template a starting point
-rather than a ceiling.
-
-## One program, three surfaces
-
-The same `harness(ctx, events, commands)` runs unmodified in a terminal, a native window and a browser. One
-fold of state, one binding each, no view holding truth.
-
-```text
- terminal ─┐
- window  ──┼──▶ harness(ctx, events, commands) ──▶ the model, in the same process
- browser ──┘
-```
-
-| Surface | Run | The model runs in |
+| Surface | Development command | Where the model runs |
 | --- | --- | --- |
-| A native desktop app | `npm run dev:desktop` | an engine process the window talks to |
-| A browser | `npm run dev:web` | a host you serve; browsers connect to it |
-| Your terminal | `npm start` | the process itself |
+| Desktop | `npm run dev:desktop` | In the app's engine process |
+| CLI | `npm start` | In the terminal process |
+| Web | `npm run dev:web` | On the host serving the browser |
 
-`npx lloyal-ai new` with no name asks for the name, surfaces, model and template.
+For multiple web users, `npm run serve` starts the host. Sessions have independent contexts and agents over
+shared model weights. The [serving guide](https://docs.lloyal.ai/serve) covers the browser client, capacity,
+and deployment configuration.
 
-## Ship your app
+### Ship a desktop download
 
-`ship` produces a distributable macOS application: a `.dmg` carrying the engine, its dependencies
-and its prompts, ready to install or attach to a release.
-
-```sh
-npx lloyal-ai ship        # from the project root: builds the desktop surface, then packages it
-```
-
-The first run records an application identifier in `harness.yml`; every run after it, and CI, reads
-it from there. Each template ships a replaceable icon at `build/icon.icns`.
-
-Model weights are not bundled — wiki packages to 142 MB, deep-research to 154 MB. Your users meet
-the same provisioning screen you did on your first `dev:desktop` run: one row per model named in
-`harness.yml`, each fetched and digest-verified with the bytes, the rate and the time left, and a
-weight they already have offered as an alternative to downloading it. Everything lands in the
-application's own support directory, never beside your project, and every launch after that opens
-at once. Change a model in `harness.yml` and a fresh installation provisions the new one; an
-existing installation keeps the manifest it seeded on first launch, along with every edit its
-reader has made to it since.
-
-Without a flag the image is unsigned, which is fast and opens only on the machine that built it.
-`ship --notarize` produces the distributable artifact: signed with your Developer ID under the
-hardened runtime, notarized and stapled, so a Mac that downloads it accepts it. Nothing is signed
-unless you ask, and a request that cannot be met is refused before the build rather than quietly
-downgraded to something nobody can install.
-
-Credentials are read from the environment and from `.env.local` in the project, which git already
-ignores — so you ship from your laptop, and CI needs no file because a real environment variable
-wins. Put a certificate already in your keychain and a stored `notarytool` profile there and it
-holds no secrets at all; `ship --notarize` prints the block to paste when it cannot find them.
-[Shipping an app](https://docs.lloyal.ai/ship) is the whole account: obtaining a Developer ID, the
-three notary routes, and what actually proves an image will open on someone else's Mac. macOS
-today; Windows and Linux each need their own build host.
-
-## Models
-
-The catalogue, your pins and what is on disk, from the project's root:
+From the project root, on macOS with signing credentials configured:
 
 ```sh
-npx lloyal-ai models:list                        # the catalogue, your pins, what is on disk
-npx lloyal-ai models:use <id> [--role reranker]  # a catalogue model, fetched and verified on the next launch
-npx lloyal-ai models:add <path.gguf> [--role reranker]  # a local weight you already have
+npx lloyal-ai ship --notarize
 ```
 
-The reasoning model is a dial. The same harness runs a 4B on a laptop and a frontier model on your own GPU host;
-the program does not change. The default set runs on a 16 GB laptop.
+This builds a signed, notarized DMG carrying the application and runtime. Model weights are provisioned
+and digest-verified on the user's first launch, rather than bundled into the download. The installer shows
+progress for each model. [Shipping an app](https://docs.lloyal.ai/ship) covers signing and distribution;
+[running and configuring](guides/running-and-configuring.md) covers model selection, abilities, and installation behavior.
 
-On a Linux CUDA host, `new` finds the GPU and runs on it: where the GPU needs the signed CUDA backend pack —
-every arch, Blackwell included, verified against the platform key — it is fetched once per lloyal.node version
-and shared by every harness on the box. For a project you cloned, `npx lloyal-ai backends:install` does
-the same and writes `model.llm.gpu: cuda` for it.
+## FAQ
 
-## Abilities
+<details>
+<summary><strong>Does everything work offline?</strong></summary>
 
-An **Ability** is an installed capability: tools, the instructions to use them, configuration, and a declaration
-of the models it cannot work without. It runs inside the harness and can work with the calling agent's live
-context. The harness provides what an ability declares by naming the model in `harness.yml`; `install` tells you
-when the project names none and offers to write the line. Deep-research ships with web, corpus and documents.
+Inference and local document, image, and library operations work offline after the weights are installed.
+Web search and tools that call external services need a connection. In a web deployment, the browser
+connects to your host; the model runs there.
 
-```sh
-npx lloyal-ai install <publisher>/<name>   # verified and vendored into the project
-npx lloyal-ai ability:new my-ability        # start one of your own
-```
+</details>
 
-Every install is Ed25519-verified against a reviewed catalogue: what you install is what was reviewed. Point the
-corpus at `reports` in `harness.yml` and the app reads what it has written.
+<details>
+<summary><strong>Can I bring a different model?</strong></summary>
 
-## Requirements
+Yes. Select a catalog model or point the configuration at a compatible GGUF. Model architecture, available
+memory, and projector compatibility still matter. A vision projector must match a supported multimodal
+reasoning model. See [models](https://docs.lloyal.ai/models) and the
+[model commands](guides/running-and-configuring.md#models).
 
-Node.js 24 or newer. Web search needs the network; everything else — documents, images, the library — works
-offline once the weights are on disk. Outside an interactive terminal, run `npm install` in the project yourself.
-Building a distributable application needs macOS.
+</details>
+
+<details>
+<summary><strong>Where do I change the generated app?</strong></summary>
+
+In the research template, `src/ui/presentation.ts` names the app, `src/harness/instructions.ts` defines its
+purpose, `src/harness/research.ts` controls its investigation, and `src/harness/prompts/` holds the prompts.
+These files are yours. The [customization guide](guides/fieldnote-walkthrough.md#make-it-yours-in-three-edits)
+walks through them.
+
+</details>
 
 ## Go deeper
 
-- [Thinking in Lloyal](https://docs.lloyal.ai/thinking-in-lloyal) — the execution model: ownership, live state, control at explicit boundaries
-- [Vertical Inference](https://verticalinference.lloyal.ai/) — the architecture, from the model up
-- [The HDK](https://github.com/lloyal-ai/hdk) — the runtime packages
-- [Issues](https://github.com/lloyal-ai/lloyal-ai/issues)
+- [Runtime recipes](guides/recipes.md): composition, typed decisions, focal lenses, steering, policy, and tools.
+- [Thinking in Lloyal](https://docs.lloyal.ai/thinking-in-lloyal): execution state and ownership.
+- [The HDK](https://github.com/lloyal-ai/hdk): TypeScript runtime packages.
+- [liblloyal](https://github.com/lloyal-ai/liblloyal): native inference primitives and continuous tree batching.
+- [Issues](https://github.com/lloyal-ai/lloyal-ai/issues): questions and bug reports.
 
 ## Licence
 
-The CLI is MIT. The application you generate is yours to license as you choose. The HDK runtime packages carry
-their own licence and the [Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
-under which building, distributing, selling and hosting a harness or an ability is always permitted. Model
-weights carry their respective licences.
+The CLI is [MIT](LICENSE). Generated application code is yours to license. Runtime packages have their own
+license and the [Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md), which
+permits building, distributing, selling, and hosting applications and abilities. Model weights retain their
+respective licenses.
