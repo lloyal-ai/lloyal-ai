@@ -47,20 +47,47 @@ your product's own data and actions.
 
 ## Get started
 
+Use **Node.js 24 or newer**.
+
 Create a working deep-research application with one command:
 
 ```sh
 npx lloyal-ai new my-app --template research
 ```
 
-To run it, open the generated `my-app` directory and run `npm run dev:desktop`.
+### Run your app
+
+Enter the generated project:
+
+```sh
+cd my-app
+```
+
+`new` installs dependencies automatically in an interactive terminal. If that step was skipped or failed,
+run `npm install` here before starting the app.
+
+Choose a run command from the generated project's `package.json`:
+
+| Command | What it starts |
+| --- | --- |
+| `npm run dev:desktop` | **Desktop:** a native application window with DevTools |
+| `npm run dev:web` | **Web:** the local model host and browser development server; open the URL printed in the terminal |
+| `npm start` | **Terminal:** the interactive CLI application |
+
+The creation command above includes all three surfaces. If you select fewer surfaces in the wizard or
+with `--targets`, your generated README lists the commands for those you kept.
 
 First launch provisions and verifies a 4B reasoning model, a 0.6B reranker, and its paired vision projector.
-The app includes editable plans, parallel investigations, document attachments, citations, live controls,
-and DevTools. You own the source and can replace its research procedure or its entire interface.
+Once provisioning finishes, ask a research question. In the desktop or web app, you can edit the plan,
+attach documents, follow parallel investigations, and inspect agents in DevTools.
 
-Use **Node.js 24 or newer**. The default research models need about **4.5 GB of disk space**, plus project
-dependencies; **16 GB memory is recommended**. See [system requirements](https://docs.lloyal.ai/system-requirements)
+To make it yours, change the app's name in `src/ui/presentation.ts`, its purpose in
+`src/harness/instructions.ts`, or its models in `harness.yml`. Restart the run command after changing
+the harness or model configuration. Run `npm run typecheck` and `npm test` to check your changes.
+The [template walkthrough](guides/fieldnote-walkthrough.md) covers the application and its editable source.
+
+The default research models need about **4.5 GB of disk space**, plus project dependencies;
+**16 GB memory is recommended**. See [system requirements](https://docs.lloyal.ai/system-requirements)
 for platforms and GPU backends. The same harness can use a larger model on your GPU host.
 
 Run `npx lloyal-ai new` for the interactive template, model, and surface choices. The
