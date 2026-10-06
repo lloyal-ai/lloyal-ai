@@ -5,6 +5,46 @@
 These examples expand the composition and agent patterns in the README. The generated templates
 include further recipes in their own documentation.
 
+## Hold and fork live attention handles
+
+`session.trunk` and `agent.branch` are `Branch` objects: TypeScript handles to live attention state in the
+resident model. The processed KV prefix is already there, along with each branch's sampler, grammar,
+logits, and ancestry. At SDK level, a procedure that owns the model context can inspect an alternative
+without changing its parent's attention:
+
+```ts
+import type { Branch } from "@lloyal-labs/sdk";
+
+export async function probeEvidence(attention: Branch, tokens: number[]) {
+  const probe = await attention.fork({ cloneLogits: false });
+  try {
+    await probe.prefill(tokens);
+    return { entropy: probe.modelEntropy("bits"), logits: probe.getLogits() };
+  } finally {
+    await probe.prune();
+  }
+}
+```
+
+Here `tokens` is a non-empty, tokenized evidence delta. The fork shares the existing attention prefix;
+prefill processes only the new material. The returned logits are a copy, so they remain available after
+the temporary branch is pruned. Agent pools normally own these lifetimes and batch the branches for you;
+use their lifecycle when a pool is running, rather than mutating its context concurrently.
+
+The operations have distinct semantics:
+
+| Operation | What happens to attention |
+| --- | --- |
+| Fork | Share the parent's KV prefix and clone the branch's sampling, grammar, and logit state. |
+| Commit accepted text | Process the accepted text into the destination's attention. This is additional decode work, not a transfer of KV cells. |
+| Promote a winner | `Session.promote()` retains the selected branch as the trunk and evicts the other branches in that context. |
+| Replay onto a new base | Reprocess recorded content onto a new branch; the kernel's rebase analogy does not mean moving cache cells. |
+| Blend distributions | `BranchStore.mergeLogits()` combines compatible branches' next-token distributions while their KV histories stay separate. |
+
+[Continuous Context](https://docs.lloyal.ai/continuous-context) explains ownership and matched
+continuations. The [kernel's Git comparison](https://github.com/lloyal-ai/liblloyal) distinguishes promotion,
+hard merge, replay, and soft logit merging.
+
 ## Compose resident models
 
 A reasoning model can work with resident specialists: an embedding model recalls candidates, a reranker
@@ -21,9 +61,8 @@ model:
   vision:    {}                                 # sight: the projector paired with the reasoning model
 ```
 
-The [services guide](https://docs.lloyal.ai/services) also describes how to extend this pattern to other
-model types. Audio and classification require additional native service implementations; the composition
-above uses the services available today.
+The [services guide](https://docs.lloyal.ai/services) describes the provider contract linking a model's
+configuration, provisioning, and runtime binding.
 
 Naming a block composes that model: it is fetched and verified before your program runs, and harness code
 and its tools can access the bound service. For example, retrieve and rerank passages from a contract index:
@@ -45,29 +84,148 @@ does not know yet is one row in its table: [services](https://docs.lloyal.ai/ser
 
 ## Typed decisions
 
-A choice over a known list is a grammar, not a prompt. The reasoning model picks the pathway by NUMBER and
-cannot answer anything else, so there is nothing to parse and no "the model said something else"; the judge
-beside it ranks every letter against the pathway, so the ones to look at first are known. Both operations
-run locally. The letter does not need to leave the application:
+An ordinary resident LLM can make a bounded decision, without a classifier fine-tune. A schema constrains
+decoding to the decision's shape, and `read` returns the typed value or `null`. For casework, number the
+pathways from 1 through N and reserve 0 for no match:
 
 ```ts
-const pick = defineOutput("pathway", z.number().int().min(0).max(pathways.length));
-const pool = yield* agentPool({
-  systemPrompt: listing,            // the pathways, by number; read once, shared by every letter's agent
-  schema: pick.schema,              // the answer IS a number in range
-  enableThinking: false,
-  acceptFreeText: true,
-  orchestrate: parallel(letters.map((letter) => ({ systemPrompt: "", content: letter }))),
-});
-const pathway = pool.outcomes.map((o) => pick.read(o));
-const judge = yield* service("reranker");
-const rank = yield* call(() => judge.scoreBatch(pathways[0], letters));   // every letter against one pathway: an ORDER, one pass
+import { z } from "zod";
+import { defineOutput } from "@lloyal-labs/rig";
+import { agentPool, parallel } from "@lloyal-labs/lloyal-agents";
+
+export function* routeLetters(pathways: string[], letters: string[]) {
+  const options = pathways.map((name, i) => `${i + 1}. ${name}`).join("\n");
+  const pick = defineOutput("pathway", z.number().int().min(0).max(pathways.length));
+  const pool = yield* agentPool({
+    systemPrompt: `Choose a pathway number. Use 0 when none applies.\n${options}`,
+    schema: pick.schema,
+    enableThinking: false,
+    acceptFreeText: true,
+    capacity: 8,
+    pruneOnReturn: true,
+    orchestrate: parallel(letters.map(content => ({ systemPrompt: "", content }))),
+  });
+  return pool.outcomes.map(outcome => pick.read(outcome));
+}
 ```
 
-Each letter gets an agent, scheduled in waves when the workload exceeds the available concurrency. The
-list of pathways is read once and shared. The judge takes the letters in one batched service call per
-pathway. Its score is the model's yes/no log-odds under the instruction, not a calibrated probability.
-Use it to order results within a query; measure any score floor against your instruction and model.
+Each letter gets an agent, scheduled in waves at the configured capacity. Completed branches release
+their slots while their typed outcomes remain available. All inherit the attention state of one processed
+option list. This is the Jev-style decision pattern: the application changes the choices
+and the procedure, while the LLM's weights stay the same.
+
+Classification and prioritization are separate operations. After choosing a pathway, a reranker can rank
+the matching letters against it:
+
+```ts
+import { call } from "effection";
+import { service } from "@lloyal-labs/rig";
+
+export function* prioritize(pathway: string, matchingLetters: string[]) {
+  const judge = yield* service("reranker");
+  return yield* call(() => judge.scoreBatch(pathway, matchingLetters));
+}
+```
+
+These scores order evidence within that query. They are the reranker's yes/no log-odds under its
+instruction, not calibrated probabilities. A score floor needs measurement for that model and instruction.
+
+For a procedure that first investigates and then returns a typed decision, use a terminal output:
+
+```ts
+import { z } from "zod";
+import { defineOutput } from "@lloyal-labs/rig";
+import { agentPool, parallel, type Tool } from "@lloyal-labs/lloyal-agents";
+
+const verdict = defineOutput("verdict", z.object({
+  decision: z.enum(["approve", "reject", "refer"]),
+  reason: z.string(),
+}));
+
+export function* assessCase(content: string, tools: readonly Tool[]) {
+  const pool = yield* agentPool({
+    tools,
+    terminal: verdict.tool,
+    orchestrate: parallel([{
+      systemPrompt: "Investigate the case, then submit a verdict with your reason.",
+      content,
+    }]),
+  });
+  return pool.outcomes.map(outcome => verdict.read(outcome));
+}
+```
+
+The terminal ends the agent's turn and validates the result. A schema constrains the shape of a decision;
+your prompts, evidence, tools, and acceptance rules determine the decision's quality. The wiki template's
+[classifier](../templates/basic/src/harness/classify.ts) discovers categories with one agent, then files
+articles under them with a pool. [Typed Decisions from LLMs](https://docs.lloyal.ai/typed-decisions) covers
+both forms and custom capture functions.
+
+## Address, project, and cite media
+
+The duplex media plane uses one content-addressed manifest for ingress, inference, citation, and replay.
+The store is an OCI Image Layout, with digest-named blobs and manifests describing their roles. The
+content handle is an `Attachment`, a descriptor of that manifest; it is not the bytes of an image or PDF.
+
+The scaffold already creates the project's store and upload routes. For standalone use, initialize a
+store and ingress once in your host, then admit uploads through it:
+
+```ts
+import { materialize } from "@lloyal-labs/media";
+import { FileAttachmentStore, createContentIngress } from "@lloyal-labs/media/node";
+
+const store = new FileAttachmentStore("media");
+const ingress = createContentIngress(store);
+
+export async function admitMedia(bytes: Uint8Array) {
+  const attachment = await ingress.ingest(bytes);
+  return { attachment, bitmaps: materialize(store, [attachment]).bitmaps };
+}
+```
+
+Image ingress needs `sharp`; PDF ingress needs `@embedpdf/pdfium`. The research scaffold includes both.
+An image's manifest records its admitted representation, the retained source when applicable, and the
+parameters used to derive it. A PDF also has extracted text and document metadata; its page and figure
+representations have their own image roots. `materialize` resolves image roots to the stored pixels;
+a document root yields no bitmaps because its text is available for retrieval.
+
+An upload returns the descriptor to the client. A later command carries that descriptor back to the
+harness, where `admitted` checks its shape, resolves it against the store, and checks vision availability
+for anything that needs projection:
+
+```ts
+import type { Session } from "@lloyal-labs/sdk";
+import type { Descriptor } from "@lloyal-labs/media";
+import { admitted } from "@lloyal-labs/rig";
+import { waitUntilSettled } from "@lloyal-labs/lloyal-agents";
+
+export function* attach(session: Session, text: string, refs: Descriptor[]) {
+  const media = yield* admitted(refs);
+  if ("refused" in media) throw new Error(media.refused);
+
+  yield* waitUntilSettled(session.prefillUserMultimodal(text, media.bitmaps, {
+    attachments: media.projected,
+  }));
+  return media.roots;
+}
+```
+
+The application can report a refusal through its command handler. On success, pass the roots as the next
+pool's `attachments`, and fork from the session trunk. Images projected before the fork become inherited
+attention. A page projected later into one agent belongs to that lineage and its future descendants.
+
+The documents ability gives agents `search_documents`, `read_document`, and `view_page`. Results include
+citations such as `attachment://<digest prefix>/page/3`; the view resolves those through the same manifest
+graph. Tool-produced images also pass through ingress before the runtime admits them into attention.
+
+That is the outward half of duplex: a user can open the evidence an agent cited, while a trace retains the
+addresses needed to rebuild the run's inputs. Keep `media/` with the trace. Content addressing deduplicates
+the bytes; it does not promise identical future generations under different model or runtime settings.
+
+The layout's compatibility is exercised with `oras`: it reads artifacts written by the package, and the
+package reads artifacts copied by `oras`. The format can use your existing OCI artifact infrastructure.
+[Media package](https://github.com/lloyal-ai/hdk/tree/main/packages/media) ·
+[Attachments and documents](https://docs.lloyal.ai/attachments).
 
 ## Govern context admission
 
@@ -89,18 +247,18 @@ model:
         minGap: 2
 ```
 
-Every `fetch_page` and every corpus search now returns the sections that answer *that* question, verbatim,
-the best few within the query, and the canary pair refuses the boot if the sentence stops discriminating.
-Measured on the shipped 0.6B judge: the rule in force on the date scores 7.2 against 2.1 for the one it
-superseded, a gap of five where the default retrieval question gives three. (A lens that turns on negation, a
-breach or a refutation, is beyond a 0.6B, which scored a complying clause as high as a breaching one; that is a
-bigger judge, one block to swap.)
+The web and corpus abilities now select sections using that instruction. The canary checks the matching
+and non-matching examples at launch and refuses to continue if the score gap is too small. A useful lens
+depends on the instruction and the model's ability to discriminate your cases; change the model block
+when the task needs a stronger judge.
 
-Then the focus narrows on its own. An agent reading a page scores its sections against what it just asked; as
-the room fills, the policy flips to exploit and a section must also answer the brief's question. The default
-flips at 40% of the room. Make the flip yours:
+An agent exploring a page scores sections against its immediate question. In exploit mode, admission also
+scores against the original brief. The default policy stops exploring at 40% context remaining, or its
+configured time threshold. Override that decision with your own policy:
 
 ```ts
+import { DefaultAgentPolicy, type Agent, type ContextPressure } from "@lloyal-labs/lloyal-agents";
+
 class Focused extends DefaultAgentPolicy {
   shouldExplore(agent: Agent, pressure: ContextPressure) {
     return agent.toolCallCount < 2;   // two reads on its own terms, then only what answers the brief
@@ -108,10 +266,9 @@ class Focused extends DefaultAgentPolicy {
 }
 ```
 
-Most of what looks like a new lens is a new reference string in the query, which costs nothing. A genuinely
-different question is one instruction for the whole reranker, since the sentence is prefilled into its warm
-trunk, and it takes effect at the next launch. [The focal lens](https://docs.lloyal.ai/focal-lens) is the whole
-account.
+A tool's reference question can change with each score call. The reranker's instruction is a shared
+prefilled prefix; changing it takes effect when the service starts again.
+[The focal lens](https://docs.lloyal.ai/focal-lens) explains the distinction and how to measure the score gap.
 
 ## Change settings during a run
 
@@ -129,12 +286,19 @@ const words = config().answer.words;
 
 ## Apply agent policy
 
-An agent that tries to report before it has read two sources is refused once and told why; its second report
-stands. The rule is one object handed to the pool of agents, and it is yours. The same five points in a tool
-call's life let you refuse a call, rule that a result does not count, or end an agent early; the pool's bigger
-judgements are one class you subclass for the single decision you care about.
+Give an agent an opportunity to do more work before reporting: this hook challenges its first return if
+it has made fewer than two non-terminal tool calls. The runtime bounds that challenge so an agent can
+still conclude. Your domain may require a more specific check of the evidence it attended to.
+
+The pool also accepts a policy subclass. When providing a custom policy, put its hooks on the policy
+itself; the pool's top-level `hooks` option belongs to the default policy it otherwise constructs:
 
 ```ts
+import {
+  agentPool, DefaultAgentPolicy,
+  type Agent, type ContextPressure, type Orchestrator, type Tool, type ToolLifecycleHooks,
+} from "@lloyal-labs/lloyal-agents";
+
 const EVIDENCE_FIRST: ToolLifecycleHooks = {
   onReturn: ({ agent }) => agent.toolCallCount < 2 ? { type: "reject", message: "Use tools first." } : undefined,
 };
@@ -143,7 +307,15 @@ class Patient extends DefaultAgentPolicy {
     return pressure.critical && super.shouldExit(agent, pressure);   // room, never time; still one agent a tick
   }
 }
-yield* agentPool({ ...spec, hooks: [EVIDENCE_FIRST], policy: new Patient() });
+
+export function* runPatientPool(orchestrate: Orchestrator, tools: readonly Tool[], terminal: Tool) {
+  return yield* agentPool({
+    orchestrate,
+    tools,
+    terminal,
+    policy: new Patient({ hooks: [EVIDENCE_FIRST] }),
+  });
+}
 ```
 
 ## Write tools over application data
