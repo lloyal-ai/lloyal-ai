@@ -22,14 +22,6 @@
 
 <br />
 
-<p align="center">
-  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
-    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
-  </a>
-</p>
-
-<br />
-
 ## Program the model's working memory
 
 Lloyal is the intelligence runtime inside your application: open-weight models, in-app agents, tools,
@@ -76,6 +68,22 @@ Run `npx lloyal-ai new` for the interactive template, model, and surface choices
 
 [Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
 [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md)
+
+## Built with Lloyal
+
+**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
+individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
+tools are application code built on the runtime above.
+
+<p align="center">
+  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
+    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
+  </a>
+</p>
+
+[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
+[Read its source](https://github.com/lloyal-ai/fieldnote) ·
+[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
 ## Recipes: what your code can program
 
@@ -344,16 +352,6 @@ as well as the events. Epistemic measurements describe generation, rather than f
 
 [Debug with traces](https://docs.lloyal.ai/traces) ·
 [DevTools walkthrough](https://www.youtube.com/watch?v=KV-cfvyLds8)
-
-## Built with Lloyal
-
-**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
-individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
-tools are application code built on the runtime above.
-
-[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
-[Read its source](https://github.com/lloyal-ai/fieldnote) ·
-[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
 ## Deployment surfaces
 
