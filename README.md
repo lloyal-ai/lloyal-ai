@@ -59,13 +59,13 @@ your product's own data and actions.
 
 ## Get started
 
-Start with a working deep-research application:
+Create a working deep-research application with one command:
 
 ```sh
 npx lloyal-ai new my-app --template research
-cd my-app
-npm run dev:desktop
 ```
+
+To run it, open the generated `my-app` directory and run `npm run dev:desktop`.
 
 First launch provisions and verifies a 4B reasoning model, a 0.6B reranker, and its paired vision projector.
 The app includes editable plans, parallel investigations, document attachments, citations, live controls,
@@ -79,7 +79,7 @@ Run `npx lloyal-ai new` for the interactive template, model, and surface choices
 [wiki template](templates/basic/README.md) is a smaller application that also demonstrates typed decisions.
 
 [Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
-[Commercial-use permissions](#licence)
+[Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md)
 
 ## Recipes: what your code can program
 
@@ -432,6 +432,6 @@ walks through them.
 ## Licence
 
 The CLI is [MIT](LICENSE). Generated application code is yours to license. Runtime packages have their own
-license and the [Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md), which
+license and the [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md), which
 permits building, distributing, selling, and hosting applications and abilities. Model weights retain their
 respective licenses.

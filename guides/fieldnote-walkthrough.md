@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-## Three commands to a living brief
+## Create a living brief with one command
 
 `new` starts you from a template. There are two, and each generated project carries its own README with its
 recipes: **wiki** (`--template basic`, [its README](https://github.com/lloyal-ai/lloyal-ai/blob/main/templates/basic/README.md)),
@@ -12,9 +12,9 @@ multi-agent investigation. More are coming. This guide follows the deep-research
 
 ```sh
 npx lloyal-ai new my-app --template research
-cd my-app
-npm run dev:desktop
 ```
+
+To run it, open the generated `my-app` directory and run `npm run dev:desktop`.
 
 The first launch fetches and verifies three weights: a 4B reasoning model, a 0.6B reranker that scores what the
 agents read, and a vision projector so the model can see. The app shows each step as it happens, with the bytes,
