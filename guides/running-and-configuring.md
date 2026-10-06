@@ -1,6 +1,6 @@
 # Running and configuring your application
 
-[Back to the README](../README.md)
+[Back to the README](../README.md) · [CLI reference](cli.md)
 
 ## Deployment surfaces
 
@@ -73,6 +73,9 @@ An **Ability** is an installed capability: tools, the instructions to use them, 
 of the models it cannot work without. It runs inside the harness and can work with the calling agent's live
 context. The harness provides what an ability declares by naming the model in `harness.yml`; `install` tells you
 when the project names none and offers to write the line. Deep-research ships with web, corpus and documents.
+
+The README's [Turnkey abilities](../README.md#turnkey-abilities-you-can-install) section lists each ability,
+its tools, template defaults, and the documents workflow from extracted PDF text to visual page inspection.
 
 ```sh
 npx lloyal-ai install <publisher>/<name>   # verified and vendored into the project

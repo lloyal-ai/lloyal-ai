@@ -69,6 +69,34 @@ Run `npx lloyal-ai new` for the interactive template, model, and surface choices
 [Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
 [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md)
 
+### CLI usage
+
+Run commands with `npx lloyal-ai <command>`, or install globally with `npm install -g lloyal-ai` and use
+`lloyal <command>`. Use `npx lloyal-ai --help` for the command list and append `--help` to any command for
+its options. Model, target, backend, and shipping commands run from your application's project root.
+
+| Command | Purpose |
+| --- | --- |
+| [`new [name]`](guides/cli.md#new) | Scaffold an application from a template |
+| [`models:list`](guides/cli.md#modelslist) | Inspect models and active selections |
+| [`models:use <id>`](guides/cli.md#modelsuse) | Pin a catalogue model |
+| [`models:add <path>`](guides/cli.md#modelsadd) | Use a local GGUF |
+| [`models:download <url>`](guides/cli.md#modelsdownload) | Download and optionally verify a GGUF |
+| [`targets:list`](guides/cli.md#targetslist) | List deployment surfaces |
+| [`targets:add <desktop\|web>`](guides/cli.md#targetsadd) | Restore a surface from the template |
+| [`targets:remove <desktop\|web>`](guides/cli.md#targetsremove) | Remove a surface |
+| [`backends:install`](guides/cli.md#backendsinstall) | Provision a CUDA backend |
+| [`ship [--notarize]`](guides/cli.md#ship) | Package a macOS DMG |
+| [`install <publisher>/<name>[@<semver>]`](guides/cli.md#install) | Install a signed ability |
+| [`ability:new <name>`](guides/cli.md#abilitynew) | Scaffold an ability |
+| [`publish`](guides/cli.md#publish) | Submit an ability for review |
+| [`publish status <submissionId>`](guides/cli.md#publish-status) | Check submission status |
+| [`publishers register --handle <handle>`](guides/cli.md#publishers-register) | Register a publisher |
+| [`publishers me`](guides/cli.md#publishers-me) | Show your publisher record |
+
+The [complete CLI reference](guides/cli.md) documents every command, argument, flag, default, and
+non-interactive behavior, with separate sections for contributor and internal review commands.
+
 ## Built with Lloyal
 
 **Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
@@ -84,6 +112,58 @@ tools are application code built on the runtime above.
 [Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
 [Read its source](https://github.com/lloyal-ai/fieldnote) ·
 [Explore the template walkthrough](guides/fieldnote-walkthrough.md)
+
+## Turnkey abilities you can install
+
+An ability packages tools, instructions for when and how to use them, settings, and required model
+services. Your agents can use these capabilities inside their existing reasoning and tool loop.
+
+| Ability | What your agents can do |
+| --- | --- |
+| [Web](https://github.com/lloyal-ai/hdk/tree/main/packages/abilities/web) | Search the web without an API key, then read relevant passages from fetched pages. Tools: `web_search`, `fetch_page`. Optional Tavily support. |
+| [Corpus](https://github.com/lloyal-ai/hdk/tree/main/packages/abilities/corpus) | Search a local knowledge base with BM25 and reranking, find every regex match, and read exact line ranges. Tools: `search`, `grep`, `read_file`. |
+| [Documents](https://github.com/lloyal-ai/hdk/tree/main/packages/abilities/documents) | Investigate attached PDFs through extracted text, page references, and selective visual inspection of pages and figures. Tools: `search_documents`, `read_document`, `view_page`. |
+| [Wikipedia](https://github.com/lloyal-ai/hdk/tree/main/packages/abilities/wikipedia) | Find Wikipedia articles and retrieve their structured summaries and canonical URLs. Tools: `wikipedia_search`, `wikipedia_fetch`. No API key or reranker required. |
+
+The research template installs and registers Web, Corpus, and Documents. The wiki (`basic`) template
+includes Wikipedia. To add an ability to another application, run its install command from the project root:
+
+```sh
+npx lloyal-ai install lloyal/documents
+```
+
+Use `lloyal/web`, `lloyal/corpus`, or `lloyal/wikipedia` to install the others.
+
+The CLI verifies the signed catalogue and bundle, checks required services, and vendors the package into
+your project. Import the ability's factory and add it to the `abilities` export in `src/app.ts`.
+Web and Corpus require a reranker; Documents requires a reranker and compatible vision service.
+The installer can offer to add missing service configuration to `harness.yml`. Set Corpus's `corpusPath`
+setting to the local directory you want agents to search.
+
+### Documents: from extracted text to visual evidence
+
+Attaching a PDF gives agents several ways to investigate the same source:
+
+1. **Extract and address.** Ingress extracts text and document structure, maps passages to pages, and
+   stores page and figure representations in the content-addressed media store.
+2. **Search and verify.** `search_documents` narrows candidates with BM25 and ranks them with the
+   reranker. Results carry document, heading, line, and page references. `read_document` retrieves the
+   exact text of the requested page or line range, so the agent can verify a passage in context.
+3. **Look inside the document.** When the answer depends on a diagram, chart, table, or image that the
+   extracted text does not explain, the reasoning model calls `view_page` for the relevant page or a
+   particular figure. The ability's instructions guide it to read surrounding text first and inspect
+   the visual identified by the evidence.
+4. **Attend and cite.** The selected image is projected into the calling agent's live attention state.
+   Agents forked from that lineage afterward inherit the same projection. Citations such as
+   `attachment://<digest prefix>/page/3` let the application open the stored evidence the agent used.
+
+Visual inspection is a model-directed tool call. Projection happens when the image is admitted into
+attention; archived page images can exist before the model chooses to view them. Text-only pages direct
+the agent to `read_document`, and pages outside the render limit report that no image is archived.
+
+Corpus and Documents work locally once the models and source material are present; Web and Wikipedia
+use the network. [Abilities](https://docs.lloyal.ai/abilities) covers registration and configuration;
+[attachments](https://docs.lloyal.ai/attachments) covers the PDF and media pipeline.
 
 ## Recipes: what your code can program
 
