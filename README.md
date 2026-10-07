@@ -32,11 +32,15 @@ Model provisioning, specialist model composition, in-app agents that share atten
 
 Start with a working TypeScript AI app. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
 
+Use **Node.js 24 or newer**.
+
 Bootstrap a working app with one command:
 
 ```sh
 npx lloyal-ai new
 ```
+
+See: [Get Started](#get-started).
 
 ## Removing the HTTP middle-man
 
@@ -76,17 +80,9 @@ See [Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-sta
 
 ## Get started
 
-Use **Node.js 24 or newer**.
-
-Create a working deep-research application with one command:
-
-```sh
-npx lloyal-ai new
-```
-
 ### Run your app
 
-Enter the generated project:
+Enter the project directory you chose during setup (replace `my-app` below with your project name):
 
 ```sh
 cd my-app
@@ -103,10 +99,10 @@ Choose a run command from the generated project's `package.json`:
 | `npm run dev:web` | **Web:** the local model host and browser development server; open the URL printed in the terminal |
 | `npm start` | **Terminal:** the interactive CLI application |
 
-The creation command above includes all three surfaces. If you select fewer surfaces in the wizard or
-with `--targets`, your generated README lists the commands for those you kept.
+Available run commands depend on the surfaces you selected during setup. Your generated README lists
+the commands for your project.
 
-First launch provisions and verifies a 4B reasoning model, a 0.6B reranker, and its paired vision projector.
+The default research configuration provisions and verifies a 4B reasoning model, a 0.6B reranker, and its paired vision projector on first launch.
 Once provisioning finishes, ask a research question. In the desktop or web app, you can edit the plan,
 attach documents, follow parallel investigations, and inspect agents in DevTools.
 
@@ -119,8 +115,7 @@ The default research models need about **4.5 GB of disk space**, plus project de
 **16 GB memory is recommended**. See [system requirements](https://docs.lloyal.ai/system-requirements)
 for platforms and GPU backends. The same harness can use a larger model on your GPU host.
 
-Run `npx lloyal-ai new` for the interactive template, model, and surface choices. The
-[wiki template](templates/basic/README.md) is a smaller application that also demonstrates typed decisions.
+The [wiki template](templates/basic/README.md) is a smaller application that also demonstrates typed decisions.
 
 [Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
 [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md)
