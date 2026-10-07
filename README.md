@@ -18,6 +18,24 @@
   <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/lloyal-ai/lloyal-ai/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush">
+    <img src="https://img.shields.io/github/actions/workflow/status/lloyal-ai/lloyal-ai/ci.yml?branch=main&amp;event=push&amp;label=CI&amp;style=flat&amp;labelColor=1c1c1e" alt="CLI CI status on main" />
+  </a>
+  <a href="https://www.npmjs.com/package/lloyal-ai">
+    <img src="https://img.shields.io/npm/v/lloyal-ai/latest?logo=npm&amp;logoColor=white&amp;color=45454b&amp;style=flat&amp;labelColor=1c1c1e" alt="Latest npm version" />
+  </a>
+  <a href="https://www.npmjs.com/package/lloyal-ai#provenance">
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2Flloyal-ai%2Flatest&amp;query=%24.dist.attestations.provenance~&amp;label=npm&amp;color=45454b&amp;style=flat&amp;labelColor=1c1c1e" alt="npm provenance for the latest release" />
+  </a>
+  <a href="https://github.com/lloyal-ai/lloyal-ai/blob/main/LICENSE">
+    <img src="https://img.shields.io/npm/l/lloyal-ai?label=CLI%20license&amp;color=45454b&amp;style=flat&amp;labelColor=1c1c1e" alt="CLI license" />
+  </a>
+  <a href="https://discord.gg/Bq9ARRj4U">
+    <img src="https://img.shields.io/badge/Discord-Join-45454b?logo=discord&amp;logoColor=white&amp;style=flat&amp;labelColor=1c1c1e" alt="Join the Lloyal Discord" />
+  </a>
+</p>
+
 ## TL;DR
 
 ### Why this exists
