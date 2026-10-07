@@ -22,15 +22,15 @@
 
 ### Why this exists
 
-Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch. Your TypeScript can **fork, merge and rebase the model's working memory**.
+Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
 
 ### What you get
 
-You get an intelligence runtime you can ship inside your application, complete with model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
+Model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
-### How to use it
+### How to use it 🚀
 
-Start with a working TypeScript AI app with built-in inference and a multi-agent runtime. In-app agents can research, read local files, understand documents visually and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes 🚀
+Start with a working TypeScript AI app. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes
 
 ## Removing the HTTP middle-man
 
@@ -42,9 +42,7 @@ Start with a working TypeScript AI app with built-in inference and a multi-agent
 - Inspect and intervene in live inference
 - Release work and reclaim context
 
-An agent is a scoped continuation of that attention state. Fork after reading a document and the children inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool history. Continuous Tree Batching advances these independent continuations together through the resident model.
-
-The CLI lets you bootstrap working applications from templates built on this programming surface. The Deep Research template is one example. The same primitives can drive document review, spreadsheet enrichment, decision systems, or an assistant over your product's own data and actions.
+Fork after reading a document and the children inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool history.
 
 [Continuous Context](https://docs.lloyal.ai/continuous-context) explains the execution model; [the native kernel](https://github.com/lloyal-ai/liblloyal) documents its Git-like branch operations.
 
