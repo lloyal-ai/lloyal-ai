@@ -20,28 +20,52 @@
 
 ## TL;DR
 
-Write your harness in TypeScript and run it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, it's not an API wrapper - model state is application state.
+Most agent frameworks treat the model as an external API call. Lloyal makes the model’s **live attention state** part of your application. Agents are forks of model state — not separate model calls. Shared context is free. [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU dispatch. Cost scales with the size of the KV cache, not the number of agents.
 
 You get an intelligence runtime you can ship inside your application, complete with: model provisioning, specialist model composition, in-app agents that share context (including multimodal projections), concurrent and adaptive tool use, inference-time policy enforement and the controls and interfaces developers need to leverage these unique unlocks.
 
+Write your harness in TypeScript and ship it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, your application doesn't wrap an API - it owns the model's attention state. 
+
 ## Removing the HTTP middle-man
 
-**Your TypeScript gets a handle to the model's live attention state.** A `Branch` identifies the processed
-context already held in the model's KV cache, together with its sampler, grammar, next-token distribution,
-and ancestry. Your program can fork that attention, add evidence to a particular continuation, constrain
-what it generates, inspect it, and release it when its work ends.
+**Your TypeScript gets a direct handle to a `Branch` of the model’s live attention state.** together with its sampler, grammar, next-token distribution, metrics
+and ancestry. Your application code can:
+
+- Fork that attention
+- Add evidence to a specific continuation
+- Constrain and condition generation with garmmar and logit merging
+- Inspect and interject live inference
+- Release work and reclaim context
 
 An agent is a scoped continuation of that attention state. Fork after reading a document and the children
 inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same
 projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool
 history. Continuous tree batching advances eligible branches together through the resident model.
 
-The templates put this programming surface inside working applications. Research is one example. The
-same primitives can drive document review, spreadsheet enrichment, decision systems, or an assistant over
-your product's own data and actions.
+The CLI lets you boostrap working applications from templates built on this programming surface. The Deep Research template is one example.
+The same primitives can drive document review, spreadsheet enrichment, decision systems, or an assistant over your product's own data and actions.
 
 [Continuous Context](https://docs.lloyal.ai/continuous-context) explains the execution model;
 [the native kernel](https://github.com/lloyal-ai/liblloyal) documents its Git-like branch operations.
+
+## A concrete analogy with Git
+
+| Git&nbsp;command | Lloyal KV operations |
+|---|---|
+| <code>git&nbsp;branch</code> | `fork()` — from the current position |
+| <code>git&nbsp;branch&nbsp;&#8209;d</code> / <code>&#8209;D</code> | `prune()` / `pruneSubtree()`, descendants included |
+| <code>git&nbsp;merge&nbsp;&#8209;&#8209;ff&#8209;only</code> | `retainOnly(winner)` — the winner's KV *becomes* the trunk, in one pass |
+| <code>git&nbsp;merge&nbsp;&#8209;&#8209;squash</code> | `decode_scatter()` onto the parent — **hard**: the child's KV is dropped, its output re-decoded |
+| <code>git&nbsp;rebase</code> | `create()` + `decode_scatter()` — **replay from content**; re-decodes onto a new base rather than moving cells, the only form that survives recurrent state |
+| *no equivalent* | `merge_logits(dst, experts, α)` — **soft**: distributions blend, both KVs stay live |
+
+**A soft merge costs nothing:**
+
+```text
+dst.logits[t] += α · Σᵢ experts[i].logits[t]
+```
+
+See [Docs: Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-state-synthesis) for details
 
 ## Get started
 
