@@ -21,57 +21,54 @@
 ## TL;DR
 
 ### Why this exists
-- Most agent frameworks treat the model as an external API call. Lloyal makes the model’s **live attention state** a programmable part of your application. Agents are forks of model state — not separate API calls so they share context for free. And [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU dispatch, so cost scales with the size of the KV cache, not the number of agents.
+
+Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch. Your TypeScript can **fork, merge and rebase the model's working memory**.
 
 ### What you get
-- You get an intelligence runtime you can ship inside your application, complete with: model provisioning, specialist model composition, in-app agents that share context (including multimodal projections), concurrent and adaptive tool use, inference-time policy enforement and the controls and interfaces developers need to leverage these unique unlocks.
+
+You get an intelligence runtime you can ship inside your application, complete with model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
 ### How to use it
-- Write your harness in TypeScript and ship it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, your application doesn't wrap an API - it owns the model's attention state. 
 
-Keep reading if you want to understand the unlocks
+Start with a working TypeScript AI app with built-in inference and a multi-agent runtime. In-app agents can research, read local files, understand documents visually and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes 🚀
 
 ## Removing the HTTP middle-man
 
-**Your TypeScript gets a direct handle to a `Branch` of the model’s live attention state.** together with its sampler, grammar, next-token distribution, metrics
-and ancestry. Your application code can:
+**Your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
 
 - Fork that attention
 - Add evidence to a specific continuation
-- Constrain and condition generation with garmmar and logit merging
-- Inspect and interject live inference
+- Constrain and condition generation with grammars and logit merging
+- Inspect and intervene in live inference
 - Release work and reclaim context
 
-An agent is a scoped continuation of that attention state. Fork after reading a document and the children
-inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same
-projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool
-history. Continuous tree batching advances eligible branches together through the resident model.
+An agent is a scoped continuation of that attention state. Fork after reading a document and the children inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool history. Continuous Tree Batching advances these independent continuations together through the resident model.
 
-The CLI lets you boostrap working applications from templates built on this programming surface. The Deep Research template is one example.
-The same primitives can drive document review, spreadsheet enrichment, decision systems, or an assistant over your product's own data and actions.
+The CLI lets you bootstrap working applications from templates built on this programming surface. The Deep Research template is one example. The same primitives can drive document review, spreadsheet enrichment, decision systems, or an assistant over your product's own data and actions.
 
-[Continuous Context](https://docs.lloyal.ai/continuous-context) explains the execution model;
-[the native kernel](https://github.com/lloyal-ai/liblloyal) documents its Git-like branch operations.
+[Continuous Context](https://docs.lloyal.ai/continuous-context) explains the execution model; [the native kernel](https://github.com/lloyal-ai/liblloyal) documents its Git-like branch operations.
 
 ## A concrete analogy with Git
 
-| Git&nbsp;command | Lloyal KV operations |
+| Git command | Lloyal KV operations |
 |---|---|
-| <code>git&nbsp;branch</code> | `fork()` — from the current position |
-| <code>git&nbsp;branch&nbsp;&#8209;d</code> / <code>&#8209;D</code> | `prune()` / `pruneSubtree()`, descendants included |
-| <code>git&nbsp;merge&nbsp;&#8209;&#8209;ff&#8209;only</code> | `retainOnly(winner)` — the winner's KV *becomes* the trunk, in one pass |
-| <code>git&nbsp;merge&nbsp;&#8209;&#8209;squash</code> | `decode_scatter()` onto the parent — **hard**: the child's KV is dropped, its output re-decoded |
-| <code>git&nbsp;rebase</code> | `create()` + `decode_scatter()` — **replay from content**; re-decodes onto a new base rather than moving cells, the only form that survives recurrent state |
-| *no equivalent* | `merge_logits(dst, experts, α)` — **soft**: distributions blend, both KVs stay live |
+| `git branch` | `fork()`: branch from the current attention state |
+| `git branch -d` / `-D` | `prune()` removes a leaf; `pruneSubtree()` includes its descendants |
+| `git merge --ff-only` | `retainOnly(winner)`: keep the winner's existing KV and discard the other branches |
+| `git merge --squash` | **Hard merge:** `decode_scatter()` the child's output onto the parent, then prune the child |
+| `git rebase` | `create()` + `decode_scatter()`: replay content onto a new base |
+| *No equivalent* | `merge_logits(dst, experts, α)`: **soft merge** blends next-token logits while the branches keep their separate KV histories |
 
-**A soft merge costs nothing:**
+**Merge predictions without another model decode:**
 
 ```text
 dst.logits[t] += α · Σᵢ experts[i].logits[t]
 ```
+
 Here, the experts are branches of the same model with different attention histories. Their logits influence the destination's next-token choice without inserting their text into its context. The destination's grammar and sampler still govern token selection.
 
 See [Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-state-synthesis) for details.
+
 
 ## Get started
 
