@@ -13,9 +13,11 @@
 <p align="center">
   <a href="https://github.com/lloyal-ai/lloyal-ai/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush"><img src="https://img.shields.io/github/actions/workflow/status/lloyal-ai/lloyal-ai/ci.yml?branch=main&amp;event=push&amp;label=ci&amp;style=flat-square" alt="CLI CI status on main" /></a>
   <a href="https://www.npmjs.com/package/lloyal-ai"><img src="https://img.shields.io/npm/v/lloyal-ai/latest?label=npm&amp;color=blue&amp;style=flat-square" alt="Latest npm version" /></a>
-  <a href="https://www.npmjs.com/package/lloyal-ai#provenance"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2Flloyal-ai%2Flatest&amp;query=%24.dist.attestations.provenance~&amp;label=npm&amp;color=brightgreen&amp;style=flat-square" alt="npm provenance for the latest release" /></a>
   <a href="https://github.com/lloyal-ai/lloyal-ai/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/lloyal-ai?label=CLI%20license&amp;color=green&amp;style=flat-square" alt="CLI license" /></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/Runtime-FSL--1.1--Apache--2.0-blue?style=flat-square" alt="Runtime license: FSL-1.1-Apache-2.0 with the Harness Developers Grant" /></a>
+<a href="https://www.nvidia.com/en-us/startups/"><img src="https://img.shields.io/badge/NVIDIA%20Inception-Member-76B900?style=flat-square&amp;logo=nvidia&amp;logoColor=white" alt="NVIDIA Inception member" /></a>  
   <a href="https://discord.gg/Bq9ARRj4U"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FBq9ARRj4U%3Fwith_counts%3Dtrue&amp;query=%24.approximate_presence_count&amp;suffix=%20online&amp;label=discord&amp;logo=discord&amp;logoColor=white&amp;color=5865F2&amp;style=flat-square" alt="Lloyal Discord members online" /></a>
+  
 </p>
 
 <p align="center">
@@ -561,7 +563,12 @@ walks through them.
 
 ## Licence
 
-The CLI is [MIT](LICENSE). Generated application code is yours to license. Runtime packages have their own
-license and the [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md), which
-permits building, distributing, selling, and hosting applications and abilities. Model weights retain their
-respective licenses.
+The CLI is [MIT](LICENSE). Generated application code is yours to license.
+
+The Lloyal runtime uses [FSL-1.1-Apache-2.0](https://github.com/lloyal-ai/hdk/blob/main/LICENSE), together with
+the [Harness Developers Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md). The grant permits
+building, distributing, selling, and hosting applications and abilities, including applications that
+compete with Lloyal's own applications. Each released runtime version becomes available under Apache 2.0
+two years after its release.
+
+Model weights retain their respective licenses.
