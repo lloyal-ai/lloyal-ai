@@ -13,11 +13,10 @@
 <p align="center">
   <a href="https://github.com/lloyal-ai/lloyal-ai/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush"><img src="https://img.shields.io/github/actions/workflow/status/lloyal-ai/lloyal-ai/ci.yml?branch=main&amp;event=push&amp;label=ci&amp;style=flat-square" alt="CLI CI status on main" /></a>
   <a href="https://www.npmjs.com/package/lloyal-ai"><img src="https://img.shields.io/npm/v/lloyal-ai/latest?label=npm&amp;color=blue&amp;style=flat-square" alt="Latest npm version" /></a>
-  <a href="https://www.npmjs.com/package/lloyal-ai#provenance"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2Flloyal-ai%2Flatest&amp;query=%24.dist.attestations.provenance~&amp;label=npm&amp;color=brightgreen&amp;style=flat-square" alt="npm provenance for the latest release" /></a>
   <a href="https://github.com/lloyal-ai/lloyal-ai/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/lloyal-ai?label=CLI%20license&amp;color=green&amp;style=flat-square" alt="CLI license" /></a>
+<a href="https://www.nvidia.com/en-us/startups/"><img src="https://img.shields.io/badge/NVIDIA%20Inception-Member-76B900?style=flat-square&amp;logo=nvidia&amp;logoColor=white" alt="NVIDIA Inception member" /></a>  
   <a href="https://discord.gg/Bq9ARRj4U"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FBq9ARRj4U%3Fwith_counts%3Dtrue&amp;query=%24.approximate_presence_count&amp;suffix=%20online&amp;label=discord&amp;logo=discord&amp;logoColor=white&amp;color=5865F2&amp;style=flat-square" alt="Lloyal Discord members online" /></a>
-  <a href="https://www.producthunt.com/products/lloyal"><img src="https://img.shields.io/badge/Product%20Hunt-Featured-DA552F?style=flat-square&amp;logo=producthunt&amp;logoColor=white" alt="Featured on Product Hunt" /></a>
-  <a href="https://www.nvidia.com/en-us/startups/"><img src="https://img.shields.io/badge/NVIDIA%20Inception-Member-76B900?style=flat-square&amp;logo=nvidia&amp;logoColor=white" alt="NVIDIA Inception member" /></a>
+  
 </p>
 
 <p align="center">
