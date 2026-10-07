@@ -32,7 +32,7 @@ Model provisioning, specialist model composition, in-app agents that share atten
 
 Start with a working TypeScript AI app. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
 
-Create a working deep-research application with one command:
+Bootstrap a working app with one command:
 
 ```sh
 npx lloyal-ai new
