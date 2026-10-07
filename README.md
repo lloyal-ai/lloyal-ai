@@ -18,11 +18,13 @@
   <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
 
-## Program the model's working memory
+## TL;DR
 
-Lloyal is the intelligence runtime inside your application: open-weight models, in-app agents, tools,
-multimodal evidence, and the controls and interfaces people need to work with them. Write your harness in
-TypeScript and run it as a desktop application, a CLI, or a web application on your own infrastructure.
+Write your harness in TypeScript and run it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, it's not an API wrapper - model state is application state.
+
+You get an intelligence runtime you can ship inside your application, complete with: model provisioning, specialist model composition, in-app agents that share context (including multimodal projections), concurrent and adaptive tool use, inference-time policy enforement and the controls and interfaces developers need to leverage these unique unlocks.
+
+## Removing the HTTP middle-man
 
 **Your TypeScript gets a handle to the model's live attention state.** A `Branch` identifies the processed
 context already held in the model's KV cache, together with its sampler, grammar, next-token distribution,
