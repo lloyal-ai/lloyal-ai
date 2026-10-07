@@ -50,6 +50,22 @@ npx lloyal-ai new
 ```
 *Use Node.js 24 or newer*. See: [Get Started](#get-started).
 
+## Built with Lloyal
+
+**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
+individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
+tools are application code built on the Lloyal runtime.
+
+<p align="center">
+  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
+    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
+  </a>
+</p>
+
+[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
+[Read its source](https://github.com/lloyal-ai/fieldnote) ·
+[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
+
 ## Removing the HTTP middle-man
 
 **Your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
@@ -155,22 +171,6 @@ its options. Model, target, backend, and shipping commands run from your applica
 
 The [complete CLI reference](guides/cli.md) documents every command, argument, flag, default, and
 non-interactive behavior, with separate sections for contributor and internal review commands.
-
-## Built with Lloyal
-
-**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
-individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
-tools are application code built on the runtime above.
-
-<p align="center">
-  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
-    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
-  </a>
-</p>
-
-[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
-[Read its source](https://github.com/lloyal-ai/fieldnote) ·
-[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
 ## Turnkey abilities you can install
 
