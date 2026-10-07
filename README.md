@@ -1,9 +1,7 @@
 <div align="center">
-  <br />
   <a href="https://lloyal.ai">
     <img src=".github/readme/lloyal-emblem.png" width="190" height="190" alt="Lloyal Labs [LL] emblem" />
   </a>
-  <br />
 </div>
 
 <h1 align="center">Agents without an API</h1>
@@ -19,8 +17,6 @@
   &nbsp;·&nbsp;
   <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
-
-<br />
 
 ## Program the model's working memory
 
