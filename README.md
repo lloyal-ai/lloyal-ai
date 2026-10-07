@@ -12,7 +12,6 @@
 
 <p align="center">
   <a href="https://github.com/lloyal-ai/lloyal-ai/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush"><img src="https://img.shields.io/github/actions/workflow/status/lloyal-ai/lloyal-ai/ci.yml?branch=main&amp;event=push&amp;label=ci&amp;style=flat-square" alt="CLI CI status on main" /></a>
-  <a href="https://www.npmjs.com/package/lloyal-ai"><img src="https://img.shields.io/npm/v/lloyal-ai/latest?label=npm&amp;color=blue&amp;style=flat-square" alt="Latest npm version" /></a>
   <a href="https://github.com/lloyal-ai/lloyal-ai/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/lloyal-ai?label=CLI%20license&amp;color=green&amp;style=flat-square" alt="CLI license" /></a>
   <a href="#licence"><img src="https://img.shields.io/badge/Runtime-FSL--1.1--Apache--2.0-blue?style=flat-square" alt="Runtime license: FSL-1.1-Apache-2.0 with the Developer Grant" /></a>
 <a href="https://www.nvidia.com/en-us/startups/"><img src="https://img.shields.io/badge/NVIDIA%20Inception-Member-76B900?style=flat-square&amp;logo=nvidia&amp;logoColor=white" alt="NVIDIA Inception member" /></a>  
