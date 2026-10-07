@@ -20,11 +20,16 @@
 
 ## TL;DR
 
-Most agent frameworks treat the model as an external API call. Lloyal makes the model’s **live attention state** part of your application. Agents are forks of model state — not separate model calls. Shared context is free. [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU dispatch. Cost scales with the size of the KV cache, not the number of agents.
+### Why this exists
+- Most agent frameworks treat the model as an external API call. Lloyal makes the model’s **live attention state** a programmable part of your application. Agents are forks of model state — not separate API calls so they share context for free. And [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU dispatch, so cost scales with the size of the KV cache, not the number of agents.
 
-You get an intelligence runtime you can ship inside your application, complete with: model provisioning, specialist model composition, in-app agents that share context (including multimodal projections), concurrent and adaptive tool use, inference-time policy enforement and the controls and interfaces developers need to leverage these unique unlocks.
+### What you get
+- You get an intelligence runtime you can ship inside your application, complete with: model provisioning, specialist model composition, in-app agents that share context (including multimodal projections), concurrent and adaptive tool use, inference-time policy enforement and the controls and interfaces developers need to leverage these unique unlocks.
 
-Write your harness in TypeScript and ship it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, your application doesn't wrap an API - it owns the model's attention state. 
+### How to use it
+- Write your harness in TypeScript and ship it as a desktop application, a CLI, or a web application on your own infrastructure - with an important twist, your application doesn't wrap an API - it owns the model's attention state. 
+
+Keep reading if you want to understand the unlocks
 
 ## Removing the HTTP middle-man
 
