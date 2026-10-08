@@ -25,8 +25,6 @@
   <a href="https://docs.lloyal.ai/build-your-first-harness">Quickstart</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/lloyal-ai/hdk/blob/main/GRANT.md">Developer Grant</a>
-  &nbsp;·&nbsp;
-  <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
 
 ## TL;DR
