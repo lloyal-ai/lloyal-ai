@@ -31,7 +31,7 @@
 
 ### Removing the HTTP middle-man
 
-Lloyal removes the HTTP boundary between the harness and the model. Running both in one process makes the model's **live attention state** programmable with ordinary TypeScript control flow. Your application forks agents, schedules their work, controls what enters their attention, and decides when they report and release memory.
+Lloyal removes the HTTP boundary between the harness and the model. Running both in one process makes the model's **live attention state** programmable with ordinary TypeScript control flow. Lloyal handles agent forking, scheduling, evidence admission, reporting and memory reclamation, so your application can program agents.
 
 Agents own their inference state and share the context they inherit, including projected images. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
 
