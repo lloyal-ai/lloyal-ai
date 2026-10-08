@@ -37,7 +37,7 @@ Lloyal makes the model's **live attention state** a programmable part of your ap
 
 Lloyal runs inside the application you ship. You get model provisioning, specialist model composition, concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
-| OS concept | Lloyal mechanism |
+| OS concept | Lloyal equivalent |
 |---|---|
 | [Process lifecycle](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155) | Forks agents and owns their execution, [tool work and cleanup](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L203-L217). |
 | [Shared memory](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/include/lloyal/branch.hpp#L1728-L1786) | Agents inherit processed evidence and [image projections](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/tests/integration/multimodal_integration_test.cpp#L371-L400). |
