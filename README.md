@@ -77,7 +77,7 @@ Inspect live inference in DevTools and replay recorded branches, including their
 
 ## Under the hood
 
-[The Kernel](https://github.com/lloyal-ai/liblloyal) enables Git-like tree ops over live inference (KV, logits, sampler, grammar, epistemics etc) and the [Mapping Layer](https://github.com/lloyal-ai/lloyal.node) projects the model state tree into the [TypeScript runtime](https://github.com/lloyal-ai/hdk).
+[The Kernel](https://github.com/lloyal-ai/liblloyal) enables Git-like tree ops over live inference (KV, logits, sampler, grammar, epistemics etc)
 
 | Git command | Lloyal KV operations |
 |---|---|
@@ -94,9 +94,9 @@ Inspect live inference in DevTools and replay recorded branches, including their
 dst.logits[t] += α · Σᵢ experts[i].logits[t]
 ```
 
-Here, the experts are branches of the same model with different attention histories. Their logits influence the destination's next-token choice without inserting their text into its context. The destination's grammar and sampler still govern token selection.
+*Here, the experts are branches of the same model with different attention histories. Their logits influence the destination's next-token choice without inserting their text into its context. The destination's grammar and sampler still govern token selection. See [Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-state-synthesis) for details.*
 
-See [Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-state-synthesis) for details.
+The [Mapping Layer](https://github.com/lloyal-ai/lloyal.node) projects the model state tree into the [TypeScript runtime](https://github.com/lloyal-ai/hdk).
 
 
 ## Get started
@@ -138,8 +138,7 @@ for platforms and GPU backends. The same harness can use a larger model on your 
 
 The [wiki template](templates/basic/README.md) is a smaller application that also demonstrates typed decisions.
 
-[Build your first harness](https://docs.lloyal.ai/build-your-first-harness) ·
-[Developer Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md)
+[Build your first harness](https://docs.lloyal.ai/build-your-first-harness)
 
 ### CLI usage
 
