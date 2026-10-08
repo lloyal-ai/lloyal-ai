@@ -29,11 +29,11 @@ An OS for Open Weight models. Agents are processes over live attention state.
 
 ## Why this exists
 
-The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing **live attention state** as a programmable part of your application.
+The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks.
 
-Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency .
+Lloyal takes a fundamentally different approach by expressing **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency .
 
-Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown. These execution semantics are analogous to how Operating Systems work.
+Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown similar to how Operating Systems work.
 
 Below is a comparison to help understand lloyal's execution model from a systems perspective:
 
