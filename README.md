@@ -37,6 +37,8 @@ Agents own their inference state and share the context they inherit, including p
 
 ### What you get
 
+Lloyal runs embedded in your application, in the same process as your TypeScript harness and the models.
+
 **Scheduling and memory policy run in the same control loop.**
 
 | OS concept | Lloyal mechanism | Source |
@@ -48,11 +50,11 @@ Agents own their inference state and share the context they inherit, including p
 | Memory pressure | Adjust evidence admission, reserve reporting capacity and reclaim branches. | [Recovery scheduling](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L265), [evidence selection](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/admission.ts#L183-L202) |
 | Resource cleanup | Scope exit halts owned tool work and prunes owned branches after in-flight decoding settles. | [Pool teardown](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L203-L217), [decode settlement](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L44-L64) |
 
-Model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
+The runtime includes model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
 ### How to use it 🚀
 
-Start with a working TypeScript AI app. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
+Scaffold a working TypeScript app with Lloyal embedded. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
 
 Bootstrap a working app with one command:
 
