@@ -7,7 +7,7 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-  The complete intelligence runtime you can ship inside your app.
+  The complete intelligence runtime for open weight models, you can ship inside your app.
 </p>
 
 <p align="center">
@@ -52,9 +52,9 @@ npx lloyal-ai new
 
 ## Built with Lloyal
 
-**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
-individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
-tools are application code built on the Lloyal runtime.
+**Fieldnote** is a private deep-research app that turns a question into a living research brief. Edit the plan, follow parallel investigations, pause the run, cancel an inquiry or close early and keep its findings. Agents search PDFs and inspect pages and diagrams when extracted text isn’t enough. As context fills, research becomes more selective about evidence and agents report before releasing memory.
+
+Inspect live inference in DevTools and replay recorded branches, including their visual context. **Start with this application as editable TypeScript and make it your own.**
 
 <p align="center">
   <a href="https://apps.lloyal.ai/#/app/Fieldnote">
