@@ -7,7 +7,7 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-  The complete intelligence runtime for open weight models, you can ship inside your app.
+An OS for Open Weight models where agents are processes over live attention state
 </p>
 
 <p align="center">
@@ -31,7 +31,16 @@
 
 ### Why this exists
 
-Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
+The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing live attention state as a programmable part of your application. And agents are programs you compose that run as concurrent processes that fork the model's working memory during their lifetime. Context use is non-monotonous, represented as ContextPressure as memory is reclaimed from pruned agents. Similar execution semantics to Operating Systems, below is a comparison that makes this concrete:
+
+| OS abstraction | Lloyal equivalent |
+|---|---|
+| **Process** | An [agent](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155) owns a branch of live attention state, with its own tool history and lifetime. |
+| **Fork / shared memory** | A [branch fork](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/include/lloyal/branch.hpp#L1728-L1786) inherits already-processed attention, including the [same image projection](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/tests/integration/multimodal_integration_test.cpp#L371-L400). Children share the prefix and develop independent reasoning and tool histories. |
+| **Scheduler** | The [scheduler](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L157-L176) admits agents against available context and sequence capacity. [Continuous Tree Batching](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L283-L288) advances their inference together. |
+| **Blocking I/O** | An agent awaiting a [fan-out tool](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L603-L629) retains its attention while siblings continue. Its [result is admitted](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L220) before inference resumes. |
+| **Memory pressure** | [Evidence admission](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/admission.ts#L183-L202) and [recovery scheduling](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L265) govern what enters attention, reserve room for agents to report, and reclaim branches. |
+| **Reap / free** | [Scope cleanup](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L203-L217) stops owned tool work and prunes owned branches after [in-flight decoding settles](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L44-L64), releasing their memory. |
 
 ### What you get
 
