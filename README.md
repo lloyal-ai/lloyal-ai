@@ -7,7 +7,7 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-An OS for Open Weight models where Agents are processes over live attention state
+An OS for Open Weight models. Agents are processes over live attention state.
 </p>
 
 <p align="center">
