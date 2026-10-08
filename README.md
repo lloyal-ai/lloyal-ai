@@ -103,7 +103,7 @@ dst.logits[t] += α · Σᵢ experts[i].logits[t]
 
 *Here, the experts are branches of the same model with different attention histories. Their logits influence the destination's next-token choice without inserting their text into its context. The destination's grammar and sampler still govern token selection. See [Expert State Synthesis](https://docs.lloyal.ai/advanced-patterns#expert-state-synthesis) for details.*
 
-The [Mapping Layer](https://github.com/lloyal-ai/lloyal.node) projects the model state tree into the [TypeScript runtime](https://github.com/lloyal-ai/hdk).
+The [Mapping Layer](https://github.com/lloyal-ai/lloyal.node) projects the inference state tree into the [TypeScript runtime](https://github.com/lloyal-ai/hdk).
 
 
 ## Get started
