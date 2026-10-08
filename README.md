@@ -35,7 +35,7 @@ Lloyal takes a fundamentally different approach by expressing **live attention s
 
 ## What you get
 
-An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, multi-hop / adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
+An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
 ## How to use it 🚀
 
