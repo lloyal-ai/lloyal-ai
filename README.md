@@ -31,9 +31,11 @@ An OS for Open Weight models where agents are processes over live attention stat
 
 ### Why this exists
 
-The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing live attention state as a programmable part of your application. And agents are programs you compose that run as concurrent processes that fork the model's working memory during their lifetime. Context use is non-monotonous, represented as ContextPressure as memory is reclaimed from pruned agents. Similar execution semantics to Operating Systems, below is a comparison that makes this concrete:
+The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing live attention state as a programmable part of your application. And agents are [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/) programs you compose that run as concurrent processes owning forks of the model's working memory. Context is non-monotonous and [continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. (ContextPressure)[https://docs.lloyal.ai/agent-policy-and-context-pressure] increases as new agents are spawned and drops as their memory is reclaimed upon teardown - Execution semantics are analogous to Operating Systems.
 
-| OS abstraction | Lloyal equivalent |
+Below is a comparison to help understand lloyal's execution model from a systems perspective:
+
+| OS Abstraction | Lloyal Equivalent |
 |---|---|
 | **Process** | An [agent](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155) owns a branch of live attention state, with its own tool history and lifetime. |
 | **Fork / shared memory** | A [branch fork](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/include/lloyal/branch.hpp#L1728-L1786) inherits already-processed attention, including the [same image projection](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/tests/integration/multimodal_integration_test.cpp#L371-L400). Children share the prefix and develop independent reasoning and tool histories. |
@@ -44,11 +46,11 @@ The industry converged on an endpoint oriented architecture for model execution 
 
 ### What you get
 
-Model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
+An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, multi-hop / adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
 ### How to use it 🚀
 
-Start with a working TypeScript AI app. In-app agents can research, read local files, understand documents and compose specialist models. Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
+Start with a working TypeScript AI app with in-app agents that can research the web, process local files, understand documents and compose specialist models based on installed [Abilities](https://docs.lloyal.ai/abilities). Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
 
 Bootstrap a working app with one command:
 
@@ -73,21 +75,9 @@ Inspect live inference in DevTools and replay recorded branches, including their
 [Read its source](https://github.com/lloyal-ai/fieldnote) ·
 [Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
-## Removing the HTTP middle-man
+## Under the hood
 
-**Your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
-
-- Fork that attention
-- Add evidence to a specific continuation
-- Constrain and condition generation with grammars and logit merging
-- Inspect and intervene in live inference
-- Release work and reclaim context
-
-Fork after reading a document and the children inherit the processed evidence. Fork after projecting an image and they inherit attention to the **same projection**. The shared prefix is processed once; each agent then develops its own reasoning and tool history.
-
-[Continuous Context](https://docs.lloyal.ai/continuous-context) explains the execution model; [the native kernel](https://github.com/lloyal-ai/liblloyal) documents its Git-like branch operations.
-
-## A concrete analogy with Git
+[The Kernel](https://github.com/lloyal-ai/liblloyal) enables Git-like tree ops over live inference (KV, logits, sampler, grammar, epistemics etc) and the [Mapping Layer](https://github.com/lloyal-ai/lloyal.node) projects the model state tree into the [TypeScript runtime](https://github.com/lloyal-ai/hdk).
 
 | Git command | Lloyal KV operations |
 |---|---|
