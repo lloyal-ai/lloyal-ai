@@ -31,7 +31,7 @@ An OS for Open Weight models. Agents are processes over live attention state.
 
 The industry converged on an endpoint oriented architecture for model execution. And API wrappers around inference endpoints became agent frameworks.
 
-Lloyal takes a fundamentally different approach by expressing an LLM's **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency .
+Lloyal takes a fundamentally different approach by expressing an LLM's **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency. Memory forking is zero-copy, so shared context between agents that share a lineage is free.
 
 ## What you get
 
