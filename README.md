@@ -29,7 +29,7 @@ An OS for Open Weight models. Agents are processes over live attention state.
 
 ## Why this exists
 
-The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks.
+The industry converged on an endpoint oriented architecture for model execution and API wrappers around inference endpoints became agent frameworks.
 
 Lloyal takes a fundamentally different approach by expressing **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency .
 
