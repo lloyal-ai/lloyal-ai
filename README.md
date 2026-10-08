@@ -7,7 +7,7 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-  The complete intelligence runtime you can ship inside your app.
+  The complete intelligence runtime for open weight models, you can ship inside your app.
 </p>
 
 <p align="center">
@@ -25,8 +25,6 @@
   <a href="https://docs.lloyal.ai/build-your-first-harness">Quickstart</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/lloyal-ai/hdk/blob/main/GRANT.md">Developer Grant</a>
-  &nbsp;·&nbsp;
-  <a href="https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg" title="Download Fieldnote for macOS on Apple silicon">Demo (macOS)</a>
 </p>
 
 ## TL;DR
@@ -49,6 +47,22 @@ Bootstrap a working app with one command:
 npx lloyal-ai new
 ```
 *Use Node.js 24 or newer*. See: [Get Started](#get-started).
+
+## Built with Lloyal
+
+**Fieldnote** is a private deep-research app that turns a question into a living research brief. Edit the plan, follow parallel investigations, pause the run, cancel an inquiry or close early and keep its findings. Agents search PDFs and inspect pages and diagrams when extracted text isn’t enough. As context fills, research becomes more selective about evidence and agents report before releasing memory.
+
+Inspect live inference in DevTools and replay recorded branches, including their visual context. **Start with this application as editable TypeScript and make it your own.**
+
+<p align="center">
+  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
+    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
+  </a>
+</p>
+
+[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
+[Read its source](https://github.com/lloyal-ai/fieldnote) ·
+[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
 ## Removing the HTTP middle-man
 
@@ -155,22 +169,6 @@ its options. Model, target, backend, and shipping commands run from your applica
 
 The [complete CLI reference](guides/cli.md) documents every command, argument, flag, default, and
 non-interactive behavior, with separate sections for contributor and internal review commands.
-
-## Built with Lloyal
-
-**Fieldnote** is a deep-research application with editable plans, parallel inquiries, PDFs, citations,
-individual stops, and follow-ups that continue from warm attention. Its investigation strategy, UI, and
-tools are application code built on the runtime above.
-
-<p align="center">
-  <a href="https://apps.lloyal.ai/#/app/Fieldnote">
-    <img src=".github/readme/fieldnote-overview.png" width="100%" alt="Illustrated Fieldnote overview: a rooftop-solar investigation in front of branching agent timelines and the live inference inspector." />
-  </a>
-</p>
-
-[Download for macOS (Apple silicon)](https://apps.lloyal.ai/download/Fieldnote-latest-arm64.dmg) ·
-[Read its source](https://github.com/lloyal-ai/fieldnote) ·
-[Explore the template walkthrough](guides/fieldnote-walkthrough.md)
 
 ## Turnkey abilities you can install
 
