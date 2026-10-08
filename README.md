@@ -27,11 +27,13 @@ An OS for Open Weight models where agents are processes over live attention stat
   <a href="https://github.com/lloyal-ai/hdk/blob/main/GRANT.md">Developer Grant</a>
 </p>
 
-## TL;DR
+## Why this exists
 
-### Why this exists
+The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing live attention state as a programmable part of your application.
 
-The industry converged on an endpoint oriented architecture for model execution and wrappers around those API endpoints became agent frameworks. Lloyal takes a fundamentally different approach by expressing live attention state as a programmable part of your application. And agents are [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/) programs you compose that run as concurrent processes owning forks of the model's working memory. Context is non-monotonous and [continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown - Execution semantics are analogous to Operating Systems.
+And agents are [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/) programs you compose that run as concurrent processes owning forks of the model's working memory.
+
+Context is non-monotonic and [continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown - Execution semantics are analogous to Operating Systems.
 
 Below is a comparison to help understand lloyal's execution model from a systems perspective:
 
@@ -44,11 +46,13 @@ Below is a comparison to help understand lloyal's execution model from a systems
 | **Memory pressure** | [Evidence admission](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/admission.ts#L183-L202) and [recovery scheduling](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L265) govern what enters attention, reserve room for agents to report, and reclaim branches. |
 | **Reap / free** | [Scope cleanup](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L203-L217) stops owned tool work and prunes owned branches after [in-flight decoding settles](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L44-L64), releasing their memory. |
 
-### What you get
+*Your policy controls which agents run, what enters their attention, when they report, and when their memory is reclaimed.*
+
+## What you get
 
 An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, multi-hop / adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
-### How to use it 🚀
+## How to use it 🚀
 
 Start with a working TypeScript AI app with in-app agents that can research the web, process local files, understand documents and compose specialist models based on installed [Abilities](https://docs.lloyal.ai/abilities). Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
 
