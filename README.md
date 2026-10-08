@@ -7,7 +7,7 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-  The complete intelligence runtime for open weight models, you can ship inside your app.
+  Lloyal is an OS for live-inference where agents are processes over live attention state.
 </p>
 
 <p align="center">
@@ -31,9 +31,9 @@
 
 ### Why this exists
 
-Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
+Lloyal makes the model's **live attention state** programmable with ordinary TypeScript control flow. Your application forks agents, schedules their work, controls what enters their attention, and decides when they report and release memory.
 
-Lloyal is an **OS for live inference inside your app**. Your application controls which agents run, what enters their attention, when they report, and when their memory is reclaimed.
+Agents own their inference state and share the context they inherit, including projected images. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
 
 ### What you get
 
@@ -71,7 +71,7 @@ Inspect live inference in DevTools and replay recorded branches, including their
 **Your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
 
 - Fork that attention
-- Add evidence to a specific continuation
+- Add evidence to a specific agent
 - Constrain and condition generation with grammars and logit merging
 - Inspect and intervene in live inference
 - Release work and reclaim context
@@ -82,7 +82,7 @@ Fork after reading a document and the children inherit the processed evidence. F
 
 | OS concept | Lloyal mechanism | Source |
 |---|---|---|
-| Process lifecycle | Agents have independent continuations, tool histories and owned lifetimes. | [Agent](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155), [pool lifetime](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L71-L73) |
+| Process lifecycle | Agents are processes that own and share live attention state, with their own tool histories and lifetimes. | [Agent](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155), [pool lifetime](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L71-L73) |
 | Fork and inherited memory | Fork live attention, including projected images, so children inherit the processed prefix. | [Native fork](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/include/lloyal/branch.hpp#L1728-L1786), [shared-image test](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/tests/integration/multimodal_integration_test.cpp#L371-L400) |
 | Scheduling and admission | Admit work against available context and sequence capacity; advance agents through Continuous Tree Batching. | [Scheduler](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L157-L176), [batched commit](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L283-L288) |
 | Blocking I/O | An agent awaiting a fan-out tool retains its attention while siblings continue; the result is admitted before it resumes. | [Tool dispatch](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L603-L629), [result admission](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L220) |
@@ -271,13 +271,13 @@ and delegate further from its own branch. Their results return as cited findings
 releases the temporary branches when the work ends.
 
 Choose `parallel`, `chain`, `fanout`, `dag`, or your own orchestrator. A chain can extend its shared attention
-with accepted findings before the next agent forks. Existing siblings retain their own continuations.
+with accepted findings before the next agent forks. Existing siblings retain their own attention state.
 The runtime batches active branches within the configured capacity; divergent work still uses memory and
 compute.
 
 For lower-level algorithms, the same SDK exposes `Branch.fork()`, selective prefill, pruning, per-branch
 sampler and grammar changes, entropy, and logits. `BranchStore.mergeLogits()` lets several attention
-histories influence a continuation's next token while their KV histories remain separate.
+histories influence a branch's next token while their KV histories remain separate.
 
 [Agents and orchestration](https://docs.lloyal.ai/agents) ·
 [Branch API](https://github.com/lloyal-ai/hdk/tree/main/packages/sdk#the-branch-api) ·
