@@ -33,7 +33,7 @@ The industry converged on an endpoint oriented architecture for model execution 
 
 You compose agents as [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/) programs scheduled as processes owning forks of the model's working memory safely under Structured Concurrency.
 
-Context is non-monotonic and [continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown - Execution semantics are analogous to Operating Systems.
+Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown - Execution semantics are analogous to Operating Systems.
 
 Below is a comparison to help understand lloyal's execution model from a systems perspective:
 
