@@ -66,9 +66,7 @@ Inspect live inference in DevTools and replay recorded branches, including their
 
 ## Why OS?
 
-Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown similar to how Operating Systems work.
-
-Below is a comparison to help understand lloyal's execution model from a systems perspective:
+Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-context), managed as a shared resource. [ContextPressure](https://docs.lloyal.ai/agent-policy-and-context-pressure) increases as new agents are spawned and drops as their memory is reclaimed upon teardown. Ssimilar to how Operating Systems work. Below is a comparison to help understand lloyal's execution model from a systems perspective:
 
 | OS Abstraction | Lloyal Equivalent |
 |---|---|
