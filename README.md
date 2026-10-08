@@ -7,13 +7,13 @@
 <h1 align="center">Agents without an API</h1>
 
 <p align="center">
-  An OS for intelligence where agents are processes over shared model memory
+  The complete intelligence runtime for open weight models, you can ship inside your app.
 </p>
 
 <p align="center">
   <a href="https://github.com/lloyal-ai/lloyal-ai/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush"><img src="https://img.shields.io/github/actions/workflow/status/lloyal-ai/lloyal-ai/ci.yml?branch=main&amp;event=push&amp;label=ci&amp;style=flat-square" alt="CLI CI status on main" /></a>
   <a href="https://github.com/lloyal-ai/lloyal-ai/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/lloyal-ai?label=CLI%20license&amp;color=green&amp;style=flat-square" alt="CLI license" /></a>
-  <a href="#licence"><img src="https://img.shields.io/badge/Runtime-FSL--1.1--MIT-blue?style=flat-square" alt="Runtime license: FSL-1.1-MIT with the Developer Grant" /></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/Runtime-FSL--1.1--Apache--2.0-blue?style=flat-square" alt="Runtime license: FSL-1.1-Apache-2.0 with the Developer Grant" /></a>
 <a href="https://www.nvidia.com/en-us/startups/"><img src="https://img.shields.io/badge/NVIDIA%20Inception-Member-76B900?style=flat-square&amp;logo=nvidia&amp;logoColor=white" alt="NVIDIA Inception member" /></a>  
   <a href="https://discord.gg/Bq9ARRj4U"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FBq9ARRj4U%3Fwith_counts%3Dtrue&amp;query=%24.approximate_presence_count&amp;suffix=%20online&amp;label=discord&amp;logo=discord&amp;logoColor=white&amp;color=5865F2&amp;style=flat-square" alt="Lloyal Discord members online" /></a>
   
@@ -31,18 +31,11 @@
 
 ### Why this exists
 
-Lloyal makes the model's **live attention state** a programmable part of your application. Agents are processes forked from that attention state. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
+Most agent frameworks treat the model as an external API call. Lloyal makes the model's **live attention state** a programmable part of your application. Agents are forks of model state, not separate API calls. **Shared context is free.** [Continuous Tree Batching](https://github.com/lloyal-ai/liblloyal) advances multiple agents in a single GPU batch.
 
 ### What you get
 
-Lloyal runs inside the application you ship. You get model provisioning, specialist model composition, concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
-
-| OS concept | Lloyal equivalent |
-|---|---|
-| [Process lifecycle](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/Agent.ts#L125-L155) | Forks agents and owns their execution, [tool work and cleanup](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/agent-pool.ts#L203-L217). |
-| [Shared memory](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/include/lloyal/branch.hpp#L1728-L1786) | Agents inherit processed evidence and [image projections](https://github.com/lloyal-ai/liblloyal/blob/0ff12dac071107ce602d2ae6fcba38b6dfd5e4a1/tests/integration/multimodal_integration_test.cpp#L371-L400). |
-| [Scheduling and blocking I/O](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L157-L176) | [Batches agent decoding](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L283-L288) while [fan-out tools run independently](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L603-L629). |
-| [Memory pressure](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/scheduler.ts#L198-L265) | Controls [evidence admission](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/admission.ts#L183-L202), reserves reporting capacity and [reclaims branches safely](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/agents/src/execute.ts#L44-L64). |
+Model provisioning, specialist model composition, in-app agents that share attention state (including multimodal projections), concurrent and adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
 
 ### How to use it 🚀
 
@@ -73,10 +66,10 @@ Inspect live inference in DevTools and replay recorded branches, including their
 
 ## Removing the HTTP middle-man
 
-Lloyal removes the HTTP boundary between the harness you build with the [HDK](https://github.com/lloyal-ai/hdk) and the model. Both run in one process, so **your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
+**Your TypeScript gets a direct handle to a `Branch` of the model's live attention state**, together with its sampler, grammar, next-token distribution, metrics and ancestry. Your application code can:
 
 - Fork that attention
-- Add evidence to a specific agent
+- Add evidence to a specific continuation
 - Constrain and condition generation with grammars and logit merging
 - Inspect and intervene in live inference
 - Release work and reclaim context
@@ -265,13 +258,13 @@ and delegate further from its own branch. Their results return as cited findings
 releases the temporary branches when the work ends.
 
 Choose `parallel`, `chain`, `fanout`, `dag`, or your own orchestrator. A chain can extend its shared attention
-with accepted findings before the next agent forks. Existing siblings retain their own attention state.
+with accepted findings before the next agent forks. Existing siblings retain their own continuations.
 The runtime batches active branches within the configured capacity; divergent work still uses memory and
 compute.
 
 For lower-level algorithms, the same SDK exposes `Branch.fork()`, selective prefill, pruning, per-branch
 sampler and grammar changes, entropy, and logits. `BranchStore.mergeLogits()` lets several attention
-histories influence a branch's next token while their KV histories remain separate.
+histories influence a continuation's next token while their KV histories remain separate.
 
 [Agents and orchestration](https://docs.lloyal.ai/agents) ·
 [Branch API](https://github.com/lloyal-ai/hdk/tree/main/packages/sdk#the-branch-api) ·
@@ -571,10 +564,10 @@ walks through them.
 
 The CLI is [MIT](LICENSE). Generated application code is yours to license.
 
-The Lloyal runtime uses [FSL-1.1-MIT](https://github.com/lloyal-ai/hdk/blob/main/LICENSE), together with
+The Lloyal runtime uses [FSL-1.1-Apache-2.0](https://github.com/lloyal-ai/hdk/blob/main/LICENSE), together with
 the [Developer Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md). The grant permits
 building, distributing, selling, and hosting applications and abilities, including applications that
-compete with Lloyal's own applications. Each runtime version released under FSL-1.1-MIT becomes available under MIT
-two years after it is first made available. Previously published versions retain their existing terms.
+compete with Lloyal's own applications. Each released runtime version becomes available under Apache 2.0
+two years after its release.
 
 Model weights retain their respective licenses.
