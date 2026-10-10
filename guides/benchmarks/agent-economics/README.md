@@ -9,13 +9,13 @@ Each agent performs a distinct, model-generated lookup from the same ~8.8k-token
 | Measurement | Lloyal | LangGraph + llama-server, prefix-cache enabled |
 | --- | ---: | ---: |
 | Concurrent agents observed | 128 | 128 |
+| Peak measured model/worker GPU memory | 10.417969 GiB | 24.001953 GiB |
 | Allocated attention KV | 0.375732 GiB | 10.125000 GiB |
 | Allocated recurrent state | 6.379395 GiB | 6.281250 GiB |
-| Peak measured model/worker GPU memory | 10.417969 GiB | 24.001953 GiB |
 | Configured sequences | 130 | 128 |
 | Exact answers / requested answers | 256 / 256 | 256 / 256 |
 
-The reductions are `100 × (1 − Lloyal / HTTP)`: **96.3% in attention KV allocation** and **56.6% in measured GPU memory**, at this agent count and context length. The GPU measurement includes recurrent state, model weights and other GPU allocations owned by the measured processes. It is not a recurrent-subtracted estimate.
+The reductions are `100 × (1 − Lloyal / HTTP)`: **56.6% in measured GPU memory** and **96.3% in attention KV allocation**, at this agent count and context length. The GPU measurement includes recurrent state, model weights and other GPU allocations owned by the measured processes. It is not a recurrent-subtracted estimate.
 
 The native trial is `cuda-capacity-default-2026-10-10/sweep-p256-n128-lloyal-r1`. The completed HTTP trial is `cuda-timeout-repair-2026-10-10/sweep-p256-n128-langgraph-r1`. The original HTTP attempt remains in the data as transport-censored.
 

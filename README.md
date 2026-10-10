@@ -33,6 +33,21 @@ The industry converged on an endpoint oriented architecture for model execution.
 
 Lloyal takes a fundamentally different approach by expressing an LLM's **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency. Memory forking is zero-copy, so shared context between agents that share a lineage is free.
 
+## Agent economics: attention processes vs. HTTP requests
+
+**At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.**
+
+<p align="center">
+  <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
+  <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
+</p>
+
+Both paths used the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server, and returned **256/256 correct answers** across two rounds.
+
+Lloyal agents inherit live attention from their parent. Hundreds of agents can work from the same processed context, each developing its own continuation. The runtime schedules their inference, manages memory pressure and reclaims branches as work ends.
+
+*Qwen3.5-4B Q4_K_M · one NVIDIA L40S · same llama.cpp revision. Text-only diagnostic agents with short private continuations; one completed trial per backend at 128 agents. The tested HTTP backend uses separate KV streams per slot. Dashed lines separate the model's recurrent-state cost, which remains included in total GPU memory. These measurements describe this workload and serving configuration. [Setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).*
+
 ## What you get
 
 An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
@@ -79,24 +94,6 @@ Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-cont
 | **Shared read-only pages / private address spaces** | In [server mode](https://docs.lloyal.ai/serve) the host process shares [resident model weights](https://github.com/lloyal-ai/lloyal.node/blob/a2c985c8a0845044598c4b27b1a4f74f114c87d8/src/SessionContext.cpp#L1961-L1991) across sessions. Each session owns a [separate native context](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/boot.ts#L287-L295), KV tree, and agent population. Agents fork within their session's attention lineage. |
 
 *Your policy controls which agents run, what enters their attention, when they report, and when their memory is reclaimed.*
-
-## Agent economics: attention processes vs. HTTP requests
-
-Every agent needs working memory. How that memory is shared determines how far your infrastructure goes.
-
-Lloyal agents inherit live attention from their parent. Hundreds of agents can work from the same processed context, each developing its own continuation. The runtime schedules their inference, manages memory pressure and reclaims branches as work ends.
-
-**At 128 concurrent agents sharing ~8.8k tokens of context: 96.3% less attention KV allocation. 56.6% less total GPU memory.**
-
-Same model. Same infrastructure. LangGraph + llama-server with **prefix-cache enabled**. Both paths returned **256/256 correct answers** across two rounds.
-
-<p align="center">
-  <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
-  <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
-</p>
-
-*Qwen3.5-4B Q4_K_M · one NVIDIA L40S · same llama.cpp revision. Text-only diagnostic agents with short private continuations; one completed trial per backend at 128 agents. The tested HTTP backend uses separate KV streams per slot. Dashed lines separate the model's recurrent-state cost, which remains included in total GPU memory. These measurements describe this workload and serving configuration. [Setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).*
-
 
 ## Under the hood
 
