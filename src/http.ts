@@ -25,7 +25,7 @@
  * for three reasons, the last decisive:
  *
  * 1. **Dependency boundary.** harness-cli depends on `@inkjs/ui`, `ink` and
- *    `react`, nothing else. Importing rig breaches the Apache/FSL + zero-native
+ *    `react`, nothing else. Importing rig breaches the MIT/FSL + zero-native
  *    line that `verify.ts` exists to hold (rig chain-imports native
  *    `lloyal.node`).
  * 2. **Shape.** `cancellableFetch` is an Effection `Operation`; adopting it turns

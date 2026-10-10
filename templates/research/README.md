@@ -783,7 +783,7 @@ which a licence of yours does not change.
 
 Your use of the HDK runtime (`@lloyal-labs/*`) is covered by the
 Functional Source License plus the
-[Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
+[Developer Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
 under which building, distributing, selling and hosting a harness or an
 ability is always permitted and is never a Competing Use — including in
 direct competition with Lloyal's own products.
