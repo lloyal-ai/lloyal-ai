@@ -48,19 +48,35 @@ npx lloyal-ai new
 ```
 *Use Node.js 24 or newer*. See: [Get Started](#get-started).
 
-## Economics: Agents as Attention Processes vs. HTTP requests
+## Agents as Attention Processes vs. HTTP requests
 
-**At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.**
-
-<p align="center">
-  <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
-  <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
-</p>
-
-<p align="center">
-  <img src=".github/readme/agent-execution-lloyal.svg" width="49%" alt="Lloyal: agents 1, 2, through 128 reference one shared attention prefix, each keeping a private continuation and recurrent state." />
-  <img src=".github/readme/agent-execution-http.svg" width="49%" alt="HTTP plus prefix caching: LangGraph and llama-server in the measured separate-KV-stream configuration reserve attention prefixes for slots 1, 2, through 128, each with a private continuation and recurrent state." />
-</p>
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%" align="center">Lloyal</th>
+      <th width="50%" align="center">HTTP + Prefix Caching</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <p><sub>Resident attention shared by concurrent agents</sub></p>
+        <img src=".github/readme/agent-execution-lloyal.svg" width="100%" alt="Lloyal: agents 1, 2, through 128 reference one shared attention prefix, each keeping a private continuation and recurrent state." />
+      </td>
+      <td width="50%" align="center" valign="top">
+        <p><sub>LangGraph + Llama Server + Prefix Caching enabled</sub></p>
+        <img src=".github/readme/agent-execution-http.svg" width="100%" alt="HTTP plus prefix caching: LangGraph and llama-server in the measured separate-KV-stream configuration reserve attention prefixes for slots 1, 2, through 128, each with a private continuation and recurrent state." />
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center">
+        <p><strong>At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.</strong></p>
+        <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
+        <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 Lloyal agents share processed context and develop independent continuations. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
 
