@@ -1,6 +1,6 @@
 # Agent economics: measurement record
 
-The [README figures](../../../README.md#agent-economics-attention-processes-vs-http-requests) show how memory grows as more agents work from a common context. This record describes the CUDA capacity diagnostic collected on 10 October 2026. It includes the setup, per-trial measurements and code to regenerate the figures.
+The [README figures](../../../README.md#economics-agents-as-attention-processes-vs-http-requests) show how memory grows as more agents work from a common context. This record describes the CUDA capacity diagnostic collected on 10 October 2026. It includes the setup, per-trial measurements and code to regenerate the figures.
 
 ## Matched result at 128 agents
 

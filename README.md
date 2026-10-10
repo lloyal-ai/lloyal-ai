@@ -42,12 +42,16 @@ Lloyal takes a fundamentally different approach by expressing an LLM's **live at
   <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
 </p>
 
+<img src=".github/readme/agent-execution-models.svg" width="100%" alt="Side-by-side storage layouts: Lloyal agents reference one shared attention prefix; the tested LangGraph and llama-server configuration reserves a prefix per slot with prefix-cache enabled. Both keep private continuations and recurrent state." />
+
 Lloyal agents share processed context and develop independent continuations. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
 
 *Text-only diagnostic · one completed trial per backend at 128 agents.*
 
 <details>
 <summary>Benchmark details</summary>
+
+*Schematic of the measured layouts; not to scale. Gray blocks show the common per-sequence recurrent-state cost. Other server KV layouts can behave differently.*
 
 | Control | Configuration |
 | --- | --- |
