@@ -33,6 +33,21 @@ The industry converged on an endpoint oriented architecture for model execution.
 
 Lloyal takes a fundamentally different approach by expressing an LLM's **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency. Memory forking is zero-copy, so shared context between agents that share a lineage is free.
 
+## What you get
+
+An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
+
+## How to use it 🚀
+
+Start with a working TypeScript AI app with in-app agents that can research the web, process local files, understand documents and compose specialist models based on installed [Abilities](https://docs.lloyal.ai/abilities). Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
+
+Bootstrap a working app with one command:
+
+```sh
+npx lloyal-ai new
+```
+*Use Node.js 24 or newer*. See: [Get Started](#get-started).
+
 ## Economics: Agents as Attention Processes vs. HTTP requests
 
 **At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.**
@@ -63,21 +78,6 @@ Lloyal agents share processed context and develop independent continuations. Bot
 The measurements apply to this workload and serving configuration. [Full setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).
 
 </details>
-
-## What you get
-
-An embedded runtime that handles model provisioning, specialist model composition, in-app agents with managed lifecycles, adaptive tool use, typed decisions, inference-time policy enforcement, a content-addressed media plane, and DevTools for inspecting and controlling live inference.
-
-## How to use it 🚀
-
-Start with a working TypeScript AI app with in-app agents that can research the web, process local files, understand documents and compose specialist models based on installed [Abilities](https://docs.lloyal.ai/abilities). Inference works offline, with no API keys or complicated setup for your users. Customize and ship it to desktop, web or terminal in minutes!
-
-Bootstrap a working app with one command:
-
-```sh
-npx lloyal-ai new
-```
-*Use Node.js 24 or newer*. See: [Get Started](#get-started).
 
 ## Built with Lloyal
 
