@@ -42,11 +42,23 @@ Lloyal takes a fundamentally different approach by expressing an LLM's **live at
   <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
 </p>
 
-Both paths used the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server, and returned **256/256 correct answers** across two rounds.
+Lloyal agents share processed context and develop independent continuations. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
 
-Lloyal agents inherit live attention from their parent. Hundreds of agents can work from the same processed context, each developing its own continuation. The runtime schedules their inference, manages memory pressure and reclaims branches as work ends.
+*Text-only diagnostic · one completed trial per backend at 128 agents.*
 
-*Qwen3.5-4B Q4_K_M · one NVIDIA L40S · same llama.cpp revision. Text-only diagnostic agents with short private continuations; one completed trial per backend at 128 agents. The tested HTTP backend uses separate KV streams per slot. Dashed lines separate the model's recurrent-state cost, which remains included in total GPU memory. These measurements describe this workload and serving configuration. [Setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).*
+<details>
+<summary>Benchmark details</summary>
+
+| Control | Configuration |
+| --- | --- |
+| Model and hardware | Qwen3.5-4B Q4_K_M, one NVIDIA L40S, same llama.cpp revision |
+| Workload | Two rounds of text-only diagnostic lookups with short private continuations; one completed trial per backend at 128 agents |
+| HTTP backend | LangGraph + llama-server, prefix-cache enabled, separate KV streams per slot |
+| Memory accounting | Dashed lines show recurrent-state allocation separately; total GPU memory includes this cost |
+
+The measurements apply to this workload and serving configuration. [Full setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).
+
+</details>
 
 ## What you get
 
