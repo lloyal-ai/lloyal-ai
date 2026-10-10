@@ -48,6 +48,56 @@ npx lloyal-ai new
 ```
 *Use Node.js 24 or newer*. See: [Get Started](#get-started).
 
+## Agents as Attention Processes vs. HTTP requests
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%" align="center">Lloyal</th>
+      <th width="50%" align="center">HTTP + Prefix Caching</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <p><sub>Fork, fan-in, and fork again from an evolving spine</sub></p>
+        <img src=".github/readme/agent-execution-lloyal.svg" width="100%" alt="Lloyal: agents inherit attention at their fork point, return results to advance the spine, then fan out again from its updated state. Each agent keeps a private continuation and recurrent state." />
+      </td>
+      <td width="50%" align="center" valign="top">
+        <p><sub>LangGraph + Llama Server + Prefix Caching enabled</sub></p>
+        <img src=".github/readme/agent-execution-http.svg" width="100%" alt="HTTP plus prefix caching: LangGraph and llama-server in the measured separate-KV-stream configuration reserve attention prefixes for slots 1, 2, through 128, each with a private continuation and recurrent state." />
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center">
+        <p><strong>At 128 concurrent agents sharing ~8.8k tokens: 56.6% less total GPU memory, with 96.3% less attention KV allocation.</strong></p>
+        <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
+        <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+Lloyal agents inherit attention at their fork point. Results can extend the spine, ready for the next fan-out. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
+
+*Text-only diagnostic · one completed trial per backend at 128 agents.*
+
+<details>
+<summary>Benchmark details</summary>
+
+*The Lloyal diagram shows a reusable execution pattern: fork, return results, advance the spine, fork again. Fan-in admits results; private KV histories are not merged. The charts measure two lookup rounds from a common spine, without intervening result-driven spine extension. The HTTP diagram shows the measured slot layout. Gray blocks show per-sequence recurrent state; shapes are not a memory scale. Other server KV layouts can behave differently.*
+
+| Control | Configuration |
+| --- | --- |
+| Model and hardware | Qwen3.5-4B Q4_K_M, one NVIDIA L40S, same llama.cpp revision |
+| Workload | Two rounds of text-only diagnostic lookups with short private continuations; one completed trial per backend at 128 agents |
+| HTTP backend | LangGraph + llama-server, prefix-cache enabled, separate KV streams per slot |
+| Memory accounting | Dashed lines show recurrent-state allocation separately; total GPU memory includes this cost |
+
+The measurements apply to this workload and serving configuration. [Full setup, measurements and chart source](guides/benchmarks/agent-economics/README.md).
+
+</details>
+
 ## Built with Lloyal
 
 **Fieldnote** is a private deep-research app that turns a question into a living research brief. Edit the plan, follow parallel investigations, pause the run, cancel an inquiry or close early and keep its findings. Agents search PDFs and inspect pages and diagrams when extracted text isn’t enough. As context fills, research becomes more selective about evidence and agents report before releasing memory.
@@ -79,7 +129,6 @@ Context is non-monotonic and [Continuous](https://docs.lloyal.ai/continuous-cont
 | **Shared read-only pages / private address spaces** | In [server mode](https://docs.lloyal.ai/serve) the host process shares [resident model weights](https://github.com/lloyal-ai/lloyal.node/blob/a2c985c8a0845044598c4b27b1a4f74f114c87d8/src/SessionContext.cpp#L1961-L1991) across sessions. Each session owns a [separate native context](https://github.com/lloyal-ai/hdk/blob/2a54959091d26df0cd46c84ce2c7fbf2afe0f1f1/packages/rig/src/boot.ts#L287-L295), KV tree, and agent population. Agents fork within their session's attention lineage. |
 
 *Your policy controls which agents run, what enters their attention, when they report, and when their memory is reclaimed.*
-
 
 ## Under the hood
 
