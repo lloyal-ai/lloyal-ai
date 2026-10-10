@@ -70,7 +70,7 @@ npx lloyal-ai new
     </tr>
     <tr>
       <td colspan="2" align="center">
-        <p><strong>At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.</strong></p>
+        <p><strong>At 128 concurrent agents sharing ~8.8k tokens: 56.6% less total GPU memory, with 96.3% less attention KV allocation.</strong></p>
         <img src=".github/readme/agent-economics-vram.png" width="49%" alt="Measured peak GPU memory versus concurrent agent count. At 128 agents, Lloyal uses 10.42 GiB versus 24.00 GiB for LangGraph with llama-server and prefix-cache enabled." />
         <img src=".github/readme/agent-economics-components.png" width="49%" alt="Attention and recurrent-state allocation versus concurrent agent count. At 128 agents, Lloyal allocates 0.376 GiB of attention KV versus 10.125 GiB for LangGraph with llama-server; recurrent state costs 50.25 MiB per configured sequence on both paths." />
       </td>
