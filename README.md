@@ -33,7 +33,7 @@ The industry converged on an endpoint oriented architecture for model execution.
 
 Lloyal takes a fundamentally different approach by expressing an LLM's **live attention state** as a programmable part of your application. Agents run in your app as processes owning forks of the model's working memory safely under [Effection](https://frontside.com/effection/guides/v4/thinking-in-effection/)'s Structured Concurrency. Memory forking is zero-copy, so shared context between agents that share a lineage is free.
 
-## Agent economics: attention processes vs. HTTP requests
+## Economics: Agents as Attention Processes vs. HTTP requests
 
 **At 128 concurrent agents sharing ~8.8k tokens of context: 56.6% less total GPU memory, with 96.3% less attention KV allocation.**
 
