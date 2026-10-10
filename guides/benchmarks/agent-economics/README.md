@@ -23,6 +23,8 @@ The native trial is `cuda-capacity-default-2026-10-10/sweep-p256-n128-lloyal-r1`
 
 Lloyal uses the public HDK `withSpine`, `agentPool` and `parallel` APIs. Agents fork the processed common context and receive private tasks. The pool advances inference through the native runtime and releases scoped branches at the end of each round.
 
+The README diagram also shows how this composes beyond the diagnostic: an orchestrator can admit returned results with `extendSpine`, then fork another group from the advanced spine. `chain`, `fanout` and `dag` compose this pattern, and `SpawnSpec.parent` can select another parent branch. Sharing follows each branch’s ancestry and fork point; it is not limited to a single fixed prefix. Fan-in here means returning results and processing them on the spine, not merging private KV histories. The capacity diagnostic reuses its common spine across two lookup rounds without result-driven spine extension; its charts do not measure the additional lifecycle shown.
+
 The comparator uses LangGraph `StateGraph` and `Send`, with `ChatOpenAI` requests to llama-server. Each request carries the common ledger and its private task. The server has one slot per concurrent agent and uses separate KV streams (`--no-kv-unified`). Prefix-cache reuse is enabled. This layout reserves the attention prefix within each simultaneous slot.
 
 The plots quantify these two configurations. HTTP and LangGraph do not intrinsically require this storage layout; a server with another KV layout or sharing policy is a different comparison.

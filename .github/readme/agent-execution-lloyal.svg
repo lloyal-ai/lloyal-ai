@@ -1,42 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="350" viewBox="0 90 640 350" role="img" aria-labelledby="title description">
-  <title id="title">Lloyal: shared context, independent agents</title>
-  <desc id="description">Agents 1, 2, through 128 reference one shared attention prefix. Each keeps a private continuation and recurrent state. The ellipsis represents agents 3 through 127. This schematic illustrates the measured 128-agent condition; shapes are not a memory scale.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="350" viewBox="0 0 640 350" role="img" aria-labelledby="title description">
+  <title id="title">Lloyal: fork from an evolving spine</title>
+  <desc id="description">Agents 1, 2, through 128 inherit resident attention at their fork point and develop private continuations and recurrent state. Fan-in returns results that can extend the spine; later agents fork from its advanced state and fan out again. Dashed arrows carry returned results, not merged private KV histories. The 128-agent fan-out illustrates the measured width; the continued lifecycle illustrates the public API, not an additional measured workload. Shapes are not a memory scale.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+    <marker id="fork" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
       <path d="M0 0 L8 4 L0 8" fill="none" stroke="#FF5A36" stroke-width="1.5"/>
     </marker>
+    <marker id="result" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L8 4 L0 8" fill="none" stroke="#626976" stroke-width="1.5"/>
+    </marker>
   </defs>
-  <rect y="90" width="640" height="350" fill="#FFFFFF"/>
+  <rect width="640" height="350" fill="#FFFFFF"/>
   <g font-family="DejaVu Sans, Arial, sans-serif" fill="#20222A">
-    <rect x="32" y="102" width="576" height="42" rx="6" fill="#FFF3EE" stroke="#FF5A36" stroke-width="2"/>
-    <text x="320" y="129" text-anchor="middle" font-size="20" fill="#AC381F">One shared attention prefix</text>
+    <rect x="32" y="10" width="576" height="34" rx="6" fill="#FFF3EE" stroke="#FF5A36" stroke-width="2"/>
+    <text x="320" y="33" text-anchor="middle" font-size="20" fill="#AC381F">Spine · shared attention at this fork</text>
 
-    <!-- Every agent references the same prefix; the middle population is elided. -->
-    <path d="M46 144 V405" fill="none" stroke="#FF5A36" stroke-width="2"/>
-    <path d="M46 191 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
-    <path d="M46 279 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
-    <path d="M46 405 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Children share their ancestry at the fork point. -->
+    <path d="M46 44 V183" fill="none" stroke="#FF5A36" stroke-width="2"/>
+    <path d="M46 80 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
+    <path d="M46 125 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
+    <path d="M46 183 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
     <g>
-      <rect x="76" y="168" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
-      <path d="M408 168 H602 Q608 168 608 174 V208 Q608 214 602 214 H408 Z" fill="#EBEDF1"/>
-      <path d="M408 168 V214" stroke="#CBD0D9"/>
-      <text x="90" y="198" font-size="18">Agent 1 · private continuation</text>
-      <text x="508" y="198" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+      <rect x="76" y="63" width="474" height="34" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M376 63 H544 Q550 63 550 69 V91 Q550 97 544 97 H376 Z" fill="#EBEDF1"/>
+      <path d="M376 63 V97" stroke="#CBD0D9"/>
+      <text x="88" y="86" font-size="18">Agent 1 · private continuation</text>
+      <text x="463" y="86" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
     </g>
     <g>
-      <rect x="76" y="256" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
-      <path d="M408 256 H602 Q608 256 608 262 V296 Q608 302 602 302 H408 Z" fill="#EBEDF1"/>
-      <path d="M408 256 V302" stroke="#CBD0D9"/>
-      <text x="90" y="286" font-size="18">Agent 2 · private continuation</text>
-      <text x="508" y="286" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+      <rect x="76" y="108" width="474" height="34" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M376 108 H544 Q550 108 550 114 V136 Q550 142 544 142 H376 Z" fill="#EBEDF1"/>
+      <path d="M376 108 V142" stroke="#CBD0D9"/>
+      <text x="88" y="131" font-size="18">Agent 2 · private continuation</text>
+      <text x="463" y="131" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
     </g>
-    <text x="342" y="350" text-anchor="middle" font-size="30" fill="#626976">⋮</text>
     <g>
-      <rect x="76" y="382" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
-      <path d="M408 382 H602 Q608 382 608 388 V422 Q608 428 602 428 H408 Z" fill="#EBEDF1"/>
-      <path d="M408 382 V428" stroke="#CBD0D9"/>
-      <text x="90" y="412" font-size="18">Agent 128 · private continuation</text>
-      <text x="508" y="412" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+      <rect x="76" y="166" width="474" height="34" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M376 166 H544 Q550 166 550 172 V194 Q550 200 544 200 H376 Z" fill="#EBEDF1"/>
+      <path d="M376 166 V200" stroke="#CBD0D9"/>
+      <text x="88" y="189" font-size="18">Agent 128 · private continuation</text>
+      <text x="463" y="189" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
     </g>
+    <text x="312" y="163" text-anchor="middle" font-size="25" fill="#626976">⋮</text>
+
+    <!-- Fan-in admits result text to the spine, not child KV histories. -->
+    <path d="M550 80 H588 V226 H320 V235 M550 125 H588 M550 183 H588" fill="none" stroke="#626976" stroke-width="1.7" stroke-dasharray="5 4"/>
+    <path d="M320 226 V235" fill="none" stroke="#626976" stroke-width="1.7" marker-end="url(#result)"/>
+    <text x="312" y="220" text-anchor="middle" font-size="18" fill="#4D5563">Fan-in · returned results extend the spine</text>
+    <rect x="32" y="237" width="576" height="34" rx="6" fill="#FFF3EE" stroke="#FF5A36" stroke-width="2"/>
+    <text x="320" y="260" text-anchor="middle" font-size="20" fill="#AC381F">Spine · prior attention + processed results</text>
+
+    <!-- The next cohort inherits the advanced spine. -->
+    <text x="32" y="292" font-size="17" fill="#AC381F">Fork again</text>
+    <path d="M320 271 V296 M128 296 H512" fill="none" stroke="#FF5A36" stroke-width="2"/>
+    <path d="M128 296 V304" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
+    <path d="M320 296 V304" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
+    <path d="M512 296 V304" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#fork)"/>
+    <rect x="48" y="306" width="160" height="32" rx="5" fill="#FFFFFF" stroke="#CBD0D9"/>
+    <path d="M172 306 H203 Q208 306 208 311 V333 Q208 338 203 338 H172 Z" fill="#EBEDF1"/>
+    <text x="110" y="328" text-anchor="middle" font-size="18">Agent</text>
+    <rect x="240" y="306" width="160" height="32" rx="5" fill="#FFFFFF" stroke="#CBD0D9"/>
+    <path d="M364 306 H395 Q400 306 400 311 V333 Q400 338 395 338 H364 Z" fill="#EBEDF1"/>
+    <text x="302" y="328" text-anchor="middle" font-size="18">Agent</text>
+    <rect x="432" y="306" width="160" height="32" rx="5" fill="#FFFFFF" stroke="#CBD0D9"/>
+    <path d="M556 306 H587 Q592 306 592 311 V333 Q592 338 587 338 H556 Z" fill="#EBEDF1"/>
+    <text x="494" y="328" text-anchor="middle" font-size="18">…</text>
   </g>
 </svg>

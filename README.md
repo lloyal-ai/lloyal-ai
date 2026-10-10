@@ -60,8 +60,8 @@ npx lloyal-ai new
   <tbody>
     <tr>
       <td width="50%" align="center" valign="top">
-        <p><sub>Resident attention shared by concurrent agents</sub></p>
-        <img src=".github/readme/agent-execution-lloyal.svg" width="100%" alt="Lloyal: agents 1, 2, through 128 reference one shared attention prefix, each keeping a private continuation and recurrent state." />
+        <p><sub>Fork, fan-in, and fork again from an evolving spine</sub></p>
+        <img src=".github/readme/agent-execution-lloyal.svg" width="100%" alt="Lloyal: agents inherit attention at their fork point, return results to advance the spine, then fan out again from its updated state. Each agent keeps a private continuation and recurrent state." />
       </td>
       <td width="50%" align="center" valign="top">
         <p><sub>LangGraph + Llama Server + Prefix Caching enabled</sub></p>
@@ -78,14 +78,14 @@ npx lloyal-ai new
   </tbody>
 </table>
 
-Lloyal agents share processed context and develop independent continuations. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
+Lloyal agents inherit attention at their fork point. Results can extend the spine, ready for the next fan-out. Both paths returned **256/256 correct answers** on the same model and infrastructure, with **prefix-cache enabled** for LangGraph + llama-server.
 
 *Text-only diagnostic · one completed trial per backend at 128 agents.*
 
 <details>
 <summary>Benchmark details</summary>
 
-*Schematic of the measured layouts; not to scale. Gray blocks show the common per-sequence recurrent-state cost. Other server KV layouts can behave differently.*
+*The Lloyal diagram shows a reusable execution pattern: fork, return results, advance the spine, fork again. Fan-in admits results; private KV histories are not merged. The charts measure two lookup rounds from a common spine, without intervening result-driven spine extension. The HTTP diagram shows the measured slot layout. Gray blocks show per-sequence recurrent state; shapes are not a memory scale. Other server KV layouts can behave differently.*
 
 | Control | Configuration |
 | --- | --- |

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="350" viewBox="0 90 640 350" role="img" aria-labelledby="title description">
   <title id="title">HTTP + Prefix Caching</title>
-  <desc id="description">LangGraph plus llama-server with prefix caching enabled. The measured configuration uses separate KV streams: slots 1, 2, through 128 each reserve an attention prefix, private continuation and recurrent state. The ellipsis represents slots 3 through 127. Recurrent-state blocks match the Lloyal panel. Shapes are not a memory scale.</desc>
+  <desc id="description">LangGraph plus llama-server with prefix caching enabled. The measured configuration uses separate KV streams: slots 1, 2, through 128 each reserve an attention prefix, private continuation and recurrent state. The ellipsis represents slots 3 through 127. Gray blocks represent the same per-sequence recurrent-state cost as in the Lloyal panel. Shapes are not a memory scale.</desc>
   <rect y="90" width="640" height="350" fill="#FFFFFF"/>
   <g font-family="DejaVu Sans, Arial, sans-serif" fill="#20222A">
 
