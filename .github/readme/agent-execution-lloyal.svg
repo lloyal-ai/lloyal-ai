@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="460" viewBox="0 0 640 460" role="img" aria-labelledby="title description">
+  <title id="title">Lloyal: shared context, independent agents</title>
+  <desc id="description">Agents 1, 2, through 128 reference one shared attention prefix. Each keeps a private continuation and recurrent state. The ellipsis represents agents 3 through 127. This schematic illustrates the measured 128-agent condition; shapes are not a memory scale.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L8 4 L0 8" fill="none" stroke="#FF5A36" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <rect width="640" height="460" fill="#FFFFFF"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif" fill="#20222A">
+    <rect x="12" y="12" width="616" height="436" rx="12" fill="#FFFFFF" stroke="#D9DCE3"/>
+    <text x="32" y="48" font-size="27" font-weight="700">Lloyal</text>
+    <text x="32" y="75" font-size="16" fill="#626976">Resident attention shared by concurrent agents</text>
+    <rect x="32" y="102" width="576" height="42" rx="6" fill="#FFF3EE" stroke="#FF5A36" stroke-width="2"/>
+    <text x="320" y="129" text-anchor="middle" font-size="20" fill="#AC381F">One shared attention prefix</text>
+
+    <!-- Every agent references the same prefix; the middle population is elided. -->
+    <path d="M46 144 V405" fill="none" stroke="#FF5A36" stroke-width="2"/>
+    <path d="M46 191 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M46 279 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M46 405 H74" fill="none" stroke="#FF5A36" stroke-width="2" marker-end="url(#arrow)"/>
+    <g>
+      <rect x="76" y="168" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M408 168 H602 Q608 168 608 174 V208 Q608 214 602 214 H408 Z" fill="#EBEDF1"/>
+      <path d="M408 168 V214" stroke="#CBD0D9"/>
+      <text x="90" y="198" font-size="18">Agent 1 · private continuation</text>
+      <text x="508" y="198" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+    </g>
+    <g>
+      <rect x="76" y="256" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M408 256 H602 Q608 256 608 262 V296 Q608 302 602 302 H408 Z" fill="#EBEDF1"/>
+      <path d="M408 256 V302" stroke="#CBD0D9"/>
+      <text x="90" y="286" font-size="18">Agent 2 · private continuation</text>
+      <text x="508" y="286" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+    </g>
+    <text x="342" y="350" text-anchor="middle" font-size="30" fill="#626976">⋮</text>
+    <g>
+      <rect x="76" y="382" width="532" height="46" rx="6" fill="#FFFFFF" stroke="#CBD0D9"/>
+      <path d="M408 382 H602 Q608 382 608 388 V422 Q608 428 602 428 H408 Z" fill="#EBEDF1"/>
+      <path d="M408 382 V428" stroke="#CBD0D9"/>
+      <text x="90" y="412" font-size="18">Agent 128 · private continuation</text>
+      <text x="508" y="412" text-anchor="middle" font-size="18" fill="#4D5563">Recurrent state</text>
+    </g>
+  </g>
+</svg>
