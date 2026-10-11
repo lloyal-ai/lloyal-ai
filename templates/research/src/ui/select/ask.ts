@@ -58,6 +58,9 @@ const fieldsOf = (
   }));
 };
 
+/** Whether the host has reported its abilities yet; until then a composer holds their place. */
+export const selectAbilitiesKnown = (app: AppState): boolean => app.session.abilitiesKnown;
+
 /** EVERY installed ability — see the wire notes on abilities:state. */
 export const selectSources = (app: AppState): Source[] =>
   app.session.abilities

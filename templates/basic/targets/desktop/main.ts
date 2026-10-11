@@ -2,8 +2,9 @@
  * The desktop target — your harness in a native window. Electron's main process
  * is a thin host over `@lloyal-labs/desktop`: it owns the window and forks THIS
  * project's own cli bin as the engine (with `RR_BRIDGE=1`, so the cli boot mounts
- * the `ipc` binding instead of the terminal view). Heavy work — native inference,
- * the Effection harness — lives in that forked process, so the UI never blocks.
+ * the `ipc` binding instead of the terminal view), serves the content plane on the
+ * `attachment://` scheme, and owns the window. Heavy work — native inference, the
+ * Effection harness — lives in that forked process, so the UI never blocks.
  *
  * Streaming model (identical to cli/web): the engine emits raw `WorkflowEvent`s
  * and the package forwards each one (+ a monotonic `seq`) to the renderer, which
@@ -14,10 +15,13 @@
 import { app, BrowserWindow } from "electron";
 import { APP } from "../../src/ui/presentation.js";
 import { join } from "node:path";
-import { cannotRun, createEngine, createWindow, placeHarness, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
+import { cannotRun, createEngine, createWindow, placeHarness, prepareMicrophone, registerContentScheme, serveContentScheme, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
+
+// Before app ready, or it is ignored silently.
+registerContentScheme();
 
 let win: BrowserWindow | null = null;
 let engine: Engine<Command, AppState> | null = null;
@@ -39,9 +43,13 @@ app.whenReady().then(() => {
     projectRoot: place.dataRoot,
     initialState,
     reduce,
-    forward: (frame) => safeSend(CHANNELS.event, frame),
+    // A harness that dictates asks for the microphone as its config arrives, before the models load.
+    forward: (frame) => { safeSend(CHANNELS.event, frame); prepareMicrophone(frame.ev, () => win?.webContents ?? null); },
     log: (stream, text) => (stream === "stderr" ? console.error : console.log)(`[engine] ${text}`),
   });
+  // The content plane: a recording the renderer makes travels up this scheme as bytes and comes back as a
+  // reference the harness transcribes. The engine admits it; nothing in the window touches a file.
+  serveContentScheme(place.dataRoot, (bytes, signal) => engine!.ingest(bytes, signal));
   const open = (): void => {
     win = createWindow({
       // electron-vite names the preload bundle after its entry and emits ESM as .mjs.

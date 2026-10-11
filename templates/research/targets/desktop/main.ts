@@ -7,7 +7,7 @@
  */
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
-import { cannotRun, createEngine, createWindow, placeHarness, registerContentScheme, serveContentScheme, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
+import { cannotRun, createEngine, createWindow, placeHarness, prepareMicrophone, registerContentScheme, serveContentScheme, serveEngine, CHANNELS } from "@lloyal-labs/desktop";
 import type { HarnessPlacement } from "@lloyal-labs/desktop";
 import type { Engine } from "@lloyal-labs/desktop";
 import { reduce, initialState, type AppState } from "../../src/ui/state.js";
@@ -36,7 +36,8 @@ function createTheEngine(place: HarnessPlacement): Engine<Command, AppState> {
     projectRoot: place.dataRoot,
     initialState,
     reduce,
-    forward: (frame) => safeSend(CHANNELS.event, frame),
+    // A harness that dictates asks for the microphone as its config arrives, before the models load.
+    forward: (frame) => { safeSend(CHANNELS.event, frame); prepareMicrophone(frame.ev, () => win?.webContents ?? null); },
     log: (stream, text) => (stream === "stderr" ? console.error : console.log)(`[engine] ${text}`),
   });
 }
