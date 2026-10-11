@@ -5,7 +5,7 @@
  * catalog model (rig fetches + digest-verifies, fail-closed, on next run); a
  * `path` is a BYO `.gguf` (trusted by possession). These verbs OWN the write, so
  * the yml is never hand-edited. `<role>` is the trunk `llm` (default) or a
- * service — `reranker`, `vision`, `embedding` — the model a `model.<service>` block names.
+ * service — `reranker`, `vision`, `embedding`, `transcription` — the model a `model.<service>` block names.
  *
  * `models:download` streams a `.gguf` from a URL into `models/<role>/` with a
  * zero-native-dep fetch (same Apache posture as `install.ts`), NEVER buffering
@@ -52,7 +52,7 @@ const USE_USAGE = [
   'lloyal models:use — pin a catalog model by id',
   '',
   'Usage:',
-  '  lloyal models:use <id> [--role llm|reranker|vision|embedding]',
+  '  lloyal models:use <id> [--role llm|reranker|vision|embedding|transcription]',
   '',
   'Writes `model.<role>.id` in harness.yml. The model is fetched + digest-verified',
   'from the catalog on the next run (no API key). For a local .gguf you already',
@@ -100,7 +100,7 @@ const ADD_USAGE = [
   'lloyal models:add — register a local .gguf you already have',
   '',
   'Usage:',
-  '  lloyal models:add <path> [--role llm|reranker|vision|embedding]',
+  '  lloyal models:add <path> [--role llm|reranker|vision|embedding|transcription]',
   '',
   'Writes `model.<role>.path` in harness.yml. The file is trusted by possession',
   '(not catalog-digest-verified). Relative paths resolve from the project root.',
@@ -146,7 +146,7 @@ const DOWNLOAD_USAGE = [
   'lloyal models:download — fetch a .gguf from a URL into models/<role>/',
   '',
   'Usage:',
-  '  lloyal models:download <url> [--role llm|reranker|vision|embedding] [--sha256 <hex>]',
+  '  lloyal models:download <url> [--role llm|reranker|vision|embedding|transcription] [--sha256 <hex>]',
   '',
   'Streams the weight to models/<role>/<file>.gguf and pins it as model.<role>.path.',
   'A URL download is TRUSTED BY SOURCE — pass --sha256 to verify the bytes',

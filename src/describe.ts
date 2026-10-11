@@ -123,9 +123,13 @@ const DESCRIBE_SCRIPT = `(async () => {
       dispose: () => {},
     };
     const vision = { artifact: 'describe-placeholder' };
+    const transcription = {
+      limits: { maxBytes: 0, maxDurationSeconds: 0, maxChannels: 0, maxSampleRate: 0 },
+      *transcribe() { return { text: '', language: '' }; },
+    };
     const cfgStore = { *get() { return synth; }, *set() {}, *clear() {} };
     const ability = await run(function* () {
-      if (Services) yield* Services.set({ reranker, vision, embedding });
+      if (Services) yield* Services.set({ reranker, vision, embedding, transcription });
       if (RerankerCtx) yield* RerankerCtx.set(reranker);
       for (const Ctx of ConfigStoreCtxs) yield* Ctx.set(cfgStore);
       return yield* factory();
