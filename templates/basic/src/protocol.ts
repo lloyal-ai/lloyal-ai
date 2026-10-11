@@ -6,6 +6,7 @@
  *
  * Node-free, so a renderer speaks the protocol without depending on the harness.
  */
+import type { VoiceCommand, VoiceEvent } from "@lloyal-labs/binding";
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent, RunCommand, SettingsEvent } from "@lloyal-labs/rig";
 
@@ -17,6 +18,8 @@ export interface BootFacts {
 }
 
 export type WorkflowEvent =
+  // Dictation, served by rig: capabilities, progress and the transcript. The view reads them; the fold ignores them.
+  | VoiceEvent
   // Forwarded verbatim from the agent pool (spawn / produce / return / …).
   | AgentEvent
   // Dev-gated host samples for the pane's pressure strip (cpu/rss/mem).
@@ -62,6 +65,7 @@ export interface Group {
 /** What a surface can ask for. `stop` is rig's word — one member of `RunCommand`, taken by `Extract` so the
  *  spelling says whose vocabulary it is. Widen to the whole union the day a surface grows a pause button. */
 export type Command =
+  | VoiceCommand
   | { type: "submit_query"; query: string }
   /** Put a kept article on the page, or with null go to the landing. A question deepens whatever is shown.
    *  Ignored while a turn is running: that turn is writing the page. */

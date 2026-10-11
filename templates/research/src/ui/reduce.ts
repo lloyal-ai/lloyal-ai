@@ -62,6 +62,8 @@ const EMPTY_SYNTH: SynthState = { open: false, agentId: null, done: false, stats
  *  compile until it is given a route, so none is dropped by omission. */
 type Scope = 'session' | 'run' | 'own' | 'ignored';
 const SCOPE: Record<WorkflowEvent['type'], Scope> = {
+  'voice:capabilities': 'ignored', 'voice:progress': 'ignored', 'voice:result': 'ignored',
+  'voice:error': 'ignored', 'voice:cancelled': 'ignored',
   'query': 'own', 'doc': 'own', 'doc:active': 'own', 'run:aborted': 'own', 'ui:error': 'own',
   'agent:trace': 'ignored', 'host:resources': 'ignored',   // the dev pane folds these itself
   // session facts
@@ -290,7 +292,7 @@ function sessionReduce(s: SessionState, ev: WorkflowEvent): SessionState {
       return { ...s, participation: { ...s.participation, [ev.name]: ev.included }, toast: null };
 
     case 'abilities:state':
-      return { ...s, abilities: ev.abilities };
+      return { ...s, abilities: ev.abilities, abilitiesKnown: true };
 
     case 'weights:done':
       // The session is READY — weights loaded, the picker can submit.

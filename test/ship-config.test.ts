@@ -74,6 +74,12 @@ describe('the entitlements', () => {
       'com.apple.security.cs.disable-library-validation',
     ]) expect(ENTITLEMENTS).toContain(key);
   });
+
+  it('declare the microphone, so a harness that dictates can ask for it as itself', () => {
+    expect(ENTITLEMENTS).toContain('com.apple.security.device.audio-input');
+    const mac = harnessPackaging({ ...identity, ...unsigned }).mac as { extendInfo: Record<string, string> };
+    expect(mac.extendInfo.NSMicrophoneUsageDescription).toMatch(/dictate into the composer/);
+  });
 });
 
 describe('signingFrom', () => {

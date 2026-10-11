@@ -8,7 +8,7 @@
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@lloyal-labs/rig";
+import { initializeHarness, useExecution, useVoiceCommands, serveCommands, serveDefaults } from "@lloyal-labs/rig";
 import { settings } from "@lloyal-labs/rig/node";
 import { createCorpusAbility } from "@lloyal-labs/corpus-ability";
 import { createWebAbility } from "@lloyal-labs/web-ability";
@@ -43,6 +43,7 @@ export function* harness(ctx: SessionContext, events: EventBus<WorkflowEvent>, c
   // The three parts. `run` owns whatever long work is live, one operation at a time: a new one waits for the
   // last one's cleanup, and Stop can always reach what is running.
   const run = yield* useExecution();
+  const voice = yield* useVoiceCommands({ wire });
   const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
   const brief = briefs({ session, library, run, wire, config: runner.config, research });   // hand it another planner or writer here
   yield* wire.send({ type: "weights:done" });   // ready: the model is resident and the abilities are enabled
@@ -54,7 +55,7 @@ export function* harness(ctx: SessionContext, events: EventBus<WorkflowEvent>, c
   // What happens when a handler throws, a command has no handler, or the run can no longer be trusted is rig's
   // (`serveDefaults`); what this app gives up on a failed handler is its own: the run in flight.
   if (runner.initialQuery) yield* brief.submit(runner.initialQuery);
-  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, abilities, config })],
+  yield* serveCommands<Command>(commands, [brief, library, voice, settings({ runner, registry, store, wire, abilities, config })],
     serveDefaults({ wire, run, abandon: brief.abortRun }));
 }
 

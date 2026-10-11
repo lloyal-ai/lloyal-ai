@@ -170,6 +170,39 @@ button.wiki-brand-name:disabled {
   opacity: 0.55;
   cursor: default;
 }
+/* Dictation: the mic beside Ask in the field's own register, and the waveform where the words will go. */
+.wiki-search .wiki-mic,
+.wiki-search .wiki-mic:hover {
+  padding: 0 10px;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+}
+.wiki-stop {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--text);
+  display: block;
+}
+.wiki-dictation {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 2px 0 0 2px;
+}
 
 /* ── columns: Contents rail + article ───────────────────────────────────── */
 .wiki-cols {

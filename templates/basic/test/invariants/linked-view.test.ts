@@ -30,7 +30,9 @@ const reachedFrom = (entry: string): Set<string> => {
     if (seen.has(file)) return;
     seen.add(file);
     for (const spec of valueImports(fs.readFileSync(file, "utf8"))) {
-      if (spec.startsWith("@lloyal-labs/")) reached.add(spec);
+      // A `?url` import is an asset Vite serves by address, never a module the page evaluates, so it
+      // has no named exports to lose and is not a pre-bundling concern.
+      if (spec.startsWith("@lloyal-labs/") && !spec.includes("?")) reached.add(spec);
       else if (spec.startsWith(".")) { const next = fileOf(file, spec); if (next) visit(next); }
     }
   };

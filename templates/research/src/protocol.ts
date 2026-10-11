@@ -6,6 +6,7 @@
  * rig owns two vocabularies that sit beside the brief's own: the controls of a live run (`RunCommand`) and
  * settings (`SettingsCommand`, `SettingsEvent`). Node-free, so a view imports this without importing the engine.
  */
+import type { VoiceCommand, VoiceEvent } from "@lloyal-labs/binding";
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
@@ -105,7 +106,7 @@ export type LibraryCommand =
   /** Remove a brief's whole folder. Confined to the library. */
   | { type: "library_delete"; path: string };
 
-export type Command = BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
+export type Command = VoiceCommand | BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
 
 // ── Events ───────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ export type LibraryEvent =
   /** The corpus ability indexed the library (at boot, and after every settle). */
   | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
 
-export type WorkflowEvent = AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+export type WorkflowEvent = VoiceEvent | AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
 
 // ── The small builders ───────────────────────────────────────────
 
