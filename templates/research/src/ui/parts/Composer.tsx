@@ -65,7 +65,7 @@ const CSS = `
   .cmp-spin { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box;
     border: 1.5px solid ${color.line}; border-top-color: ${color.dim}; animation: cmp-spin .9s linear infinite; }
   @keyframes cmp-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .cmp-spin { animation: fn-pulse 2.4s ease-in-out infinite; } }
+  @media (prefers-reduced-motion: reduce) { .cmp-spin { animation: none; } }
   .cmp-pill { transition: background .12s ease, color .12s ease; }
   .cmp-pill:hover { background: ${color.card}; color: ${color.ink}; }
   .cmp-menu-main { transition: background .12s ease; }
@@ -218,7 +218,10 @@ export function Composer({ shape, placeholder }: {
     if (!row || !need) return;
     const fit = (): void => {
       const [pills, picker] = Array.from(need.children) as HTMLElement[];
-      setCollapsed(pills.offsetWidth + 10 + (picker?.offsetWidth ?? 0) > row.clientWidth);
+      // The row's gap sits between each pair of its children: pills and the spacer, then the spacer and
+      // the picker when there is one.
+      const pickerWidth = picker?.offsetWidth ?? 0;
+      setCollapsed(pills.offsetWidth + (pickerWidth ? pickerWidth + 20 : 10) > row.clientWidth);
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -230,7 +233,7 @@ export function Composer({ shape, placeholder }: {
   /** Arrow keys walk the rows; Enter and Space act on the row under focus, as on any menu. */
   const moveInMenu = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
-    const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'));
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"], [role="menuitem"]'));
     const at = items.indexOf(document.activeElement as HTMLElement);
     const next = e.key === "ArrowDown" ? items[(at + 1) % items.length]
       : e.key === "ArrowUp" ? items[(at - 1 + items.length) % items.length]
@@ -252,7 +255,8 @@ export function Composer({ shape, placeholder }: {
     const main = (
       <button
         type="button"
-        role={inMenu ? "menuitemcheckbox" : undefined}
+        // A blocked ability is not a toggle: its row opens its settings, so it is a plain menu item.
+        role={inMenu ? (blocked ? "menuitem" : "menuitemcheckbox") : undefined}
         className={inMenu ? "cmp-menu-main" : undefined}
         style={{ ...(inMenu ? S.menuMain : S.libMain), ...(blocked ? S.libBlocked : null) }}
         aria-pressed={!inMenu && !blocked ? l.included : undefined}
