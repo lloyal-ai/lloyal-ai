@@ -15,7 +15,7 @@ import { basename } from "node:path";
 import type { Operation, Signal } from "effection";
 import type { SessionContext } from "@lloyal-labs/sdk";
 import type { EventBus } from "@lloyal-labs/binding";
-import { initializeHarness, serveCommands, serveDefaults, useExecution } from "@lloyal-labs/rig";
+import { initializeHarness, serveCommands, serveDefaults, useExecution, useVoiceCommands } from "@lloyal-labs/rig";
 import { config } from "./config.js";
 import { createWikipediaAbility } from "@lloyal-labs/wikipedia-ability";
 import { articles } from "./harness/article.js";
@@ -85,6 +85,8 @@ export function* harness(
   // reader can do; it hands its work to `run` and never waits on the model, which is why the loop below
   // keeps dispatching while an answer is still being written.
   const run = yield* useExecution();
+  // Dictation: its own lifetime beside the run, never a turn. Served only when `model.transcription` is named.
+  const voice = yield* useVoiceCommands({ wire });
   const article = articles({
     session,
     run,
@@ -114,7 +116,7 @@ export function* harness(
   // a handler throws, a command has no handler, or the run can no longer be trusted is rig's
   // (`serveDefaults`); what this app gives up on a failed handler is its own — the turn in flight.
   if (runner.initialQuery) yield* article.submit(runner.initialQuery);
-  yield* serveCommands<Command>(commands, [article], serveDefaults({ wire, run, abandon: article.abortRun }));
+  yield* serveCommands<Command>(commands, [article, voice], serveDefaults({ wire, run, abandon: article.abortRun }));
 }
 
 /** One question, no reader. `submit` returns once the run is accepted, so wait for the run itself as well:

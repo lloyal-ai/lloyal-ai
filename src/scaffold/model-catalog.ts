@@ -18,7 +18,7 @@
  * (packages/rig/src/services.ts; `test/platform-mirror.test.ts` holds the two equal), vendored for the same
  * reason the catalog is: a name an ability requires that is not here is not a service the platform provides.
  */
-export const SERVICES = ['reranker', 'vision', 'embedding'] as const;
+export const SERVICES = ['reranker', 'vision', 'embedding', 'transcription'] as const;
 export type Service = (typeof SERVICES)[number];
 
 /** The model roles a harness provisions: the trunk llm, and every service. */
@@ -66,6 +66,11 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
     id: 'qwen3-reranker-0.6b-q8',
     role: 'reranker',
     label: 'Qwen3 Reranker 0.6B · Q8_0',
+  },
+  {
+    id: 'qwen3-asr-0.6b-q8',
+    role: 'transcription',
+    label: 'Qwen3-ASR 0.6B · Q8_0',
   },
   {
     id: 'nomic-embed-text-v1.5-q4',

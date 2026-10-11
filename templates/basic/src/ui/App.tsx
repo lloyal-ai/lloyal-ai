@@ -39,7 +39,8 @@ import {
 import { extractStreamingReport, hostOf } from "@lloyal-labs/ui/fold";
 import { RIG_REPORT } from "@lloyal-labs/rig";
 import { headingsOf } from "@lloyal-labs/ui/prose";
-import { useAvailability, useHarness, useProjection, useRecover, useSend } from "@lloyal-labs/ui";
+import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
+import { MicGlyph, RecordingWaveform, useAvailability, useHarness, useProjection, useRecover, useSend, useVoiceInput } from "@lloyal-labs/ui";
 import type { Availability } from "@lloyal-labs/binding";
 import type { Command, DocId, WorkflowEvent } from "../protocol.js";
 import { Markdown, StreamingMarkdown } from "./Markdown.js";
@@ -219,6 +220,35 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
   const { bridge } = useHarness<WorkflowEvent, Command, AppState>();
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("");
+  /** Dictation lives in the search row: the mic beside Ask, and while it records the field gives way to the
+   *  waveform. A transcript lands as editable text at the cursor and the field takes focus so the next
+   *  keystroke edits or sends it; nothing is submitted on the reader's behalf. */
+  const field = useRef<HTMLInputElement>(null);
+  const dictated = useRef(false);
+  const voice = useVoiceInput({
+    workletUrl: pcmWorkletUrl,
+    draft: query,
+    onDraft: (text) => { dictated.current = true; setQuery(text); },
+    selection: () => ({
+      start: field.current?.selectionStart ?? query.length,
+      end: field.current?.selectionEnd ?? query.length,
+    }),
+  });
+  useEffect(() => {
+    if (voice.active || !dictated.current) return;
+    dictated.current = false;
+    field.current?.focus();
+  }, [query, voice.active]);
+  // Escape abandons a recording from anywhere in the window: the field that would take the key is replaced
+  // by the waveform while it records.
+  const cancelVoice = useRef(voice.cancel);
+  cancelVoice.current = voice.cancel;
+  useEffect(() => {
+    if (!voice.active) return;
+    const onKey = (e: KeyboardEvent): void => { if (e.key === "Escape") cancelVoice.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [voice.active]);
 
   const submit = (): void => {
     const q = query.trim();
@@ -298,13 +328,53 @@ export function HarnessApp({ surface }: { surface: string }): ReactElement {
               submit();
             }}
           >
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Wikipedia…"
-              disabled={working}
-            />
-            <button type="submit" disabled={working || !query.trim()}>
+            {voice.active ? (
+              <div className="wiki-dictation">
+                <RecordingWaveform levels={voice.levels} elapsed={voice.elapsed} recording={voice.phase === "recording"} />
+                {voice.phase !== "recording" && (
+                  <span role="status">{voice.phase === "requesting" ? "Allow microphone access" : "Transcribing…"}</span>
+                )}
+              </div>
+            ) : (
+              <input
+                ref={field}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                // A failed recording explains itself where the words would have gone; the first keystroke replaces it.
+                placeholder={voice.error ?? "Search Wikipedia…"}
+                disabled={working}
+              />
+            )}
+            {voice.pending && (
+              <button type="button" className="wiki-mic" onClick={voice.insertPending}>
+                Insert transcript
+              </button>
+            )}
+            {/* The mic has its seat from first paint, off until the host says dictation exists; only a harness
+                with no transcription at all goes without it. While a recording is in hand, stop takes the seat,
+                and cancel while the microphone is being asked for or the words are on their way. */}
+            {voice.enabled !== false &&
+              (voice.phase === "recording" ? (
+                <button type="button" className="wiki-mic" title="Stop recording" aria-label="Stop recording" onClick={voice.stop}>
+                  <span className="wiki-stop" aria-hidden="true" />
+                </button>
+              ) : voice.active ? (
+                <button type="button" className="wiki-mic" title="Cancel dictation (Esc)" aria-label="Cancel dictation" onClick={voice.cancel}>
+                  ×
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="wiki-mic"
+                  title={voice.enabled ? "Dictate" : "Dictation is starting"}
+                  aria-label="Record voice"
+                  disabled={!voice.available || working}
+                  onClick={voice.start}
+                >
+                  <MicGlyph size={16} />
+                </button>
+              ))}
+            <button type="submit" disabled={working || voice.active || !query.trim()}>
               {working ? "Reading…" : "Ask"}
             </button>
           </form>

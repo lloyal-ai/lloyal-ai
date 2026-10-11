@@ -8,6 +8,8 @@ model:
   reranker:
     id: qwen3-reranker-0.6b-q8
   vision: {}
+  transcription:
+    id: qwen3-asr-0.6b-q8
 
 sources:
   outputDir: reports

@@ -97,6 +97,8 @@ export interface SessionState {
   participation: Record<string, boolean>;
   /** Installed Abilities surfaced into the renderer. */
   abilities: AbilityDescriptor[];
+  /** The host has said which abilities exist; before this the list is unknown, not empty. */
+  abilitiesKnown: boolean;
 }
 
 /** One document, whole: its identity, its content, and its run machinery.
@@ -178,6 +180,7 @@ export const initialSession: SessionState = {
   librarySearch: null,
   participation: {},
   abilities: [],
+  abilitiesKnown: false,
 };
 
 export const initialState: AppState = {
