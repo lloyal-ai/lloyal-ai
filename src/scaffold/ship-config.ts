@@ -17,11 +17,12 @@
 
 import { execFileSync } from 'node:child_process';
 
-/** The three hardened-runtime exemptions a harness needs, and nothing else.
+/** The hardened-runtime exemptions a harness needs, and nothing else.
  *
  *  JIT and unsigned executable memory are the model itself — V8 and the inference runtime both write
  *  and execute. Library validation goes off so the addon's sibling dylibs, which carry a different
- *  signature or none, can load at all. Without these an app notarizes and then dies on launch. */
+ *  signature or none, can load at all. Without these an app notarizes and then dies on launch.
+ *  Audio input lets a signed app ask for the microphone; without it dictation is refused silently. */
 export const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -32,9 +33,14 @@ export const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
   <true/>
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
 </dict>
 </plist>
 `;
+
+/** What macOS shows when the app first asks for the microphone; required, or the request is refused. */
+export const MICROPHONE_USAGE = 'The microphone is used to dictate into the composer. Audio stays on this machine unless the harness is served elsewhere.';
 
 /** Whether this machine can sign, and whether it can also notarize. */
 export interface Signing {
@@ -341,6 +347,8 @@ export function harnessPackaging(input: PackagingInput): Record<string, unknown>
       entitlementsInherit: input.entitlements,
       gatekeeperAssess: false,
       notarize: input.notarize,
+      // The usage string macOS shows on the first microphone request; a bundle without it is refused outright.
+      extendInfo: { NSMicrophoneUsageDescription: MICROPHONE_USAGE },
     },
 
     dmg: {
