@@ -224,8 +224,11 @@ export function Composer({ shape, placeholder }: {
       setCollapsed(pills.offsetWidth + (pickerWidth ? pickerWidth + 20 : 10) > row.clientWidth);
     };
     fit();
+    // Both sides of the comparison can move: the row as the window does, the measurement as a font or
+    // an icon finishes loading.
     const observer = new ResizeObserver(fit);
     observer.observe(row);
+    observer.observe(need);
     return () => observer.disconnect();
   }, [sources, abilitiesKnown, willSkipPlanner, live, voice.active]);
   // The menu belongs to the chip: when the chip goes, so does the menu.
@@ -295,6 +298,7 @@ export function Composer({ shape, placeholder }: {
     const gear = l.fields.length > 0 && (
       <button
         type="button"
+        role={inMenu ? "menuitem" : undefined}
         className="cmp-icon" style={inMenu ? S.menuGear : S.libGear}
         title={`${l.title} settings`}
         aria-label={`${l.title} settings`}

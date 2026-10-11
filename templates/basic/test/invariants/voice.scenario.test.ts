@@ -44,3 +44,14 @@ test("dictation returns editable text without starting a turn", async () => {
   assert.equal(warmDeltas(run.trace).length, 0);
   assert.equal(reduce(initialState, { type: "voice:result", requestId: "draft", result }), initialState);
 });
+
+test("without a transcription block the host says so, and nothing is provisioned or offered", async () => {
+  const run = await runHarness({
+    script: [
+      { send: { type: "voice:describe" } },
+      { on: ev => ev.type === "voice:capabilities" },
+    ],
+  });
+  assert.deepEqual(run.events.find(ev => ev.type === "voice:capabilities"), { type: "voice:capabilities", capabilities: { enabled: false } });
+  assert.equal(run.events.some(ev => ev.type === "query"), false);
+});
