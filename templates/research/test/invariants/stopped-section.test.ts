@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyRoster, foldAgents } from "@lloyal-labs/ui/fold";
 import type { AgentEvent, AgentRoster, AgentRuntime } from "@lloyal-labs/ui/fold";
+import { weaveSourcesIntoResult } from "@lloyal-labs/rig";
 import { proseOf, verbOf } from "../../src/ui/select.js";
 
 const REPORTS = { tool: "report", field: "result" };
@@ -46,7 +47,7 @@ test("kept text equal to the draft: a stop with nothing lost shows the note and 
   assert.deepEqual(verbOf(a, REPORTS), { kind: "kept", text: "reached the report length — kept to here" });
 });
 
-test("a kept text that is not a prefix of the draft: the report stands, the note says the draft was replaced", () => {
+test("a kept text that is not a prefix of the draft: the report stands, the note claims only what is certain", () => {
   const a = fold([
     spawn, produce("x</think>", 1), produce(envelope(STREAMED), 40),
     { type: "agent:done", agentId: 1, reason: "pressure_critical" },
@@ -54,7 +55,20 @@ test("a kept text that is not a prefix of the draft: the report stands, the note
   ]);
   const section = proseOf(a, REPORTS);
   assert.equal(section.prose, "A different write-up");
-  assert.deepEqual(section.stopped, { note: "ran out of room — an earlier draft was replaced", tail: null });
+  assert.deepEqual(section.stopped, { note: "ran out of room — kept what it had", tail: null });
+});
+
+test("a salvage whose whole call had streamed is woven with its citations: the draft kept, nothing lost, no replacement claimed", () => {
+  const finding = "The finding is supported by https://example.org.";
+  const sources = [{ title: "Source", url: "https://example.org" }];
+  const a = fold([
+    spawn, produce("x</think>", 1), produce(envelope(finding), 40),
+    { type: "agent:done", agentId: 1, reason: "pressure_critical" },
+    { type: "agent:recovered", agentId: 1, result: weaveSourcesIntoResult(finding, sources) },
+  ]);
+  const section = proseOf(a, REPORTS);
+  assert.ok(section.prose?.startsWith("The finding is supported by [Source](https://example.org)"));
+  assert.deepEqual(section.stopped, { note: "ran out of room — kept what it had", tail: null });
 });
 
 test("a stopped report whose write-up has not landed: the draft is frozen, the recovery streams beneath it", () => {

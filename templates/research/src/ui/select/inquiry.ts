@@ -168,8 +168,10 @@ export const proseOf = (a: AgentRuntime, reports: Reports): SectionProse => {
   if (report?.kind === "report") {
     const prose = reportBody(report.body, reports.field);
     if (draft === null) return { prose, streaming: false, draft: null, stopped: null };
-    // What was kept is a prefix of what streamed (a salvage); the rest is shown, not dropped on the quiet.
-    if (!draft.startsWith(prose)) return { prose, streaming: false, draft: null, stopped: { note: `${cause} — an earlier draft was replaced`, tail: null } };
+    // What was kept is a prefix of what streamed (a salvage); the rest is shown, not dropped on the quiet. A kept
+    // text that is no prefix may be the draft woven with its citations, or a write-up that replaced it; the rule
+    // cannot tell them apart and says only what is certain.
+    if (!draft.startsWith(prose)) return { prose, streaming: false, draft: null, stopped: { note: `${cause} — kept what it had`, tail: null } };
     const beyond = draft.slice(prose.length);
     return { prose, streaming: false, draft: null, stopped: { note: `${cause} — kept to here`, tail: beyond.length > 0 ? beyond : null } };
   }
