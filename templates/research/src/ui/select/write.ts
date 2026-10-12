@@ -2,7 +2,7 @@
  *  the settling pass that follows them. */
 import { type AppState } from "../state.js";
 import { type Answer, activeDoc } from "./canvas.js";
-import { type Inquiry, currentAttempts, handingIn, proseOf, verbOf } from "./inquiry.js";
+import { type Inquiry, type Stopped, currentAttempts, handingIn, proseOf, verbOf } from "./inquiry.js";
 import { settlingOf } from "./settle.js";
 
 export interface Section {
@@ -20,6 +20,10 @@ export interface Section {
    *  it writes, settled when it lands. Its citations are already inline. */
   prose: string | null;
   streaming: boolean;
+  /** A report the inquiry was writing when it was stopped: frozen above the rule while the write-up streams. */
+  draft: string | null;
+  /** The stop, shown where the text is: the rule's note, and what streamed beyond the kept text. */
+  stopped: Stopped | null;
 }
 
 /** The section head IS the task, whole — the reader always sees exactly
@@ -32,7 +36,7 @@ export const selectSections = (app: AppState): Section[] => {
   const reports = handingIn(doc);
   return (doc.plan?.tasks ?? []).map((task, index) => {
     const a = attempts.get(index) ?? null;
-    const { prose, streaming } = a ? proseOf(a, reports) : { prose: null, streaming: false };
+    const { prose, streaming, draft, stopped } = a ? proseOf(a, reports) : { prose: null, streaming: false, draft: null, stopped: null };
     return {
       index,
       title: sectionTitle(task.description),
@@ -49,6 +53,8 @@ export const selectSections = (app: AppState): Section[] => {
       },
       prose,
       streaming,
+      draft,
+      stopped,
     };
   });
 };

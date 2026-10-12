@@ -604,7 +604,6 @@ export function Composer({ shape, placeholder }: {
           />
         )}
         {pending && <span className="fn-lamp" style={S.sentDot} />}
-        {live && <Clock />}
         {voice.pending && (
           <button type="button" className="cmp-pill" style={S.insertTranscript} onClick={voice.insertPending}>
             Insert transcript
@@ -699,6 +698,10 @@ export function Composer({ shape, placeholder }: {
           <path d="M5 12l7-7 7 7" />
         </svg>
       </button>
+      {/* The clock shares the send button's right edge, on the question's line: the trailing
+          column's top, where nothing else sits. While a recording holds the card the controls
+          centre on one line and the clock steps aside. */}
+      {live && !voice.active && <Clock />}
       </div>
     </div>
   );
@@ -774,7 +777,7 @@ const S: Record<string, CSSProperties> = {
     // Send sits beside the two rows and bottom-aligns with them, so it rides
     // the control row's line — the same baseline as the ability pills — rather
     // than floating in the card's vertical middle.
-    display: "flex", alignItems: "flex-end", gap: 12,
+    display: "flex", alignItems: "flex-end", gap: 12, position: "relative",
   },
   /** Recording: the trailing controls centre on the single line instead of
    *  riding the control row's baseline. */
@@ -902,8 +905,11 @@ const S: Record<string, CSSProperties> = {
   },
   stopMark: { width: 11, height: 11, borderRadius: 2.5, background: "currentColor", display: "block" },
   sentDot: { width: 7, height: 7, borderRadius: "50%", background: color.ember, flex: "none" },
+  /** Absolute in the card: its right edge is the send button's (the card's right padding),
+   *  its line the question row's (the card's top padding, the row's height). */
   clock: {
-    display: "inline-flex", alignItems: "center", gap: 5, flex: "none",
+    position: "absolute", right: 13, top: 12, height: 38,
+    display: "inline-flex", alignItems: "center", gap: 5,
     font: `500 12px ${font.mono}`, color: color.dim, fontVariantNumeric: "tabular-nums",
   },
   depths: {
