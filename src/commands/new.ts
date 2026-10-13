@@ -84,8 +84,8 @@ const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
  * `--skip-abilities` escape hatch, never on `--skip-install` or on being a TTY.
  */
 export const DEFAULT_ABILITIES: Record<TemplateKind, string[]> = {
-  basic: ['lloyal/wikipedia@2.1.0'],
-  research: ['lloyal/corpus@2.1.0', 'lloyal/web@2.1.0', 'lloyal/documents@0.2.0'],
+  basic: ['lloyal/wikipedia@3.0.0'],
+  research: ['lloyal/corpus@3.0.0', 'lloyal/web@3.0.0', 'lloyal/documents@0.3.0'],
 };
 
 interface ScaffoldPlan {

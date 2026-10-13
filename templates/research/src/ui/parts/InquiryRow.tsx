@@ -108,6 +108,7 @@ const STEP_STYLE: Record<WorkStep["kind"], CSSProperties> = {
   call: { color: color.dim, fontWeight: 500 },
   result: { color: color.dim, fontWeight: 500 },
   tokens: { color: color.dim, fontFamily: font.mono, fontSize: 11.5 },
+  stopped: { color: color.dim, fontStyle: "italic" },
 };
 
 const S: Record<string, CSSProperties> = {

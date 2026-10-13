@@ -78,15 +78,36 @@ export const currentAttempts = (doc: DocState): Map<number, AgentRuntime> => {
   return byTask;
 };
 
-/** Failure, in the librarian's voice. Unlisted reasons are mechanical
+/** Failure, in the librarian's voice: the inquiry ended with nothing kept. Unlisted reasons are mechanical
  *  (decode errors) — the dev pane keeps the detail. */
 const FAIL_TEXT: Record<string, string> = {
   user_cancel: "dropped — left out of the brief",
-  time_exceeded: "out of time — kept what it had",
-  wind_down: "closed early — kept what it had",
 };
 const failText = (reason: string): string =>
   FAIL_TEXT[reason] ?? "couldn't finish this line of inquiry";
+
+/** Why a span ended before the inquiry finished on its own, in the reader's words — the drop reason
+ *  `agent:done` carried. "Failed", to the reader, is not getting a normal round; what was kept is still kept. */
+const STOP_TEXT: Record<string, string> = {
+  pressure_critical: "ran out of room",
+  pressure_settle_reject: "ran out of room",
+  settle_stall_break: "ran out of room",
+  pressure_softcut: "ran out of room",
+  policy_exit: "out of time",
+  wind_down: "closed early",
+  terminal_cap: "reached the report length",
+  maxTurns: "used its turns",
+};
+const stopText = (reason: string | null): string =>
+  (reason !== null ? STOP_TEXT[reason] : undefined) ?? "stopped before it finished";
+
+/** The span ended early: a reason was given, or a draft was left behind. */
+const stoppedEarly = (a: AgentRuntime): boolean => a.stopReason !== null || a.draft !== null;
+
+/** The report the draft held, if the model was writing one when it was stopped — read the way the live stream
+ *  is read, so the draft and what was kept are compared like for like. A call it was mid-way through is no draft. */
+const draftProseOf = (a: AgentRuntime, reports: Reports): string | null =>
+  a.draft === null || reports.field === null ? null : extractStreamingReport(a.draft, { tool: reports.tool, field: reports.field });
 
 /** An agent's timeline; an agent tracked by its numbers only has none, and reads as one with nothing in it. */
 export const timelineOf = (a: AgentRuntime): readonly TimelineItem[] => a.timeline ?? [];
@@ -95,9 +116,10 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
   if (a.failReason) return { kind: "failed", text: failText(a.failReason) };
   if (a.phase === "done") {
     const kept = timelineOf(a).some((t) => t.kind === "report");
-    return kept
-      ? { kind: "settled", text: "wrote its section" }
-      : { kind: "kept", text: "kept what it had" };
+    if (!kept) return { kind: "kept", text: "kept what it had" };
+    if (!stoppedEarly(a)) return { kind: "settled", text: "wrote its section" };
+    const held = a.stopReason === "terminal_cap" ? "kept to here" : "kept what it had";
+    return { kind: "kept", text: `${stopText(a.stopReason)} — ${held}` };
   }
   if (a.retry) {
     return {
@@ -107,7 +129,8 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
     };
   }
   if (a.recovering || liveProse(a, reports) !== null) {
-    return { kind: "writing", text: "settling the section into the brief" };
+    const writing = "settling the section into the brief";
+    return { kind: "writing", text: stoppedEarly(a) ? `${stopText(a.stopReason)} — ${writing}` : writing };
   }
   const lastCall = [...timelineOf(a)].reverse().find((t) => t.kind === "tool_call");
   if (lastCall?.kind === "tool_call" && a.pendingToolCallId === lastCall.id) {
@@ -120,17 +143,58 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
   return { kind: "thinking", text: "thinking it through" };
 };
 
-export const proseOf = (a: AgentRuntime, reports: Reports): { prose: string | null; streaming: boolean } => {
+/** A stop shown where the text is: the note for the rule, and the words beyond what was kept, if any. */
+export interface Stopped {
+  note: string;
+  /** What streamed past the kept text — shown as plain text, never as markdown, so a cut inside a table or a
+   *  fence cannot leak into what follows. Null when nothing was lost, or when the kept text is no prefix. */
+  tail: string | null;
+}
+
+export interface SectionProse {
+  prose: string | null;
+  streaming: boolean;
+  /** A report the inquiry was writing when it was stopped, frozen above the rule while its write-up streams. */
+  draft: string | null;
+  stopped: Stopped | null;
+}
+
+const NOTHING: SectionProse = { prose: null, streaming: false, draft: null, stopped: null };
+
+export const proseOf = (a: AgentRuntime, reports: Reports): SectionProse => {
   const report = [...timelineOf(a)].reverse().find((t) => t.kind === "report");
-  if (report?.kind === "report") return { prose: reportBody(report.body, reports.field), streaming: false };
+  const draft = draftProseOf(a, reports);
+  const cause = stopText(a.stopReason);
+  if (report?.kind === "report") {
+    const prose = reportBody(report.body, reports.field);
+    if (draft === null) return { prose, streaming: false, draft: null, stopped: null };
+    // What was kept is a prefix of what streamed (a salvage); the rest is shown, not dropped on the quiet. A kept
+    // text that is no prefix may be the draft woven with its citations, or a write-up that replaced it; the rule
+    // cannot tell them apart and says only what is certain.
+    if (!draft.startsWith(prose)) return { prose, streaming: false, draft: null, stopped: { note: `${cause} — kept what it had`, tail: null } };
+    const beyond = draft.slice(prose.length);
+    return { prose, streaming: false, draft: null, stopped: { note: `${cause} — kept to here`, tail: beyond.length > 0 ? beyond : null } };
+  }
+  if (a.failReason !== null) {
+    return draft === null ? NOTHING : { prose: null, streaming: false, draft: null, stopped: { note: `${cause} — nothing could be kept`, tail: draft } };
+  }
   const live = a.phase !== "done" ? liveProse(a, reports) : null;
-  return live ? { prose: live, streaming: true } : { prose: null, streaming: false };
+  return {
+    prose: live,
+    streaming: live !== null,
+    draft,
+    stopped: draft === null ? null : { note: `${cause} — writing up what it found`, tail: null },
+  };
 };
+
+/** The one line the disclosed stream shows for an early stop. */
+export const stopStep = (a: AgentRuntime): string | null =>
+  stoppedEarly(a) ? `stopped — ${stopText(a.stopReason)}` : null;
 
 /** One step of an inquiry's disclosed stream. `tokens` is the raw tail of
  *  the move being written — visible progress even at a few tokens a second. */
 export interface WorkStep {
-  kind: "thought" | "call" | "result" | "tokens";
+  kind: "thought" | "call" | "result" | "tokens" | "stopped";
   text: string;
   live: boolean;
 }
@@ -156,6 +220,8 @@ export const selectWorkFor = (id: number): ((app: AppState) => WorkStep[]) => {
     const steps = timelineOf(a)
       .map(stepOf)
       .filter((s): s is WorkStep => s !== null);
+    const stop = stopStep(a);
+    if (stop !== null) steps.push({ kind: "stopped", text: stop, live: false });
     if (a.phase !== "done" && a.contentBuffer && liveProse(a, handingIn(activeDoc(app))) === null) {
       steps.push({ kind: "tokens", text: a.contentBuffer, live: true });
     }

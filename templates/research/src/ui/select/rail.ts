@@ -31,6 +31,11 @@ export const selectRail = (app: AppState): OutlineEntry[] => {
   if (moment === "write") {
     return selectSections(app).flatMap((s): OutlineEntry[] => [
       { anchor: `s${s.index}`, text: s.title, level: 0, index: s.index },
+      // A stopped report's draft stands above the write-up streaming beneath it; the document gives its
+      // headings ids under the section's `d` prefix, and the rail lists them first, as the page reads.
+      ...(s.draft ? anchorsOf(s.draft, `s${s.index}d`) : []).map((h): OutlineEntry => ({
+        anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: s.index,
+      })),
       ...(s.prose ? anchorsOf(s.prose, `s${s.index}`) : []).map((h): OutlineEntry => ({
         anchor: h.anchor, text: h.text, level: railLevel(h.depth), index: s.index,
       })),
