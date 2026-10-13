@@ -1,7 +1,7 @@
 {
   "name": "@__PUBLISHER__/__NAME__-ability",
   "version": "1.0.0",
-  "description": "HDK ability \u2014 __NAME__ research.",
+  "description": "HDK ability — __NAME__ research.",
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,16 +20,16 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "echo \"no tests yet \u2014 add them under test/ and switch this to: node --test --import tsx test/\" && exit 0"
+    "test": "echo \"no tests yet — add them under test/ and switch this to: node --test --import tsx test/\" && exit 0"
   },
   "peerDependencies": {
-    "@lloyal-labs/lloyal-agents": "^6.0.0",
-    "@lloyal-labs/rig": "^5.6.0",
+    "@lloyal-labs/lloyal-agents": "^7.0.0",
+    "@lloyal-labs/rig": "^6.0.0",
     "effection": "^4.0.2"
   },
   "devDependencies": {
-    "@lloyal-labs/lloyal-agents": "^6.0.0",
-    "@lloyal-labs/rig": "^5.6.0",
+    "@lloyal-labs/lloyal-agents": "^7.0.0",
+    "@lloyal-labs/rig": "^6.0.0",
     "@types/node": "^25.3.0",
     "effection": "^4.0.2",
     "tsx": "^4.21.0",
