@@ -434,7 +434,8 @@ export function Composer({ shape, placeholder }: {
     // Enter is the only way to submit, so re-entry is one keypress away while
     // an upload is in flight — and a second submit would upload the same files
     // again and send a second query.
-    if (!text || uploading || pending !== null) return;
+    // While a run is live the button stops it; a question sent then would replace the run without a word.
+    if (!text || uploading || pending !== null || live) return;
     if (clarifying) {
       send({ type: "submit_clarification", revision, answer: text });
       setPending({ text, docId: activeDocId, clarify: true });
@@ -692,12 +693,21 @@ export function Composer({ shape, placeholder }: {
           <MicGlyph size={18} />
         </button>
       ))}
-      <button type="button" className="cmp-send" style={S.send} onClick={submit} aria-label="Send" disabled={uploading || pending !== null || voice.active}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 19V5" />
-          <path d="M5 12l7-7 7 7" />
-        </svg>
-      </button>
+      {live ? (
+        <button type="button" className="cmp-send" style={S.send} onClick={() => send({ type: "stop" })}
+          aria-label="Stop" title="Stop the brief — what it wrote stays on the page">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" />
+          </svg>
+        </button>
+      ) : (
+        <button type="button" className="cmp-send" style={S.send} onClick={submit} aria-label="Send" disabled={uploading || pending !== null || voice.active}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 19V5" />
+            <path d="M5 12l7-7 7 7" />
+          </svg>
+        </button>
+      )}
       {/* The clock shares the send button's right edge, on the question's line: the trailing
           column's top, where nothing else sits. While a recording holds the card the controls
           centre on one line and the clock steps aside. */}

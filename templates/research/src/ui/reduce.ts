@@ -106,7 +106,7 @@ export function emptyDoc(): DocState {
     reconAgentIds: [],
     researchAgentCount: 0, reports: null,
     synth: EMPTY_SYNTH, answer: null, exchanges: [], ask: null, askAttachments: [],
-    paused: false, closing: false, closedEarly: false,
+    paused: false, closing: false, closedEarly: false, stopped: false,
     pipelineElapsedMs: 0, pipelineResumedAt: null,
   };
 }
@@ -161,11 +161,50 @@ function settledDoc(ev: Extract<WorkflowEvent, { type: 'doc' }>): DocState {
 /** The run stopped short of complete. A doc with a settled answer stands
  *  (its in-flight ask clears); a stillborn doc dies and the canvas falls
  *  back to the picker if it was watching it. */
-function abortRun(state: AppState): AppState {
+/** Why an agent's span ended when the reader stopped the run — the inquiry row and the section's rule say so. */
+export const READER_STOP = 'reader_stop';
+
+/** The reader stopped the run: every agent still working ends where it stood, and what it was writing is kept
+ *  as its draft, so each section shows its text under a rule instead of losing it. Settled agents are untouched. */
+function stopRoster(roster: DocState['roster'], now: number): DocState['roster'] {
+  const agents = new Map(roster.agents);
+  for (const [id, a] of agents) {
+    if (a.phase === 'done' || a.phase === 'failed') continue;
+    agents.set(id, {
+      ...a,
+      phase: 'done',
+      endedAt: now,
+      recovering: false,
+      retry: null,
+      pendingToolCallId: null,
+      currentThinkId: null,
+      stopReason: READER_STOP,
+      draft: a.contentBuffer || a.draft,
+      timeline: a.timeline?.map((t) => (t.kind === 'think' && t.live ? { ...t, live: false, closedAt: now } : t)) ?? null,
+    });
+  }
+  return { ...roster, agents };
+}
+
+function abortRun(state: AppState, stopped: boolean): AppState {
   const id = state.runDocId;
   if (id === null) return state;
   const doc = state.documents.get(id);
   if (!doc) return { ...state, runDocId: null };
+  // A brief the reader stopped while it wrote stays on the canvas as it stood: the sections, the settling text.
+  if (stopped && doc.answer === null && (doc.phase === 'research' || doc.phase === 'synthesizing')) {
+    const now = Date.now();
+    return withDoc(state, id, {
+      ...doc,
+      roster: stopRoster(doc.roster, now),
+      revision: null,
+      paused: false,
+      closing: false,
+      stopped: true,
+      pipelineElapsedMs: doc.pipelineResumedAt ? doc.pipelineElapsedMs + (now - doc.pipelineResumedAt) : doc.pipelineElapsedMs,
+      pipelineResumedAt: null,
+    }, { runDocId: null });
+  }
   if (doc.answer !== null) {
     const banked = doc.pipelineResumedAt
       ? doc.pipelineElapsedMs + (Date.now() - doc.pipelineResumedAt)
@@ -222,7 +261,7 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
       return { ...state, activeDocId: ev.docId };
 
     case 'run:aborted':
-      return abortRun(state);
+      return abortRun(state, ev.stopped === true);
 
     case 'ui:error': {
       // A toast, nothing more. One event, one meaning: abort semantics

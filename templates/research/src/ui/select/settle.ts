@@ -17,7 +17,8 @@ export const settlingOf = (d: DocState): Answer | null => {
   return {
     thinking: thought?.kind === "think" && thought.body ? thought.body : null,
     body: report?.kind === "report" ? report.body : a.contentBuffer,
-    streaming: report === undefined,
+    // An agent the run ended without a report (the reader stopped it) writes nothing more.
+    streaming: report === undefined && a.phase !== "done",
   };
 };
 

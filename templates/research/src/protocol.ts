@@ -148,7 +148,8 @@ export type BriefEvent =
   /** What the canvas shows. Null is the picker. */
   | { type: "doc:active"; docId: DocId | null }
   /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
-  | { type: "run:aborted" }
+  /** The run ended without settling. `stopped`: the reader stopped it, and the view keeps what streamed. */
+  | { type: "run:aborted"; stopped?: boolean }
   /** Whether a source takes part in the next ask. */
   | { type: "participation:toggled"; name: string; included: boolean }
   /** The session is ready: the model is resident and the abilities are enabled. */

@@ -137,6 +137,7 @@ export const selectStatus = (app: AppState): string => {
   // The word describes the running document while one runs: the bar's
   // controls command that document, whatever the canvas shows.
   const d = running ?? activeDoc(app);
+  if (d.stopped) return "Stopped";
   return d.ask !== null ? "Writing" : PHASES[d.phase].status;
 };
 
