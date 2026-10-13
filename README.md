@@ -193,6 +193,15 @@ for platforms and GPU backends. The same harness can use a larger model on your 
 
 The [wiki template](templates/basic/README.md) is a smaller application that also demonstrates typed decisions.
 
+The [Glass template](templates/glass/README.md) turns typed decisions into a continuous conversation:
+direct answers, editable plans, parallel checks, chains and dependency graphs, with document inspection,
+recorded dictation and saved turns. Modes and abilities are independent. See its
+[verification record](templates/glass/docs/verification.md) for tested behavior and remaining release gates.
+
+```sh
+npx lloyal-ai new my-glass --template glass
+```
+
 [Build your first harness](https://docs.lloyal.ai/build-your-first-harness)
 
 ### CLI usage
@@ -236,7 +245,7 @@ services. Your agents can use these capabilities inside their existing reasoning
 | [Wikipedia](https://github.com/lloyal-ai/hdk/tree/main/packages/abilities/wikipedia) | Find Wikipedia articles and retrieve their structured summaries and canonical URLs. Tools: `wikipedia_search`, `wikipedia_fetch`. No API key or reranker required. |
 
 The research template installs and registers Web, Corpus, and Documents. The wiki (`basic`) template
-includes Wikipedia. To add an ability to another application, run its install command from the project root:
+includes Wikipedia; Glass installs all four. To add an ability to another application, run its install command from the project root:
 
 ```sh
 npx lloyal-ai install lloyal/documents

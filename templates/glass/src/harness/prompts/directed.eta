@@ -1,0 +1,4 @@
+<%= it.question %>
+<% for(const direction of it.directions){ %>
+Follow-up direction from the person: <%= direction.query %>
+<% } %>

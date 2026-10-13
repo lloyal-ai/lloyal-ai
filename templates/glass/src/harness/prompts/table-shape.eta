@@ -1,0 +1,1 @@
+Every table row must contain exactly one cell per column, in the same order. Return only a table with consistent columns.

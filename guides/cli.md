@@ -53,14 +53,14 @@ directory; they do not search parent directories for a project.
 npx lloyal-ai new [name] [options]
 ```
 
-Create an application from the wiki (`basic`) or deep-research (`research`) template. With no name, the
+Create an application from the wiki (`basic`), deep-research (`research`) or conversational (`glass`) template. With no name, the
 wizard runs when both stdin and stdout are terminals. Provided flags prefill its choices. A name,
 `--yes`, or redirected input/output selects the flags path; that path requires a name.
 
 | Argument or option | Meaning and default |
 | --- | --- |
 | `[name]` | Project and directory name. Required outside the wizard. Matches `[a-z][a-z0-9_-]{1,63}`. |
-| `--template <basic\|research>` | Starting template. Default on the flags path: `basic`. |
+| `--template <basic\|research\|glass>` | Starting template. Default on the flags path: `basic`. |
 | `--targets <list>` | Comma-separated `cli`, `desktop`, `web`. Default: all three. `cli` is always retained. |
 | `--model <id\|path>` | Reasoning model catalogue ID or local GGUF path. Default: the catalogue's first reasoning model, currently `qwen3.5-4b`. |
 | `--dir <path>` | Parent directory. Default: current directory. |
@@ -72,7 +72,7 @@ wizard runs when both stdin and stdout are terminals. Provided flags prefill its
 
 The destination must not already exist. The CLI writes the selected model, prunes unselected surfaces,
 and downloads and verifies the template's default abilities. Research includes Web, Corpus, and Documents;
-Wiki includes Wikipedia. Model weights are provisioned on the application's first launch.
+Wiki includes Wikipedia; Glass includes all four. Model weights are provisioned on the application's first launch.
 
 Automatic dependency installation normally runs when stdout is a terminal. In CI, run `npm install`
 yourself unless you explicitly requested it through `--backend-pack download`. Default abilities are

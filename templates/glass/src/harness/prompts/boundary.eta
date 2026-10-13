@@ -1,0 +1,5 @@
+The current composition has finished. Its combined answer is:
+<%= it.answer %>
+Accepted task IDs: <%= JSON.stringify(it.completed) %>
+Missing task IDs: <%= JSON.stringify(it.missing) %>
+Return answer if it resolves the request. Choose another composition only for a concrete unresolved gap. This is stage <%= it.stage %> of a maximum of three per turn; further stages require a new request.

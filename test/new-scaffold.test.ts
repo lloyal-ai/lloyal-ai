@@ -76,7 +76,7 @@ describe('pruneTargets — cli-only', () => {
 describe('desktop target — the three things electron-vite needs', () => {
   const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: package.json declares the Electron entry point',
     (template) => {
       // electron-vite refuses to launch without it: "No entry point found for
@@ -86,7 +86,7 @@ describe('desktop target — the three things electron-vite needs', () => {
     },
   );
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: the preload path matches what electron-vite emits',
     (template) => {
       // electron-vite names the bundle after its entry and emits ESM as .mjs, so
@@ -100,7 +100,7 @@ describe('desktop target — the three things electron-vite needs', () => {
     },
   );
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: the desktop scripts guard the Electron binary first',
     (template) => {
       // electron 42 dropped `postinstall: node install.js`, so `npm install`
@@ -137,7 +137,7 @@ describe('desktop target — the three things electron-vite needs', () => {
 describe('preflight-abilities — the ability guard runs before the compiler', () => {
   const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: prestart and both desktop pre-hooks run the guard first',
     (template) => {
       // `harness/harness.ts` imports its abilities at the top level, so a scaffold
@@ -215,7 +215,7 @@ describe('the shared React view outlives either DOM target alone', () => {
     }
   }
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: no target imports across into another target',
     (template) => {
       // THE INVARIANT. web/main.tsx used to import ../desktop/App.js, so pruning
@@ -241,7 +241,7 @@ describe('the shared React view outlives either DOM target alone', () => {
     },
   );
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: declares a Node floor, so an old runtime fails at install not inside vite',
     (template) => {
       // The templates declared NO engines at all, so a scaffold asserted nothing
@@ -256,7 +256,7 @@ describe('the shared React view outlives either DOM target alone', () => {
     },
   );
 
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: the harness runtime path has no dynamic import()',
     (template) => {
       // Metro needs a statically analysable module graph, so a dynamic import

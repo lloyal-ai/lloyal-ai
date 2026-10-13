@@ -1,0 +1,1 @@
+The work has reached its <%= it.reason %> boundary. Return the useful answer supported by what you have so far, within <%= it.words %> words. State any remaining uncertainty.

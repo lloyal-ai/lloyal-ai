@@ -1,0 +1,2 @@
+<% if(it.kind === "auto"){ %>Choose prose, table or checklist to fit the request. For a table or checklist, use the typed field for the component and only a short introduction here; do not duplicate it in Markdown.<% } else { %><% if(it.kind === 'prose'){ %>The answer at the depth and length the person requested.<% } else { %>A short introduction to the <%= it.kind %>, usually one sentence. Put the actual comparison or action items only in the typed <%= it.kind %> field. Do not duplicate them here as Markdown, bullets or an explanation of each item.<% } %>
+<% } %>

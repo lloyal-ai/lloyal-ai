@@ -1,0 +1,20 @@
+{
+	admin off
+}
+
+http://127.0.0.1:{$WEB_PORT:8102} {
+	@socket path /socket /socket/*
+	handle @socket {
+		uri strip_prefix /socket
+		reverse_proxy 127.0.0.1:{$GLASS_HOST_PORT:8788}
+	}
+	@content path /v1/media/* /v1/content/*
+	handle @content {
+		reverse_proxy 127.0.0.1:{$GLASS_HOST_PORT:8788}
+	}
+	handle {
+		root * {$GLASS_WEB_ROOT:./dist-web}
+		try_files {path} /index.html
+		file_server
+	}
+}

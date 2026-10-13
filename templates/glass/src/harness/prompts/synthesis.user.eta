@@ -1,0 +1,5 @@
+<% if(it.question){ %>Answer the request: <%= it.question %><% } else { %>Answer the person's latest request in the inherited conversation.<% } %>
+Accepted findings have been deliberately added to this working context. Combine them into one useful answer. Preserve qualifications and citations. Missing or stopped tasks are not accepted evidence: <%= JSON.stringify(it.missing) %>.
+Presentation: <%= it.kind %>. Match the person's requested detail and avoid repeating the work transcript. If needed findings are missing, say what remains unresolved. Submit your answer with report.
+Use only actual source URLs in the accepted findings. Task names and agents are not external sources. Set sources to [] when the findings use general knowledge without external evidence. Never create placeholder source URLs.
+The user's length and scope constraints govern the final answer. Findings may include extra detail for you to assess; do not copy their structure or append background limitations the user did not need. When all requested work is answered, end the answer.

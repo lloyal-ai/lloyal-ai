@@ -158,7 +158,7 @@ describe('printNextSteps — pending abilities come BEFORE the run commands', ()
 });
 
 describe('DEFAULT_ABILITIES covers what each template actually imports', () => {
-  it.each(['basic', 'research'] as const)(
+  it.each(['basic', 'research', 'glass'] as const)(
     '%s: one default ability spec per `*-ability` package app.ts imports',
     (template) => {
       // The file that installs the abilities: `src/app.ts` in both templates,

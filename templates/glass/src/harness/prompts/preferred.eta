@@ -1,0 +1,4 @@
+<%= it.question %>
+<% if(it.preferences?.detail && it.preferences.detail !== "adaptive"){ %>
+The person's default is <%= it.preferences.detail === "brief" ? "a concise answer" : "a thorough answer with useful detail" %>. Their explicit request takes precedence. This preference does not remove necessary work or evidence.
+<% } %>

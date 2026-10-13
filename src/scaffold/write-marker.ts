@@ -16,7 +16,7 @@ import { readPackageJson, writeJson } from './package-json.js';
 import type { Target } from './prune-targets.js';
 
 export interface ProjectMarker {
-  /** Template this project was scaffolded from (`basic` | `research`). */
+  /** Template this project was scaffolded from (`basic` | `research` | `glass`). */
   template: string;
   /** Run surfaces present, kept in sync by `targets:add`/`targets:remove`. */
   targets: Target[];

@@ -18,7 +18,7 @@ const walk = (dir: string): string[] =>
     return statSync(p).isDirectory() ? walk(p) : p;
   });
 
-describe.each(['basic', 'research'])('the view seam in %s', (template) => {
+describe.each(['basic', 'research', 'glass'])('the view seam in %s', (template) => {
   const root = join(TEMPLATES, template);
   // By basename, not by a `/` in the path: the seam holds on every platform's separator.
   const entries = walk(join(root, 'targets')).filter((f) => basename(f) === 'view.tsx' || basename(f) === 'main.tsx');

@@ -24,7 +24,7 @@ import type { Target } from '../scaffold/prune-targets.js';
 
 const VERSION = (createRequire(import.meta.url)('../../package.json') as { version: string }).version;
 
-export type TemplateKind = 'basic' | 'research';
+export type TemplateKind = 'basic' | 'research' | 'glass';
 
 export interface WizardResult {
   name: string;
@@ -444,6 +444,7 @@ export function Wizard({
               options={[
                 { label: 'wiki — Wikipedia research harness', value: 'basic' },
                 { label: 'deep-research — tuned recon → plan → agents → synth', value: 'research' },
+                { label: 'glass — conversational work with typed composition', value: 'glass' },
               ]}
               onChange={submitTemplate}
             />
