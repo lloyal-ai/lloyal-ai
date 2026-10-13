@@ -56,6 +56,8 @@ An early Finish fixture exposed inconsistent table row widths. Table-shape refin
 
 An Auto follow-up after reopening asked for clarification despite the original numbers being present in the reconstructed trunk; Direct recalled them correctly. Initial Auto decisions now receive a bounded excerpt of the last accepted exchange (up to 2,000 question characters and 4,000 answer characters) alongside inherited conversation context. Three newly reconstructed native sessions then answered 18 + 24 as 42, half that as 21, and recalled both original numbers. These are selected functional checks, not a universal recall or reasoning-efficiency result. The earlier failed answers remain preserved.
 
+Cross-platform CI caught Windows rejecting the directory fsync after an otherwise successful file rename (`EPERM`). The storage path now preserves file-data fsync and atomic rename on Windows, with the additional directory flush on Linux/macOS. Its precise power-loss limitation is documented in [conversation ownership](document-identity.md). No generic filesystem error is swallowed.
+
 A SmolLM2 isolation run shortened HARBOR to HARB. The Qwen main-model isolation run passed all three codeword checks. Native completion receipts preserve both outcomes.
 
 ## Remaining release gates

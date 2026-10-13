@@ -22,6 +22,19 @@ const keyOf = (root: string, id: string) => `${root}/${id}`;
 const validId = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+// Windows rejects fsync on a directory handle. File data is still flushed
+// before the atomic rename; POSIX additionally flushes the directory entry.
+// See docs/document-identity.md for the platform durability boundary.
+function flushDirectory(root: string): void {
+  if (process.platform === "win32") return;
+  const directory = openSync(root, "r");
+  try {
+    fsyncSync(directory);
+  } finally {
+    closeSync(directory);
+  }
+}
+
 export class Conversations {
   readonly root: string;
   constructor(root: string) {
@@ -114,12 +127,7 @@ export class Conversations {
       closeSync(fd);
       fd = undefined;
       renameSync(temp, path);
-      const directory = openSync(this.root, "r");
-      try {
-        fsyncSync(directory);
-      } finally {
-        closeSync(directory);
-      }
+      flushDirectory(this.root);
     } finally {
       if (fd !== undefined) closeSync(fd);
       if (existsSync(temp)) unlinkSync(temp);
@@ -134,11 +142,6 @@ export class Conversations {
         "This conversation changed. Reopen it before discarding.",
       );
     unlinkSync(this.path(id));
-    const directory = openSync(this.root, "r");
-    try {
-      fsyncSync(directory);
-    } finally {
-      closeSync(directory);
-    }
+    flushDirectory(this.root);
   }
 }
