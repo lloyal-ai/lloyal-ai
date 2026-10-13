@@ -9,13 +9,15 @@
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
 import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Lightbox, Markdown, useAssets } from "@lloyal-labs/ui";
+import { Lightbox, Markdown, useAssets, useContentOrigin } from "@lloyal-labs/ui";
+import type { LightboxProps } from "@lloyal-labs/ui";
+import { videoView } from "./Figures.js";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
 import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
 import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
-import { parseAttachmentHref, resolvePrefix } from "@lloyal-labs/media";
+import { parseAttachmentHref, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
 
 const textOf = (node: ReactNode): string =>
   typeof node === "string" ? node
@@ -50,6 +52,8 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
   const digests = useMemo(() => (digestKey ? digestKey.split("\n") : []), [digestKey]);
   const assets = useAssets(digests);
   const [openPage, setOpenPage] = useState<{ digest: string; label: string } | null>(null);
+  const [openVideo, setOpenVideo] = useState<NonNullable<LightboxProps["video"]> | null>(null);
+  const origin = useContentOrigin();
   const markdown = shed(raw);
   const anchors = given ?? (anchorPrefix ? anchorsOf(markdown, anchorPrefix) : []);
   let next = 0;
@@ -64,6 +68,23 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
         components={{
           a: ({ href, children }) => {
             const ordinal = href ? citations?.get(href) : undefined;
+            const moment = href ? parseAttachmentMoment(href) : null;
+            if (moment) {
+              // A moment in a video: the one root that answers to the prefix, played from that time.
+              const root = resolvePrefix(moment.prefix, digests);
+              const asset = root ? assets[root] : undefined;
+              const at = `${Math.floor(moment.tMs / 60000)}:${String(Math.floor(moment.tMs / 1000) % 60).padStart(2, "0")}`;
+              const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
+              if (!root || asset?.kind !== "video" || origin === null) {
+                return <span style={S.citeLink} title={`video · ${at} — not in this thread`}>{mark}</span>;
+              }
+              return (
+                <button type="button" style={S.pageLink} title={`video · ${at} — play from here`}
+                  onClick={() => setOpenVideo(videoView(origin, root, asset, moment.tMs))}>
+                  {mark}
+                </button>
+              );
+            }
             const cited = href ? parseAttachmentHref(href) : null;
             if (cited) {
               // Evidence by content address: exactly one root in this thread
@@ -125,6 +146,9 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
           pre: ({ children }) => <pre style={S.pre}>{children}</pre>,
         }}
       />
+      {openVideo !== null && (
+        <Lightbox video={openVideo} label="the attached video" onClose={() => setOpenVideo(null)} styles={LIGHTBOX} />
+      )}
       {openPage !== null && (
         <Lightbox digest={openPage.digest} label={openPage.label} onClose={() => setOpenPage(null)} styles={LIGHTBOX} />
       )}

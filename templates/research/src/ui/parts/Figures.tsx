@@ -1,9 +1,8 @@
 /** The evidence the question carried, shown where the question is.
  *
  *  An image shows as the ADMITTED REPRESENTATION — the bytes the model was
- *  actually given. The content plane serves nothing else on purpose: raw
- *  blobs answer HEAD only, so a retained source layer can never be handed out
- *  by mistake. For an image under the pixel ceiling normalization returns the
+ *  actually given, read through its manifest, so a retained source layer is
+ *  never shown in its place. For an image under the pixel ceiling normalization returns the
  *  file byte-identical, so this usually IS what you dropped; where it differs
  *  the image was too large, rotated by its EXIF tag, or carried a non-sRGB
  *  profile — the cases where what the model saw is the honest thing to show,
@@ -11,7 +10,11 @@
  *
  *  A document shows as a card — its title, its page count, its first page —
  *  because what the model was given is its text, and a page image is what the
- *  model looks at only when a tool puts one in front of it. */
+ *  model looks at only when a tool puts one in front of it.
+ *
+ *  A video shows as its poster over the frames the model saw, on their
+ *  timeline, with what the soundtrack said beneath; opening it plays the file
+ *  as attached beside those frames. */
 import { useState, type CSSProperties, type ReactElement } from "react";
 import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection } from "@lloyal-labs/ui";
 import type { Asset, LightboxProps } from "@lloyal-labs/ui";
@@ -22,6 +25,20 @@ import { LIGHTBOX } from "./Prose.js";
 
 export { pageFacts, resolveAsset, useAssets };
 export type { Asset };
+
+type VideoAsset = Extract<Asset, { kind: "video" }>;
+
+/** The enlarged view of a video: the original when it was kept, the frames the model saw, what was said. */
+export function videoView(origin: string, digest: string, asset: VideoAsset, atMs?: number): NonNullable<LightboxProps["video"]> {
+  return {
+    ...(asset.source ? { src: sourceUrl(origin, digest) } : {}),
+    frames: asset.meta.frames.map((f) => ({ src: representationUrl(origin, digest, f.frame), tMs: f.tMs })),
+    ...(asset.transcript ? { transcript: asset.transcript.segments } : {}),
+    ...(atMs !== undefined ? { atMs } : {}),
+  };
+}
+
+const clock = (ms: number): string => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
 /** ui's enlarged view, in this document's register — one for the strip, the run bar's marker and a cited page. */
 export const Lightbox = (props: Omit<LightboxProps, "styles">): ReactElement | null => <UiLightbox {...props} styles={LIGHTBOX} />;
@@ -40,13 +57,16 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
   // Page renders the thread holds — admitted by a tool, persisted with the run —
   // say which pages the model looked at.
   const threadDigests = useProjection(selectThreadDigests);
-  const [open, setOpen] = useState<{ digest: string; label?: string } | { pdf: string; label: string } | null>(null);
+  const [open, setOpen] = useState<
+    { digest: string; label?: string } | { pdf: string; label: string } | { video: NonNullable<LightboxProps["video"]>; label: string } | null
+  >(null);
   // Read off the loaded element rather than the wire: the descriptor carries a
   // byte length, never pixels, and this is the representation's true size.
   const [dims, setDims] = useState<Record<string, string>>({});
 
   if (digests.length === 0 || origin === null) return null;
   const anyDocument = digests.some((d) => assets[d]?.kind === "document");
+  const anyHeard = digests.some((d) => { const a = assets[d]; return a?.kind === "video" && a.transcript !== undefined; });
 
   return (
     <>
@@ -83,6 +103,30 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
               </button>
             );
           }
+          if (asset?.kind === "video") {
+            const { meta, transcript } = asset;
+            const said = transcript?.segments.map((t) => t.text).join(" ");
+            return (
+              <button
+                key={digest}
+                type="button"
+                style={S.videoCard}
+                title={asset.source ? "Play the video beside the frames the model saw" : "The frames the model saw"}
+                onClick={() => setOpen({ video: videoView(origin, digest, asset), label: `video · ${clock(meta.durationMs)}` })}
+              >
+                <img src={representationUrl(origin, digest, meta.poster)} alt="The video's first frame" style={S.poster} />
+                <span style={S.timeline} aria-hidden="true">
+                  {meta.frames.map((f) => (
+                    <img key={f.tMs} src={representationUrl(origin, digest, f.frame)} alt="" style={S.tick} />
+                  ))}
+                </span>
+                <span style={S.videoMeta}>
+                  {clock(meta.durationMs)} · {meta.frames.length} frame{meta.frames.length === 1 ? "" : "s"}
+                  {said ? <span style={S.said}>“{said}”</span> : null}
+                </span>
+              </button>
+            );
+          }
           return (
             <button
               key={digest}
@@ -109,14 +153,16 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
         })}
       </div>
       <p style={S.caption}>
-        {anyDocument ? "what the model was given" : "what the model saw"}
+        {anyDocument ? "what the model was given" : anyHeard ? "what the model saw and heard" : "what the model saw"}
         {digests.length === 1 && dims[digests[0]] ? ` · ${dims[digests[0]]}` : ""}
         {" · click to enlarge"}
       </p>
 
       {open !== null && ("pdf" in open
         ? <Lightbox pdf={open.pdf} label={open.label} onClose={() => setOpen(null)} />
-        : <Lightbox digest={open.digest} dims={dims[open.digest]} label={open.label} onClose={() => setOpen(null)} />)}
+        : "video" in open
+          ? <Lightbox video={open.video} label={open.label} onClose={() => setOpen(null)} />
+          : <Lightbox digest={open.digest} dims={dims[open.digest]} label={open.label} onClose={() => setOpen(null)} />)}
     </>
   );
 }
@@ -164,4 +210,14 @@ const S: Record<string, CSSProperties> = {
   },
   cardMeta: { font: `11px/1.35 ${font.ui}`, color: "rgba(255,255,255,.92)" },
   caption: { font: `12px ${font.ui}`, color: color.dim, margin: "0 0 18px" },
+  // A video card: the poster, then the frames on their timeline, then length and what was said.
+  videoCard: {
+    display: "flex", flexDirection: "column", gap: 6, width: 260, padding: 6, cursor: "zoom-in", textAlign: "left",
+    border: `1px solid ${color.line}`, borderRadius: radius.panel, background: color.card, boxShadow: shadow.card, flex: "none",
+  },
+  poster: { display: "block", width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 8, background: "#000" },
+  timeline: { display: "flex", gap: 2, overflow: "hidden" },
+  tick: { height: 22, flex: "1 1 0", minWidth: 0, objectFit: "cover", borderRadius: 2 },
+  videoMeta: { display: "flex", flexDirection: "column", gap: 3, font: `11.5px/1.35 ${font.ui}`, color: color.dim, padding: "0 2px 2px" },
+  said: { color: color.ink, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" },
 };

@@ -10,7 +10,7 @@ import {
   selectSeen, selectStatus, selectTitle,
 } from "../select.js";
 import { paceFor } from "../pace.js";
-import { Lightbox, useAssets } from "./Figures.js";
+import { Lightbox, useAssets, videoView } from "./Figures.js";
 import { representationUrl } from "@lloyal-labs/media";
 import { APP } from "../presentation.js";
 import { DeleteMe } from "./DeleteMe.js";
@@ -103,6 +103,7 @@ function Seen(): ReactElement | null {
   const assets = useAssets(seen);
   const [open, setOpen] = useState<string | null>(null);
   if (seen.length === 0) return null;
+  const opened = open !== null ? assets[open] : undefined;
   return (
     <span style={S.seen}>
       {seen.map((id) => {
@@ -120,12 +121,14 @@ function Seen(): ReactElement | null {
               aria-label="Enlarge the attached image"
               onClick={() => setOpen(id)}
             >
-              <img src={representationUrl(origin, id)} alt="" style={S.seenImg} />
+              <img src={representationUrl(origin, id, asset?.kind === "video" ? asset.meta.poster : 0)} alt="" style={S.seenImg} />
             </button>
           )
           : <span key={id} style={S.seenChip}>image</span>;
       })}
-      {open !== null && <Lightbox digest={open} onClose={() => setOpen(null)} />}
+      {open !== null && origin !== null && (opened?.kind === "video"
+        ? <Lightbox video={videoView(origin, open, opened)} label="the attached video" onClose={() => setOpen(null)} />
+        : <Lightbox digest={open} onClose={() => setOpen(null)} />)}
     </span>
   );
 }

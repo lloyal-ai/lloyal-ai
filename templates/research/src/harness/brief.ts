@@ -188,7 +188,7 @@ export function briefs(deps: {
       }
       if (seen.bitmaps.length) {
         // Onto the trunk once: every agent forked from it attends the same cells. N agents cost one projection.
-        yield* waitUntilSettled(session.prefillUserMultimodal(text, seen.bitmaps, { attachments: seen.projected }));
+        yield* waitUntilSettled(session.prefillUserMultimodal(withVideoAddresses(text, seen.videos), seen.bitmaps, { attachments: seen.projected }));
       }
       if (!direct) return yield* frame(ask, review);
       // The question is the plan: said on the wire so the canvas frames the ask the way it frames a planned one.
@@ -329,4 +329,13 @@ export interface SubmitOptions {
   attachments?: Descriptor[];
   /** Whether a research plan waits for the reader's yes. A one-shot run has no reader. */
   review?: boolean;
+}
+
+/** A video is cited by a moment in it; the question names each attached video's address so a report can. */
+function withVideoAddresses(text: string, videos: readonly { digest: string }[]): string {
+  const lines = videos.map((v, i) => {
+    const at = `attachment://${v.digest.replace(/^sha256:/, "").slice(0, 12)}`;
+    return `Video ${i + 1} is ${at}; cite a moment in it as ${at}/t/ followed by the time the video marks, such as ${at}/t/0m5.00s.`;
+  });
+  return lines.length > 0 ? `${text}\n\n${lines.join("\n")}` : text;
 }

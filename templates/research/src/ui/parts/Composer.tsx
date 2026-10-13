@@ -7,9 +7,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
 import { color, font, radius, shadow } from "../theme.js";
-import { MicGlyph, Popover, RecordingWaveform, useContentOrigin, useProjection, useSend, useVoiceInput } from "@lloyal-labs/ui";
-import type { Command } from "../../protocol.js";
-import { ingestMedia, representationUrl } from "@lloyal-labs/media";
+import { ingestVideo, MicGlyph, Popover, RecordingWaveform, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput } from "@lloyal-labs/ui";
+import type { VideoProgress } from "@lloyal-labs/ui";
+import type { Command, WorkflowEvent } from "../../protocol.js";
+import { ingestMedia, isVideoContainer, representationUrl } from "@lloyal-labs/media";
 import { resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
@@ -33,7 +34,7 @@ const selectClarifying = (app: AppState): boolean =>
  *  Enumerating types here would be a second copy of a question the bytes
  *  answer — and wrong in both directions (the ingress converts and admits
  *  webp, heic and tiff happily). */
-const ATTACH_TYPES = "image/*,application/pdf";
+const ATTACH_TYPES = "image/*,application/pdf,video/*";
 
 /** An attachment is admitted the moment it is picked: the bytes cross HTTP
  *  once, the host normalizes an image or reads a document, and the tray shows
@@ -43,8 +44,8 @@ const ATTACH_TYPES = "image/*,application/pdf";
  *  is even written. A removed attachment leaves an unreferenced blob behind,
  *  the same harmless orphan class the store's write order already accepts. */
 type Attached =
-  | { id: number; name: string; status: "uploading" }
-  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document"; thumb: string | null; title: string | null }
+  | { id: number; name: string; status: "uploading"; progress?: string }
+  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null }
   | { id: number; name: string; status: "failed"; error: string };
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
@@ -88,6 +89,9 @@ export function Composer({ shape, placeholder }: {
 }): ReactElement {
   const send = useSend<Command>();
   const origin = useContentOrigin();
+  const { bridge } = useHarness<WorkflowEvent, Command>();
+  /** A video is decoded here and composed by the host, which says how it samples one. */
+  const video = useVideoCapabilities();
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
@@ -361,14 +365,22 @@ export function Composer({ shape, placeholder }: {
     for (const file of chosen) {
       const id = nextId.current++;
       setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
+      const progress = (p: VideoProgress): void =>
+        setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: progressLabel(p) } : a)));
       void (async () => {
         try {
-          const root = await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
+          // The bytes decide, here as at the host: a video container is decoded on this page and composed
+          // there; anything else crosses once and the host's ingress admits it.
+          const root = isVideoContainer(new Uint8Array(await file.slice(0, 64).arrayBuffer()))
+            ? await attachVideo(file, progress)
+            : await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
           const asset = await resolveAsset(origin, root.digest);
           const cover = asset.kind === "document" ? asset.meta.pages.find((p) => p.page === 1)?.render : undefined;
           const thumb = asset.kind === "image"
             ? representationUrl(origin, root.digest)
-            : cover ? representationUrl(origin, cover.digest) : null;
+            : asset.kind === "video"
+              ? representationUrl(origin, root.digest, asset.meta.poster)
+              : cover ? representationUrl(origin, cover.digest) : null;
           const title = asset.kind === "document" ? asset.meta.title : null;
           setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title } : a)));
         } catch (err) {
@@ -381,6 +393,14 @@ export function Composer({ shape, placeholder }: {
     }
   };
 
+  /** A video: its original pushed, its frames and soundtrack sampled here, and the host composing them. */
+  const attachVideo = async (file: File, onProgress: (p: VideoProgress) => void): Promise<Descriptor> => {
+    if (origin === null) throw new Error("This build cannot accept attachments.");
+    // Before the host has said how it samples a video, ingestVideo asks it.
+    const { root } = await ingestVideo({ origin, bridge, file, capabilities: video, onProgress });
+    return root;
+  };
+
   /** Paste is the shortest road from a screenshot to a question. The clipboard
    *  hands over the same File objects the picker does, so it feeds `attach`
    *  rather than growing a second path. Only image and PDF items are taken,
@@ -388,7 +408,7 @@ export function Composer({ shape, placeholder }: {
    *  carrying text would silently lose it. */
   const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
     const files = Array.from(e.clipboardData?.items ?? [])
-      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type === "application/pdf"))
+      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type.startsWith("video/") || i.type === "application/pdf"))
       .map((i) => i.getAsFile())
       .filter((f): f is File => f !== null);
     if (files.length === 0) return;
@@ -481,7 +501,7 @@ export function Composer({ shape, placeholder }: {
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
                   ? <span style={{ ...S.docChip, color: color.danger }}><DocGlyph />{img.name} — {img.error}</span>
-                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? ` · ${img.progress ?? "admitting…"}` : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
@@ -570,8 +590,8 @@ export function Composer({ shape, placeholder }: {
           <button
             type="button"
             className="cmp-icon" style={S.attach}
-            title="Attach an image or PDF"
-            aria-label="Attach an image or PDF"
+            title="Attach an image, PDF or video"
+            aria-label="Attach an image, PDF or video"
             onClick={() => picker.current?.click()}
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -715,6 +735,17 @@ export function Composer({ shape, placeholder }: {
       </div>
     </div>
   );
+}
+
+/** What an attaching video is doing, in the attach row's words. */
+function progressLabel(p: VideoProgress): string {
+  switch (p.phase) {
+    case "uploading": return `uploading ${Math.floor((100 * p.done) / Math.max(1, p.total))}%`;
+    case "sampling": return "reading frames…";
+    case "ingesting": return `frames ${p.done}/${p.total}`;
+    case "transcribing": return `transcribing audio ${p.done}/${p.total}`;
+    case "composing": return "composing…";
+  }
 }
 
 /** The run's wall clock, ticking beside the picker while work is live.

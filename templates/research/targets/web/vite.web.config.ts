@@ -94,6 +94,8 @@ export default defineConfig(({ mode }) => {
     proxy: {
       "/v1/media": { target: origin, changeOrigin: true },
       "/v1/content": { target: origin, changeOrigin: true },
+      // `/v2` is the blob upload surface a video's original is pushed over.
+      "/v2": { target: origin, changeOrigin: true },
     },
   },
   build: { outDir: resolve(__dirname, "../../dist-web"), emptyOutDir: true },

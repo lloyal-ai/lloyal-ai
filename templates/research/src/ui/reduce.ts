@@ -64,6 +64,9 @@ type Scope = 'session' | 'run' | 'own' | 'ignored';
 const SCOPE: Record<WorkflowEvent['type'], Scope> = {
   'voice:capabilities': 'ignored', 'voice:progress': 'ignored', 'voice:result': 'ignored',
   'voice:error': 'ignored', 'voice:cancelled': 'ignored',
+  // an attaching video's conversation with the host belongs to the composer that started it
+  'video:capabilities': 'ignored', 'video:progress': 'ignored', 'video:composed': 'ignored',
+  'video:error': 'ignored', 'video:cancelled': 'ignored',
   'query': 'own', 'doc': 'own', 'doc:active': 'own', 'run:aborted': 'own', 'ui:error': 'own',
   'agent:trace': 'ignored', 'host:resources': 'ignored',   // the dev pane folds these itself
   // session facts
