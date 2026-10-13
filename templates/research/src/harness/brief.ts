@@ -124,7 +124,7 @@ export function briefs(deps: {
       *edit_plan() { yield* abortRun(); },
 
       // Write: the controls of the live run. `run` owns it, so these only pass the word along.
-      *stop() { yield* abortRun(); },
+      *stop() { yield* abortRun({ stopped: true }); },
       *wrap_up() { run.wrapUp(); },
       *pause() { run.pause(); },
       *resume() { run.resume(); },
@@ -290,7 +290,7 @@ export function briefs(deps: {
   }
 
   /** Whatever is in flight — a run, or a plan awaiting its yes — stops; its folder is released unless it settled; the canvas is told. */
-  function* abortRun({ keep = null }: { keep?: DocId | null } = {}): Operation<void> {
+  function* abortRun({ keep = null, stopped = false }: { keep?: DocId | null; stopped?: boolean } = {}): Operation<void> {
     const dying = live;
     const parked = pendingPlan?.inputs.docId ?? null;
     yield* run.stop();   // withdraws an accepted run and halts the live one; returns at once, `busy` holds until the model settles
@@ -298,7 +298,7 @@ export function briefs(deps: {
     live = null;
     pendingPlan = null;
     for (const id of new Set([dying, parked])) if (id && id !== keep) library.release(id);
-    if (dying ?? parked) yield* wire.send({ type: "run:aborted" });
+    if (dying ?? parked) yield* wire.send(stopped ? { type: "run:aborted", stopped: true } : { type: "run:aborted" });
   }
 
   // ── Settle ─────────────────────────────────────────────────────────────────

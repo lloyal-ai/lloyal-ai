@@ -78,6 +78,19 @@ test("a stop during A's restoration, then the same ask: A's thread is restored w
   assert.equal(exchanges.length, 1);
 });
 
+test("the reader's stop is marked as the reader's on the wire", async () => {
+  const run = await runHarness({
+    utterances: [{ text: PLAN_JSON, kind: "text", stallTokens: 400 }],
+    script: [
+      { send: { type: "submit_query", query: "A?", mode: "flat" } },
+      { on: (ev) => ev.type === "plan:start", send: { type: "stop" } },
+      { on: (ev) => ev.type === "run:aborted" },
+    ],
+  });
+  const aborted = run.events.filter((e) => e.type === "run:aborted");
+  assert.deepEqual(aborted, [{ type: "run:aborted", stopped: true }]);
+});
+
 test("a stop during the planner, then an ask into the same canvas: the brief's first report lands in its folder", async () => {
   const run = await runHarness({
     utterances: [

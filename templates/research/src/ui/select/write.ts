@@ -43,7 +43,7 @@ export const selectSections = (app: AppState): Section[] => {
       task: task.description,
       inherits: doc.mode === "deep" && index > 0,
       // Derived: a flat-mode task the plan named with no agent yet, while the pool is still seating.
-      waiting: !a && doc.mode === "flat" && doc.phase === "research",
+      waiting: !a && doc.mode === "flat" && doc.phase === "research" && !doc.stopped,
       inquiry: a && {
         id: a.id,
         index,

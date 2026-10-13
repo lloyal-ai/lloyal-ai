@@ -97,9 +97,13 @@ const STOP_TEXT: Record<string, string> = {
   wind_down: "closed early",
   terminal_cap: "reached the report length",
   maxTurns: "used its turns",
+  reader_stop: "stopped by you",
 };
 const stopText = (reason: string | null): string =>
   (reason !== null ? STOP_TEXT[reason] : undefined) ?? "stopped before it finished";
+
+/** The reader stopped the run: nothing more will come, so what was written is all there is. */
+const stoppedByReader = (a: AgentRuntime): boolean => a.stopReason === "reader_stop";
 
 /** The span ended early: a reason was given, or a draft was left behind. */
 const stoppedEarly = (a: AgentRuntime): boolean => a.stopReason !== null || a.draft !== null;
@@ -116,6 +120,9 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
   if (a.failReason) return { kind: "failed", text: failText(a.failReason) };
   if (a.phase === "done") {
     const kept = timelineOf(a).some((t) => t.kind === "report");
+    if (!kept && stoppedByReader(a)) {
+      return { kind: "kept", text: draftProseOf(a, reports) !== null ? "stopped by you — kept to here" : "stopped by you" };
+    }
     if (!kept) return { kind: "kept", text: "kept what it had" };
     if (!stoppedEarly(a)) return { kind: "settled", text: "wrote its section" };
     const held = a.stopReason === "terminal_cap" ? "kept to here" : "kept what it had";
@@ -177,6 +184,10 @@ export const proseOf = (a: AgentRuntime, reports: Reports): SectionProse => {
   }
   if (a.failReason !== null) {
     return draft === null ? NOTHING : { prose: null, streaming: false, draft: null, stopped: { note: `${cause} — nothing could be kept`, tail: draft } };
+  }
+  // Stopped by the reader mid-report: the draft is the section, under the rule; no write-up will follow.
+  if (stoppedByReader(a)) {
+    return draft === null ? NOTHING : { prose: draft, streaming: false, draft: null, stopped: { note: `${cause} — kept to here`, tail: null } };
   }
   const live = a.phase !== "done" ? liveProse(a, reports) : null;
   return {

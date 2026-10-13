@@ -175,10 +175,10 @@ function RunBar(): ReactElement {
             type="button"
             style={{ ...S.control, ...(closing ? S.controlOff : null) }}
             disabled={closing}
-            title={closing ? "the brief is closing" : paused ? "the next step continues from here" : "hold the run — everything stays in place"}
+            title={closing ? "the brief is closing" : paused ? "the next step continues from here" : "pause the run — everything stays in place"}
             onClick={() => send({ type: paused ? "resume" : "pause" })}
           >
-            {paused ? "▶ Resume" : "⏸ Hold"}
+            {paused ? "▶ Resume" : "⏸ Pause"}
           </button>
           <button
             type="button"

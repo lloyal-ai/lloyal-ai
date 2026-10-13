@@ -149,6 +149,8 @@ export interface DocState {
   paused: boolean;
   closing: boolean;
   closedEarly: boolean;
+  /** The reader stopped the run: what it wrote stays as written, and nothing more will come. */
+  stopped: boolean;
   /** Pipeline-active milliseconds (excludes review dwell and idle). */
   pipelineElapsedMs: number;
   pipelineResumedAt: number | null;

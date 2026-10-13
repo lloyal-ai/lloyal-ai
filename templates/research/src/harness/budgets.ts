@@ -14,6 +14,11 @@ export type Effort = "low" | "medium" | "high" | "ultra";
 /** Display order for the interface (lightest → heaviest). */
 export const EFFORT_ORDER: readonly Effort[] = ["low", "medium", "high", "ultra"];
 
+/** The report turn's token cap, every effort. An honest report is told to stay within 1,200 words (about
+ *  1,700 tokens) and its thinking and envelope sit beside that, so 4,096 never cuts one; it bounds a report
+ *  that stops making progress and rewrites itself until the context fills. A cut shows as stopped. */
+const REPORT_CAP = 4096;
+
 export const BUDGETS = {
   effort: {
     // The ceiling tier, hand-tuned for a large (~1M-token) nCtx; `maxTasks: 10` is past the planner's
@@ -24,6 +29,7 @@ export const BUDGETS = {
       time: { softLimit: 600_000, hardLimit: 900_000 },
       shouldExplore: { context: 0.25 },   // explore until 75% of the KV is used, then exploit
       recoveryShape: "parallel",
+      recoveryBudget: REPORT_CAP,
     },
     high: {
       maxTasks: 6, maxTurns: 10,
@@ -31,6 +37,7 @@ export const BUDGETS = {
       time: { softLimit: 240_000, hardLimit: 360_000 },
       shouldExplore: { context: 0.4 },
       recoveryShape: "staggered",  // serial, full-headroom, lossless
+      recoveryBudget: REPORT_CAP,
     },
     medium: {
       maxTasks: 4, maxTurns: 10,
@@ -38,6 +45,7 @@ export const BUDGETS = {
       time: { softLimit: 150_000, hardLimit: 240_000 },
       shouldExplore: { context: 0.6 },
       recoveryShape: "parallel",
+      recoveryBudget: REPORT_CAP,
     },
     low: {
       maxTasks: 2, maxTurns: 10,
@@ -45,6 +53,7 @@ export const BUDGETS = {
       time: { softLimit: 90_000, hardLimit: 150_000 },
       shouldExplore: { context: 1.0 },   // always exploit: strict on-topic retrieval from the first turn
       recoveryShape: "parallel",
+      recoveryBudget: REPORT_CAP,
     },
   },
   /** A source probe is shallow: ~2 searches, then a report. Its turn cap is firm. The time is sized for the
