@@ -6,6 +6,7 @@ import { answerText } from "../../domain/answer.js";
 import type { Selection } from "../../domain/answer.js";
 import { uniqueSources, withoutSourceTrailer } from "../../domain/citations.js";
 import { proseText } from "../../domain/prose.js";
+import { DisclosureHeading } from "./DisclosureHeading.js";
 import { Prose, StreamingProse } from "./Prose.js";
 export function AnswerView({
   actions,
@@ -262,7 +263,9 @@ export function AnswerView({
       )}
       {!!sources.length && (
         <details className="glass-answer-sources">
-          <summary>Sources · {sources.length}</summary>
+          <summary className="gc-disclosure">
+            <DisclosureHeading meta={sources.length}>Sources</DisclosureHeading>
+          </summary>
           <ol>
             {sources.map((source) => (
               <li key={source.url}>

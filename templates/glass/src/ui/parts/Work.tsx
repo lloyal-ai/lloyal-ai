@@ -1,3 +1,4 @@
+import { DisclosureHeading } from "./DisclosureHeading.js";
 import { SourceProgress } from "./SourceProgress.js";
 import { returnedSources } from "../sources.js";
 import { ActivityLabel } from "./ActivityLabel.js";
@@ -548,25 +549,31 @@ export function Work() {
               <p>{work.decision}</p>
               {work.coverage && (
                 <details>
-                  <summary>Source coverage</summary>
+                  <summary className="gc-disclosure">
+                    <DisclosureHeading>Source coverage</DisclosureHeading>
+                  </summary>
                   <Prose markdown={work.coverage} />
                 </details>
               )}
               {[...work.roster.agents.values()].map((a) => (
                 <details key={a.id}>
-                  <summary>
-                    {ps.plan.tasks.find((t) => t.id === work.keys[a.id])
-                      ?.title ??
-                      (work.keys[a.id] === "answer"
-                        ? "Combined answer"
-                        : "Decision")}{" "}
-                    · {a.phase} · {a.toolCallCount} tool calls
+                  <summary className="gc-disclosure">
+                    <DisclosureHeading
+                      meta={`${a.phase} · ${a.toolCallCount} tool calls`}
+                    >
+                      {ps.plan.tasks.find((t) => t.id === work.keys[a.id])
+                        ?.title ??
+                        (work.keys[a.id] === "answer"
+                          ? "Combined answer"
+                          : "Decision")}
+                    </DisclosureHeading>
                   </summary>
                   {a.timeline?.map((item) => (
                     <div key={item.id}>
                       {item.kind === "tool_call" ? (
                         <p>
-                          {item.tool} · {item.argsSummary}
+                          <span className="gc-activity-tool">{item.tool}</span>{" "}
+                          · {item.argsSummary}
                         </p>
                       ) : item.kind === "tool_result" ? (
                         <p>
@@ -574,7 +581,11 @@ export function Work() {
                         </p>
                       ) : item.kind === "think" ? (
                         <details>
-                          <summary>Model reasoning</summary>
+                          <summary className="gc-disclosure">
+                            <DisclosureHeading>
+                              Model reasoning
+                            </DisclosureHeading>
+                          </summary>
                           <Prose markdown={item.body} />
                         </details>
                       ) : (

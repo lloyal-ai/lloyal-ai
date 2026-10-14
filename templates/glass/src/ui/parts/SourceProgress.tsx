@@ -34,7 +34,7 @@ export function SourceProgress({ sources }: { sources: SourceMeta[] }) {
             <SourceIcon key={source.url ?? i} source={source} />
           ))}
         </span>
-        <span>
+        <span className="gc-source-count">
           {sources.length} {sources.length === 1 ? "source" : "sources"}
         </span>
         <Chevron />

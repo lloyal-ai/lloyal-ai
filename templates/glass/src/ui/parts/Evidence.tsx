@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DisclosureHeading } from "./DisclosureHeading.js";
 import {
   Lightbox,
   pageFacts,
@@ -47,6 +48,9 @@ export function Evidence({
       type="button"
       key={r.digest}
       className="gc-viewed"
+      aria-label={
+        label + (seen.has(r.digest) ? " · viewed by model" : " · preview")
+      }
       onClick={() =>
         setOpen({
           digest: r.digest,
@@ -56,11 +60,11 @@ export function Evidence({
         })
       }
     >
-      <img src={representationUrl(origin, r.digest)} alt={label} />
-      <small>
-        {label}
-        {seen.has(r.digest) ? " · viewed" : ""}
-      </small>
+      <img src={representationUrl(origin, r.digest)} alt="" />
+      <small className="gc-preview-label">{label}</small>
+      {seen.has(r.digest) && (
+        <span className="gc-viewed-status">Viewed by model</span>
+      )}
     </button>
   );
   return (
@@ -76,16 +80,19 @@ export function Evidence({
             );
           if (asset.kind === "document")
             return (
-              <details key={r.digest} className="gc-file-card">
-                <summary>
-                  {asset.meta.title}
-                  <small>{asset.meta.pageCount} pages · PDF</small>
+              <details key={r.digest} className="gc-file-card" open>
+                <summary className="gc-disclosure gc-file-summary">
+                  <DisclosureHeading
+                    meta={`${asset.meta.pageCount} pages · PDF`}
+                  >
+                    {asset.meta.title}
+                  </DisclosureHeading>
                 </summary>
-                <div className="gc-inline-actions">
+                <div className="gc-file-actions">
                   {asset.source && (
                     <button
                       type="button"
-                      className="gc-small"
+                      className="gc-small gc-open-original"
                       onClick={() =>
                         setOpen({
                           pdf: sourceUrl(origin, r.digest),
@@ -115,24 +122,40 @@ export function Evidence({
                     Extracted text
                   </a>
                 </div>
-                {pageFacts(asset.meta, seen).map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
+                <div className="gc-file-facts">
+                  {pageFacts(asset.meta, seen).map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
                 {asset.meta.derive.truncated && (
-                  <p>
+                  <p className="gc-file-warning">
                     Some text, pages or figures were outside the extraction
                     limits.
                   </p>
                 )}
-                <div className="gc-pages">
+                <div
+                  className="gc-pages"
+                  role="region"
+                  aria-label={`Pages of ${asset.meta.title}`}
+                  tabIndex={0}
+                >
                   {asset.meta.pages.flatMap((p) =>
                     p.render ? [image(p.render, `Page ${p.page}`)] : [],
                   )}
                 </div>
                 {!!asset.meta.figures.length && (
-                  <details>
-                    <summary>Figures · {asset.meta.figures.length}</summary>
-                    <div className="gc-pages">
+                  <details className="gc-evidence-section">
+                    <summary className="gc-disclosure">
+                      <DisclosureHeading meta={asset.meta.figures.length}>
+                        Figures
+                      </DisclosureHeading>
+                    </summary>
+                    <div
+                      className="gc-pages"
+                      role="region"
+                      aria-label={`Figures from ${asset.meta.title}`}
+                      tabIndex={0}
+                    >
                       {asset.meta.figures.map((f) =>
                         image(
                           f.root,
@@ -148,8 +171,14 @@ export function Evidence({
         })}
       </div>
       {viewed.some((r) => !originals.has(r.digest)) && (
-        <details>
-          <summary className="gc-small">What the model saw</summary>
+        <details className="gc-evidence-section">
+          <summary className="gc-disclosure">
+            <DisclosureHeading
+              meta={viewed.filter((r) => !originals.has(r.digest)).length}
+            >
+              What the model saw
+            </DisclosureHeading>
+          </summary>
           <div className="gc-attachment-strip">
             {viewed
               .filter((r) => !originals.has(r.digest))
@@ -163,7 +192,7 @@ export function Evidence({
           onClose={() => setOpen(null)}
           styles={{
             caption: {
-              font: "12px Inter,sans-serif",
+              font: "13px Inter,sans-serif",
               color: "#aeb9d3",
               margin: 0,
             },

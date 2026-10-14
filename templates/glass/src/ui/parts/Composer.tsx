@@ -371,6 +371,9 @@ export function Composer({
           </button>
         )}
       </div>
+      <p className="gc-composer-note">
+        AI can make mistakes, verify answers provided here
+      </p>
       {!record && (
         <div className="gc-suggestions">
           {[

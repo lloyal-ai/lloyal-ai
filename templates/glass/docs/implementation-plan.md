@@ -13,6 +13,12 @@ Glass starts as a standalone application over released public HDK packages. The 
 7. Source previews and actual admitted representations remain distinct. Media is content-addressed. PDFs belong to Documents; supported Markdown resources belong to Corpus.
 8. Keep the approved design: Inter, edge-to-edge electric depth, compact frosted navigation, short travelling reflections, contextual controls and no decorative idle animation. During observed work, a single diffuse background wash shifts slowly across the canvas; there are no per-agent light shapes. Pause, reading and reduced motion keep it still.
 
+## Reading and evidence presentation
+
+Owner review sets one shared desktop measure of 840 px for answers, work panels, document cards and the composer, with fluid gutters on smaller viewports. Main prose is 16 px and table content 14 px. Document cards open by default but remain collapsible. Titles, metadata and actions have distinct emphasis, shared across evidence/source/activity disclosures. The composer includes a small muted verification reminder below the input, within its own dock.
+
+The history drawer is 280 px wide, capped at viewport width minus 32 px. Its compact rows stay unchanged; its vertical scroll area uses the same thin, muted thumb and transparent track as the document strip. A stable scrollbar gutter avoids title-width shifts.
+
 ## Build sequence and owners
 
 | Slice             | Owning code                                                                     | Result                                                                            |

@@ -5,6 +5,8 @@ body:has(#glass-composition) {
   background: #0b0c10 !important;
 }
 #glass-composition {
+  --g-content-width: 840px;
+  --g-gutter: 32px;
   --g-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --g-bg: #0b0c10;
   --g-ink: #f2f5ff;
@@ -16,7 +18,7 @@ body:has(#glass-composition) {
   --g-edge: #a4c7ff;
   --g-wash: #26334f;
   --g-good: #a5d6cb;
-  font: 400 15px/1.6 var(--g-font);
+  font: 400 16px/1.65 var(--g-font);
   color: var(--g-ink);
   letter-spacing: -0.012em;
   color-scheme: dark;
@@ -176,12 +178,12 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   z-index: 5;
 }
 #glass-composition .gc-layout {
-  max-width: 1020px;
+  max-width: calc(var(--g-content-width) + 2 * var(--g-gutter));
   margin: auto;
-  padding: 0 36px 30px;
+  padding: 0 var(--g-gutter) 30px;
 }
 #glass-composition .gc-main {
-  max-width: 650px;
+  max-width: var(--g-content-width);
   margin: auto;
   min-width: 0;
 }
@@ -357,7 +359,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   letter-spacing: -0.35px;
 }
 #glass-composition .gc-body p {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.8;
   margin: 0 0 12px;
   white-space: pre-line;
@@ -538,12 +540,12 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 10px 0 19px;
 }
 #glass-composition .gc-answer p {
-  font-size: 15px;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.75;
   margin: 0 0 15px;
 }
 #glass-composition .gc-answer ul {
-  font-size: 14px;
+  font-size: 16px;
   padding-left: 19px;
   line-height: 1.85;
   margin: 0 0 17px;
@@ -561,16 +563,15 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   vertical-align: super;
   padding: 0 4px;
 }
+/* Evidence is a block surface; inline-citation decoration must not leak here. */
 #glass-composition .gc-evidence {
-  font: inherit;
-  text-align: left;
-  display: inline;
-  padding: 0 2px;
-  background: #4d80ff14;
-  border-bottom: 1px solid #4d80ffa6;
-}
-#glass-composition .gc-evidence:hover {
-  background: #4d80ff2b;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 20px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--g-soft);
 }
 #glass-composition .gc-answer-actions {
   display: flex;
@@ -799,7 +800,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   top: 0;
   bottom: 0;
   z-index: 10;
-  width: 238px;
+  width: 280px;
   padding: 12px 10px;
   background: #14192489;
   backdrop-filter: blur(28px) saturate(120%);
@@ -1266,8 +1267,11 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   }
 }
 @media (max-width: 740px) {
+  #glass-composition {
+    --g-gutter: 22px;
+  }
   #glass-composition .gc-layout {
-    padding: 0 22px 26px;
+    padding: 0 var(--g-gutter) 26px;
   }
   #glass-composition[data-inspect="open"] .gc-layout {
     display: block;
@@ -1290,8 +1294,11 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   }
 }
 @media (max-width: 450px) {
+  #glass-composition {
+    --g-gutter: 16px;
+  }
   #glass-composition .gc-layout {
-    padding: 0 17px 25px;
+    padding: 0 var(--g-gutter) 25px;
   }
   #glass-composition .gc-arrival h1 {
     font-size: 30px;
@@ -1417,7 +1424,11 @@ body,
 }
 #glass-composition .gc-dock {
   position: relative;
-  width: min(650px, calc(100% - 44px));
+  width: min(
+    var(--g-content-width),
+    calc(100% - 2 * var(--g-gutter) - var(--g-scrollbar-width, 0px))
+  );
+  left: calc(var(--g-scrollbar-width, 0px) / -2);
   margin: 0 auto;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   min-width: 0;
@@ -1425,6 +1436,15 @@ body,
 }
 #glass-composition .gc-dock .gc-composer {
   margin-top: 0;
+}
+#glass-composition .gc-composer-note {
+  margin: 9px 0 2px;
+  padding: 0 8px;
+  color: var(--g-dim);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
 }
 #glass-composition .gc-footer:empty {
   display: none;
@@ -1529,6 +1549,10 @@ body,
 }
 #glass-composition .gc-rail {
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #8590a860 transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 #glass-composition .gc-exchange {
   padding-bottom: 30px;
@@ -1558,40 +1582,156 @@ body,
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  width: 100%;
+  min-width: 0;
 }
 #glass-composition .gc-file-card {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--g-line);
   border-radius: 12px;
-  padding: 10px;
-  max-width: 100%;
+  padding: 16px;
   text-align: left;
   font-size: 13px;
 }
-#glass-composition .gc-file-card img,
-#glass-composition .gc-viewed img {
-  max-height: 130px;
-  max-width: 180px;
-  border-radius: 7px;
-  display: block;
+#glass-composition .gc-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 32px;
 }
-#glass-composition .gc-file-card small {
-  display: block;
+#glass-composition .gc-disclosure::-webkit-details-marker {
+  display: none;
+}
+#glass-composition .gc-disclosure-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  flex: 1;
+  min-width: 0;
+}
+#glass-composition .gc-disclosure-title {
+  color: var(--g-ink);
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+#glass-composition .gc-disclosure-meta {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--g-dim);
+}
+#glass-composition .gc-disclosure > .gc-chevron {
+  color: var(--g-soft);
+}
+#glass-composition details[open] > .gc-disclosure > .gc-chevron {
+  transform: rotate(180deg);
+}
+#glass-composition .gc-file-summary .gc-disclosure-heading {
+  display: grid;
+  gap: 2px;
+}
+#glass-composition .gc-file-summary .gc-disclosure-title {
+  font-size: 16px;
+  line-height: 1.4;
+}
+#glass-composition .gc-file-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 14px 0 12px;
+}
+#glass-composition .gc-file-actions a {
+  color: var(--g-edge);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#glass-composition .gc-file-actions .gc-open-original {
+  padding: 5px 10px;
+  min-height: 34px;
+  border: 1px solid var(--g-line);
+  border-radius: 7px;
+  background: #a3baff0a;
+  color: var(--g-ink);
+  font-weight: 500;
+}
+#glass-composition .gc-file-actions .gc-open-original:hover {
+  background: #a3baff18;
+}
+#glass-composition .gc-file-facts p {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--g-soft);
+}
+#glass-composition .gc-file-warning {
+  margin: 8px 0;
   color: var(--g-soft);
 }
 #glass-composition .gc-pages {
   display: flex;
-  gap: 10px;
-  overflow: auto;
-  max-width: 570px;
-  padding: 8px 0;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #8590a860 transparent;
+  padding: 12px 0 8px;
 }
-#glass-composition .gc-pages img {
-  height: 90px;
+#glass-composition .gc-viewed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 180px;
+  text-align: left;
 }
-#glass-composition .gc-evidence {
+#glass-composition .gc-viewed img {
+  display: block;
+  max-height: 130px;
+  max-width: 180px;
+  border-radius: 7px;
+}
+#glass-composition .gc-pages .gc-viewed {
+  width: 86px;
+}
+#glass-composition .gc-pages .gc-viewed img {
+  height: 112px;
+  max-width: 86px;
+  object-fit: contain;
+  object-position: left;
+}
+#glass-composition .gc-preview-label {
   font-size: 13px;
   color: var(--g-soft);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+#glass-composition .gc-viewed-status {
+  font-size: 13px;
+  color: var(--g-good);
+  line-height: 1.4;
+}
+#glass-composition .gc-evidence-section {
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--g-line);
+}
+#glass-composition .gc-evidence-section .gc-attachment-strip {
+  margin-top: 8px;
+}
+#glass-composition .gc-activity-tool,
+#glass-composition .gc-source-count {
+  color: var(--g-ink);
+  font-weight: 500;
 }
 #glass-composition .gc-attachments {
   display: flex;
@@ -1780,7 +1920,7 @@ body,
 #glass-composition table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: 14px;
 }
 #glass-composition td,
 #glass-composition th {
@@ -1802,7 +1942,7 @@ body,
   background: #5681ff14;
 }
 #glass-composition .glass-cell p {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
 }
 #glass-composition .gc-checklist small {
@@ -2047,11 +2187,11 @@ body,
 }
 @media (max-width: 450px) {
   #glass-composition .gc-layout {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: var(--g-gutter);
+    padding-right: var(--g-gutter);
   }
   #glass-composition .gc-dock {
-    width: calc(100% - 24px);
+    width: calc(100% - 2 * var(--g-gutter) - var(--g-scrollbar-width, 0px));
   }
   #glass-composition .gc-composer {
     padding: 12px 10px 10px;
@@ -2236,7 +2376,7 @@ body,
   padding-right: 20px;
 }
 #glass-composition .glass-cell-content p {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
 }
 #glass-composition .glass-cell-content[data-selected="true"] {

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 import {
   useConnection,
@@ -69,12 +70,31 @@ function GlassApp() {
   const [nav, setNav] = useState(false);
   const scroll = useRef<HTMLElement>(null),
     positions = useRef(new Map<string, number>());
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  useLayoutEffect(() => {
+    const node = scroll.current;
+    if (!node) return;
+    // Align the dock to the reading area's usable width on platforms with
+    // non-overlay scrollbars; retain the native scrollbar and its affordance.
+    const measure = () =>
+      setScrollbarWidth(node.offsetWidth - node.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   useLayoutEffect(() => {
     if (scroll.current)
       scroll.current.scrollTop =
         positions.current.get(state.activeId ?? "new") ?? 0;
   }, [state.activeId]);
   const menu = useRef<HTMLButtonElement>(null);
+  const previousNav = useRef(nav);
+  useLayoutEffect(() => {
+    // Restore focus after React removes inert from the trigger.
+    if (previousNav.current && !nav) menu.current?.focus();
+    previousNav.current = nav;
+  }, [nav]);
   const record = activeConversation(state);
   const lastTurn = record?.turns.at(-1)?.id;
   const previousTurn = useRef({ conversation: state.activeId, turn: lastTurn });
@@ -105,11 +125,11 @@ function GlassApp() {
   }, [record?.title]);
   function closeNav() {
     setNav(false);
-    menu.current?.focus();
   }
   return (
     <div
       id="glass-composition"
+      style={{ "--g-scrollbar-width": `${scrollbarWidth}px` } as CSSProperties}
       data-motion={preferences.motion}
       data-nav={nav ? "open" : "closed"}
       data-view={record ? "conversation" : "arrival"}
