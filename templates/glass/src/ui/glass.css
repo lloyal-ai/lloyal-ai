@@ -2010,12 +2010,9 @@ body,
   border-left: 1px solid var(--g-line);
   margin: 12px 0 20px;
 }
-#glass-composition .gc-input:focus-visible {
+#glass-composition .gc-input:focus-visible,
+#glass-composition .gc-search input:focus-visible {
   outline: none;
-}
-#glass-composition .gc-composer:has(.gc-input:focus-visible) {
-  outline: 2px solid #82a8ff;
-  outline-offset: 2px;
 }
 #glass-composition .gc-dot.complete {
   background: #79b8b0;

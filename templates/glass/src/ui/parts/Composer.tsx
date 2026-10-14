@@ -330,7 +330,11 @@ export function Composer({
           >
             +
           </button>
-          <Modes value={mode} onChange={chooseMode} />
+          <Modes
+            value={mode}
+            onChange={chooseMode}
+            disabled={submitted !== null || busy}
+          />
           <Abilities excluded={excluded} onExcluded={setExcluded} />
           <span className="gc-spacer" />
           <VoiceButton voice={voice} />

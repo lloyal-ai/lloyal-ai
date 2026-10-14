@@ -14,18 +14,24 @@ const descriptions = {
 export function Modes({
   value,
   onChange,
+  disabled = false,
 }: {
   value: Mode;
+  disabled?: boolean;
   onChange(value: Mode): void;
 }) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null),
     [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   return (
     <>
       <button
         ref={setAnchor}
         type="button"
         className="gc-picker"
+        disabled={disabled}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
@@ -33,7 +39,7 @@ export function Modes({
       </button>
       <ComposerPopover
         anchor={anchor}
-        open={open}
+        open={open && !disabled}
         onClose={() => setOpen(false)}
         label="Mode"
       >
