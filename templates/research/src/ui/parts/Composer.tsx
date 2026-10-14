@@ -44,9 +44,9 @@ const ATTACH_TYPES = "image/*,application/pdf,video/*";
  *  is even written. A removed attachment leaves an unreferenced blob behind,
  *  the same harmless orphan class the store's write order already accepts. */
 type Attached =
-  | { id: number; name: string; status: "uploading"; progress?: string }
+  | { id: number; name: string; status: "uploading"; progress?: string; video?: boolean }
   | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null }
-  | { id: number; name: string; status: "failed"; error: string };
+  | { id: number; name: string; status: "failed"; error: string; video?: boolean };
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
  *  inline background always beats the hover class, so selection never dims. */
@@ -79,6 +79,16 @@ function DocGlyph(): ReactElement {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+/** A strip of film — the video chip's glyph while the clip is read and composed. */
+function FilmGlyph(): ReactElement {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4" />
     </svg>
   );
 }
@@ -367,11 +377,14 @@ export function Composer({ shape, placeholder }: {
       setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
       const progress = (p: VideoProgress): void =>
         setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: progressLabel(p) } : a)));
+      let video = false;
       void (async () => {
         try {
           // The bytes decide, here as at the host: a video container is decoded on this page and composed
           // there; anything else crosses once and the host's ingress admits it.
-          const root = isVideoContainer(new Uint8Array(await file.slice(0, 64).arrayBuffer()))
+          video = isVideoContainer(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+          if (video) setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, video } : a)));
+          const root = video
             ? await attachVideo(file, progress)
             : await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
           const asset = await resolveAsset(origin, root.digest);
@@ -387,7 +400,7 @@ export function Composer({ shape, placeholder }: {
           // The host's own message — 413 too large, 408 too slow, 400 not
           // admitted — beats anything invented here.
           const error = err instanceof Error ? err.message : "Upload failed.";
-          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error } : a)));
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error, video } : a)));
         }
       })();
     }
@@ -500,8 +513,8 @@ export function Composer({ shape, placeholder }: {
               {img.status === "admitted" && img.thumb
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
-                  ? <span style={{ ...S.docChip, color: color.danger }}><DocGlyph />{img.name} — {img.error}</span>
-                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? ` · ${img.progress ?? "admitting…"}` : ""}</span>}
+                  ? <span style={{ ...S.docChip, color: color.danger }}>{img.video ? <FilmGlyph /> : <DocGlyph />}{img.name} — {img.error}</span>
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}>{img.status === "uploading" && img.video ? <FilmGlyph /> : <DocGlyph />}{img.name}{img.status === "uploading" ? ` · ${img.progress ?? "admitting…"}` : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
