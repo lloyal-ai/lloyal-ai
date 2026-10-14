@@ -9,9 +9,8 @@
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
 import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Lightbox, Markdown, useAssets, useContentOrigin } from "@lloyal-labs/ui";
+import { Lightbox, Markdown, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
 import type { LightboxProps } from "@lloyal-labs/ui";
-import { videoView } from "./Figures.js";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
 import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
@@ -84,8 +83,11 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
       const view = videoView(origin, root, asset, moment.tMs);
       // The frame the model saw at that moment: the last one shown at or before it.
       const seen = view.frames.filter((f) => f.tMs <= moment.tMs).at(-1) ?? view.frames[0];
+      // Said aloud as it reads: the cited words, their citation number, then what pressing it does.
+      const label = [textOf(children).trim(), ordinal !== undefined && `citation ${ordinal}`, `play the attached video from ${at}`]
+        .filter(Boolean).join(", ");
       return (
-        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={`Play the attached video from ${at}`} onClick={() => setOpenVideo(view)}>
+        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={label} onClick={() => setOpenVideo(view)}>
           {mark}
           <span style={S.moment}>
             {seen && <img src={seen.src} alt="" style={S.momentFrame} />}
