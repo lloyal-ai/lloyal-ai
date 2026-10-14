@@ -1,6 +1,6 @@
 import { DisclosureHeading } from "./DisclosureHeading.js";
 import { SourceProgress } from "./SourceProgress.js";
-import { returnedSources } from "../sources.js";
+import { sourceProgress } from "../sources.js";
 import { ActivityLabel } from "./ActivityLabel.js";
 import { Chevron } from "./Chevron.js";
 import { usePreferences } from "../preferences.js";
@@ -482,12 +482,13 @@ export function Work() {
                   </ActivityLabel>
                 </div>
                 <SourceProgress
-                  sources={returnedSources(
+                  sources={sourceProgress(
                     [...work.roster.agents.values()].filter(
                       (a) =>
                         work.keys[a.id] === active.id &&
                         work.revisions[a.id] === ps.revision,
                     ),
+                    work.sourceRequests,
                   )}
                 />
                 <h3>{active.title}</h3>

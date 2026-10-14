@@ -1,3 +1,11 @@
+/* One scrollbar treatment, including public UI portals mounted under body. */
+html:has(#glass-composition),
+body:has(#glass-composition),
+body:has(#glass-composition) * {
+  scrollbar-width: thin;
+  scrollbar-color: #8590a860 transparent;
+}
+
 html:has(#glass-composition),
 body:has(#glass-composition) {
   margin: 0;
@@ -303,9 +311,11 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   padding: 0 13px;
   border-bottom: 1px solid var(--g-line);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
 }
 #glass-composition .gc-tab {
+  flex-shrink: 0;
   display: flex;
   gap: 7px;
   align-items: center;
@@ -323,7 +333,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   height: 2px;
   background: #83a4ff;
   position: absolute;
-  bottom: -1px;
+  bottom: 0;
   left: 8px;
   right: 8px;
   border-radius: 1px;
@@ -2478,4 +2488,12 @@ body,
     width: 44px;
     height: 44px;
   }
+}
+
+#glass-composition .gc-tab:focus-visible {
+  outline-offset: -3px;
+}
+#glass-composition .gc-source-progress small {
+  color: var(--g-dim);
+  white-space: nowrap;
 }

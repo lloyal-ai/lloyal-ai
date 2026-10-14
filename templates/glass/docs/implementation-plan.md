@@ -35,3 +35,10 @@ The history drawer is 280 px wide, capped at viewport width minus 32 px. Its com
 ## Deferred capabilities
 
 Streaming ASR/TTS, live camera/video, new multimodal embedding services, automatic all-service model fitting, unsupported source-region anchors and new host transports remain outside Phase 1. Recorded dictation produces an editable transcript after recording and the app replies in text.
+
+
+## Incremental source progress and scrollbar consistency
+
+Source progress is driven by public agent events. A dispatched `fetch_page`/`web_fetch` URL appears immediately as Opening, before the tool returns. Completed tool metadata enriches the same page and accumulates during the run; a later result without an icon does not erase an earlier icon. Failed/stopped requests stop showing Opening. Search results remain distinct from proof that a page was read. Direct answers and selected work parts use the same progress component; no final report is needed to populate it. Search identities remain unavailable until the search tool returns results.
+
+All application scroll regions, including public UI portals, share thin muted scrollbars with transparent tracks. Work tabs scroll horizontally only, keep their active underline inside the row, and retain an inset visible keyboard focus outline.

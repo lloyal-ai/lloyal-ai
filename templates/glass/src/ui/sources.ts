@@ -23,11 +23,59 @@ export function returnedSources(agents: Iterable<AgentRuntime>): SourceMeta[] {
         if (!address && !source.host && !source.title) continue;
         sources.set(key, {
           ...sources.get(key),
-          ...source,
+          ...Object.fromEntries(
+            Object.entries(source).filter(([, value]) => value !== undefined),
+          ),
           url: address,
-          icon: webAddress(source.icon),
+          icon: webAddress(source.icon) ?? sources.get(key)?.icon,
         });
       }
     }
   return [...sources.values()];
+}
+
+export type ProgressSource = SourceMeta & { opening?: boolean };
+
+/** A dispatched URL is visible before its result; it is not yet evidence. */
+export function requestedSource(
+  tool: string,
+  args: string,
+): string | undefined {
+  if (tool !== "fetch_page" && tool !== "web_fetch") return;
+  try {
+    const value: unknown = JSON.parse(args);
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("url" in value) ||
+      typeof value.url !== "string"
+    )
+      return;
+    return webAddress(value.url);
+  } catch {
+    return;
+  }
+}
+
+export function sourceProgress(
+  agents: Iterable<AgentRuntime>,
+  requests: Record<number, string>,
+): ProgressSource[] {
+  const selected = [...agents];
+  const sources: ProgressSource[] = returnedSources(selected);
+  const page = (address: string) => {
+    const url = new URL(address);
+    url.hash = "";
+    return url.href;
+  };
+  for (const agent of selected) {
+    const url = requests[agent.id];
+    if (!url) continue;
+    const known = sources.find(
+      (source) => source.url && page(source.url) === page(url),
+    );
+    if (known) known.opening = true;
+    else sources.push({ url, host: new URL(url).hostname, opening: true });
+  }
+  return sources;
 }

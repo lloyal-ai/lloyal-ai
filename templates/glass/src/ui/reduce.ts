@@ -1,3 +1,4 @@
+import { requestedSource } from "./sources.js";
 import { foldAgents } from "@lloyal-labs/ui/fold";
 import type { AgentEvent as FoldEvent } from "@lloyal-labs/ui/fold";
 import type { WorkflowEvent } from "../protocol.js";
@@ -125,10 +126,38 @@ export function reduce(state: AppState, event: WorkflowEvent): AppState {
         : state;
     case "work:ended":
       return state.work?.turnId === event.turnId
-        ? { ...state, work: { ...state.work, phase: "idle", paused: false } }
+        ? {
+            ...state,
+            work: {
+              ...state.work,
+              phase: "idle",
+              paused: false,
+              sourceRequests: {},
+            },
+          }
         : state;
     default: {
       if (!event.type.startsWith("agent:") || !state.work) return state;
+      let sourceRequests = state.work.sourceRequests;
+      if (event.type === "agent:tool_call") {
+        const url = requestedSource(event.tool, event.args);
+        sourceRequests = { ...sourceRequests };
+        delete sourceRequests[event.agentId];
+        if (url) sourceRequests[event.agentId] = url;
+      } else if (
+        [
+          "agent:tool_result",
+          "agent:failed",
+          "agent:done",
+          "agent:return",
+          "agent:recovered",
+        ].includes(event.type) &&
+        "agentId" in event &&
+        sourceRequests[event.agentId]
+      ) {
+        sourceRequests = { ...sourceRequests };
+        delete sourceRequests[event.agentId];
+      }
       const keys =
         event.type === "agent:spawn"
           ? { ...state.work.keys, [event.agentId]: event.key ?? "decision" }
@@ -142,7 +171,9 @@ export function reduce(state: AppState, event: WorkflowEvent): AppState {
             null,
         }),
       });
-      return roster === state.work.roster && keys === state.work.keys
+      return roster === state.work.roster &&
+        keys === state.work.keys &&
+        sourceRequests === state.work.sourceRequests
         ? state
         : {
             ...state,
@@ -150,6 +181,7 @@ export function reduce(state: AppState, event: WorkflowEvent): AppState {
               ...state.work,
               roster,
               keys,
+              sourceRequests,
               revisions:
                 event.type === "agent:spawn"
                   ? {

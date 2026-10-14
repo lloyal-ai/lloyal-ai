@@ -23,6 +23,7 @@ export interface AppState {
     viewed: Descriptor[];
     roster: AgentRoster;
     keys: Record<number, string>;
+    sourceRequests: Record<number, string>;
     revisions: Record<number, number>;
     plan: PlanState | null;
     decision: string;
@@ -52,6 +53,7 @@ export const emptyWork = (
   viewed: [],
   roster: emptyRoster(),
   keys: {},
+  sourceRequests: {},
   revisions: {},
   plan: null,
   decision: "",

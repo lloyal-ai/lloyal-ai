@@ -1,12 +1,16 @@
 import { useState } from "react";
-import type { SourceMeta } from "@lloyal-labs/ui/fold";
+import type { ProgressSource } from "../sources.js";
 import { Chevron } from "./Chevron.js";
 
-function SourceIcon({ source }: { source: SourceMeta }) {
+function SourceIcon({ source }: { source: ProgressSource }) {
   const [failed, setFailed] = useState(false);
   const label = source.host || source.title || "Source";
   return (
-    <span className="gc-source-icon" title={label} aria-hidden="true">
+    <span
+      className="gc-source-icon"
+      title={source.opening ? `Opening ${label}` : label}
+      aria-hidden="true"
+    >
       {source.icon && !failed ? (
         <img
           src={source.icon}
@@ -24,7 +28,7 @@ function SourceIcon({ source }: { source: SourceMeta }) {
   );
 }
 
-export function SourceProgress({ sources }: { sources: SourceMeta[] }) {
+export function SourceProgress({ sources }: { sources: ProgressSource[] }) {
   if (!sources.length) return null;
   return (
     <details className="gc-source-progress">
@@ -34,13 +38,20 @@ export function SourceProgress({ sources }: { sources: SourceMeta[] }) {
             <SourceIcon key={source.url ?? i} source={source} />
           ))}
         </span>
-        <span className="gc-source-count">
+        <span
+          className="gc-source-count"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {sources.length} {sources.length === 1 ? "source" : "sources"}
+          {sources.some((source) => source.opening) && " · opening…"}
         </span>
         <Chevron />
       </summary>
       <p>
-        Returned by this part’s tools. Search results may not have been read.
+        Sources appear as tools find or open them. “Opening” is a request in
+        flight; search results may not have been read.
       </p>
       <ul>
         {sources.map((source, i) => (
@@ -53,6 +64,7 @@ export function SourceProgress({ sources }: { sources: SourceMeta[] }) {
             ) : (
               <span>{source.title || source.host}</span>
             )}
+            {source.opening && <small>Opening…</small>}
           </li>
         ))}
       </ul>

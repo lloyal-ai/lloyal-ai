@@ -18,6 +18,8 @@ import type { Command } from "../protocol.js";
 import { activeConversation, isWorking, streamedAnswer } from "./select.js";
 import { ActionMenu } from "./parts/ActionMenu.js";
 import { Composer } from "./parts/Composer.js";
+import { SourceProgress } from "./parts/SourceProgress.js";
+import { sourceProgress } from "./sources.js";
 import { ActivityLabel } from "./parts/ActivityLabel.js";
 import { PendingActivity } from "./parts/PendingActivity.js";
 import { History } from "./parts/History.js";
@@ -311,6 +313,16 @@ function GlassApp() {
                                       ? "Checking sources"
                                       : "Preparing your answer"
                             }
+                          />
+                        )}
+                      {work?.conversationId === record.id &&
+                        work.turnId === turn.id &&
+                        !work.plan && (
+                          <SourceProgress
+                            sources={sourceProgress(
+                              work.roster.agents.values(),
+                              work.sourceRequests,
+                            )}
                           />
                         )}
                       <AnswerView
