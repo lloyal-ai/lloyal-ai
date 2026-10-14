@@ -29,6 +29,15 @@ export function reduce(state: AppState, event: WorkflowEvent): AppState {
       return {
         ...state,
         conversations,
+        entries: state.entries.filter((entry) => entry.id !== event.id),
+        search: state.search
+          ? {
+              ...state.search,
+              entries: state.search.entries.filter(
+                (entry) => entry.id !== event.id,
+              ),
+            }
+          : null,
         activeId: state.activeId === event.id ? null : state.activeId,
       };
     }

@@ -55,6 +55,8 @@ export function History({ open, close }: { open: boolean; close(): void }) {
       <nav
         ref={panel}
         className="gc-rail"
+        role="dialog"
+        aria-modal={open ? true : undefined}
         aria-label="Conversation history"
         inert={!open}
         onKeyDown={(event) => {
@@ -67,7 +69,13 @@ export function History({ open, close }: { open: boolean; close(): void }) {
               panel.current?.querySelectorAll<HTMLElement>(
                 "button:not(:disabled),input:not(:disabled),select,summary",
               ) ?? [],
-            );
+            ).filter((item) => {
+              const closed = item.closest("details:not([open])");
+              return (
+                item.getClientRects().length > 0 &&
+                (!closed || item === closed.querySelector("summary"))
+              );
+            });
             const first = items[0],
               last = items.at(-1);
             if (event.shiftKey && document.activeElement === first) {
@@ -132,21 +140,56 @@ export function History({ open, close }: { open: boolean; close(): void }) {
         )}
         <div className="gc-nav-label">Conversations</div>
         {items.map((entry) => (
-          <button
-            type="button"
-            key={entry.id}
-            className="gc-history-item"
-            aria-current={entry.id === state.activeId ? "page" : undefined}
-            onClick={() => navigate(entry.id)}
-          >
-            <span>{entry.title}</span>
-          </button>
+          <div className="gc-history-row" key={entry.id}>
+            <button
+              type="button"
+              className="gc-history-item"
+              aria-current={entry.id === state.activeId ? "page" : undefined}
+              onClick={() => navigate(entry.id)}
+              title={entry.title}
+            >
+              <span>{entry.title}</span>
+            </button>
+            <button
+              type="button"
+              className="gc-icon gc-history-delete"
+              aria-label={`Discard conversation: ${entry.title}`}
+              title="Discard conversation"
+              disabled={!!state.work && state.work.phase !== "idle"}
+              onClick={() => {
+                if (confirm(`Discard “${entry.title}”?`)) {
+                  send({
+                    type: "discard_conversation",
+                    id: entry.id,
+                    revision: entry.revision,
+                  });
+                  searchRef.current?.focus();
+                }
+              }}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3.5 5.5h13M7 5.5v-2h6v2M5 5.5l.8 11h8.4l.8-11M8 8.5v5M12 8.5v5" />
+              </svg>
+            </button>
+          </div>
         ))}
         {!items.length && (
-          <p className="gc-history-note">
-            {search
-              ? "No matching conversations."
-              : "Your conversations will appear here."}
+          <p className="gc-history-note" role="status">
+            {search && state.search?.query !== search
+              ? "Searching…"
+              : search
+                ? "No matching conversations."
+                : "Your conversations will appear here."}
           </p>
         )}
         <PreferencesView />

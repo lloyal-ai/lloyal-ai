@@ -1,5 +1,9 @@
+import { SourceProgress } from "./SourceProgress.js";
+import { returnedSources } from "../sources.js";
+import { ActivityLabel } from "./ActivityLabel.js";
+import { Chevron } from "./Chevron.js";
 import { usePreferences } from "../preferences.js";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useProjection, useSend } from "@lloyal-labs/ui";
 import type { AppState } from "../state.js";
 import type { Command } from "../../protocol.js";
@@ -47,7 +51,8 @@ export function Work() {
     if (!a) return live ? "Waiting" : "Not run";
     if (a.stopReason || a.failReason)
       return a.failReason ? "Failed" : "Stopped";
-    if (a.phase === "done") return "Checking result";
+    if (a.phase === "done") return live ? "Checking result" : "Ended";
+    if (!live || work.phase === "stopping") return "Stopped";
     return work.paused
       ? "Paused"
       : a.phase === "tool"
@@ -58,12 +63,34 @@ export function Work() {
             ? "Failed"
             : "Working";
   };
+  const editor = useRef<HTMLDivElement>(null);
+  const [invalidField, setInvalidField] = useState("");
   const patch = (id: string, p: Partial<WorkTask>) =>
     setDraft((d) => ({
       ...d,
       tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...p } : t)),
     }));
   function apply() {
+    setInvalidField("");
+    for (let i = 0; i < draft.tasks.length; i++) {
+      for (const field of ["title", "instruction"] as const) {
+        const text = draft.tasks[i][field];
+        const limit = field === "title" ? 100 : 3000;
+        if (!text.trim() || text.length > limit) {
+          const label = `Step ${i + 1} ${field}`;
+          setInvalidField(label);
+          setError(
+            !text.trim()
+              ? `Add ${field === "title" ? "a title" : "an instruction"} for step ${i + 1}.`
+              : `Keep the ${field} for step ${i + 1} within ${limit} characters.`,
+          );
+          editor.current
+            ?.querySelector<HTMLElement>(`[aria-label="${label}"]`)
+            ?.focus();
+          return;
+        }
+      }
+    }
     try {
       validatePlan(
         draft,
@@ -139,7 +166,7 @@ export function Work() {
             aria-label={collapsed ? "Expand work" : "Collapse work"}
             onClick={() => setCollapsed((v) => !v)}
           >
-            {collapsed ? "⌄" : "⌃"}
+            <Chevron up={!collapsed} />
           </button>
         </div>
       </div>
@@ -158,13 +185,20 @@ export function Work() {
                   ? "Adjust the steps, then start when you’re ready."
                   : "Accepted findings stay available when their premises are unchanged."}
               </div>
-              <div className="gc-plan-list">
+              <div className="gc-plan-list" ref={editor}>
                 {draft.tasks.map((task, i) => (
                   <div className="gc-plan-row" key={task.id}>
                     <span className="gc-plan-number">{i + 1}</span>
                     <div className="gc-plan-content">
                       <input
                         aria-label={`Step ${i + 1} title`}
+                        aria-invalid={invalidField === `Step ${i + 1} title`}
+                        aria-describedby={
+                          invalidField === `Step ${i + 1} title`
+                            ? "plan-error"
+                            : undefined
+                        }
+                        maxLength={100}
                         value={task.title}
                         onChange={(e) =>
                           patch(task.id, { title: e.target.value })
@@ -173,6 +207,15 @@ export function Work() {
                       <textarea
                         rows={2}
                         aria-label={`Step ${i + 1} instruction`}
+                        aria-invalid={
+                          invalidField === `Step ${i + 1} instruction`
+                        }
+                        aria-describedby={
+                          invalidField === `Step ${i + 1} instruction`
+                            ? "plan-error"
+                            : undefined
+                        }
+                        maxLength={3000}
                         value={task.instruction}
                         onChange={(e) =>
                           patch(task.id, { instruction: e.target.value })
@@ -288,7 +331,7 @@ export function Work() {
                 </button>
               </div>
               {error && (
-                <p className="gc-plan-description" role="alert">
+                <p id="plan-error" className="gc-plan-description" role="alert">
                   {error}
                 </p>
               )}
@@ -381,12 +424,16 @@ export function Work() {
                           : e.key === "ArrowLeft"
                             ? -1
                             : 0;
-                      if (offset) {
+                      if (offset || e.key === "Home" || e.key === "End") {
                         e.preventDefault();
                         const t =
                           ps.plan.tasks[
-                            (i + offset + ps.plan.tasks.length) %
-                              ps.plan.tasks.length
+                            e.key === "Home"
+                              ? 0
+                              : e.key === "End"
+                                ? ps.plan.tasks.length - 1
+                                : (i + offset + ps.plan.tasks.length) %
+                                  ps.plan.tasks.length
                           ];
                         setSelected(t.id);
                         document.getElementById("task-" + t.id)?.focus();
@@ -414,9 +461,34 @@ export function Work() {
                 className="gc-body"
                 id="work-panel"
                 role="tabpanel"
+                tabIndex={0}
                 aria-labelledby={"task-" + active.id}
               >
-                <div className="gc-status">{status(active.id)}</div>
+                <div className="gc-status" role="status">
+                  <ActivityLabel
+                    active={
+                      live &&
+                      !work.paused &&
+                      [
+                        "Working",
+                        "Thinking",
+                        "Using a source",
+                        "Checking result",
+                      ].includes(status(active.id))
+                    }
+                  >
+                    {status(active.id)}
+                  </ActivityLabel>
+                </div>
+                <SourceProgress
+                  sources={returnedSources(
+                    [...work.roster.agents.values()].filter(
+                      (a) =>
+                        work.keys[a.id] === active.id &&
+                        work.revisions[a.id] === ps.revision,
+                    ),
+                  )}
+                />
                 <h3>{active.title}</h3>
                 <StreamingProse markdown={agentText(runtime(active.id))} />
                 <div className="gc-task-footer">
@@ -453,7 +525,13 @@ export function Work() {
                   accepted · {ps.plan.tasks.length} requested
                 </span>
                 <span className="gc-spacer" />
-                <span>
+                <ActivityLabel
+                  active={
+                    live &&
+                    !work.paused &&
+                    !["review", "stopping"].includes(work.phase)
+                  }
+                >
                   {work.paused
                     ? "Paused"
                     : work.phase === "answering"
@@ -461,7 +539,7 @@ export function Work() {
                       : live
                         ? "In progress"
                         : "Ended"}
-                </span>
+                </ActivityLabel>
               </div>
             </>
           )}

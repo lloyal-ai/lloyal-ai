@@ -13,6 +13,7 @@ import type { Command } from "../../protocol.js";
 import { activeConversation, isWorking } from "../select.js";
 import { VoiceButton, VoiceCapture } from "./Voice.js";
 import { Reflection } from "./Reflection.js";
+import { PendingActivity } from "./PendingActivity.js";
 import { Selection } from "../../domain/answer.js";
 import { Mode } from "../../domain/work.js";
 import { usePreferences } from "../preferences.js";
@@ -195,7 +196,7 @@ export function Composer({
     setFlash((f) => ({ key: f.key + 1, right: true, bottom: true }));
   }
   return (
-    <div className={record ? "gc-dock" : ""}>
+    <div className="gc-dock">
       <div
         className="gc-composer gc-surface"
         data-drag={drag}
@@ -231,6 +232,7 @@ export function Composer({
         }}
       >
         <Reflection surface={surface} flash={flash} />
+        {submitted && <PendingActivity label="Sending your message" />}
         {busy && selection && (
           <p className="gc-status">
             Finish or stop the current work before asking about this saved
@@ -389,9 +391,7 @@ export function Composer({
           ))}
         </div>
       )}
-      <div className="gc-footer">
-        {submitted ? "Saving your message…" : !state.ready ? "Connecting…" : ""}
-      </div>
+      <div className="gc-footer">{!state.ready ? "Connecting…" : ""}</div>
     </div>
   );
 }

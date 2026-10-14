@@ -31,8 +31,6 @@ export function Reflection({
       height = box.height;
     node.width = (width + pad * 2) * ratio;
     node.height = (height + pad * 2) * ratio;
-    node.style.width = width + pad * 2 + "px";
-    node.style.height = height + pad * 2 + "px";
     context.scale(ratio, ratio);
     const corner = (radius * Math.PI) / 2,
       travel = 82 + corner + Math.min(55, height - 2 * radius);

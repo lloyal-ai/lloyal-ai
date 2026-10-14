@@ -7,6 +7,7 @@ export function PreferencesView() {
       <label>
         Answer detail
         <select
+          aria-label="Answer detail"
           value={value.detail}
           onChange={(e) =>
             set({ ...value, detail: e.target.value as typeof value.detail })
@@ -20,6 +21,7 @@ export function PreferencesView() {
       <label>
         Work surfaces
         <select
+          aria-label="Work surfaces"
           value={value.work}
           onChange={(e) =>
             set({ ...value, work: e.target.value as typeof value.work })
@@ -33,6 +35,7 @@ export function PreferencesView() {
       <label>
         Motion
         <select
+          aria-label="Motion"
           value={value.motion}
           onChange={(e) =>
             set({ ...value, motion: e.target.value as typeof value.motion })

@@ -15,7 +15,10 @@ import {
 import type { AppState } from "./state.js";
 import type { Command } from "../protocol.js";
 import { activeConversation, isWorking, streamedAnswer } from "./select.js";
+import { ActionMenu } from "./parts/ActionMenu.js";
 import { Composer } from "./parts/Composer.js";
+import { ActivityLabel } from "./parts/ActivityLabel.js";
+import { PendingActivity } from "./parts/PendingActivity.js";
 import { History } from "./parts/History.js";
 import { LiveField } from "./parts/LiveField.js";
 import { Evidence } from "./parts/Evidence.js";
@@ -121,13 +124,14 @@ function GlassApp() {
           className="gc-menu gc-icon gc-nav-trigger"
           aria-label="Open history"
           aria-expanded={nav}
+          inert={nav}
           onClick={() => setNav((v) => !v)}
         >
           <span />
           <span />
         </button>
         <History open={nav} close={closeNav} />
-        <header className="gc-header">
+        <header className="gc-header" inert={nav}>
           <span className="gc-thread-title">{record?.title}</span>
           <span className="gc-spacer" />
           {busy && (
@@ -146,21 +150,28 @@ function GlassApp() {
                 </button>
               )}
               <span role="status">
-                {work?.phase === "stopping"
-                  ? "Stopping…"
-                  : work?.paused
-                    ? "Paused"
-                    : work?.phase === "restoring"
-                      ? "Reopening…"
-                      : work?.phase === "review"
-                        ? "Review the approach"
-                        : work?.phase === "answering"
-                          ? "Writing"
-                          : work?.phase === "deciding"
-                            ? "Considering the request"
-                            : work?.phase === "preflight"
-                              ? "Checking source coverage"
-                              : "Working"}
+                <ActivityLabel
+                  active={
+                    !work?.paused &&
+                    !["review", "stopping"].includes(work?.phase ?? "")
+                  }
+                >
+                  {work?.phase === "stopping"
+                    ? "Stopping…"
+                    : work?.paused
+                      ? "Paused"
+                      : work?.phase === "restoring"
+                        ? "Reopening…"
+                        : work?.phase === "review"
+                          ? "Review the approach"
+                          : work?.phase === "answering"
+                            ? "Writing"
+                            : work?.phase === "deciding"
+                              ? "Considering the request"
+                              : work?.phase === "preflight"
+                                ? "Checking source coverage"
+                                : "Working"}
+                </ActivityLabel>
               </span>
               <button
                 type="button"
@@ -195,188 +206,192 @@ function GlassApp() {
             </div>
           )}
         </header>
-        <main
-          ref={scroll}
-          className="gc-scroll"
-          onScroll={(e) =>
-            positions.current.set(
-              state.activeId ?? "new",
-              e.currentTarget.scrollTop,
-            )
-          }
-        >
-          <div className="gc-layout">
-            <div className="gc-main">
-              {connection !== "connected" && (
-                <div className="gc-notice" role="status">
-                  Connection: {connection}{" "}
-                  {recover && (
-                    <button type="button" onClick={recover}>
-                      Reconnect
-                    </button>
-                  )}
-                </div>
-              )}
-              {state.error && (
-                <div className="gc-notice" role="alert">
-                  {state.error}
-                </div>
-              )}
-              {!record && (
-                <section className="gc-arrival">
-                  <h1>What’s on your mind?</h1>
-                </section>
-              )}
-              {record?.turns.map((turn) => {
-                const stream =
-                  turn.id === work?.turnId && record.id === work.conversationId
-                    ? draft
-                    : "";
-                const body = turn.answer ?? stream;
-                return (
-                  <section
-                    key={turn.id}
-                    data-turn={turn.id}
-                    className="gc-exchange"
-                  >
-                    <div className="gc-question">
-                      <p>{turn.question}</p>
-                      {turn.mode && turn.mode !== "Auto" && (
-                        <span className="gc-mode-receipt">{turn.mode}</span>
-                      )}
-                    </div>
-                    {(turn.directions ?? []).map((d) => (
-                      <p className="gc-direction" key={d.id}>
-                        {d.query}
-                      </p>
-                    ))}
-                    <Evidence
-                      roots={turn.attachments}
-                      references={record.turns.flatMap((t) => t.attachments)}
-                      viewed={
-                        turn.id === work?.turnId ? work.viewed : turn.viewed
-                      }
-                    />
-                    {work?.turnId === turn.id && work.plan && (
-                      <Work key={work.turnId} />
+        <div className="gc-stage" inert={nav}>
+          <main
+            ref={scroll}
+            className="gc-scroll"
+            onScroll={(e) =>
+              positions.current.set(
+                state.activeId ?? "new",
+                e.currentTarget.scrollTop,
+              )
+            }
+          >
+            <div className="gc-layout">
+              <div className="gc-main">
+                {connection !== "connected" && (
+                  <div className="gc-notice" role="status">
+                    Connection: {connection}{" "}
+                    {recover && (
+                      <button type="button" onClick={recover}>
+                        Reconnect
+                      </button>
                     )}
-                    <AnswerView
-                      recordId={record.id}
-                      revision={record.revision}
-                      mutable={!busy}
-                      turn={turn}
-                      stream={stream}
-                      digests={record.turns.flatMap((t) =>
-                        t.attachments.map((a) => a.digest),
-                      )}
-                      selected={
-                        selection?.turnId === turn.id
-                          ? selection
-                          : record.turns
-                              .map((t) => t.selection)
-                              .reverse()
-                              .find((s) => s?.turnId === turn.id)
-                      }
-                      onSelect={(s) => {
-                        setSelection(s);
-                        document
-                          .querySelector<HTMLTextAreaElement>(".gc-input")
-                          ?.focus();
-                      }}
-                    />
-                    {turn.status !== "complete" &&
-                      turn.status !== "pending" && (
-                        <div className="gc-interruption">
-                          <span>
-                            {turn.status === "partial"
-                              ? "Partial answer · saved"
-                              : (turn.reason ?? "No answer was saved.")}
-                          </span>
-                          {!busy && (
-                            <button
-                              className="gc-small"
-                              onClick={() =>
-                                send({
-                                  type: "continue_conversation",
-                                  id: record.id,
-                                  turnId: turn.id,
-                                  revision: record.revision,
-                                })
-                              }
-                            >
-                              Continue
-                            </button>
-                          )}
-                          {stream && !turn.answer && !busy && (
-                            <button
-                              className="gc-small"
-                              type="button"
-                              onClick={() =>
-                                send({
-                                  type: "keep_partial",
-                                  id: record.id,
-                                  turnId: turn.id,
-                                  revision: record.revision,
-                                })
-                              }
-                            >
-                              Keep this draft
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    {!busy && (
-                      <details className="glass-turn-menu">
-                        <summary aria-label="Turn actions">•••</summary>
-                        <button
-                          className="gc-small"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                "Discard this question and its answer? Later turns will stay saved.",
-                              )
-                            )
-                              send({
-                                type: "discard_turn",
-                                id: record.id,
-                                turnId: turn.id,
-                                revision: record.revision,
-                              });
-                          }}
-                        >
-                          Discard turn
-                        </button>
-                      </details>
-                    )}
+                  </div>
+                )}
+                {state.error && (
+                  <div className="gc-notice" role="alert">
+                    {state.error}
+                  </div>
+                )}
+                {!record && (
+                  <section className="gc-arrival">
+                    <h1>What’s on your mind?</h1>
                   </section>
-                );
-              })}
-              <Composer
-                selection={selection}
-                onClear={() => setSelection(null)}
-                onSelect={setSelection}
-              />
-              {record && !busy && (
-                <div className="gc-answer-actions">
-                  <button
-                    className="gc-small"
-                    type="button"
-                    onClick={() => {
-                      if (confirm("Discard this conversation?"))
-                        send({
-                          type: "discard_conversation",
-                          id: record.id,
-                          revision: record.revision,
-                        });
-                    }}
-                  >
-                    Discard conversation
-                  </button>
-                </div>
-              )}
+                )}
+                {record?.turns.map((turn) => {
+                  const stream =
+                    turn.id === work?.turnId &&
+                    record.id === work.conversationId
+                      ? draft
+                      : "";
+                  const body = turn.answer ?? stream;
+                  return (
+                    <section
+                      key={turn.id}
+                      data-turn={turn.id}
+                      className="gc-exchange"
+                    >
+                      <div className="gc-question">
+                        <p>{turn.question}</p>
+                        {turn.mode && turn.mode !== "Auto" && (
+                          <span className="gc-mode-receipt">{turn.mode}</span>
+                        )}
+                      </div>
+                      {(turn.directions ?? []).map((d) => (
+                        <p className="gc-direction" key={d.id}>
+                          {d.query}
+                        </p>
+                      ))}
+                      <Evidence
+                        roots={turn.attachments}
+                        references={record.turns.flatMap((t) => t.attachments)}
+                        viewed={
+                          turn.id === work?.turnId ? work.viewed : turn.viewed
+                        }
+                      />
+                      {work?.turnId === turn.id && work.plan && (
+                        <Work key={work.turnId} />
+                      )}
+                      {busy &&
+                        work?.conversationId === record.id &&
+                        work.turnId === turn.id &&
+                        turn.status === "pending" &&
+                        !body &&
+                        (!work?.plan || work.phase === "answering") && (
+                          <PendingActivity
+                            paused={work?.paused || work?.phase === "stopping"}
+                            label={
+                              work?.paused
+                                ? "Paused"
+                                : work?.phase === "stopping"
+                                  ? "Stopping…"
+                                  : work?.phase === "deciding"
+                                    ? "Considering your request"
+                                    : work?.phase === "preflight"
+                                      ? "Checking sources"
+                                      : "Preparing your answer"
+                            }
+                          />
+                        )}
+                      <AnswerView
+                        actions={
+                          !busy ? (
+                            <ActionMenu
+                              label="Answer actions"
+                              action="Discard turn"
+                              onAction={() => {
+                                if (
+                                  confirm(
+                                    "Discard this question and its answer? Later turns will stay saved.",
+                                  )
+                                )
+                                  send({
+                                    type: "discard_turn",
+                                    id: record.id,
+                                    turnId: turn.id,
+                                    revision: record.revision,
+                                  });
+                              }}
+                            />
+                          ) : null
+                        }
+                        recordId={record.id}
+                        revision={record.revision}
+                        mutable={!busy}
+                        turn={turn}
+                        stream={stream}
+                        digests={record.turns.flatMap((t) =>
+                          t.attachments.map((a) => a.digest),
+                        )}
+                        selected={
+                          selection?.turnId === turn.id
+                            ? selection
+                            : record.turns
+                                .map((t) => t.selection)
+                                .reverse()
+                                .find((s) => s?.turnId === turn.id)
+                        }
+                        onSelect={(s) => {
+                          setSelection(s);
+                          document
+                            .querySelector<HTMLTextAreaElement>(".gc-input")
+                            ?.focus();
+                        }}
+                      />
+                      {turn.status !== "complete" &&
+                        turn.status !== "pending" && (
+                          <div className="gc-interruption">
+                            <span>
+                              {turn.status === "partial"
+                                ? "Partial answer · saved"
+                                : (turn.reason ?? "No answer was saved.")}
+                            </span>
+                            {!busy && (
+                              <button
+                                className="gc-small"
+                                onClick={() =>
+                                  send({
+                                    type: "continue_conversation",
+                                    id: record.id,
+                                    turnId: turn.id,
+                                    revision: record.revision,
+                                  })
+                                }
+                              >
+                                Continue
+                              </button>
+                            )}
+                            {stream && !turn.answer && !busy && (
+                              <button
+                                className="gc-small"
+                                type="button"
+                                onClick={() =>
+                                  send({
+                                    type: "keep_partial",
+                                    id: record.id,
+                                    turnId: turn.id,
+                                    revision: record.revision,
+                                  })
+                                }
+                              >
+                                Keep this draft
+                              </button>
+                            )}
+                          </div>
+                        )}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+          <Composer
+            selection={selection}
+            onClear={() => setSelection(null)}
+            onSelect={setSelection}
+          />
+        </div>
       </div>
     </div>
   );

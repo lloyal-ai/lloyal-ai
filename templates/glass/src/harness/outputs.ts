@@ -3,6 +3,8 @@ import { parseAttachmentHref } from "@lloyal-labs/media";
 import { defineOutput, weaveSourcesIntoResult } from "@lloyal-labs/rig";
 import { stripDanglingToolCall } from "@lloyal-labs/lloyal-agents";
 import { Source, Table, Checklist, type Answer } from "../domain/answer.js";
+import { withoutSourceTrailer } from "../domain/citations.js";
+import { withoutRepeatedTable } from "../domain/table-prose.js";
 import { render } from "./prompts.js";
 function tableOutput() {
   return Table.refine(
@@ -96,14 +98,25 @@ export function finishAnswer(
     ? {
         ...value.table,
         rows: value.table.rows.map((row) =>
-          row.map((cell) => weaveSourcesIntoResult(cell, value.sources)),
+          row.map((cell) =>
+            withoutSourceTrailer(
+              weaveSourcesIntoResult(cell, value.sources),
+              value.sources,
+            ),
+          ),
         ),
       }
     : undefined;
   const checklist = value.checklist?.map((item) => ({
     ...item,
-    text: weaveSourcesIntoResult(item.text, value.sources),
-    detail: weaveSourcesIntoResult(item.detail, value.sources),
+    text: withoutSourceTrailer(
+      weaveSourcesIntoResult(item.text, value.sources),
+      value.sources,
+    ),
+    detail: withoutSourceTrailer(
+      weaveSourcesIntoResult(item.detail, value.sources),
+      value.sources,
+    ),
   }));
   return {
     ...value,
@@ -111,7 +124,10 @@ export function finishAnswer(
     ...(checklist ? { checklist } : {}),
     kind,
     result: weaveSourcesIntoResult(
-      stripDanglingToolCall(value.result, []),
+      withoutRepeatedTable(
+        stripDanglingToolCall(value.result, []),
+        value.table,
+      ),
       value.sources,
     ),
   };

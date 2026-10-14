@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Popover } from "@lloyal-labs/ui";
+import { ComposerPopover } from "./ComposerPopover.js";
+import { Chevron } from "./Chevron.js";
+import { useState, useEffect, useRef } from "react";
 import { Mode } from "../../domain/work.js";
-import { popStyle } from "./Abilities.js";
+
 const descriptions = {
   Auto: "Let the request take shape",
   Direct: "One agent, available abilities",
@@ -28,16 +29,15 @@ export function Modes({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {value} <span aria-hidden="true">⌄</span>
+        {value} <Chevron />
       </button>
-      <Popover
+      <ComposerPopover
         anchor={anchor}
         open={open}
         onClose={() => setOpen(false)}
         label="Mode"
-        style={popStyle}
       >
-        <div className="glass-pop" role="radiogroup" aria-label="Mode">
+        <ModeGroup>
           {Mode.options.map((mode) => (
             <button
               className="glass-mode"
@@ -45,6 +45,32 @@ export function Modes({
               type="button"
               role="radio"
               aria-checked={mode === value}
+              tabIndex={mode === value ? 0 : -1}
+              onKeyDown={(event) => {
+                const offset = ["ArrowDown", "ArrowRight"].includes(event.key)
+                  ? 1
+                  : ["ArrowUp", "ArrowLeft"].includes(event.key)
+                    ? -1
+                    : 0;
+                if (!offset && !["Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const choices = Array.from(
+                  event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>(
+                    "[role=radio]",
+                  ),
+                );
+                const index =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? choices.length - 1
+                      : (choices.indexOf(event.currentTarget) +
+                          offset +
+                          choices.length) %
+                        choices.length;
+                choices[index].focus();
+                onChange(Mode.options[index]);
+              }}
               onClick={() => {
                 onChange(mode);
                 setOpen(false);
@@ -54,8 +80,20 @@ export function Modes({
               <small>{descriptions[mode]}</small>
             </button>
           ))}
-        </div>
-      </Popover>
+        </ModeGroup>
+      </ComposerPopover>
     </>
+  );
+}
+
+function ModeGroup({ children }: { children: React.ReactNode }) {
+  const group = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    group.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  }, []);
+  return (
+    <div ref={group} className="glass-pop" role="radiogroup" aria-label="Mode">
+      {children}
+    </div>
   );
 }

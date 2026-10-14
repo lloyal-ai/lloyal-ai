@@ -93,7 +93,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   gap: 12px;
 }
 #glass-composition .gc-thread-title {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -181,7 +181,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   align-items: center;
   gap: 7px;
   color: var(--g-soft);
-  font-size: 12px;
+  font-size: 13px;
   min-height: 32px;
 }
 #glass-composition .gc-suggestions button:hover {
@@ -205,7 +205,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   flex: 1;
 }
 #glass-composition .gc-mode-receipt {
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
   border: 1px solid var(--g-line);
   border-radius: 6px;
@@ -239,14 +239,14 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   min-width: 0;
 }
 #glass-composition .gc-work-caption {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .gc-small {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 13px;
   min-height: 28px;
   color: var(--g-soft);
 }
@@ -278,7 +278,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   padding: 10px 8px 11px;
   white-space: nowrap;
   color: var(--g-soft);
-  font-size: 12px;
+  font-size: 13px;
   position: relative;
 }
 #glass-composition .gc-tab[aria-selected="true"] {
@@ -335,7 +335,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   gap: 7px;
   align-items: center;
   color: var(--g-soft);
-  font-size: 11px;
+  font-size: 13px;
   min-height: 21px;
 }
 #glass-composition .gc-status svg {
@@ -355,7 +355,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   flex-wrap: wrap;
 }
 #glass-composition .gc-source-link {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   display: inline-flex;
   align-items: center;
@@ -379,7 +379,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   align-items: center;
   border-top: 1px solid var(--g-line);
   color: var(--g-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 #glass-composition .gc-spacer {
   flex: 1;
@@ -390,7 +390,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   align-items: center;
 }
 #glass-composition .gc-run-controls button {
-  font-size: 11px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -417,7 +417,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 }
 #glass-composition .gc-plan-number {
   color: var(--g-dim);
-  font-size: 11px;
+  font-size: 13px;
   min-width: 16px;
 }
 #glass-composition .gc-plan-content {
@@ -433,7 +433,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   line-height: 1.5;
 }
 #glass-composition .gc-dep {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   display: block;
 }
@@ -448,7 +448,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 #glass-composition .gc-plan-description {
   padding: 0 17px 14px;
   color: var(--g-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 #glass-composition .gc-primary {
@@ -456,7 +456,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   color: #fff;
   padding: 7px 13px;
   border-radius: 9px;
-  font-size: 12px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -464,7 +464,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   min-height: 32px;
 }
 #glass-composition .gc-primary:hover {
-  background: #507dff;
+  background: #3665e5;
 }
 #glass-composition .gc-primary svg {
   width: 13px;
@@ -479,7 +479,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   border-bottom: 1px solid var(--g-line);
 }
 #glass-composition .gc-step-trail button {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   white-space: nowrap;
   display: inline-flex;
@@ -525,7 +525,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 }
 #glass-composition .gc-cite {
   color: var(--g-edge);
-  font-size: 11px;
+  font-size: 13px;
   vertical-align: super;
   padding: 0 4px;
 }
@@ -558,7 +558,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   border: 1px solid var(--g-line);
   border-radius: 8px;
   color: var(--g-soft);
-  font-size: 12px;
+  font-size: 13px;
 }
 #glass-composition .gc-followups button:hover {
   background: #a3baff08;
@@ -581,7 +581,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 #glass-composition .gc-answer th {
   font-weight: 400;
   color: var(--g-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 #glass-composition .gc-checklist {
   list-style: none !important;
@@ -605,7 +605,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   text-decoration: line-through;
 }
 #glass-composition .gc-interruption {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   display: flex;
   gap: 8px;
@@ -624,7 +624,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   padding: 4px 0 26px;
 }
 #glass-composition .gc-dependency-button {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   text-align: left;
   display: flex;
@@ -674,7 +674,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 6px;
   color: var(--g-soft);
   border-radius: 6px;
@@ -694,7 +694,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   color: #fff;
 }
 #glass-composition .gc-send:hover {
-  background: #507dff;
+  background: #3665e5;
 }
 #glass-composition .gc-attachments {
   display: flex;
@@ -706,7 +706,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   background: #8eacff0d;
   border: 1px solid #bbd1ff0b;
@@ -723,7 +723,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   color: var(--g-soft);
 }
 #glass-composition .gc-footer {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   margin: 14px 0 0;
   text-align: center;
@@ -752,7 +752,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   height: 5px;
 }
 #glass-composition .gc-record-time {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -822,7 +822,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   height: 28px;
 }
 #glass-composition .gc-nav-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   margin: 16px 10px 5px;
 }
@@ -836,7 +836,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   min-height: 32px;
   text-align: left;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .gc-history-item > span:first-child {
@@ -866,7 +866,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   background: #a9bcdf80;
 }
 #glass-composition .gc-history-note {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   margin: 20px 10px;
 }
@@ -894,7 +894,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 }
 #glass-composition .gc-pop-heading {
   padding: 9px 9px 7px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
 }
 #glass-composition .gc-pop-row {
@@ -926,7 +926,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 }
 #glass-composition .gc-pop-row small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   margin-top: 1px;
 }
@@ -973,7 +973,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   max-width: 100%;
 }
 #glass-composition .gc-config label {
-  font-size: 12px;
+  font-size: 13px;
   display: block;
   margin: 9px 0;
 }
@@ -986,7 +986,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   font-size: 13px;
 }
 #glass-composition .gc-config p {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.65;
   color: var(--g-soft);
 }
@@ -1006,7 +1006,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   border: 1px solid #a3baff24;
   border-radius: 11px;
   padding: 10px 15px;
-  font-size: 12px;
+  font-size: 13px;
   max-width: calc(100% - 28px);
   box-shadow: 0 5px 25px #0005;
 }
@@ -1029,7 +1029,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   margin-bottom: 10px;
 }
@@ -1039,7 +1039,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 17px 0 10px;
 }
 #glass-composition .gc-inspector p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   line-height: 1.8;
 }
@@ -1049,7 +1049,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 10px 0 17px;
 }
 #glass-composition .gc-inspector-tabs button {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   padding: 5px 0;
   border-bottom: 1px solid transparent;
@@ -1064,7 +1064,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   padding: 22px 17px;
   border-radius: 5px;
   min-height: 290px;
-  font-size: 11px;
+  font-size: 13px;
   box-shadow: 0 8px 35px #0003;
 }
 #glass-composition .gc-paper small {
@@ -1081,7 +1081,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 0 0 14px;
 }
 #glass-composition .gc-paper p {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.8;
   color: #46536b;
 }
@@ -1097,7 +1097,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 14px 0;
 }
 #glass-composition .gc-paper-caption {
-  font-size: 10px;
+  font-size: 13px;
   color: #46536b;
 }
 #glass-composition .gc-page-controls {
@@ -1106,11 +1106,11 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   align-items: center;
   justify-content: center;
   margin-top: 12px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .gc-receipt {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
   margin-top: 13px;
   line-height: 1.7;
@@ -1123,12 +1123,12 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   padding: 10px 0;
 }
 #glass-composition .gc-activity-entry strong {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   display: block;
 }
 #glass-composition .gc-activity-entry span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-dim);
 }
 #glass-composition .gc-graph {
@@ -1143,7 +1143,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   border: 1px solid #a3baff26;
   border-radius: 9px;
   padding: 10px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
   flex: 1;
   max-width: 205px;
@@ -1156,7 +1156,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 }
 #glass-composition .gc-node span {
   display: block;
-  font-size: 10px;
+  font-size: 13px;
   margin-top: 3px;
   color: var(--g-dim);
 }
@@ -1175,7 +1175,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   margin: 0 0 7px;
 }
 #glass-composition .gc-clarify p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   margin: 0 0 14px;
 }
@@ -1185,7 +1185,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   flex-wrap: wrap;
 }
 #glass-composition .gc-choice-list button {
-  font-size: 12px;
+  font-size: 13px;
   padding: 7px 10px;
   border: 1px solid #a3baff29;
   border-radius: 8px;
@@ -1206,11 +1206,11 @@ html[data-visualize-standalone] #glass-composition .gc-app {
 #glass-composition .gc-edit-note {
   padding: 5px 17px 10px;
   color: var(--g-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 #glass-composition .gc-empty {
   padding: 15px 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 @keyframes gc-open {
@@ -1272,7 +1272,7 @@ html[data-visualize-standalone] #glass-composition .gc-app {
     flex-wrap: wrap;
   }
   #glass-composition .gc-picker {
-    font-size: 11px;
+    font-size: 13px;
     padding: 4px;
   }
   #glass-composition .gc-body {
@@ -1357,26 +1357,104 @@ body,
 #glass-composition .gc-app {
   height: 100dvh;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+}
+#glass-composition .gc-header {
+  flex: none;
+  min-height: 76px;
+  height: auto;
+}
+/* The composer occupies its own row; the reading viewport ends at its top edge. */
+#glass-composition .gc-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 #glass-composition .gc-scroll {
-  height: calc(100dvh - 76px);
+  min-height: 0;
+  min-width: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-#glass-composition[data-view="conversation"] .gc-layout {
-  padding-bottom: 220px;
+#glass-composition .gc-layout {
+  padding-bottom: 24px;
 }
 #glass-composition .gc-dock {
-  position: fixed;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   width: min(650px, calc(100% - 44px));
+  margin: 0 auto;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  min-width: 0;
   z-index: 6;
+}
+#glass-composition .gc-dock .gc-composer {
+  margin-top: 0;
+}
+#glass-composition .gc-footer:empty {
+  display: none;
+}
+#glass-composition[data-view="arrival"] .gc-stage {
+  display: block;
+  overflow: auto;
+}
+#glass-composition[data-view="arrival"] .gc-scroll {
+  overflow: visible;
+}
+#glass-composition[data-view="arrival"] .gc-layout {
+  padding-bottom: 0;
+}
+#glass-composition .gc-arrival {
+  padding: clamp(24px, 15dvh, 140px) 0 40px;
+}
+#glass-composition .gc-question p,
+#glass-composition .gc-work-head,
+#glass-composition .gc-plan-content,
+#glass-composition .gc-selection-chip span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#glass-composition .gc-attachments {
+  max-height: 18dvh;
+  overflow: auto;
+}
+#glass-composition .gc-file {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+#glass-composition .gc-file > span {
+  min-width: 0;
+}
+#glass-composition .gc-notice,
+#glass-composition .gc-run-controls,
+#glass-composition .gc-answer-actions {
+  flex-wrap: wrap;
+}
+#glass-composition .gc-run-controls {
+  justify-content: flex-end;
+}
+#glass-composition .gc-header .gc-run-controls {
+  padding: 12px 0;
+}
+#glass-composition .gc-header .gc-thread-title {
+  min-width: 0;
+}
+#glass-composition .gc-header .gc-spacer {
+  min-width: 0;
+}
+#glass-composition .gc-chevron {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 #glass-composition .gc-reflection {
   left: -24px;
   top: -24px;
+  width: calc(100% + 48px);
+  height: calc(100% + 48px);
 }
 #glass-composition .gc-answer {
   overflow-wrap: anywhere;
@@ -1403,7 +1481,7 @@ body,
 }
 #glass-composition .gc-notice,
 #glass-composition .gc-interruption {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   padding: 12px 0;
   display: flex;
@@ -1413,7 +1491,7 @@ body,
   color: #f5b4c2;
 }
 #glass-composition .gc-history-note {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-dim);
   padding: 0 10px;
 }
@@ -1427,7 +1505,7 @@ body,
   padding-right: 28px;
 }
 #glass-composition .gc-run-controls {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 @media (max-width: 650px) {
@@ -1456,7 +1534,7 @@ body,
   padding: 10px;
   max-width: 100%;
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
 }
 #glass-composition .gc-file-card img,
 #glass-composition .gc-viewed img {
@@ -1480,7 +1558,7 @@ body,
   height: 90px;
 }
 #glass-composition .gc-evidence {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .gc-attachments {
@@ -1495,7 +1573,7 @@ body,
   padding: 4px 8px;
   background: #c7d8ff0b;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 13px;
 }
 #glass-composition .gc-citation,
 #glass-composition .gc-answer a {
@@ -1510,7 +1588,27 @@ body,
   font:
     400 13px/1.5 Inter,
     sans-serif;
-  max-width: 330px;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color-scheme: dark;
+}
+.glass-pop,
+.glass-pop * {
+  box-sizing: border-box;
+}
+.glass-pop form {
+  width: 100%;
+  min-width: 0;
+}
+.glass-pop input,
+.glass-pop select {
+  min-width: 0;
+  max-width: 100%;
+}
+.glass-pop :focus-visible {
+  outline: 2px solid #82a8ff;
+  outline-offset: 2px;
 }
 .glass-pop button,
 .glass-pop input,
@@ -1531,7 +1629,7 @@ body,
 }
 .glass-pop p,
 .glass-pop small {
-  font-size: 11px;
+  font-size: 13px;
   color: #aeb9d3;
 }
 .glass-pop h3 {
@@ -1585,7 +1683,7 @@ body,
 }
 .glass-mode small {
   color: #aab8d0;
-  font-size: 11px;
+  font-size: 13px;
 }
 .glass-mode[aria-checked="true"] {
   background: #517fff20 !important;
@@ -1599,7 +1697,7 @@ body,
   border: 0;
   resize: vertical;
   color: var(--g-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   padding: 2px 0;
 }
@@ -1607,13 +1705,13 @@ body,
   background: #202635;
   border: 1px solid var(--g-line);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 4px;
   margin: 4px 0;
 }
 #glass-composition .gc-plan-content fieldset {
   border: 0;
-  font-size: 11px;
+  font-size: 13px;
   padding: 5px 0;
   display: flex;
   gap: 8px;
@@ -1630,7 +1728,7 @@ body,
 #glass-composition .gc-dependency-overview,
 #glass-composition .glass-activity {
   padding: 5px 18px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .gc-dependency-overview p {
@@ -1640,7 +1738,7 @@ body,
   padding: 7px 0;
 }
 #glass-composition .glass-activity p {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -1677,7 +1775,7 @@ body,
 }
 #glass-composition .gc-checklist small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   margin-top: 3px;
 }
@@ -1692,7 +1790,7 @@ body,
   padding: 8px 12px;
   margin: 8px 10px 0;
   border-left: 2px solid #82a8ff;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
   background: #4773ff12;
   border-radius: 4px;
@@ -1719,7 +1817,7 @@ body,
   cursor: pointer;
 }
 #glass-composition .gc-answer-actions details {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 
@@ -1734,7 +1832,7 @@ body,
   outline: none;
 }
 #glass-composition .gc-composer:has(.gc-input:focus-visible) {
-  outline: 1px solid #90b0ff44;
+  outline: 2px solid #82a8ff;
   outline-offset: 2px;
 }
 #glass-composition .gc-dot.complete {
@@ -1745,7 +1843,7 @@ body,
 
 #glass-composition .glass-preferences {
   margin: 28px 10px 16px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-soft);
 }
 #glass-composition .glass-preferences summary {
@@ -1768,11 +1866,11 @@ body,
 }
 #glass-composition .glass-preferences small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 #glass-composition .glass-turn-menu {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-dim);
   margin: 0 0 16px;
 }
@@ -1934,4 +2032,380 @@ body,
   border: 0;
   border-radius: 9px;
   padding: 9px 15px;
+}
+
+/* Native select behavior with one inset, centered chevron in every Glass form. */
+#glass-composition select,
+.glass-pop select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23aeb9d3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+  max-width: 100%;
+  min-width: 0;
+}
+#glass-composition .gc-plan-content select {
+  min-width: 140px;
+  padding: 6px 34px 6px 9px;
+}
+#glass-composition .gc-pending,
+#glass-composition .gc-activity-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--g-soft);
+  font-size: 13px;
+}
+#glass-composition .gc-pending {
+  min-height: 36px;
+  margin: 4px 0 18px;
+}
+#glass-composition .gc-composer .gc-pending {
+  margin: 0 0 8px;
+}
+#glass-composition .gc-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 5px;
+}
+#glass-composition .gc-typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: gc-typing 1.2s ease-in-out infinite;
+}
+#glass-composition .gc-typing i:nth-child(2) {
+  animation-delay: 150ms;
+}
+#glass-composition .gc-typing i:nth-child(3) {
+  animation-delay: 300ms;
+}
+#glass-composition .gc-pending[data-paused="true"] i {
+  animation: none;
+}
+#glass-composition .gc-status-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 1.5px solid #aeb9d340;
+  border-top-color: #aeb9d3;
+  border-radius: 50%;
+  animation: gc-spin 900ms linear infinite;
+}
+@keyframes gc-typing {
+  0%,
+  70%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+@keyframes gc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 450px) {
+  #glass-composition .gc-layout {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  #glass-composition .gc-dock {
+    width: calc(100% - 24px);
+  }
+  #glass-composition .gc-composer {
+    padding: 12px 10px 10px;
+  }
+  #glass-composition .gc-picker {
+    font-size: 13px;
+    gap: 4px;
+    padding: 4px;
+  }
+  #glass-composition .gc-toolbar {
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+  #glass-composition .gc-toolbar .gc-icon {
+    width: 36px;
+    min-height: 44px;
+  }
+  #glass-composition .gc-toolbar .gc-picker {
+    min-height: 44px;
+  }
+  #glass-composition .gc-work-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #glass-composition .gc-inline-actions {
+    margin-left: auto;
+  }
+  #glass-composition .gc-input {
+    max-height: min(140px, 24dvh);
+  }
+  #glass-composition .gc-suggestions {
+    margin: 18px 4px 24px;
+  }
+}
+@media (max-height: 500px) {
+  #glass-composition .gc-header {
+    min-height: 56px;
+  }
+  #glass-composition .gc-nav-trigger {
+    top: 10px;
+  }
+  #glass-composition .gc-input {
+    max-height: 22dvh;
+  }
+  #glass-composition .gc-arrival {
+    padding: 20px 0;
+  }
+}
+
+#glass-composition .gc-source-progress {
+  margin: 8px 0 16px;
+  font-size: 13px;
+  color: var(--g-soft);
+}
+#glass-composition .gc-source-progress summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  width: fit-content;
+  list-style: none;
+}
+#glass-composition .gc-source-progress summary::-webkit-details-marker {
+  display: none;
+}
+#glass-composition .gc-source-progress[open] summary > .gc-chevron {
+  transform: rotate(180deg);
+}
+#glass-composition .gc-source-icons {
+  display: flex;
+  padding-left: 4px;
+}
+#glass-composition .gc-source-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #29344d;
+  color: #cfdaef;
+  font-size: 13px;
+  border: 2px solid #1c202c;
+  overflow: hidden;
+}
+#glass-composition .gc-source-icons .gc-source-icon {
+  margin-left: -4px;
+}
+#glass-composition .gc-source-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#glass-composition .gc-source-progress ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+#glass-composition .gc-source-progress li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+#glass-composition .gc-source-progress a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+/* Keep custom reduced-motion preferences consistent with the public waveform. */
+#glass-composition[data-motion="reduced"] .lloyal-wave-live {
+  display: none;
+}
+#glass-composition[data-motion="reduced"] .lloyal-wave-still {
+  display: block;
+}
+#glass-composition .gc-record {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+#glass-composition .gc-search .gc-record {
+  gap: 6px;
+  min-height: 34px;
+  padding: 0;
+}
+#glass-composition .gc-search .gc-record .gc-small {
+  font-size: 13px;
+}
+#glass-composition .gc-rail {
+  max-width: calc(100% - 32px);
+}
+
+/* Disclosures and scrollable answer/work regions need the same visible keyboard focus. */
+#glass-composition summary:focus-visible,
+#glass-composition a:focus-visible,
+#glass-composition [tabindex="0"]:focus-visible {
+  outline: 2px solid #82a8ff;
+  outline-offset: 3px;
+}
+#glass-composition .glass-table-scroll th,
+#glass-composition .glass-table-scroll td {
+  overflow-wrap: normal;
+}
+@media (pointer: coarse) {
+  .glass-pop button,
+  .glass-pop input,
+  .glass-pop select,
+  #glass-composition summary,
+  #glass-composition .gc-plan-content select {
+    min-height: 44px;
+  }
+  .glass-pop input,
+  .glass-pop select {
+    font-size: 16px;
+  }
+  #glass-composition .gc-source-progress summary {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+#glass-composition .glass-answer-sources {
+  margin: 20px 0;
+  color: var(--g-soft);
+  font-size: 13px;
+}
+#glass-composition .glass-answer-sources summary {
+  cursor: pointer;
+}
+#glass-composition .glass-answer-sources ol {
+  padding-left: 24px;
+}
+#glass-composition .glass-answer-sources p {
+  font-size: 13px;
+  margin: 5px 0;
+}
+#glass-composition .glass-cell-content {
+  position: relative;
+  padding-right: 20px;
+}
+#glass-composition .glass-cell-content p {
+  font-size: 13px;
+  margin: 0;
+}
+#glass-composition .glass-cell-content[data-selected="true"] {
+  background: #5681ff14;
+}
+#glass-composition .glass-cell-ask {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 24px;
+  min-height: 24px;
+  opacity: 0;
+  color: var(--g-soft);
+}
+#glass-composition .glass-cell-content:hover .glass-cell-ask,
+#glass-composition .glass-cell-content:focus-within .glass-cell-ask {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  #glass-composition .glass-cell-ask {
+    position: static;
+    opacity: 1;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #glass-composition .glass-cell-content {
+    padding-right: 0;
+  }
+}
+
+#glass-composition .gc-answer-actions {
+  gap: 16px;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 0;
+}
+#glass-composition .gc-more {
+  font-size: 22px;
+  width: 32px;
+  height: 32px;
+}
+#glass-composition .glass-saved-approach {
+  color: var(--g-soft);
+  font-size: 13px;
+  padding: 2px 0 10px;
+}
+.glass-action-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #f5b4c2;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.glass-action-menu button:hover {
+  background: #a3baff12;
+}
+.glass-action-menu :focus-visible {
+  outline: 2px solid #82a8ff;
+  outline-offset: -2px;
+}
+@media (pointer: coarse) {
+  .glass-action-menu button,
+  #glass-composition .gc-more {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+#glass-composition .gc-history-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+#glass-composition .gc-history-row .gc-history-item {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+}
+#glass-composition .gc-history-delete {
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+}
+#glass-composition .gc-history-row:hover .gc-history-delete,
+#glass-composition .gc-history-row:focus-within .gc-history-delete {
+  opacity: 1;
+}
+#glass-composition .gc-history-delete:hover {
+  color: #f5b4c2;
+}
+@media (pointer: coarse) {
+  #glass-composition .gc-history-delete {
+    opacity: 1;
+    width: 44px;
+    height: 44px;
+  }
 }

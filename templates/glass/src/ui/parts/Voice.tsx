@@ -1,4 +1,5 @@
 import { MicGlyph, RecordingWaveform } from "@lloyal-labs/ui";
+import { ActivityLabel } from "./ActivityLabel.js";
 import type { VoiceInput } from "@lloyal-labs/ui";
 export function VoiceButton({ voice }: { voice: VoiceInput }) {
   if (voice.enabled === false) return null;
@@ -23,6 +24,9 @@ export function VoiceCapture({ voice }: { voice: VoiceInput }) {
         elapsed={voice.elapsed}
         recording={voice.phase === "recording"}
       />
+      {voice.phase !== "recording" && (
+        <ActivityLabel active>Transcribing…</ActivityLabel>
+      )}
       {voice.phase === "recording" && (
         <button type="button" className="gc-small" onClick={voice.stop}>
           Done

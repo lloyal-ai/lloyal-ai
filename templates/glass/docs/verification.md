@@ -2,6 +2,8 @@
 
 This is a working Phase 1 implementation for review, not a signed release or a completed human suitability study. The CLI, desktop and web targets share the command owner and fold. Each claim below identifies its evidence boundary.
 
+The follow-up [UI, interaction and accessibility review](ui-review-2026-10-14.md) records the responsive layout, activity, citation and control fixes, 44 passing invariants and remaining public Lightbox/Wikipedia metadata gaps. These findings supersede the earlier narrow browser check below; they do not close physical-device or assistive-technology gates.
+
 ## Reproduce
 
 Use Node 24, then `npm ci`, `npm run typecheck`, `npm test`, `npm run build:web` and `npm run build:desktop`. The lockfile records the tested resolution. `npm run dev:web` provisions the declared models and runs the real host and renderer; `npm run dev:desktop` uses the desktop target. Production web deployment is described in [hosting](hosting.md).

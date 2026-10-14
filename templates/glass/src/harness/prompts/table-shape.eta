@@ -1,1 +1,1 @@
-Every table row must contain exactly one cell per column, in the same order. Return only a table with consistent columns.
+Every table row must contain exactly one cell per column, in the same order. Return only a table with consistent columns. Cite a sourced claim inline in its own cell as [title](exact URL). Keep row labels free of unrelated citations. Put the source inventory in the answer sources field; do not repeat a Sources list inside cells.

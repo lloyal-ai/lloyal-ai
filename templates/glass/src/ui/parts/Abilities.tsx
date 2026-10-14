@@ -1,5 +1,7 @@
+import { ComposerPopover } from "./ComposerPopover.js";
+import { Chevron } from "./Chevron.js";
 import { useState } from "react";
-import { Popover, useProjection, useSend } from "@lloyal-labs/ui";
+import { useProjection, useSend } from "@lloyal-labs/ui";
 import type { AppState } from "../state.js";
 import type { Command } from "../../protocol.js";
 const names: Record<string, string> = {
@@ -13,17 +15,6 @@ const descriptions: Record<string, string> = {
   documents: "Read attached PDFs, pages and figures",
   corpus: "Search a configured Markdown collection",
   wikipedia: "Look up encyclopedic references",
-};
-export const popStyle = {
-  background: "#191e2c",
-  color: "#f2f5ff",
-  border: "1px solid #a3baff25",
-  borderRadius: 16,
-  padding: 10,
-  font: "400 13px Inter, sans-serif",
-  boxShadow: "0 16px 60px #0008",
-  maxHeight: "min(540px,80vh)",
-  overflow: "auto" as const,
 };
 type Field = {
   type?: string;
@@ -64,18 +55,19 @@ export function Abilities({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        Abilities <span aria-hidden="true">⌄</span>
+        Abilities <Chevron />
       </button>
-      <Popover
+      <ComposerPopover
         anchor={anchor}
         open={open}
         onClose={close}
+        key={current?.name ?? "abilities"}
+        width={current ? 360 : 320}
         label={
           current
             ? (names[current.name] ?? current.title) + " settings"
             : "Abilities"
         }
-        style={popStyle}
       >
         <div className="glass-pop">
           {current ? (
@@ -103,12 +95,24 @@ export function Abilities({
               <h3>{names[current.name] ?? current.title}</h3>
               {fields.map(([name, f]) => (
                 <label key={name}>
-                  {f.title ?? name}
+                  {f.title ??
+                    (name === "tavilyKey"
+                      ? "Tavily API key"
+                      : name.replace(/([a-z])([A-Z])/g, "$1 $2"))}
                   {f.enum ? (
                     <select
+                      aria-label={
+                        f.title ??
+                        (name === "tavilyKey" ? "Tavily API key" : name)
+                      }
                       value={String(values[name] ?? "")}
                       onChange={(e) =>
-                        setValues((v) => ({ ...v, [name]: e.target.value }))
+                        setValues((v) => {
+                          const next = { ...v };
+                          if (e.target.value === "") delete next[name];
+                          else next[name] = e.target.value;
+                          return next;
+                        })
                       }
                     >
                       <option value="">Keep current</option>
@@ -118,12 +122,18 @@ export function Abilities({
                     </select>
                   ) : f.type === "boolean" ? (
                     <select
+                      aria-label={
+                        f.title ??
+                        (name === "tavilyKey" ? "Tavily API key" : name)
+                      }
                       value={String(values[name] ?? "")}
                       onChange={(e) =>
-                        setValues((v) => ({
-                          ...v,
-                          [name]: e.target.value === "true",
-                        }))
+                        setValues((v) => {
+                          const next = { ...v };
+                          if (e.target.value === "") delete next[name];
+                          else next[name] = e.target.value === "true";
+                          return next;
+                        })
                       }
                     >
                       <option value="">Keep current</option>
@@ -138,6 +148,15 @@ export function Abilities({
                           : f.type === "number"
                             ? "number"
                             : "text"
+                      }
+                      aria-label={
+                        f.title ??
+                        (name === "tavilyKey" ? "Tavily API key" : name)
+                      }
+                      value={
+                        Array.isArray(values[name])
+                          ? (values[name] as string[]).join(", ")
+                          : String(values[name] ?? "")
                       }
                       autoComplete="off"
                       placeholder={
@@ -161,14 +180,15 @@ export function Abilities({
                       }
                     />
                   )}
-                  {current.config[name] === true && (
-                    <button
-                      type="button"
-                      onClick={() => setValues((v) => ({ ...v, [name]: "" }))}
-                    >
-                      Clear stored value
-                    </button>
-                  )}
+                  {current.config[name] === true &&
+                    /key|secret|token/i.test(name) && (
+                      <button
+                        type="button"
+                        onClick={() => setValues((v) => ({ ...v, [name]: "" }))}
+                      >
+                        Clear stored value
+                      </button>
+                    )}
                 </label>
               ))}
               <p>Changes apply when work next acquires this ability.</p>
@@ -229,7 +249,7 @@ export function Abilities({
             </>
           )}
         </div>
-      </Popover>
+      </ComposerPopover>
     </>
   );
 }
