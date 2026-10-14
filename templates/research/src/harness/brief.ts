@@ -20,6 +20,7 @@ import type { Library } from "./library.js";
 import type { BriefEvent, Command, DocId, Mode, WorkflowEvent } from "../protocol.js";
 import { docEvent, errorMessage, HarnessExit } from "../protocol.js";
 import { render } from "../harness/prompts.js";
+import { BUDGETS } from "./budgets.js";
 
 /** A planner result held for the reader's yes, with the round the interface echoes back. */
 type PendingPlan = { plan: PlanResult; inputs: Inputs; revision: number };
@@ -146,7 +147,7 @@ export function briefs(deps: {
   /** Begin a brief, or ask into the one shown. Returns the accepted run, or null when the ask was refused. */
   function* submit(text: string, opts: SubmitOptions = {}): Operation<Operation<void> | null> {
     const { mode = config().defaults.reasoningMode, direct = false, attachments = [], review = true } = opts;
-    const seen = yield* admitted(attachments);   // the claims checked once: shape, store, sight
+    const seen = yield* admitted(attachments, BUDGETS.attachments);   // the claims checked once: shape, store, sight, size
     if ("refused" in seen) {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;
