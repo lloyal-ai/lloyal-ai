@@ -77,7 +77,9 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
       const at = `${Math.floor(moment.tMs / 60000)}:${String(Math.floor(moment.tMs / 1000) % 60).padStart(2, "0")}`;
       const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
       if (!root || asset?.kind !== "video" || origin === null) {
-        return <span style={S.citeLink} title={`video · ${at} — not in this thread`}>{mark}</span>;
+        // Not playable here (yet): the citation stays visible, as its own words or, from backticks, its address.
+        const shown = children ?? <code style={S.code}>{href}</code>;
+        return <span style={S.citeLink} title={`video · ${at} — not in this thread`}>{shown}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</span>;
       }
       const view = videoView(origin, root, asset, moment.tMs);
       // The frame the model saw at that moment: the last one shown at or before it.
