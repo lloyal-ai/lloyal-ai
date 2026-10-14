@@ -73,5 +73,5 @@ export const BUDGETS = {
   /** Tool calls before a report is accepted: a first report short of it is refused once, then stands. */
   evidence: 2,
   /** Attached images and videos may fill at most this fraction of the context; a turn over it is refused before it is read. */
-  attachments: { context: 0.5 },
+  attachments: { context: 0.7 },
 } as const;

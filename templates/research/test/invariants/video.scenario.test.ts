@@ -77,6 +77,6 @@ test("a video that would fill more of the context than the budget allows is refu
 
   const errors = run.events.filter((e) => e.type === "ui:error") as { message: string }[];
   assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /would take [\d,]+ of the [\d,]+-token context; this harness lets attachments fill up to 50% of it/);
+  assert.match(errors[0].message, /would take [\d,]+ of the [\d,]+-token context; this harness lets attachments fill up to 70% of it/);
   assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
 });
