@@ -1,7 +1,9 @@
 /**
  * A video on the question: projected once, on the trunk, as ONE video input;
  * the question names the video's address so a report can cite a moment in it;
- * and that citation resolves to the video among the brief's roots.
+ * and that citation resolves to the video among the brief's roots. A clip that
+ * would fill more of the context than the budget allows is refused before
+ * anything is read in.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -55,4 +57,23 @@ test("a video on the question is one video input on the trunk, and a moment cite
   const moment = parseAttachmentMoment(cite)!;
   assert.equal(resolvePrefix(moment.prefix, [video.digest]), video.digest, "the cited moment resolves to the video");
   assert.equal(moment.tMs, 250);
+});
+
+test("a video that would fill more of the context than the budget allows is refused before any prefill", async () => {
+  const { store, video } = await plant();
+  let ctx!: MockSessionContext;
+  const run = await runHarness({
+    attachmentStore: store,
+    // Every frame priced at the whole context: the clip cannot fit the share the budget gives attachments.
+    instrument: (c) => { ctx = c; c.mockImageCells = c.nCtx; },
+    script: [
+      { send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
+      { on: (ev) => ev.type === "ui:error" },
+    ],
+  });
+
+  const errors = run.events.filter((e) => e.type === "ui:error") as { message: string }[];
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /would take [\d,]+ of the [\d,]+-token context; this harness lets attachments fill up to 50% of it/);
+  assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
 });

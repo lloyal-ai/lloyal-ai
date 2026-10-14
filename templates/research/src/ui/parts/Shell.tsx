@@ -118,7 +118,7 @@ function Seen(): ReactElement | null {
               type="button"
               style={S.seenBtn}
               title="What the model saw — enlarge"
-              aria-label="Enlarge the attached image"
+              aria-label={asset?.kind === "video" ? "Play the attached video" : "Enlarge the attached image"}
               onClick={() => setOpen(id)}
             >
               <img src={representationUrl(origin, id, asset?.kind === "video" ? asset.meta.poster : 0)} alt="" style={S.seenImg} />
