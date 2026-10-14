@@ -7,11 +7,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
 import { color, font, radius, shadow } from "../theme.js";
-import { ingestVideo, MicGlyph, Popover, RecordingWaveform, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput } from "@lloyal-labs/ui";
+import { describeProgress, ingestVideo, MicGlyph, ProgressRing, Popover, RecordingWaveform, useAssets, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput, VideoCard, videoView } from "@lloyal-labs/ui";
+import type { VideoView } from "@lloyal-labs/ui";
 import type { VideoProgress } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../../protocol.js";
 import { ingestMedia, isVideoContainer, representationUrl } from "@lloyal-labs/media";
-import { resolveAsset } from "./Figures.js";
+import { Lightbox, resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, fmtElapsed, selectAbilitiesKnown, selectActiveDocId, selectBanked,
@@ -44,7 +45,7 @@ const ATTACH_TYPES = "image/*,application/pdf,video/*";
  *  is even written. A removed attachment leaves an unreferenced blob behind,
  *  the same harmless orphan class the store's write order already accepts. */
 type Attached =
-  | { id: number; name: string; status: "uploading"; progress?: string; video?: boolean }
+  | { id: number; name: string; status: "uploading"; progress?: VideoProgress; video?: boolean }
   | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null }
   | { id: number; name: string; status: "failed"; error: string; video?: boolean };
 
@@ -84,6 +85,37 @@ function DocGlyph(): ReactElement {
 }
 
 /** A strip of film — the video chip's glyph while the clip is read and composed. */
+/** A video in the tray: a card while it attaches and once it has, never a strip of text. */
+const isVideoChip = (img: Attached): boolean =>
+  img.status === "admitted" ? img.kind === "video" : img.video === true;
+
+/** While it attaches, the card says what it is doing on a line of its own, whatever the file is called; once
+ *  attached, it is ui's video card, and a click plays the file as attached. */
+function VideoChip({ img }: { img: Attached }): ReactElement {
+  const origin = useContentOrigin();
+  const digest = img.status === "admitted" ? img.root.digest : null;
+  const asset = useAssets(digest ? [digest] : [])[digest ?? ""];
+  const [open, setOpen] = useState<VideoView | null>(null);
+  if (img.status === "admitted" && origin !== null && asset?.kind === "video" && digest) {
+    const view = videoView(origin, digest, asset);
+    return (
+      <>
+        <VideoCard video={view} styles={TRAY_CARD} label={`Play ${img.name}`} onOpen={() => setOpen(view)} />
+        {open && <Lightbox video={open} label={img.name} onClose={() => setOpen(null)} />}
+      </>
+    );
+  }
+  // Before the first report, and once attached while the host is read back, the ring spins.
+  const step = img.status === "uploading" && img.progress ? describeProgress(img.progress) : { fraction: null, text: "Starting" };
+  return (
+    <span style={S.videoPending}>
+      <span style={S.videoName}>{img.name}</span>
+      <ProgressRing fraction={step.fraction} label={`${img.name}: ${step.text}`} size={40} />
+      <span style={S.videoProgress}>{step.text}</span>
+    </span>
+  );
+}
+
 function FilmGlyph(): ReactElement {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -376,7 +408,7 @@ export function Composer({ shape, placeholder }: {
       const id = nextId.current++;
       setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
       const progress = (p: VideoProgress): void =>
-        setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: progressLabel(p) } : a)));
+        setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: p } : a)));
       let video = false;
       void (async () => {
         try {
@@ -509,12 +541,14 @@ export function Composer({ shape, placeholder }: {
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
           {images.map((img) => (
-            <span key={img.id} style={S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
-              {img.status === "admitted" && img.thumb
+            <span key={img.id} style={isVideoChip(img) ? S.videoChip : S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
+              {isVideoChip(img) && img.status !== "failed"
+                ? <VideoChip img={img} />
+                : img.status === "admitted" && img.thumb
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
                   ? <span style={{ ...S.docChip, color: color.danger }}>{img.video ? <FilmGlyph /> : <DocGlyph />}{img.name} — {img.error}</span>
-                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}>{img.status === "uploading" && img.video ? <FilmGlyph /> : <DocGlyph />}{img.name}{img.status === "uploading" ? ` · ${img.progress ?? "admitting…"}` : ""}</span>}
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}>{img.status === "uploading" && img.video ? <FilmGlyph /> : <DocGlyph />}{img.name}{img.status === "uploading" ? ` · ${img.progress ? describeProgress(img.progress).text : "admitting…"}` : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
@@ -633,8 +667,8 @@ export function Composer({ shape, placeholder }: {
             onPaste={onPaste}
             // A failed recording explains itself where the words would have
             // gone, and the first keystroke replaces it.
-            placeholder={voice.error ?? (uploading ? "Sending your image…" : placeholder)}
-            disabled={uploading || pending !== null}
+            placeholder={voice.error ?? (uploading ? "Attaching… write your question meanwhile" : placeholder)}
+            disabled={pending !== null}
           />
         )}
         {pending && <span className="fn-lamp" style={S.sentDot} />}
@@ -751,16 +785,6 @@ export function Composer({ shape, placeholder }: {
 }
 
 /** What an attaching video is doing, in the attach row's words. */
-function progressLabel(p: VideoProgress): string {
-  switch (p.phase) {
-    case "uploading": return `uploading ${Math.floor((100 * p.done) / Math.max(1, p.total))}%`;
-    case "sampling": return "reading frames…";
-    case "ingesting": return `frames ${p.done}/${p.total}`;
-    case "transcribing": return `transcribing audio ${p.done}/${p.total}`;
-    case "composing": return "composing…";
-  }
-}
-
 /** The run's wall clock, ticking beside the picker while work is live.
  *  Wall time is composed here, not in a selector — the fold's memo would
  *  freeze a Date.now() between events. */
@@ -806,6 +830,18 @@ const S: Record<string, CSSProperties> = {
   thumbImg: {
     width: 40, height: 40, objectFit: "cover", borderRadius: 6, display: "block",
   },
+  // A video in the tray: a card the size of a small shared-video thumbnail, attaching or attached.
+  videoChip: { position: "relative", display: "inline-flex", flex: "none", borderRadius: 10, boxShadow: shadow.card },
+  // Dark like the card it becomes, so attaching and attached are one object.
+  videoPending: {
+    width: 160, height: 90, boxSizing: "border-box", padding: "6px 8px", borderRadius: 10, background: "#1B1B1F", color: "#fff",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between",
+  },
+  videoName: {
+    alignSelf: "stretch", font: `11px/1.3 ${font.ui}`, color: "rgba(255,255,255,.75)",
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
+  videoProgress: { font: `500 11px ${font.ui}`, color: "#fff", fontVariantNumeric: "tabular-nums" },
   thumbX: {
     position: "absolute", top: -6, right: -6, width: 18, height: 18,
     borderRadius: 9, border: `1px solid ${color.line}`, background: color.card,
@@ -976,3 +1012,11 @@ const S: Record<string, CSSProperties> = {
     border: 0, display: "grid", placeItems: "center", fontSize: 14, flex: "none", cursor: "pointer",
   },
 };
+
+/** ui's video card at tray size, in this composer's register. */
+const TRAY_CARD = {
+  card: {
+    position: "relative", display: "block", padding: 0, width: 160, aspectRatio: "16 / 9", overflow: "hidden", cursor: "pointer",
+    border: `1px solid ${color.line}`, borderRadius: 10, background: "#111",
+  },
+} satisfies Record<string, CSSProperties>;
