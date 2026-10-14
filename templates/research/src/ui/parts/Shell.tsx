@@ -117,7 +117,7 @@ function Seen(): ReactElement | null {
               key={id}
               type="button"
               style={S.seenBtn}
-              title="What the model saw — enlarge"
+              title={asset?.kind === "video" ? "What the model saw — play" : "What the model saw — enlarge"}
               aria-label={asset?.kind === "video" ? "Play the attached video" : "Enlarge the attached image"}
               onClick={() => setOpen(id)}
             >

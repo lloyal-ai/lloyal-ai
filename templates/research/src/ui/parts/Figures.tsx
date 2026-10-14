@@ -53,6 +53,9 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
   if (digests.length === 0 || origin === null) return null;
   const anyDocument = digests.some((d) => assets[d]?.kind === "document");
   const anyHeard = digests.some((d) => { const a = assets[d]; return a?.kind === "video" && a.transcript !== undefined; });
+  // What a click does: a video plays, a picture enlarges, and a strip holding both opens.
+  const videos = digests.filter((d) => assets[d]?.kind === "video").length;
+  const action = videos === digests.length ? "click to play" : videos > 0 ? "click to open" : "click to enlarge";
 
   return (
     <>
@@ -127,7 +130,7 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
       <p style={S.caption}>
         {anyDocument ? "what the model was given" : anyHeard ? "what the model saw and heard" : "what the model saw"}
         {digests.length === 1 && dims[digests[0]] ? ` · ${dims[digests[0]]}` : ""}
-        {" · click to enlarge"}
+        {` · ${action}`}
       </p>
 
       {open !== null && ("pdf" in open

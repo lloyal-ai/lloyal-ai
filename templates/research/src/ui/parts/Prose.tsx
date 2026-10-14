@@ -83,7 +83,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
       // The frame the model saw at that moment: the last one shown at or before it.
       const seen = view.frames.filter((f) => f.tMs <= moment.tMs).at(-1) ?? view.frames[0];
       return (
-        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} onClick={() => setOpenVideo(view)}>
+        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={`Play the attached video from ${at}`} onClick={() => setOpenVideo(view)}>
           {mark}
           <span style={S.moment}>
             {seen && <img src={seen.src} alt="" style={S.momentFrame} />}
