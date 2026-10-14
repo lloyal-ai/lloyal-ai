@@ -12,33 +12,19 @@
  *  because what the model was given is its text, and a page image is what the
  *  model looks at only when a tool puts one in front of it.
  *
- *  A video shows as its poster over the frames the model saw, on their
- *  timeline, with what the soundtrack said beneath; opening it plays the file
- *  as attached beside those frames. */
+ *  A video shows as ui's video card — its poster, a play mark, its length —
+ *  with the start of what the soundtrack said beneath; opening it plays the
+ *  file as attached, the frames the model saw on its time slider. */
 import { useState, type CSSProperties, type ReactElement } from "react";
-import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection } from "@lloyal-labs/ui";
+import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection, VideoCard, videoView } from "@lloyal-labs/ui";
 import type { Asset, LightboxProps } from "@lloyal-labs/ui";
 import { representationUrl, sourceUrl } from "@lloyal-labs/media";
 import { color, font, radius, shadow } from "../theme.js";
 import { selectSeen, selectThreadDigests } from "../select.js";
 import { LIGHTBOX } from "./Prose.js";
 
-export { pageFacts, resolveAsset, useAssets };
+export { pageFacts, resolveAsset, useAssets, videoView };
 export type { Asset };
-
-type VideoAsset = Extract<Asset, { kind: "video" }>;
-
-/** The enlarged view of a video: the original when it was kept, the frames the model saw, what was said. */
-export function videoView(origin: string, digest: string, asset: VideoAsset, atMs?: number): NonNullable<LightboxProps["video"]> {
-  return {
-    ...(asset.source ? { src: sourceUrl(origin, digest) } : {}),
-    frames: asset.meta.frames.map((f) => ({ src: representationUrl(origin, digest, f.frame), tMs: f.tMs })),
-    ...(asset.transcript ? { transcript: asset.transcript.segments } : {}),
-    ...(atMs !== undefined ? { atMs } : {}),
-  };
-}
-
-const clock = (ms: number): string => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
 /** ui's enlarged view, in this document's register — one for the strip, the run bar's marker and a cited page. */
 export const Lightbox = (props: Omit<LightboxProps, "styles">): ReactElement | null => <UiLightbox {...props} styles={LIGHTBOX} />;
@@ -104,27 +90,13 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
             );
           }
           if (asset?.kind === "video") {
-            const { meta, transcript } = asset;
-            const said = transcript?.segments.map((t) => t.text).join(" ");
+            const view = videoView(origin, digest, asset);
+            const said = asset.transcript?.segments.map((t) => t.text).join(" ");
             return (
-              <button
-                key={digest}
-                type="button"
-                style={S.videoCard}
-                title={asset.source ? "Play the video beside the frames the model saw" : "The frames the model saw"}
-                onClick={() => setOpen({ video: videoView(origin, digest, asset), label: `video · ${clock(meta.durationMs)}` })}
-              >
-                <img src={representationUrl(origin, digest, meta.poster)} alt="The video's first frame" style={S.poster} />
-                <span style={S.timeline} aria-hidden="true">
-                  {meta.frames.map((f) => (
-                    <img key={f.tMs} src={representationUrl(origin, digest, f.frame)} alt="" style={S.tick} />
-                  ))}
-                </span>
-                <span style={S.videoMeta}>
-                  {clock(meta.durationMs)} · {meta.frames.length} frame{meta.frames.length === 1 ? "" : "s"}
-                  {said ? <span style={S.said}>“{said}”</span> : null}
-                </span>
-              </button>
+              <figure key={digest} style={S.video}>
+                <VideoCard video={view} styles={VIDEO_CARD} onOpen={() => setOpen({ video: view, label: "the attached video" })} />
+                {said ? <figcaption style={S.said}>“{said}”</figcaption> : null}
+              </figure>
             );
           }
           return (
@@ -210,14 +182,18 @@ const S: Record<string, CSSProperties> = {
   },
   cardMeta: { font: `11px/1.35 ${font.ui}`, color: "rgba(255,255,255,.92)" },
   caption: { font: `12px ${font.ui}`, color: color.dim, margin: "0 0 18px" },
-  // A video card: the poster, then the frames on their timeline, then length and what was said.
-  videoCard: {
-    display: "flex", flexDirection: "column", gap: 6, width: 260, padding: 6, cursor: "zoom-in", textAlign: "left",
-    border: `1px solid ${color.line}`, borderRadius: radius.panel, background: color.card, boxShadow: shadow.card, flex: "none",
+  // A video: ui's card, and under it the start of what was said, as a shared video's title sits under it.
+  video: { display: "flex", flexDirection: "column", gap: 6, width: 262, margin: 0, flex: "none" },
+  said: {
+    font: `12px/1.35 ${font.ui}`, color: color.ink, padding: "0 2px",
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
-  poster: { display: "block", width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 8, background: "#000" },
-  timeline: { display: "flex", gap: 2, overflow: "hidden" },
-  tick: { height: 22, flex: "1 1 0", minWidth: 0, objectFit: "cover", borderRadius: 2 },
-  videoMeta: { display: "flex", flexDirection: "column", gap: 3, font: `11.5px/1.35 ${font.ui}`, color: color.dim, padding: "0 2px 2px" },
-  said: { color: color.ink, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" },
 };
+
+/** ui's video card in this document's register: the same size, border and lift as a document card. */
+const VIDEO_CARD = {
+  card: {
+    position: "relative", display: "block", padding: 0, width: 262, aspectRatio: "16 / 9", overflow: "hidden", cursor: "pointer",
+    border: `1px solid ${color.line}`, borderRadius: radius.panel, background: "#111", boxShadow: shadow.card,
+  },
+} satisfies Record<string, CSSProperties>;

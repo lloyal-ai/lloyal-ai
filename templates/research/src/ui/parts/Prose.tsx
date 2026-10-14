@@ -78,10 +78,17 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
               if (!root || asset?.kind !== "video" || origin === null) {
                 return <span style={S.citeLink} title={`video · ${at} — not in this thread`}>{mark}</span>;
               }
+              const view = videoView(origin, root, asset, moment.tMs);
+              // The frame the model saw at that moment: the last one shown at or before it.
+              const seen = view.frames.filter((f) => f.tMs <= moment.tMs).at(-1) ?? view.frames[0];
               return (
-                <button type="button" style={S.pageLink} title={`video · ${at} — play from here`}
-                  onClick={() => setOpenVideo(videoView(origin, root, asset, moment.tMs))}>
+                <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} onClick={() => setOpenVideo(view)}>
                   {mark}
+                  <span style={S.moment}>
+                    {seen && <img src={seen.src} alt="" style={S.momentFrame} />}
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z" /></svg>
+                    {at}
+                  </span>
                 </button>
               );
             }
@@ -203,6 +210,12 @@ const S: Record<string, CSSProperties> = {
     background: "none", border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit",
     textDecoration: "underline dotted", textUnderlineOffset: 3, cursor: "zoom-in",
   },
+  // A cited moment, as a shared video's timestamp: the frame, a play mark, the time.
+  moment: {
+    display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 4, padding: "1px 6px 1px 2px", verticalAlign: "middle",
+    font: `600 11px/1 ${font.mono}`, color: color.emberDeep, background: color.emberWash, borderRadius: radius.pill,
+  },
+  momentFrame: { height: 14, aspectRatio: "16 / 9", objectFit: "cover", borderRadius: radius.pill, display: "block" },
   cite: {
     font: `600 10px/1 ${font.ui}`, color: color.emberDeep, background: color.emberWash,
     borderRadius: radius.pill, padding: "2px 5px", marginLeft: 2, verticalAlign: "super",

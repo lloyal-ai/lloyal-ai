@@ -11,6 +11,7 @@ import { harnessTheme } from "../../src/ui/theme.js";
 // The register's fonts, bundled: the desktop CSP and the local-first promise both rule out remote stylesheets.
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
+import "@lloyal-labs/ui/video.css";
 
 createRoot(document.getElementById("root")!).render(
   <div style={harnessTheme}>
