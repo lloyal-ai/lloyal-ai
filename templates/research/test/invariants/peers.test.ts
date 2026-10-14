@@ -1,5 +1,5 @@
-/** Media leaves its codecs to the harness: `@embedpdf/pdfium` reads a PDF, `sharp` normalises an image, and both
- *  are OPTIONAL peers, so nothing installs them but this project's own manifest. A scaffold that forgets one
+/** Media leaves its codecs to the harness: `@embedpdf/pdfium` reads a PDF, `sharp` normalises an image, and
+ *  `mediabunny` reads a video in the page. All are OPTIONAL peers, so nothing installs them but this project's own manifest. A scaffold that forgets one
  *  fails at the first attachment, in a browser, with no test to say so — except this one. */
 import { test } from "node:test";
 import assert from "node:assert/strict";

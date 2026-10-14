@@ -54,8 +54,11 @@ test("a video on the question is one video input on the trunk, and a moment cite
   assert.ok(ctx.multimodalPrefills[0].prompts[0].includes(`Video 1 is attachment://${prefix}; cite a moment in it as attachment://${prefix}/t/ followed by the time the video marks, such as attachment://${prefix}/t/0m5.00s.`),
     "the question names the video's address");
 
+  // Resolved as the view resolves it: against the roots the brief's query event carries.
+  const query = run.events.find((e) => e.type === "query") as { attachments?: Attachment[] } | undefined;
+  const roots = (query?.attachments ?? []).map((a) => a.digest);
   const moment = parseAttachmentMoment(cite)!;
-  assert.equal(resolvePrefix(moment.prefix, [video.digest]), video.digest, "the cited moment resolves to the video");
+  assert.equal(resolvePrefix(moment.prefix, roots), video.digest, "the cited moment resolves to the video among the brief's roots");
   assert.equal(moment.tMs, 250);
 });
 

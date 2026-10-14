@@ -50,6 +50,7 @@
     "effection": "^4.1.0",
     "eta": "^4.6.0",
     "ink": "^7.1.1",
+    "mediabunny": "^1.61.4",
     "partial-json": "^0.1.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
