@@ -9,7 +9,7 @@
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
 import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Lightbox, Markdown, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
+import { Lightbox, Markdown, momentClock, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
 import type { LightboxProps } from "@lloyal-labs/ui";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
 import type { Anchor } from "@lloyal-labs/ui/prose";
@@ -73,7 +73,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
       // A moment in a video: the one root that answers to the prefix, played from that time.
       const root = resolvePrefix(moment.prefix, digests);
       const asset = root ? assets[root] : undefined;
-      const at = `${Math.floor(moment.tMs / 60000)}:${String(Math.floor(moment.tMs / 1000) % 60).padStart(2, "0")}`;
+      const at = momentClock(moment.tMs);
       const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
       if (!root || asset?.kind !== "video" || origin === null) {
         // Not playable here (yet): the citation stays visible, as its own words or, from backticks, its address.
