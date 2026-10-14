@@ -84,7 +84,6 @@ function DocGlyph(): ReactElement {
   );
 }
 
-/** A strip of film — the video chip's glyph while the clip is read and composed. */
 /** A video in the tray: a card while it attaches and once it has, never a strip of text. */
 const isVideoChip = (img: Attached): boolean =>
   img.status === "admitted" ? img.kind === "video" : img.video === true;
@@ -116,6 +115,7 @@ function VideoChip({ img }: { img: Attached }): ReactElement {
   );
 }
 
+/** A strip of film — a video's glyph in a chip that could not attach it. */
 function FilmGlyph(): ReactElement {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -548,7 +548,7 @@ export function Composer({ shape, placeholder }: {
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
                   ? <span style={{ ...S.docChip, color: color.danger }}>{img.video ? <FilmGlyph /> : <DocGlyph />}{img.name} — {img.error}</span>
-                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}>{img.status === "uploading" && img.video ? <FilmGlyph /> : <DocGlyph />}{img.name}{img.status === "uploading" ? ` · ${img.progress ? describeProgress(img.progress).text : "admitting…"}` : ""}</span>}
+                  : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
@@ -784,7 +784,6 @@ export function Composer({ shape, placeholder }: {
   );
 }
 
-/** What an attaching video is doing, in the attach row's words. */
 /** The run's wall clock, ticking beside the picker while work is live.
  *  Wall time is composed here, not in a selector — the fold's memo would
  *  freeze a Date.now() between events. */
