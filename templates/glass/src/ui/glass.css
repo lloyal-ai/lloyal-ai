@@ -72,18 +72,50 @@ html[data-visualize-standalone] #glass-composition .gc-app {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(
-    ellipse at 50% 56%,
-    #153ef147 0%,
-    #1636b530 26%,
-    #14255b19 52%,
-    #080b1200 80%
-  );
+  overflow: clip;
   pointer-events: none;
-  transition: opacity 0.5s;
+  opacity: 0.72;
+  transition: opacity 900ms ease;
 }
 #glass-composition[data-view="conversation"] .gc-haze {
   opacity: 0.46;
+}
+#glass-composition[data-view="conversation"] .gc-haze[data-active="true"] {
+  opacity: 0.64;
+}
+#glass-composition .gc-ambient-flow {
+  position: absolute;
+  inset: -28% -24%;
+  background:
+    radial-gradient(
+      ellipse 95% 62% at 50% 58%,
+      #173fdc38 0%,
+      #142b761f 45%,
+      transparent 82%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 12%,
+      #153ccb0a 30%,
+      #244eff26 52%,
+      #1738750b 72%,
+      transparent 90%
+    );
+  animation: glass-atmosphere 32s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+#glass-composition
+  .gc-haze[data-active="true"][data-reading="false"]
+  .gc-ambient-flow {
+  animation-play-state: running;
+}
+@keyframes glass-atmosphere {
+  from {
+    transform: translate3d(-5%, 2%, 0) scale(1.02);
+  }
+  to {
+    transform: translate3d(5%, -2%, 0) scale(1.08);
+  }
 }
 #glass-composition .gc-header {
   height: 76px;
@@ -1886,92 +1918,6 @@ body,
   scroll-behavior: auto !important;
 }
 
-/* The field follows actual inquiry phases. Every animation is finite. */
-#glass-composition .glass-live-field {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-}
-#glass-composition .glass-inquiry-position {
-  position: absolute;
-  width: 32vmin;
-  height: 32vmin;
-  transform: translate(-50%, -50%);
-}
-#glass-composition .glass-inquiry-light {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    #315cff30 0%,
-    #193ec518 35%,
-    transparent 72%
-  );
-  opacity: 0.7;
-  animation: glass-arrive 250ms ease-out both;
-}
-#glass-composition .glass-inquiry-light[data-state="writing"] {
-  background: radial-gradient(
-    circle,
-    #4387ff48 0%,
-    #274afc20 35%,
-    transparent 72%
-  );
-  animation: glass-write 250ms ease-out both;
-}
-#glass-composition .glass-inquiry-light[data-state="settling"] {
-  animation: glass-settle 250ms ease-out both;
-}
-#glass-composition .glass-inquiry-light[data-state="cooling"] {
-  animation: glass-cool 250ms ease-out both;
-}
-#glass-composition .glass-inquiry-light[data-state="still"] {
-  opacity: 0;
-  animation: none;
-}
-@keyframes glass-arrive {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 0.7;
-    transform: translateY(0);
-  }
-}
-@keyframes glass-write {
-  from {
-    opacity: 0.4;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 0.85;
-    transform: translateY(-2px);
-  }
-}
-@keyframes glass-settle {
-  from {
-    opacity: 0.8;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-16px);
-  }
-}
-@keyframes glass-cool {
-  from {
-    opacity: 0.45;
-    filter: saturate(0.5);
-  }
-  to {
-    opacity: 0;
-    filter: saturate(0);
-  }
-}
 #glass-composition [data-selected="true"]:is(.glass-cell, .gc-checklist li) {
   background: #4d80ff22;
   box-shadow: inset 2px 0 #82a8ff;
@@ -1980,22 +1926,6 @@ body,
   box-shadow: -2px 0 #82a8ff;
   padding-left: 12px;
 }
-@media (prefers-reduced-motion: reduce) {
-  #glass-composition .glass-inquiry-light {
-    animation: none !important;
-  }
-  #glass-composition .glass-inquiry-light[data-state="settling"],
-  #glass-composition .glass-inquiry-light[data-state="cooling"] {
-    opacity: 0;
-  }
-}
-#glass-composition[data-motion="reduced"]
-  .glass-inquiry-light[data-state="settling"],
-#glass-composition[data-motion="reduced"]
-  .glass-inquiry-light[data-state="cooling"] {
-  opacity: 0;
-}
-
 /* Keep changing worker output inside its own reading surface. */
 #glass-composition .gc-body {
   height: 320px;

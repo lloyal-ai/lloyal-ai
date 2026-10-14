@@ -11,7 +11,7 @@ Glass starts as a standalone application over released public HDK packages. The 
 5. Accepted findings pass explicitly through public parallel/chain/fanout/DAG composition and synthesis. Sibling state is not implicitly merged. Plan changes settle the previous attempt before rebuilding affected work.
 6. Stop preserves acknowledged turns. Finish requires an explicit Resume while paused. Discard is an explicit separate user action. Reading saved history does not transfer the live work owner.
 7. Source previews and actual admitted representations remain distinct. Media is content-addressed. PDFs belong to Documents; supported Markdown resources belong to Corpus.
-8. Keep the approved design: Inter, edge-to-edge electric depth, compact frosted navigation, short travelling reflections, contextual controls and no decorative idle animation.
+8. Keep the approved design: Inter, edge-to-edge electric depth, compact frosted navigation, short travelling reflections, contextual controls and no decorative idle animation. During observed work, a single diffuse background wash shifts slowly across the canvas; there are no per-agent light shapes. Pause, reading and reduced motion keep it still.
 
 ## Build sequence and owners
 

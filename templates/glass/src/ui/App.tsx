@@ -116,7 +116,6 @@ function GlassApp() {
       data-working={busy && !work?.paused}
     >
       <div className="gc-app">
-        <div className="gc-haze" />
         <LiveField state={state} />
         <button
           ref={menu}

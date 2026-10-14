@@ -1,29 +1,40 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { inquiryLights } from "../field.js";
 import type { AppState } from "../state.js";
-/** State transitions animate once. Reading and paused surfaces have no ticking JS. */
+/** One continuous atmosphere. No per-agent shapes or per-token animation restarts. */
 export function LiveField({ state }: { state: AppState }) {
-  const lights = inquiryLights(state);
+  const active = inquiryLights(state).some(
+    (light) => light.state === "reading" || light.state === "writing",
+  );
+  const [scrolling, setScrolling] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  useEffect(() => {
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const scroll = () => {
+      setScrolling(true);
+      clearTimeout(quiet);
+      quiet = setTimeout(() => setScrolling(false), 800);
+    };
+    const selection = () => {
+      const selected = window.getSelection();
+      setSelecting(Boolean(selected && !selected.isCollapsed));
+    };
+    window.addEventListener("scroll", scroll, { capture: true, passive: true });
+    document.addEventListener("selectionchange", selection);
+    return () => {
+      clearTimeout(quiet);
+      window.removeEventListener("scroll", scroll, true);
+      document.removeEventListener("selectionchange", selection);
+    };
+  }, []);
   return (
-    <div className="glass-live-field" aria-hidden="true">
-      {lights.map((light, i) => (
-        <div
-          key={light.id}
-          className="glass-inquiry-position"
-          style={
-            {
-              left: `${18 + (i % 4) * 21}%`,
-              top: `${48 + (Math.floor(i / 4) % 2) * 17}%`,
-            } as CSSProperties
-          }
-        >
-          <div
-            key={light.state}
-            className="glass-inquiry-light"
-            data-state={light.state}
-          />
-        </div>
-      ))}
+    <div
+      className="gc-haze"
+      data-active={active}
+      data-reading={scrolling || selecting}
+      aria-hidden="true"
+    >
+      <div className="gc-ambient-flow" />
     </div>
   );
 }
