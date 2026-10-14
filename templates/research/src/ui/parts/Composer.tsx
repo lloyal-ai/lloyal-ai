@@ -416,8 +416,8 @@ export function Composer({ shape, placeholder }: {
 
   /** Paste is the shortest road from a screenshot to a question. The clipboard
    *  hands over the same File objects the picker does, so it feeds `attach`
-   *  rather than growing a second path. Only image and PDF items are taken,
-   *  and the default is prevented only when one was — otherwise a paste
+   *  rather than growing a second path. Only image, video and PDF items are
+   *  taken, and the default is prevented only when one was — otherwise a paste
    *  carrying text would silently lose it. */
   const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
     const files = Array.from(e.clipboardData?.items ?? [])
