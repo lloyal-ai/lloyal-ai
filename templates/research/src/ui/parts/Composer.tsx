@@ -16,8 +16,8 @@ import { Lightbox, resolveAsset } from "./Figures.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, fmtElapsed, selectAbilitiesKnown, selectActiveDocId, selectBanked,
-  selectDepth, selectSources, selectLive, selectMoment, selectResumedAt, selectRevision,
-  type Shape, type Source,
+  selectDepth, selectSources, selectLive, selectMoment, selectNotice, selectResumedAt, selectRevision,
+  sentFate, type Sent, type Shape, type Source,
 } from "../select.js";
 import type { AppState } from "../state.js";
 
@@ -142,12 +142,11 @@ export function Composer({ shape, placeholder }: {
   const picker = useRef<HTMLInputElement>(null);
   const draftInput = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
-  /** The question, held after send until the fold acknowledges it. The echo
-   *  mints or names a document within milliseconds, so the first clear arm
-   *  (the active doc changed) does nearly all the work; a warm ask clears on
-   *  its own echo, a clarify answer on leaving 'clarifying'. */
+  /** The question, held after send with its draft and attachments until the
+   *  fold says what became of it (`sentFate`). Acknowledged, it is let go; refused,
+   *  the draft and attachments come back to be edited or removed. */
   const [pending, setPending] = useState<
-    { text: string; docId: string | null; clarify: boolean } | null>(null);
+    (Sent & { draft: string; images: Attached[] }) | null>(null);
   /** An ability just saved toward its first enable — its pill pulses until
    *  `abilities:state` confirms (a corpus enable INDEXES, which takes time). */
   const [enabling, setEnabling] = useState<string | null>(null);
@@ -166,6 +165,7 @@ export function Composer({ shape, placeholder }: {
   const [values, setValues] = useState<Record<string, string>>({});
   const configPanel = sources.find((l) => l.name === configFor) ?? null;
   const askNow = useProjection(selectActiveAsk);
+  const notice = useProjection(selectNotice);
   /** Dictation lives in the question row: the mic beside the field, and while
    *  it records the field itself gives way to the waveform. A transcript lands
    *  as editable text at the cursor and the field takes focus so the next
@@ -199,18 +199,16 @@ export function Composer({ shape, placeholder }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [voice.active]);
 
-  // Acknowledgment: a document was born or activated (the echo lands in
-  // milliseconds), the warm ask echoed, or the clarify round moved on.
   useEffect(() => {
     if (pending === null) return;
-    if (
-      activeDocId !== pending.docId ||
-      askNow === pending.text ||
-      (pending.clarify && !clarifying)
-    ) {
-      setPending(null);
+    const fate = sentFate(pending, { activeDocId, ask: askNow, clarifying, notice });
+    if (fate === "waiting") return;
+    if (fate === "refused") {
+      setDraft(pending.draft);
+      setImages(pending.images);
     }
-  }, [pending, activeDocId, askNow, clarifying]);
+    setPending(null);
+  }, [pending, activeDocId, askNow, clarifying, notice]);
   // The echo must not outlive plausibility — a dead wire has its own banner.
   useEffect(() => {
     if (pending === null) return;
@@ -503,7 +501,7 @@ export function Composer({ shape, placeholder }: {
     if (!text || uploading || pending !== null || live) return;
     if (clarifying) {
       send({ type: "submit_clarification", revision, answer: text });
-      setPending({ text, docId: activeDocId, clarify: true });
+      setPending({ text, docId: activeDocId, clarify: true, notice: notice?.id ?? 0, draft, images });
       clear();
       return;
     }
@@ -524,7 +522,7 @@ export function Composer({ shape, placeholder }: {
       skipPlanner: willSkipPlanner,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
-    setPending({ text, docId: activeDocId, clarify: false });
+    setPending({ text, docId: activeDocId, clarify: false, notice: notice?.id ?? 0, draft, images });
     clear();
   };
 
