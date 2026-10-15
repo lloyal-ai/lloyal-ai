@@ -35,5 +35,7 @@ Pin the tested dependency resolution in package-lock.json. Use the latest suppor
 ## Verification
 
 See docs/verification.md. Run typecheck, invariants, web and desktop builds after relevant changes. Use the real harness over rig/testing for deterministic contracts.
+For regressions, run the counterexample against unchanged application code before fixing it. Retain positive controls and the failure case in CI; see test/invariants/README.md.
+Decision-quality evaluations must use Qwen3.5-4B on CUDA with CPU fallback disabled and a verified eval-process GPU allocation; see test/eval/decisions/README.md.
 Real-model tests use the intended models: SmolLM2 for text mechanics, Qwen3.5-4B plus its matching projector for vision, Qwen3-ASR plus its projector for recorded audio. Run model-specific suites in separate processes. Never infer capability from a build or mock.
 Browser tests must exercise the real transport and harness for end-to-end claims. Verify keyboard, reduced motion, responsive layout and console errors.

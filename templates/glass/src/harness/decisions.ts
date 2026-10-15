@@ -9,6 +9,7 @@ import {
   validateDecision,
   acceptedOutcome,
   type Mode,
+  type DecisionBoundary,
 } from "../domain/work.js";
 import { samplingSeed } from "./sampling.js";
 import { render } from "./prompts.js";
@@ -20,6 +21,7 @@ export function* decide(
   attachments: readonly Attachment[],
   context = "",
   inheritedQuestion = false,
+  boundary: DecisionBoundary = "request",
   seed?: number,
 ): Operation<Decision> {
   seed ??= yield* samplingSeed();
@@ -29,6 +31,7 @@ export function* decide(
       mode,
       abilities.map((a) => a.manifest.name),
       attachments.map((a) => a.digest),
+      boundary,
     ),
   );
   const result = yield* agent({
@@ -46,6 +49,7 @@ export function* decide(
     content: render("decision.user", {
       question: inheritedQuestion ? null : question,
       mode,
+      boundary,
       context,
       abilities: abilities.map((a) => ({
         name: a.manifest.name,
@@ -69,5 +73,6 @@ export function* decide(
     mode,
     abilities.map((a) => a.manifest.name),
     attachments.map((a) => a.digest),
+    boundary,
   );
 }

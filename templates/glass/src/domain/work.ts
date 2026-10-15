@@ -8,11 +8,13 @@ export const Mode = z.enum([
   "Graph",
 ]);
 export type Mode = z.infer<typeof Mode>;
+export type DecisionBoundary = "request" | "revisit";
 export const Presentation = z.enum(["prose", "table", "checklist"]);
 export const WorkTask = z.object({
   id: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),
   title: z.string().min(1).max(100),
   instruction: z.string().min(1).max(3000),
+  // Preferred ability and attribution; sourceScope owns allowed sources.
   ability: z.string(),
   dependsOn: z.array(z.string()).max(8),
 });
@@ -26,6 +28,7 @@ export const Plan = z.object({
   review: z.boolean(),
   preflight: z.boolean(),
   revisit: z.boolean(),
+  // Relevant evidence references, not an attachment-access boundary.
   inputs: z.array(z.string()),
 });
 export type Plan = z.infer<typeof Plan>;
@@ -65,6 +68,7 @@ export function decisionSchema(
   mode: Mode,
   abilities?: readonly string[],
   inputs?: readonly string[],
+  boundary: DecisionBoundary = "request",
 ) {
   const choices = (values: readonly string[] | undefined) =>
     values === undefined
@@ -83,24 +87,25 @@ export function decisionSchema(
   const topology = (
     { Parallel: "parallel", Chain: "chain", Graph: "graph" } as const
   )[mode as "Parallel" | "Chain" | "Graph"];
-  const plan = Plan.extend({
-    ...(abilities
-      ? {
-          tasks: z
-            .array(WorkTask.extend({ ability: z.enum(["", ...abilities]) }))
-            .min(1)
-            .max(8),
-        }
+  const task = WorkTask.extend({
+    ...(abilities ? { ability: z.enum(["", ...abilities]) } : {}),
+    // Parallel's no-handoff contract belongs in the sampling grammar as well
+    // as semantic validation; a forbidden edge should never be generated.
+    ...(mode === "Parallel"
+      ? { dependsOn: z.array(z.string()).length(0) }
       : {}),
+  });
+  const plan = Plan.extend({
+    tasks: z.array(task).min(1).max(8),
     inputs: choices(inputs),
     ...(topology ? { topology: z.literal(topology) } : {}),
     ...(["Plan", "Graph"].includes(mode) ? { review: z.literal(true) } : {}),
   });
   const compose = composeDecision.extend({ ...fields, plan });
-  if (mode === "Auto")
-    return z.discriminatedUnion("action", [answer, clarify, compose]);
   if (mode === "Direct")
     return z.discriminatedUnion("action", [answer, clarify]);
+  if (mode === "Auto" || boundary === "revisit")
+    return z.discriminatedUnion("action", [answer, clarify, compose]);
   return z.discriminatedUnion("action", [clarify, compose]);
 }
 export type Decision = z.infer<typeof Decision>;
@@ -149,28 +154,43 @@ export function validatePlan(
     visited.add(id);
   }
   p.tasks.forEach((t) => visit(t.id));
-  if (p.topology === "parallel" && p.tasks.some((t) => t.dependsOn.length))
-    throw new Error(
-      "Parallel steps must be independent. Use Graph for dependencies.",
-    );
-  if (
-    p.topology === "chain" &&
-    p.tasks.some((t, i) =>
-      t.dependsOn.some((id) => !p.tasks.slice(0, i).some((x) => x.id === id)),
-    )
-  )
-    throw new Error("A chain can depend only on earlier steps.");
-  if (
-    p.topology === "fanout" &&
-    (p.tasks.length < 2 ||
-      p.tasks[0].dependsOn.length ||
-      p.tasks
-        .slice(1)
-        .some((t) => t.dependsOn.some((id) => id !== p.tasks[0].id)))
-  )
-    throw new Error(
-      "A fanout needs one landscape followed by independent tasks.",
-    );
+  switch (p.topology) {
+    case "parallel":
+      if (p.tasks.some((t) => t.dependsOn.length))
+        throw new Error(
+          "Parallel steps must be independent. Use Graph for dependencies.",
+        );
+      break;
+    case "chain":
+      if (
+        p.tasks.some((t, i) =>
+          t.dependsOn.some(
+            (id) => !p.tasks.slice(0, i).some((x) => x.id === id),
+          ),
+        )
+      )
+        throw new Error("A chain can depend only on earlier steps.");
+      break;
+    case "fanout": {
+      const [landscape, ...domains] = p.tasks;
+      if (
+        !domains.length ||
+        landscape.dependsOn.length ||
+        domains.some((t) => t.dependsOn.some((id) => id !== landscape.id))
+      )
+        throw new Error(
+          "A fanout needs one landscape followed by independent tasks.",
+        );
+      break;
+    }
+    case "graph":
+      // The reference and cycle checks above define a valid DAG.
+      break;
+    default: {
+      const unsupported: never = p.topology;
+      throw new Error(`Unsupported topology: ${unsupported}`);
+    }
+  }
   const forced = (
     { Parallel: "parallel", Chain: "chain", Graph: "graph" } as const
   )[mode as "Parallel" | "Chain" | "Graph"];
@@ -187,6 +207,7 @@ export function validateDecision(
   mode: Mode,
   abilities: readonly string[],
   inputs: readonly string[],
+  boundary: DecisionBoundary = "request",
 ): Decision {
   const d = Decision.parse(input);
   if (
@@ -195,27 +216,32 @@ export function validateDecision(
       d.sourceScope.inputs.some((a) => !inputs.includes(a)))
   )
     throw new Error("The decision requests unavailable sources.");
-  if (d.action === "clarify") {
-    if (!d.clarification.trim())
-      throw new Error("A clarification must ask a question.");
-    return d;
+  switch (d.action) {
+    case "clarify":
+      if (!d.clarification.trim())
+        throw new Error("A clarification must ask a question.");
+      return d;
+    case "answer":
+      if (boundary === "request" && !["Auto", "Direct"].includes(mode))
+        throw new Error(`An answer alone would ignore ${mode} mode.`);
+      return d;
+    case "compose":
+      if (d.presentation !== d.plan.presentation)
+        throw new Error("The decision and plan must agree on presentation.");
+      return {
+        ...d,
+        plan: validatePlan(
+          d.plan,
+          mode,
+          d.sourceScope?.abilities ?? abilities,
+          d.sourceScope?.inputs ?? inputs,
+        ),
+      };
+    default: {
+      const unsupported: never = d;
+      throw new Error(`Unsupported decision: ${unsupported}`);
+    }
   }
-  if (d.action === "answer") {
-    if (!["Auto", "Direct"].includes(mode))
-      throw new Error(`An answer alone would ignore ${mode} mode.`);
-    if (d.plan)
-      throw new Error("A direct answer cannot also carry a work plan.");
-    return d;
-  }
-  return {
-    ...d,
-    plan: validatePlan(
-      d.plan,
-      mode,
-      d.sourceScope?.abilities ?? abilities,
-      d.sourceScope?.inputs ?? inputs,
-    ),
-  };
 }
 /** Withdraw descendants AND results that actually inherited the changed premise through the shared spine. */
 export function retainedFindings(

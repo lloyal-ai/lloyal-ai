@@ -13,6 +13,14 @@ Glass starts as a standalone application over released public HDK packages. The 
 7. Source previews and actual admitted representations remain distinct. Media is content-addressed. PDFs belong to Documents; supported Markdown resources belong to Corpus.
 8. Keep the approved design: Inter, edge-to-edge electric depth, compact frosted navigation, short travelling reflections, contextual controls and no decorative idle animation. During observed work, a single diffuse background wash shifts slowly across the canvas; there are no per-agent light shapes. Pause, reading and reduced motion keep it still.
 
+## Composition contracts
+
+Composition decisions distinguish the initial request from a revisit after synthesis. Manual modes constrain additional work at either boundary, while a sufficient completed answer can end any mode. A clarification at revisit preserves the completed typed answer and evidence unless a new source restriction withdraws that evidence. Composed decisions and plans must agree on presentation.
+
+Task abilities express a preferred capability; `sourceScope` owns the allowed abilities and attachments for the stage. `Plan.inputs` records relevant evidence references. Revisions track actual worker fork positions against landed findings, including queued admission. Refused or unaccepted prerequisites cannot advance dependent work.
+
+The versioned [decision evaluation suite](../test/eval/decisions/README.md) exercises production proposals on CUDA with real ability catalogs, PDF ingress and inherited context. Automated contract results, human proposal review and end-to-end answer quality are separate gates. Prompt changes retain a comparable baseline.
+
 ## Reading and evidence presentation
 
 Owner review sets one shared desktop measure of 840 px for answers, work panels, document cards and the composer, with fluid gutters on smaller viewports. Main prose is 16 px and table content 14 px. Document cards open by default but remain collapsible. Titles, metadata and actions have distinct emphasis, shared across evidence/source/activity disclosures. The composer includes a small muted verification reminder below the input, within its own dock.

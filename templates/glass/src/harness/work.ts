@@ -9,6 +9,7 @@ import {
   fanout,
   dag,
   withSpine,
+  SpawnRefused,
 } from "@lloyal-labs/lloyal-agents";
 import type {
   Orchestrator,
@@ -130,6 +131,10 @@ const outcomeOf = (a: {
   exitReason?: string;
   failed: string | null;
 }) => a;
+const withClarification = (answer: Answer, question: string): Answer => ({
+  ...answer,
+  result: `${answer.result}\n\n${question}`,
+});
 
 /** Add acceptance policy around the public factories. The pool still owns seating, execution and waits. */
 export function guardedShape(
@@ -139,13 +144,13 @@ export function guardedShape(
   notify: (id: string, accepted: boolean, reason?: string) => Operation<void>,
 ): Orchestrator {
   return function* (ctx) {
-    const inherited = new Set<string>();
+    const inherited = new Map<string, number>();
     for (const [id, f] of findings) {
       yield* ctx.extendSpine(render("finding", { ...f.task }), f.text);
-      inherited.add(id);
+      inherited.set(id, ctx.spine.position);
     }
     const keys = new Map<number, string>(),
-      lineage = new Map<number, string[]>();
+      forkHeads = new Map<number, number>();
     const labels = new Map(
       plan.tasks.map((t) => [render("finding", { ...t }), t.id]),
     );
@@ -158,11 +163,21 @@ export function guardedShape(
           throw new DependencyRejected(
             `A prerequisite of “${t.title}” has no accepted finding.`,
           );
-        const visible = [...inherited];
-        const a = yield* ctx.spawn(spec);
-        if (spec.key) keys.set(a.id, spec.key);
-        lineage.set(a.id, visible);
-        return a;
+        try {
+          const a = yield* ctx.spawn(spec);
+          if (spec.key) keys.set(a.id, spec.key);
+          // Admission may happen after other findings land. Keep the actual
+          // fork position while the branch is live, including across heals.
+          forkHeads.set(a.id, a.forkHead);
+          return a;
+        } catch (error) {
+          if (!(error instanceof SpawnRefused) || plan.topology === "parallel")
+            throw error;
+          if (t) yield* notify(t.id, false, error.reason);
+          throw new DependencyRejected(
+            `“${t?.title ?? spec.key}” could not start and has no accepted finding. Review its dependent work.`,
+          );
+        }
       },
       *waitFor(a) {
         const final = yield* ctx.waitFor(a),
@@ -174,7 +189,9 @@ export function guardedShape(
             findings.set(task.id, {
               task,
               text: final.result!,
-              influencedBy: lineage.get(a.id) ?? [],
+              influencedBy: [...inherited]
+                .filter(([, end]) => end <= forkHeads.get(a.id)!)
+                .map(([id]) => id),
             });
           yield* notify(
             task.id,
@@ -193,42 +210,56 @@ export function guardedShape(
       *extendSpine(user, body) {
         const n = yield* ctx.extendSpine(user, body);
         const id = labels.get(user);
-        if (id) inherited.add(id);
+        // A batched extension may acknowledge several findings at the same
+        // position. Forks precede that batch or follow it, never split it.
+        if (id) inherited.set(id, ctx.spine.position);
         return n;
       },
     };
     const pending = plan.tasks.filter((t) => !findings.has(t.id));
-    let shape: Orchestrator;
-    if (plan.topology === "parallel") shape = parallel(pending.map(specFor));
-    else if (plan.topology === "chain")
-      shape = chain(pending, (t) => ({
-        task: specFor(t),
-        userContent: render("finding", { ...t }),
-      }));
-    else if (plan.topology === "fanout" && !findings.has(plan.tasks[0].id))
-      shape = fanout(
-        {
-          task: specFor(plan.tasks[0]),
-          userContent: render("finding", { ...plan.tasks[0] }),
-        },
-        pending.slice(1).map(specFor),
-      );
-    else if (plan.topology === "fanout") shape = parallel(pending.map(specFor));
-    else
-      shape = dag(
-        pending.map((t) => ({
-          id: t.id,
+    switch (plan.topology) {
+      case "parallel":
+        yield* parallel(pending.map(specFor))(guarded);
+        break;
+      case "chain":
+        yield* chain(pending, (t) => ({
           task: specFor(t),
-          dependsOn: t.dependsOn.filter((id) => !findings.has(id)),
           userContent: render("finding", { ...t }),
-        })),
-      );
-    yield* shape(guarded);
+        }))(guarded);
+        break;
+      case "fanout":
+        if (findings.has(plan.tasks[0].id)) {
+          yield* parallel(pending.map(specFor))(guarded);
+          break;
+        }
+        yield* fanout(
+          {
+            task: specFor(plan.tasks[0]),
+            userContent: render("finding", { ...plan.tasks[0] }),
+          },
+          pending.slice(1).map(specFor),
+        )(guarded);
+        break;
+      case "graph":
+        yield* dag(
+          pending.map((t) => ({
+            id: t.id,
+            task: specFor(t),
+            dependsOn: t.dependsOn.filter((id) => !findings.has(id)),
+            userContent: render("finding", { ...t }),
+          })),
+        )(guarded);
+        break;
+      default: {
+        const unsupported: never = plan.topology;
+        throw new Error(`Unsupported topology: ${unsupported}`);
+      }
+    }
     // Parallel siblings do not merge KV. Put only accepted findings on the owned work spine.
     for (const [id, f] of findings)
       if (!inherited.has(id)) {
         yield* ctx.extendSpine(render("finding", { ...f.task }), f.text);
-        inherited.add(id);
+        inherited.set(id, ctx.spine.position);
       }
   };
 }
@@ -533,7 +564,7 @@ function* composeWork(
             const follow = yield* decide(
               spine,
               question,
-              control.mode === "Plan" ? "Auto" : control.mode,
+              control.mode,
               abilities,
               attachments,
               render("boundary", {
@@ -543,16 +574,13 @@ function* composeWork(
                 stage: stages + 1,
               }),
               inheritedQuestion,
+              "revisit",
             );
             if (follow.sourceScope) return { type: "answer", value, follow };
             if (follow.action === "clarify")
               return {
                 type: "answer",
-                value: {
-                  kind: "prose",
-                  result: follow.clarification,
-                  sources: [],
-                },
+                value: withClarification(value, follow.clarification),
               };
             if (follow.action === "compose")
               return { type: "answer", value, next: follow.plan! };
@@ -606,11 +634,13 @@ function* composeWork(
       // The attempt has settled. Rebuild restricted evidence only after its child scopes close.
       const changed = yield* applyScope(outcome.follow.sourceScope!);
       if (outcome.follow.action === "clarify")
-        return {
-          kind: "prose",
-          result: outcome.follow.clarification,
-          sources: [],
-        };
+        return changed
+          ? {
+              kind: "prose",
+              result: outcome.follow.clarification,
+              sources: [],
+            }
+          : withClarification(previousAnswer, outcome.follow.clarification);
       if (outcome.follow.action === "answer") {
         if (!changed) return previousAnswer;
         return yield* answer(

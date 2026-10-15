@@ -1,8 +1,30 @@
-# Verification record — 14 October 2026
+# Verification record
 
 This is a working Phase 1 implementation for review, not a signed release or a completed human suitability study. The CLI, desktop and web targets share the command owner and fold. Each claim below identifies its evidence boundary.
 
+## Composition regression checks — 16 October 2026
+
+The unchanged `ad28718` baseline passed 47/47 invariants on Brev. The test-only commit `e3ac40f` then reproduced the defects before application changes: 26 additional cases, 17 expected failures and nine passing controls. The initial Glass-only fixes passed 73 invariants; the additional eval-grader and Parallel-grammar cases bring the final suite to 78/78. All target/eval typechecks and web/desktop builds pass on Node 24.15.0, Linux x86-64. The build retains its existing bundle-size warning.
+
+The regression suite covers queued DAG inheritance, refused chain/fanout prerequisites, inconsistent presentation, sufficient-answer revisits in manual modes, and preservation of typed answers and evidence when a revisit asks a clarification. The lineage matrix varies sequence capacity (4, 5, 8) and worker duration (24, 60 ticks), using public trace fork/extension positions as its independent oracle. Each case requires both affected and unaffected accepted findings, so invalidating everything fails.
+
+Decision actions, topology validation and execution use exhaustive switches. Runtime ownership remains Effection operations with public `Execution`, `withSpine` and agent factories; no framework, addon or dependency changes are needed. The [test discipline](../test/invariants/README.md) describes the red-first workflow and its evidence limits.
+
+Reproduce the added cases with:
+
+```sh
+node --import tsx --test --test-timeout=30000 test/invariants/composition-contracts.test.ts test/invariants/composition-lineage.test.ts
+```
+
+The test-only commit intentionally fails. Use the fixed branch head for the complete checks below. Deterministic scenarios establish execution contracts; they do not establish general model quality or close the remaining release gates.
+
 The follow-up [UI, interaction and accessibility review](ui-review-2026-10-14.md) records the responsive layout, activity, citation and control fixes, 44 passing invariants and remaining public Lightbox/Wikipedia metadata gaps. These findings supersede the earlier narrow browser check below; they do not close physical-device or assistive-technology gates.
+
+## Native decision evaluation — 16 October 2026
+
+The [versioned GPU suite](../test/eval/decisions/README.md) calls production decisions through public HDK APIs, real ability catalogs, PDF ingress and inherited context. The unchanged 19-case corpus improved from 26/38 to 38/38 automated contract checks at seeds 7 and 42; the frozen prompt also passed 19/19 at seed 99. CUDA selection, disabled fallback and the eval PID’s GPU allocation are mandatory. Dev tracing is enabled.
+
+[Raw decisions, failed baselines and proposal review](evaluations/2026-10-16/README.md) retain the evidence. A seed-99 fanout preselects technologies before its survey; this semantic quality concern remains despite passing structural checks. No universal quality or end-to-end answer claim follows from these results.
 
 ## Reproduce
 
@@ -30,7 +52,7 @@ GLASS_WS=ws://127.0.0.1:8788/ GLASS_FIXTURE=test/fixtures/inspection-image.pdf n
 - macOS Apple Silicon: an unsigned Glass 0.1.0 DMG built by the public `lloyal ship` command. The installed app provisioned its five model artifacts, opened, answered 18 + 24 = 42, then quit and reopened the saved conversation before answering the contextual follow-up as 21 in Auto. This does not establish notarization or every desktop journey.
 - Current peer-compatible Vite 7.3.7 is retained because electron-vite 5 does not accept the newer major. The package audit reported five low-severity entries through the public UI's KaTeX dependency; no supported automatic fix was available. No incompatible transitive override was introduced.
 
-The final invariant suite passes **37/37** checks; all three target typechecks and both application builds pass.
+The original 14 October verification passed 37/37 invariants, all three target typechecks and both application builds. The later UI review reached 44 tests, source-progress changes reached 47, and the current composition regression checks above bring the suite to 73.
 
 ## Evidence matrix
 

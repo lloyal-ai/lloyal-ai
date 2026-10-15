@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "esbuild targets/cli/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/targets/cli/index.mjs",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json && tsc -p tsconfig.electron.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json && tsc -p tsconfig.electron.json && tsc -p tsconfig.eval.json",
     "prestart": "node bin/preflight-abilities.js && npm run build",
     "start": "node bin/run.js",
     "predev:desktop": "node bin/preflight-abilities.js && node bin/ensure-electron.js",
@@ -32,7 +32,8 @@
     "dev:web": "concurrently -k -n serve,web -c blue,magenta \"cross-env LLOYAL_DEV=1 npm run serve\" \"vite --config targets/web/vite.web.config.ts\"",
     "build:web": "vite build --config targets/web/vite.web.config.ts",
     "test": "node --import tsx --test --test-timeout=30000 test/invariants/*.test.ts",
-    "test:native": "node --import tsx test/native/host-journey.ts"
+    "test:native": "node --import tsx test/native/host-journey.ts",
+    "eval:decisions": "tsc -p tsconfig.eval.json --noEmit && node --import tsx test/native/decisions.ts"
   },
   "dependencies": {
     "@embedpdf/pdfium": "^2.15.0",

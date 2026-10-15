@@ -1,5 +1,6 @@
 <% if(it.question){ %>Request: <%= it.question %><% } else { %>Use the person's latest request in the inherited conversation.<% } %>
 Mode constraint: <%= it.mode %>
+Decision boundary: <%= it.boundary %>
 Available abilities: <%= JSON.stringify(it.abilities) %>
 Available attachment digests: <%= JSON.stringify(it.inputs) %>
 <% if(it.context){ %>Current boundary and evidence: <%= it.context %><% } %>
