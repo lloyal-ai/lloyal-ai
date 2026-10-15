@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { runHarness, warmDeltas, writeReportFixture, docIdOfQuery, dirs } from "./harness.js";
 import { reduce, initialState } from "../../src/ui/state.js";
-import { selectAnswer, selectExchanges } from "../../src/ui/select.js";
+import { selectAnswer, selectExchanges, selectUnanswered } from "../../src/ui/select.js";
 import { NO_ROOM, NOTHING_KEPT, nothingKept } from "../../src/ui/presentation.js";
 
 const SAVED = "2026-01-01T00-00-00-000";
@@ -103,6 +103,7 @@ test("a cold brief too full for an agent to start says so where the answer would
   assert.equal(answer.unanswered, "no_room");
   const s = run.events.reduce(reduce, initialState);
   assert.equal(nothingKept(s.documents.get(docIdOfQuery(run.events))!.unanswered), NO_ROOM);
+  assert.equal(nothingKept(selectUnanswered(s)), NO_ROOM, "the canvas reads it off the brief it shows");
 });
 
 test("an empty run whose agents ran says the sources found nothing, as before", () => {
