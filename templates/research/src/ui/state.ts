@@ -145,8 +145,9 @@ export interface DocState {
   unanswered: Unanswered | null;
   /** Why the answer is the inquiries' findings as written rather than one settled answer; null when settled. */
   unsettled: Unsettled | null;
-  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask that found nothing: the reader
-   *  asked, nothing was kept, and the view says so where the answer would be. */
+  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask with no answer: it found
+   *  nothing, or had no room to start (`unanswered`); nothing was kept, and the view says which where the
+   *  answer would be. */
   exchanges: { question: string; body: string | null; attachments: string[]; unanswered?: Unanswered }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;

@@ -6,7 +6,9 @@
  * report — what it is told is a prompt, joined in `research.ts`, so the
  * interface can read a row without carrying the model's prose. `high` is the
  * tuned baseline; `medium`/`low` are starting estimates. The context limits
- * are ABSOLUTE free-KV reserves, not nCtx-derived.
+ * are ABSOLUTE free-KV reserves, not nCtx-derived; a row's `softLimit` is also
+ * the room a turn's attachments must leave free for the run that follows them.
+ * `attachments.context` is the one fraction: of the whole context.
  */
 
 export type Effort = "low" | "medium" | "high" | "ultra";

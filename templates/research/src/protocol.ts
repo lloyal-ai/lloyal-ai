@@ -156,8 +156,8 @@ export type BriefEvent =
   | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: "synthesize:start" }
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
-  /** The answer — or null when the inquiries found nothing to settle: the ask is over, nothing was invented,
-   *  committed or kept, and the view says so. */
+  /** The answer, or null when there is none: the inquiries found nothing to settle, or no agent had room to
+   *  start (`unanswered`). The ask is over, nothing was invented, committed or kept, and the view says which. */
   | { type: "answer"; text: string | null; unanswered?: Unanswered; unsettled?: Unsettled }
   | { type: "stats"; ctxPct: number; ctxPos: number; ctxTotal: number }
   | { type: "complete"; data: CompleteData }

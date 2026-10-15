@@ -44,8 +44,9 @@ export type Inputs = {
 };
 
 export type Stats = { ctxPct: number; ctxPos: number; ctxTotal: number };
-/** What a writing produced. `answer` is the brief — or null when the inquiries found nothing to settle: the
- *  view says so; nothing is invented, committed or kept. `inquiries` is what each line of inquiry found, in
+/** What a writing produced. `answer` is the brief, or null when there is none: the inquiries found nothing to
+ *  settle, or none had room to start (`unanswered`). The view says which; nothing is invented, committed or
+ *  kept. An unsettled answer is the findings as written (`unsettled`). `inquiries` is what each line of inquiry found, in
  *  plan order: the library keeps one annexure for each that found something, so a writer that ran none returns
  *  none. `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
 export type Written = { answer: string | null; unanswered?: Unanswered; unsettled?: Unsettled; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
