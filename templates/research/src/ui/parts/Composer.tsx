@@ -205,7 +205,7 @@ export function Composer({ shape, placeholder }: {
     if (fate === "waiting") return;
     if (fate === "refused") {
       setDraft(pending.draft);
-      setImages(pending.images);
+      setImages((tray) => [...pending.images, ...tray]);   // anything attached while it was out stays
     }
     setPending(null);
   }, [pending, activeDocId, askNow, clarifying, notice]);
