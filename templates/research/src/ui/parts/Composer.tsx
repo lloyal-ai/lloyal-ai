@@ -9,10 +9,11 @@ import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
 import { color, font, radius, shadow } from "../theme.js";
 import { describeProgress, ingestVideo, MicGlyph, ProgressRing, Popover, RecordingWaveform, useAssets, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput, VideoCard, videoView } from "@lloyal-labs/ui";
 import type { VideoView } from "@lloyal-labs/ui";
-import type { VideoProgress } from "@lloyal-labs/ui";
+import type { AttachedVideo, VideoProgress } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../../protocol.js";
 import { ingestMedia, isVideoContainer, representationUrl } from "@lloyal-labs/media";
 import { Lightbox, resolveAsset } from "./Figures.js";
+import { untranscribedNotice } from "../presentation.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, fmtElapsed, selectAbilitiesKnown, selectActiveDocId, selectBanked,
@@ -46,7 +47,9 @@ const ATTACH_TYPES = "image/*,application/pdf,video/*";
  *  the same harmless orphan class the store's write order already accepts. */
 type Attached =
   | { id: number; name: string; status: "uploading"; progress?: VideoProgress; video?: boolean }
-  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null }
+  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null;
+      /** Soundtrack windows the host could not transcribe: the model will not hear them. */
+      untranscribed?: AttachedVideo["untranscribed"] }
   | { id: number; name: string; status: "failed"; error: string; video?: boolean };
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
@@ -142,6 +145,9 @@ export function Composer({ shape, placeholder }: {
   const picker = useRef<HTMLInputElement>(null);
   const draftInput = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
+  /** The work each attachment still has running, by id: stopped when it is removed or the composer goes. */
+  const inFlight = useRef(new Map<number, AbortController>());
+  useEffect(() => () => inFlight.current.forEach((work) => work.abort()), []);
   /** The question, held after send with its draft and attachments until the
    *  fold says what became of it (`sentFate`). Acknowledged, it is let go; refused,
    *  the draft and attachments come back to be edited or removed. */
@@ -404,6 +410,8 @@ export function Composer({ shape, placeholder }: {
     }
     for (const file of chosen) {
       const id = nextId.current++;
+      const work = new AbortController();
+      inFlight.current.set(id, work);
       setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
       const progress = (p: VideoProgress): void =>
         setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: p } : a)));
@@ -414,9 +422,9 @@ export function Composer({ shape, placeholder }: {
           // there; anything else crosses once and the host's ingress admits it.
           video = isVideoContainer(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
           if (video) setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, video } : a)));
-          const root = video
-            ? await attachVideo(file, progress)
-            : await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
+          const { root, untranscribed } = video
+            ? await attachVideo(file, progress, work.signal)
+            : { root: await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()), { signal: work.signal }), untranscribed: [] };
           const asset = await resolveAsset(origin, root.digest);
           const cover = asset.kind === "document" ? asset.meta.pages.find((p) => p.page === 1)?.render : undefined;
           const thumb = asset.kind === "image"
@@ -425,23 +433,34 @@ export function Composer({ shape, placeholder }: {
               ? representationUrl(origin, root.digest, asset.meta.poster)
               : cover ? representationUrl(origin, cover.digest) : null;
           const title = asset.kind === "document" ? asset.meta.title : null;
-          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title } : a)));
+          setImages((prev) => prev.map((a) => (a.id === id ? {
+            id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title,
+            ...(untranscribed.length > 0 ? { untranscribed } : {}),
+          } : a)));
         } catch (err) {
+          if (work.signal.aborted) return;   // removed while it worked: there is nothing left to say it failed on
           // The host's own message — 413 too large, 408 too slow, 400 not
           // admitted — beats anything invented here.
           const error = err instanceof Error ? err.message : "Upload failed.";
           setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error, video } : a)));
+        } finally {
+          inFlight.current.delete(id);
         }
       })();
     }
   };
 
   /** A video: its original pushed, its frames and soundtrack sampled here, and the host composing them. */
-  const attachVideo = async (file: File, onProgress: (p: VideoProgress) => void): Promise<Descriptor> => {
+  const attachVideo = async (file: File, onProgress: (p: VideoProgress) => void, signal: AbortSignal): Promise<AttachedVideo> => {
     if (origin === null) throw new Error("This build cannot accept attachments.");
     // Before the host has said how it samples a video, ingestVideo asks it.
-    const { root } = await ingestVideo({ origin, bridge, file, capabilities: video, onProgress });
-    return root;
+    return ingestVideo({ origin, bridge, file, capabilities: video, onProgress, signal });
+  };
+
+  /** Removing an attachment stops the work still running for it: its upload, its sampling, the host's transcription. */
+  const remove = (id: number): void => {
+    inFlight.current.get(id)?.abort();
+    setImages((prev) => prev.filter((p) => p.id !== id));
   };
 
   /** Paste is the shortest road from a screenshot to a question. The clipboard
@@ -551,12 +570,16 @@ export function Composer({ shape, placeholder }: {
                 type="button"
                 style={S.thumbX}
                 aria-label={`Remove ${img.name}`}
-                onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
+                onClick={() => remove(img.id)}
               >
                 ×
               </button>
             </span>
           ))}
+          {images.flatMap((img) => {
+            const notice = img.status === "admitted" ? untranscribedNotice(img.untranscribed ?? []) : null;
+            return notice ? [<span key={`sound-${img.id}`} style={S.soundNotice}>{img.name}: {notice}</span>] : [];
+          })}
           {imageError && <span style={S.imageError}>{imageError}</span>}
         </div>
       )}
@@ -853,6 +876,7 @@ const S: Record<string, CSSProperties> = {
     textOverflow: "ellipsis", whiteSpace: "nowrap",
   },
   imageError: { font: `12px ${font.ui}`, color: color.danger },
+  soundNotice: { font: `12px ${font.ui}`, color: color.ink },
   attach: {
     width: 30, height: 30, borderRadius: 8, border: 0, background: "none",
     color: color.dim, display: "grid", placeItems: "center", flex: "none",

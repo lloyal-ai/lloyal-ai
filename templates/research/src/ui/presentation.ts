@@ -22,3 +22,13 @@ export const NO_ROOM = "This brief's context had no room left for an agent to wo
 /** The words for an empty answer: why it is empty, when the run said. */
 export const nothingKept = (unanswered: Unanswered | null | undefined): string =>
   unanswered === "no_room" ? NO_ROOM : NOTHING_KEPT;
+
+/** Said on a video whose soundtrack was not all transcribed: what the model will not hear, before the question is sent. */
+export const untranscribedNotice = (windows: readonly { startMs: number; endMs: number }[]): string | null => {
+  if (windows.length === 0) return null;
+  const clock = (ms: number): string => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1_000) % 60).padStart(2, "0")}`;
+  const span = (w: { startMs: number; endMs: number }): string => `${clock(w.startMs)} to ${clock(w.endMs)}`;
+  return windows.length <= 2
+    ? `The model won't hear the speech from ${windows.map(span).join(" and ")}.`
+    : `The model won't hear the speech in ${windows.length} parts of this video, from ${span({ startMs: windows[0].startMs, endMs: windows[windows.length - 1].endMs })}.`;
+};
