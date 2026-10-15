@@ -19,7 +19,7 @@ import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
-import { NOTHING_KEPT } from "../presentation.js";
+import { nothingKept } from "../presentation.js";
 
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);
@@ -119,13 +119,13 @@ export function Settle(): ReactElement {
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
-      {answer === null && !ask && <p style={S.mark}>{NOTHING_KEPT}</p>}
+      {answer === null && !ask && <p style={S.mark}>{nothingKept(doc?.unanswered)}</p>}
       <Sources citations={citations} notes={notes} />
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
           <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
           <FigureStrip digests={x.attachments} />
-          {x.body === null ? <p style={S.mark}>{NOTHING_KEPT}</p> : (
+          {x.body === null ? <p style={S.mark}>{nothingKept(x.unanswered)}</p> : (
             <>
               <p style={S.exchangeActions}>
                 <button type="button" style={S.action} onClick={() => copy(x.body!, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>

@@ -23,7 +23,7 @@ import type { Ability, Coverage, Output, PlanResult, Reports, ResearchTask } fro
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
 import { prompt, render } from "./prompts.js";
-import type { CompleteData, DocId, Mode, WorkflowEvent } from "../protocol.js";
+import type { CompleteData, DocId, Mode, Unanswered, WorkflowEvent } from "../protocol.js";
 
 /** An ask, as the brief hands it over. */
 export type Inputs = {
@@ -48,7 +48,7 @@ export type Stats = { ctxPct: number; ctxPos: number; ctxTotal: number };
  *  view says so; nothing is invented, committed or kept. `inquiries` is what each line of inquiry found, in
  *  plan order: the library keeps one annexure for each that found something, so a writer that ran none returns
  *  none. `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
-export type Written = { answer: string | null; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
+export type Written = { answer: string | null; unanswered?: Unanswered; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
 /** What the brief is handed: the planner, the writer, and how the writer's inquiries hand in their findings,
  *  which is what lets the view show them. Replace `write`'s `output` and you replace `reports` with it. */
 export type Research = { plan: typeof plan; write: typeof write; reports?: Reports };
@@ -281,8 +281,11 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
         text = r.answer.trim() ? r.answer : null; settled = r;
       }
 
+      // Every inquiry refused for want of room: nothing was searched, and the reader is told so, not "nothing found".
+      const noRoom = text === null && tasks.every((_, i) => pool.byKey(taskKey(i))?.failed === "pressure_init");
       return {
         answer: text,
+        ...(noRoom ? { unanswered: "no_room" as const } : {}),
         inquiries: tasks.map((task, i) => ({ task: task.description, findings: found[i] })),
         stats: yield* contextUse(),
         complete: {

@@ -21,6 +21,10 @@ export type DocId = string;
 /** 'deep' is chain-shaped research (each inquiry builds on the last); 'flat' is parallel. */
 export type Mode = "flat" | "deep";
 
+/** Why a run ended with no answer, when it can say: `no_room` when the context was too full for an agent to
+ *  start. Absent, the inquiries ran and found nothing to settle. */
+export type Unanswered = "no_room";
+
 /** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;
@@ -140,7 +144,7 @@ export type BriefEvent =
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
   /** The answer — or null when the inquiries found nothing to settle: the ask is over, nothing was invented,
    *  committed or kept, and the view says so. */
-  | { type: "answer"; text: string | null }
+  | { type: "answer"; text: string | null; unanswered?: Unanswered }
   | { type: "stats"; ctxPct: number; ctxPos: number; ctxTotal: number }
   | { type: "complete"; data: CompleteData }
   /** A settled brief, whole, from disk. Does not activate. */

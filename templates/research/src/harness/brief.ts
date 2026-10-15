@@ -251,7 +251,7 @@ export function briefs(deps: {
     const written = yield* research.write(session.trunk, ask, plan);
     yield* commitAnswer(ask.text, written.answer);
     library.written(ask.docId, written);   // held until `complete` is said, which is when the report is made
-    yield* wire.send({ type: "answer", text: written.answer });
+    yield* wire.send({ type: "answer", text: written.answer, ...(written.unanswered ? { unanswered: written.unanswered } : {}) });
     yield* wire.send({ type: "stats", ...written.stats });
     live = null;   // said as complete, nothing here is left for a stop to abort; what follows is bookkeeping a replacement may cut short
     yield* wire.send({ type: "complete", data: written.complete });

@@ -16,7 +16,7 @@ import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../harness/budgets.js';
 import type { Reports } from '@lloyal-labs/rig';
-import type { DocId, Mode, LibraryEntry } from '../protocol.js';
+import type { DocId, Mode, LibraryEntry, Unanswered } from '../protocol.js';
 
 export type { DocId, Mode, LibraryEntry } from '../protocol.js';
 export { reduce } from './reduce.js';
@@ -139,9 +139,11 @@ export interface DocState {
 
   synth: SynthState;
   answer: string | null;
+  /** Why the answer is null, when the run said; null otherwise. */
+  unanswered: Unanswered | null;
   /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask that found nothing: the reader
    *  asked, nothing was kept, and the view says so where the answer would be. */
-  exchanges: { question: string; body: string | null; attachments: string[] }[];
+  exchanges: { question: string; body: string | null; attachments: string[]; unanswered?: Unanswered }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
   /** The in-flight ask's media digests, landed on the settled exchange. */

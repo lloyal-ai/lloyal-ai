@@ -16,7 +16,7 @@ import type { AgentRuntime, AppState } from "./state.js";
 import { selectAnswer } from "./select.js";
 import type { Command, WorkflowEvent } from "../protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
-import { APP, NOTHING_KEPT } from "./presentation.js";
+import { APP, nothingKept } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
 
 const seed = (bootstrap: readonly WorkflowEvent[]): AppState =>
@@ -96,8 +96,8 @@ function View({
   const latest = doc && doc.ask === null ? doc.exchanges[doc.exchanges.length - 1] : undefined;
   const streaming =
     answer?.streaming ? answer.body
-    : latest ? latest.body ?? NOTHING_KEPT
-    : doc && doc.phase === "done" && doc.answer === null ? NOTHING_KEPT
+    : latest ? latest.body ?? nothingKept(latest.unanswered)
+    : doc && doc.phase === "done" && doc.answer === null ? nothingKept(doc.unanswered)
     : answer?.body ?? "";
 
   // Input is offered when nothing is mid-flight: no doc, a settled doc, or

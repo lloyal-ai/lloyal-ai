@@ -5,6 +5,8 @@
  *  `name` is for people: change it whenever you like. `storage` prefixes what a browser remembers for a reader
  *  (the open panel, this machine's pace), so it is kept apart: renaming the app does not forget any of that,
  *  and changing `storage` does. Node-free, so every target can import it. */
+import type { Unanswered } from "../protocol.js";
+
 export const APP = {
   name: "__NAME__",
   storage: "__NAME__",
@@ -13,3 +15,10 @@ export const APP = {
 /** Said where an answer would be, for a brief or a follow-up that ran to its end and found nothing: no report was
  *  written, nothing was invented. */
 export const NOTHING_KEPT = "The sources turned up nothing to settle this on — nothing was kept.";
+
+/** Said instead when the context was too full for an agent to start: nothing was searched, so nothing was found. */
+export const NO_ROOM = "This brief's context had no room left for an agent to work in, so nothing was kept. Start a new brief, or ask without attaching more.";
+
+/** The words for an empty answer: why it is empty, when the run said. */
+export const nothingKept = (unanswered: Unanswered | null | undefined): string =>
+  unanswered === "no_room" ? NO_ROOM : NOTHING_KEPT;
