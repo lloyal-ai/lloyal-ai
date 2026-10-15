@@ -117,6 +117,8 @@ export interface DocState {
   /** The run's own effort, as submitted — distinct from the config default. */
   runEffort: Effort | null;
   phase: DocPhase;
+  /** The brief's attachments are being read into the conversation: from its query until its plan starts. */
+  reading: boolean;
   plan: {
     intent: string;
     tasks: { description: string; ability?: string }[];

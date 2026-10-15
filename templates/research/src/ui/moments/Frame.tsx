@@ -10,7 +10,7 @@ import { useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command } from "../../protocol.js";
 import {
   selectClarify, selectDev, selectDiscovering, selectOutline, selectOutlineDraft,
-  selectProbes, selectReviewing, selectRevision, selectTitle, type Probe,
+  selectProbes, selectReading, selectReviewing, selectRevision, selectTitle, type Probe,
 } from "../select.js";
 import { Work } from "../parts/InquiryRow.js";
 import { Figures } from "../parts/Figures.js";
@@ -22,6 +22,7 @@ export function Frame(): ReactElement {
   const title = useProjection(selectTitle);
   const clarify = useProjection(selectClarify);
   const discovering = useProjection(selectDiscovering);
+  const reading = useProjection(selectReading);
   const draft = useProjection(selectOutlineDraft);
   const outline = useProjection(selectOutline);
   const reviewing = useProjection(selectReviewing);
@@ -37,6 +38,8 @@ export function Frame(): ReactElement {
           <Probes />
         </>
       )}
+
+      {reading && <p style={S.beat}><Thinking>reading the attachments…</Thinking></p>}
 
       {draft && (
         <>

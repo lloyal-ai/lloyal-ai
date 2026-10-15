@@ -104,7 +104,7 @@ function withDoc(
 export function emptyDoc(): DocState {
   return {
     id: '', query: '', attachments: [], mode: null, direct: false, runEffort: null,
-    phase: 'done', plan: null, revision: null,
+    phase: 'done', reading: false, plan: null, revision: null,
     roster: emptyRoster(),
     reconAgentIds: [],
     researchAgentCount: 0, reports: null,
@@ -124,6 +124,7 @@ function newDoc(ev: Extract<WorkflowEvent, { type: 'query' }>): DocState {
     direct: !!ev.direct,
     runEffort: ev.effort ?? null,
     phase: 'planning',
+    reading: (ev.attachments ?? []).length > 0,
     pipelineResumedAt: Date.now(),
   };
 }
@@ -418,10 +419,12 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       // the settled canvas — the ask streams beneath it.
       if (asking) return { ...doc, plan: null, pipelineResumedAt: Date.now() };
       // A planner pass (first or re-plan): recon agents vanish here, the
-      // planner is A0 again, the accumulator keeps counting.
+      // planner is A0 again, the accumulator keeps counting. The attachments
+      // have been read by now.
       return {
         ...doc,
         phase: 'planning',
+        reading: false,
         plan: null,
         revision: null,
         mode: ev.mode === 'flat' ? 'flat' : 'deep',

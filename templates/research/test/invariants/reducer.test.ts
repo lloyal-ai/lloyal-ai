@@ -9,7 +9,7 @@ import { reduce, initialState, type AppState } from '../../src/ui/state.js';
 import type { WorkflowEvent } from '../../src/protocol.js';
 import {
   DOC_PHASES, selectAnswer, selectControls, selectEtaTasks, selectLive, selectMarks, selectMoment, selectReviewing,
-  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle, selectProbes,
+  selectRunDepth, selectRunTitle, selectSections, selectStatus, selectTitle, selectProbes, selectOutlineDraft,
 } from '../../src/ui/select.js';
 
 const fold = (events: WorkflowEvent[], from: AppState = initialState): AppState =>
@@ -417,4 +417,18 @@ test("the run bar commands the RUNNING document while the canvas shows another",
   assert.equal(selectStatus(s), 'Writing', "the status word describes the running document");
   assert.equal(selectRunTitle(s), 'Q1', "the run bar names the running document");
   assert.equal(selectTitle(s), 'Saved brief', "the canvas keeps the viewed document");
+});
+
+test("a brief's attachments are read before its outline is drafted: the canvas says reading until the plan starts", () => {
+  const video = { mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: `sha256:${'a'.repeat(64)}`, size: 1 };
+  const asked = fold([{ type: 'query', docId: A, query: 'Q1', warm: false, attachments: [video] } as WorkflowEvent]);
+  assert.equal(asked.documents.get(A)?.reading, true, "a brief asked with attachments is reading them");
+  assert.equal(selectOutlineDraft(asked), null, "no outline is being drafted while they are read");
+
+  const planning = fold([{ type: 'plan:start', query: 'Q1', mode: 'flat' } as WorkflowEvent], asked);
+  assert.equal(planning.documents.get(A)?.reading, false, "the plan starts once they are read");
+  assert.notEqual(selectOutlineDraft(planning), null, "the outline is drafted from the plan's start");
+
+  const bare = fold([{ type: 'query', docId: B, query: 'Q2', warm: false } as WorkflowEvent]);
+  assert.equal(bare.documents.get(B)?.reading, false, "a brief asked without attachments reads nothing");
 });
