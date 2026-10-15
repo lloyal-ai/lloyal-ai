@@ -558,13 +558,22 @@ export function Composer({ shape, placeholder }: {
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
           {images.map((img) => (
-            <span key={img.id} style={isVideoChip(img) ? S.videoChip : S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
+            <span key={img.id} style={isVideoChip(img) && img.status !== "failed" ? S.videoChip : S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
               {isVideoChip(img) && img.status !== "failed"
                 ? <VideoChip img={img} />
                 : img.status === "admitted" && img.thumb
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
-                  ? <span style={{ ...S.docChip, color: color.danger }}>{img.video ? <FilmGlyph /> : <DocGlyph />}{img.name} — {img.error}</span>
+                  ? (
+                    // The name may be cut short; why it failed never is, so a failed attachment never looks gone.
+                    <span style={S.failedChip}>
+                      {img.video ? <FilmGlyph /> : <DocGlyph />}
+                      <span style={S.failedText}>
+                        <span style={S.failedName}>{img.name}</span>
+                        <span style={S.failedReason}>{img.error}</span>
+                      </span>
+                    </span>
+                  )
                   : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
               <button
                 type="button"
@@ -870,6 +879,13 @@ const S: Record<string, CSSProperties> = {
   },
   /** An attachment the host has not answered for yet. */
   admitting: { opacity: 0.6 },
+  failedChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 280, padding: "4px 10px 4px 8px",
+    font: `12px/1.35 ${font.ui}`, color: color.danger,
+  },
+  failedText: { display: "flex", flexDirection: "column", minWidth: 0 },
+  failedName: { color: color.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  failedReason: { color: color.danger, whiteSpace: "normal", overflowWrap: "anywhere" },
   docChip: {
     display: "inline-flex", alignItems: "center", gap: 6, height: 40, padding: "0 10px 0 8px",
     font: `12px ${font.ui}`, color: color.ink, maxWidth: 240, overflow: "hidden",
