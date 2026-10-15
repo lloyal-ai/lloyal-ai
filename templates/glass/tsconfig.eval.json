@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["test/native/decisions.ts", "test/eval/decisions/**/*.ts"],
+  "exclude": []
+}

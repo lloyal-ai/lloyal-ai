@@ -37,6 +37,7 @@ function printHelp(): void {
       'Scaffold:',
       '  lloyal new [name]           Scaffold a new harness (interactive if no name)',
       '  lloyal new --template research       Start from the tuned research template',
+      '  lloyal new --template glass          Start from the Glass conversation app',
       '  lloyal ability:new <name>       Scaffold a new ability',
       '',
       'Manage models (in a project):',

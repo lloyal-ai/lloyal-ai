@@ -1,0 +1,4 @@
+This request follows an accepted conversation turn. For resolving short references during this decision, the most recent exchange was:
+Person: <%= it.question %>
+Glass: <%= it.answer %>
+The complete allowed conversation is inherited. This excerpt orients the decision; it does not replace the person's latest request or justify reusing a source they now withdraw.

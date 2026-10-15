@@ -1,0 +1,3340 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Glass Composition</title>
+<style>
+:root{color-scheme:dark;background:#0b0c10}
+html,body{margin:0;padding:0;width:100%;height:100%;background:#0b0c10;overflow:hidden}
+iframe{display:block;width:100%;height:100vh!important;height:100dvh!important;margin:0;border:0}
+</style>
+
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Glass Composition" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Glass Composition&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, &quot;Segoe UI&quot;,
+    Helvetica, &quot;Apple Color Emoji&quot;, Arial, sans-serif, &quot;Segoe UI Emoji&quot;,
+    &quot;Segoe UI Symbol&quot;;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget &gt; :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(&gt; .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel &gt; [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel &gt; [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host&#x27;s design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker &gt; summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-picker &gt; summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls &gt; button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker &gt; summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls &gt; button &gt; svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls &gt; button::before,
+.viz-carousel-picker &gt; summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: &quot;&quot;;
+  pointer-events: none;
+}
+
+.viz-carousel-controls &gt; button:hover::before,
+.viz-carousel-picker &gt; summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker &gt; summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker &gt; summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options &gt; button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options &gt; [aria-current=&quot;true&quot;],
+.viz-carousel-options &gt; button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type=&quot;file&quot;],
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;],
+  [type=&quot;color&quot;]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid=&quot;true&quot;] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select option {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: &quot;&quot;;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;radio&quot;]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;radio&quot;]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host&#x27;s proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(&gt; .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker &gt; summary,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type=&quot;file&quot;],
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;week&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;color&quot;]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;glass-composition&quot; aria-label=&quot;Glass interactive product concept&quot;&gt;
+&lt;style&gt;
+@import url(&#x27;https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;display=swap&#x27;);
+html:has(#glass-composition),body:has(#glass-composition){margin:0;padding:0;background:#0b0c10!important}
+#glass-composition{--g-font:Inter,-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,sans-serif;--g-bg:#0b0c10;--g-ink:#f2f5ff;--g-soft:#aeb9d3;--g-dim:#8590a8;--g-line:#a3baff18;--g-pane:#1c202c;--g-accent:#4d80ff;--g-edge:#a4c7ff;--g-wash:#26334f;--g-good:#a5d6cb;font:400 15px/1.6 var(--g-font);color:var(--g-ink);letter-spacing:-.012em;color-scheme:dark}
+#glass-composition *{box-sizing:border-box}
+#glass-composition [hidden]{display:none!important}
+#glass-composition button,#glass-composition input,#glass-composition textarea,#glass-composition select{font:inherit;color:inherit}
+#glass-composition button{background:none;border:0;padding:0}
+#glass-composition button:not(:disabled),#glass-composition a{touch-action:manipulation}
+#glass-composition button:disabled{opacity:.4}
+#glass-composition button:focus-visible,#glass-composition input:focus-visible,#glass-composition textarea:focus-visible,#glass-composition select:focus-visible{outline:2px solid #82a8ff;outline-offset:4px}
+#glass-composition svg{flex-shrink:0}
+#glass-composition .gc-app{position:relative;isolation:isolate;min-height:760px;width:100%;background:var(--g-bg);overflow:hidden}
+html[data-visualize-standalone] #glass-composition .gc-app{min-height:100vh;min-height:100dvh}
+#glass-composition .gc-haze{position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse at 50% 56%,#153ef147 0%,#1636b530 26%,#14255b19 52%,#080b1200 80%);pointer-events:none;transition:opacity .5s}
+#glass-composition[data-view=&quot;conversation&quot;] .gc-haze{opacity:.46}
+#glass-composition .gc-header{height:76px;display:flex;align-items:center;padding:0 110px 0 78px;gap:12px}
+#glass-composition .gc-thread-title{font-size:12px;color:var(--g-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#glass-composition .gc-icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;color:var(--g-soft);flex-shrink:0}
+#glass-composition .gc-icon svg{width:16px;height:16px}
+#glass-composition .gc-icon:hover{color:var(--g-ink);background:#c7d8ff0c}
+#glass-composition .gc-menu{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;width:36px;height:36px;padding:8px}
+#glass-composition .gc-menu span{display:block;width:20px;height:1.5px;border-radius:1px;background:currentColor}
+#glass-composition .gc-menu span:last-child{width:12px}
+#glass-composition .gc-nav-trigger{position:absolute;top:20px;left:18px;z-index:5}
+#glass-composition .gc-layout{max-width:1020px;margin:auto;padding:0 36px 30px}
+#glass-composition .gc-main{max-width:650px;margin:auto;min-width:0}
+#glass-composition .gc-arrival{text-align:center;padding:104px 0 40px}
+#glass-composition .gc-arrival h1{font-size:36px;line-height:1.25;font-weight:400;letter-spacing:-1.35px;margin:0 0 10px}
+#glass-composition .gc-arrival p{font-size:14px;color:var(--g-soft);margin:0}
+#glass-composition .gc-suggestions{display:flex;justify-content:center;gap:10px 23px;flex-wrap:wrap;margin:26px 0 70px}
+#glass-composition .gc-suggestions button{display:flex;align-items:center;gap:7px;color:var(--g-soft);font-size:12px;min-height:32px}
+#glass-composition .gc-suggestions button:hover{color:var(--g-ink)}
+#glass-composition .gc-suggestions svg{width:14px;height:14px}
+#glass-composition .gc-question{display:flex;align-items:flex-start;gap:12px;padding:20px 0 26px;color:var(--g-soft);font-size:14px;line-height:1.65}
+#glass-composition .gc-question p{margin:0;flex:1}
+#glass-composition .gc-mode-receipt{font-size:11px;white-space:nowrap;border:1px solid var(--g-line);border-radius:6px;padding:1px 7px;margin-top:2px}
+#glass-composition .gc-surface{position:relative;isolation:isolate;background:linear-gradient(120deg,#20232e,#1b1e29 55%,#191d29);border:1px solid var(--g-line);border-radius:23px;box-shadow:0 10px 35px #04070d24,inset 0 1px 0 #ffffff03}
+#glass-composition .gc-work{margin:0 0 26px}
+#glass-composition .gc-work-head{display:flex;gap:10px;align-items:center;padding:14px 17px 11px;min-height:49px}
+#glass-composition .gc-work-title{font-size:13px;font-weight:500;flex:1;min-width:0}
+#glass-composition .gc-work-caption{font-size:11px;color:var(--g-soft)}
+#glass-composition .gc-small{display:inline-flex;align-items:center;gap:5px;font-size:12px;min-height:28px;color:var(--g-soft)}
+#glass-composition .gc-small:hover{color:var(--g-ink)}
+#glass-composition .gc-small svg{width:13px;height:13px}
+#glass-composition .gc-inline-actions{display:flex;align-items:center;gap:12px}
+#glass-composition .gc-tabs{display:flex;align-items:center;gap:4px;padding:0 13px;border-bottom:1px solid var(--g-line);overflow-x:auto;scrollbar-width:thin}
+#glass-composition .gc-tab{display:flex;gap:7px;align-items:center;padding:10px 8px 11px;white-space:nowrap;color:var(--g-soft);font-size:12px;position:relative}
+#glass-composition .gc-tab[aria-selected=&quot;true&quot;]{color:var(--g-ink)}
+#glass-composition .gc-tab[aria-selected=&quot;true&quot;]:after{content:&quot;&quot;;height:2px;background:#83a4ff;position:absolute;bottom:-1px;left:8px;right:8px;border-radius:1px}
+#glass-composition .gc-tab svg{width:12px;height:12px}
+#glass-composition .gc-dot{width:5px;height:5px;background:var(--g-edge);border-radius:50%;display:inline-block;flex-shrink:0}
+#glass-composition .gc-dot.working{box-shadow:0 0 9px #3877ff80}
+#glass-composition .gc-dot.waiting{background:var(--g-dim);opacity:.65}
+#glass-composition .gc-body{padding:18px 21px 20px;min-height:204px}
+#glass-composition .gc-body h3{margin:7px 0 12px;font-size:17px;line-height:1.4;font-weight:500;letter-spacing:-.35px}
+#glass-composition .gc-body p{font-size:13px;line-height:1.8;margin:0 0 12px;white-space:pre-line}
+#glass-composition .gc-status{display:flex;gap:7px;align-items:center;color:var(--g-soft);font-size:11px;min-height:21px}
+#glass-composition .gc-status svg{width:12px;height:12px}
+#glass-composition .gc-task-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-top:14px}
+#glass-composition .gc-sources{display:flex;gap:7px;flex-wrap:wrap}
+#glass-composition .gc-source-link{font-size:11px;color:var(--g-soft);display:inline-flex;align-items:center;gap:5px;border-radius:5px;background:#d0ddff06;padding:3px 6px}
+#glass-composition .gc-source-link:hover{background:#c7d8ff12;color:var(--g-ink)}
+#glass-composition .gc-source-link svg{width:12px;height:12px}
+#glass-composition .gc-work-foot{padding:10px 17px;display:flex;gap:12px;align-items:center;border-top:1px solid var(--g-line);color:var(--g-soft);font-size:11px}
+#glass-composition .gc-spacer{flex:1}
+#glass-composition .gc-run-controls{display:flex;gap:13px;align-items:center}
+#glass-composition .gc-run-controls button{font-size:11px;display:flex;align-items:center;gap:5px;min-height:28px;color:var(--g-soft)}
+#glass-composition .gc-run-controls button:hover{color:var(--g-ink)}
+#glass-composition .gc-run-controls svg{width:12px;height:12px}
+#glass-composition .gc-plan-list{padding:0 17px 7px}
+#glass-composition .gc-plan-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid #c5d6ff09;min-height:44px}
+#glass-composition .gc-plan-number{color:var(--g-dim);font-size:11px;min-width:16px}
+#glass-composition .gc-plan-content{flex:1;min-width:0}
+#glass-composition .gc-plan-content input{width:100%;background:transparent;border:0;padding:2px 0;font-size:13px;line-height:1.5}
+#glass-composition .gc-dep{font-size:11px;color:var(--g-dim);display:block}
+#glass-composition .gc-plan-row .gc-icon{width:25px;height:25px}
+#glass-composition .gc-plan-row .gc-icon svg{width:12px;height:12px}
+#glass-composition .gc-plan-description{padding:0 17px 14px;color:var(--g-soft);font-size:12px;line-height:1.6}
+#glass-composition .gc-primary{background:#3165f5;color:#fff;padding:7px 13px;border-radius:9px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px}
+#glass-composition .gc-primary:hover{background:#507dff}
+#glass-composition .gc-primary svg{width:13px;height:13px}
+#glass-composition .gc-step-trail{display:flex;align-items:center;gap:5px;padding:0 16px 11px;overflow-x:auto;border-bottom:1px solid var(--g-line)}
+#glass-composition .gc-step-trail button{font-size:11px;color:var(--g-soft);white-space:nowrap;display:inline-flex;gap:6px;align-items:center;padding:5px 2px}
+#glass-composition .gc-step-trail button[aria-selected=&quot;true&quot;]{color:var(--g-ink)}
+#glass-composition .gc-step-trail svg{width:12px;height:12px;color:var(--g-dim)}
+#glass-composition .gc-answer{padding:2px 0 24px}
+#glass-composition .gc-answer h2{font-size:29px;line-height:1.3;letter-spacing:-.8px;font-weight:500;margin:10px 0 19px}
+#glass-composition .gc-answer p{font-size:15px;line-height:1.8;margin:0 0 15px}
+#glass-composition .gc-answer ul{font-size:14px;padding-left:19px;line-height:1.85;margin:0 0 17px}
+#glass-composition .gc-answer li{padding-left:3px;margin:6px 0}
+#glass-composition .gc-answer strong{font-weight:500}
+#glass-composition .gc-cite{color:var(--g-edge);font-size:11px;vertical-align:super;padding:0 4px}
+#glass-composition .gc-evidence{font:inherit;text-align:left;display:inline;padding:0 2px;background:#4d80ff14;border-bottom:1px solid #4d80ffa6}
+#glass-composition .gc-evidence:hover{background:#4d80ff2b}
+#glass-composition .gc-answer-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:22px}
+#glass-composition .gc-followups{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}
+#glass-composition .gc-followups button{padding:6px 10px;border:1px solid var(--g-line);border-radius:8px;color:var(--g-soft);font-size:12px}
+#glass-composition .gc-followups button:hover{background:#a3baff08;color:var(--g-ink)}
+#glass-composition .gc-answer table{width:100%;border-collapse:collapse;margin:19px 0;font-size:13px;line-height:1.65}
+#glass-composition .gc-answer th,#glass-composition .gc-answer td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--g-line);vertical-align:top}
+#glass-composition .gc-answer th{font-weight:400;color:var(--g-soft);font-size:11px}
+#glass-composition .gc-checklist{list-style:none!important;padding:0!important;margin:20px 0!important}
+#glass-composition .gc-checklist label{display:flex;align-items:flex-start;gap:10px;font-size:14px;line-height:1.7}
+#glass-composition .gc-checklist input{accent-color:#638bff;margin-top:6px;flex-shrink:0}
+#glass-composition .gc-checklist input:checked+span{color:var(--g-dim);text-decoration:line-through}
+#glass-composition .gc-interruption{font-size:12px;color:var(--g-soft);display:flex;gap:8px;align-items:center;padding:0 0 16px}
+#glass-composition .gc-interruption svg{width:14px;height:14px}
+#glass-composition .gc-direct{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 0 26px}
+#glass-composition .gc-dependency-button{font-size:11px;color:var(--g-dim);text-align:left;display:flex;align-items:center;gap:4px;min-height:24px}
+#glass-composition .gc-dependency-button svg{width:11px;height:11px}
+#glass-composition .gc-composer{padding:15px 16px 12px;margin-top:4px}
+#glass-composition .gc-reflection{position:absolute;left:-25px;top:-25px;z-index:3;pointer-events:none;opacity:0}
+#glass-composition .gc-input{width:100%;border:0;background:transparent;padding:3px 3px 14px;font-size:16px;resize:none;min-height:44px;max-height:140px;line-height:1.6;display:block}
+#glass-composition .gc-input::placeholder{color:var(--g-soft);opacity:1}
+#glass-composition .gc-toolbar{display:flex;gap:9px;align-items:center;min-height:32px}
+#glass-composition .gc-picker{display:flex;align-items:center;gap:5px;font-size:12px;padding:4px 6px;color:var(--g-soft);border-radius:6px;min-height:30px}
+#glass-composition .gc-picker:hover,#glass-composition .gc-picker[aria-expanded=&quot;true&quot;]{background:#bbd1ff0b;color:var(--g-ink)}
+#glass-composition .gc-picker svg{width:12px;height:12px}
+#glass-composition .gc-send{background:#3165f5;color:#fff}
+#glass-composition .gc-send:hover{background:#507dff}
+#glass-composition .gc-attachments{display:flex;gap:6px;flex-wrap:wrap;padding:0 3px 9px}
+#glass-composition .gc-file{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--g-soft);background:#8eacff0d;border:1px solid #bbd1ff0b;border-radius:8px;padding:5px 7px}
+#glass-composition .gc-file svg{width:13px;height:13px}
+#glass-composition .gc-file button{display:flex;align-items:center;color:var(--g-soft)}
+#glass-composition .gc-footer{font-size:11px;color:var(--g-dim);margin:14px 0 0;text-align:center;min-height:21px}
+#glass-composition .gc-record{display:flex;align-items:center;gap:12px;min-height:55px;padding:3px 0 10px}
+#glass-composition .gc-wave{display:flex;align-items:center;justify-content:center;gap:3px;height:30px;flex:1;color:var(--g-edge)}
+#glass-composition .gc-wave span{width:2px;border-radius:1px;background:currentColor;height:5px}
+#glass-composition .gc-record-time{font-size:11px;color:var(--g-soft);font-variant-numeric:tabular-nums}
+#glass-composition .gc-nav-shade{position:absolute;inset:0;z-index:9}
+#glass-composition .gc-rail{position:absolute;left:0;top:0;bottom:0;z-index:10;width:238px;padding:12px 10px;background:#14192489;backdrop-filter:blur(28px) saturate(120%);-webkit-backdrop-filter:blur(28px) saturate(120%);border-right:1px solid #dbe6ff0c;box-shadow:20px 0 50px #00000012;transform:translateX(-102%);visibility:hidden;transition:transform 230ms ease-in,visibility 0s linear 230ms}
+#glass-composition[data-nav=&quot;open&quot;] .gc-rail{transform:translateX(0);visibility:visible;transition-delay:0s}
+#glass-composition .gc-rail-top{display:flex;align-items:center;gap:8px;height:36px;font-size:13px}
+#glass-composition .gc-search{display:flex;gap:7px;align-items:center;margin:12px 4px 18px;padding:0 6px;border-bottom:1px solid #dbe6ff18;min-height:34px;color:var(--g-soft)}
+#glass-composition .gc-search&gt;svg{width:14px;height:14px}
+#glass-composition .gc-search input{width:100%;min-width:0;border:0;background:transparent;font-size:13px;padding:6px 0}
+#glass-composition .gc-search input::placeholder{color:var(--g-soft)}
+#glass-composition .gc-search .gc-icon{width:28px;height:28px}
+#glass-composition .gc-nav-label{font-size:11px;color:var(--g-dim);margin:16px 10px 5px}
+#glass-composition .gc-history-item{position:relative;display:flex;gap:6px;align-items:center;width:100%;padding:5px 10px;min-height:32px;text-align:left;border-radius:3px;font-size:12px;color:var(--g-soft)}
+#glass-composition .gc-history-item&gt;span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1}
+#glass-composition .gc-history-item svg{width:12px;height:12px}
+#glass-composition .gc-history-item:hover{color:var(--g-ink);background:#c7d8ff07}
+#glass-composition .gc-history-item[aria-current=&quot;page&quot;]{color:var(--g-ink)}
+#glass-composition .gc-history-item[aria-current=&quot;page&quot;]:before{content:&quot;&quot;;position:absolute;left:0;top:10px;bottom:10px;width:2px;background:#a9bcdf80}
+#glass-composition .gc-history-note{font-size:11px;color:var(--g-dim);margin:20px 10px}
+#glass-composition .gc-overlay-layer{position:absolute;inset:0;z-index:20;pointer-events:none}
+#glass-composition .gc-popover{pointer-events:auto;position:absolute;min-width:246px;max-width:calc(100% - 24px);background:#1b202dec;backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border:1px solid #a3baff24;border-radius:15px;padding:6px;box-shadow:0 18px 65px #0008;animation:gc-open 130ms ease-out;max-height:560px;overflow:auto}
+#glass-composition .gc-pop-heading{padding:9px 9px 7px;font-size:11px;color:var(--g-dim)}
+#glass-composition .gc-pop-row{display:flex;gap:11px;align-items:center;width:100%;padding:9px 10px;text-align:left;border-radius:9px;min-height:42px}
+#glass-composition .gc-pop-row:hover{background:#a3baff0a}
+#glass-composition .gc-pop-row&gt;svg{width:16px;height:16px;color:var(--g-soft)}
+#glass-composition .gc-pop-row .gc-pop-copy{flex:1;min-width:0}
+#glass-composition .gc-pop-row strong{display:block;font-size:13px;font-weight:400}
+#glass-composition .gc-pop-row small{display:block;font-size:11px;color:var(--g-soft);margin-top:1px}
+#glass-composition .gc-pop-row .gc-selected{color:var(--g-edge);width:14px;height:14px}
+#glass-composition .gc-ability-row{display:flex;align-items:center}
+#glass-composition .gc-ability-row .gc-pop-row{flex:1}
+#glass-composition .gc-switch{width:24px;height:14px;border-radius:9px;background:#53617c;position:relative;flex-shrink:0}
+#glass-composition .gc-switch:after{content:&quot;&quot;;position:absolute;width:10px;height:10px;left:2px;top:2px;border-radius:50%;background:#dbe4fa;transition:transform 120ms}
+#glass-composition .gc-switch.on{background:#416fe2}
+#glass-composition .gc-switch.on:after{transform:translateX(10px)}
+#glass-composition .gc-config{padding:8px 10px 10px;width:272px;max-width:100%}
+#glass-composition .gc-config label{font-size:12px;display:block;margin:9px 0}
+#glass-composition .gc-config input{width:100%;background:#0c101c66;border:1px solid var(--g-line);border-radius:8px;padding:9px 10px;font-size:13px}
+#glass-composition .gc-config p{font-size:11px;line-height:1.65;color:var(--g-soft)}
+#glass-composition .gc-config-actions{display:flex;justify-content:flex-end;gap:14px;margin-top:15px}
+#glass-composition .gc-toast{position:absolute;z-index:25;left:50%;bottom:23px;transform:translateX(-50%);background:#242a3cf5;border:1px solid #a3baff24;border-radius:11px;padding:10px 15px;font-size:12px;max-width:calc(100% - 28px);box-shadow:0 5px 25px #0005}
+#glass-composition .gc-inspector{min-width:0;border-left:1px solid #9bb4ea16;padding:12px 0 0 23px;margin-top:20px;animation:gc-inspect 220ms ease-out}
+#glass-composition[data-inspect=&quot;open&quot;] .gc-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(265px,1fr);gap:26px}
+#glass-composition[data-inspect=&quot;open&quot;] .gc-answer h2{font-size:26px}
+#glass-composition .gc-inspector-head{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g-soft);margin-bottom:10px}
+#glass-composition .gc-inspector h3{font-size:15px;font-weight:500;margin:17px 0 10px}
+#glass-composition .gc-inspector p{font-size:12px;color:var(--g-soft);line-height:1.8}
+#glass-composition .gc-inspector-tabs{display:flex;gap:13px;margin:10px 0 17px}
+#glass-composition .gc-inspector-tabs button{font-size:11px;color:var(--g-soft);padding:5px 0;border-bottom:1px solid transparent}
+#glass-composition .gc-inspector-tabs button[aria-selected=&quot;true&quot;]{color:var(--g-ink);border-color:#86a7ff}
+#glass-composition .gc-paper{background:#edf1f9;color:#273047;padding:22px 17px;border-radius:5px;min-height:290px;font-size:11px;box-shadow:0 8px 35px #0003}
+#glass-composition .gc-paper small{font-size:9px;letter-spacing:.08em;color:#68748d;display:block;margin-bottom:28px}
+#glass-composition .gc-paper h4{font-weight:500;font-size:17px;line-height:1.4;margin:0 0 14px}
+#glass-composition .gc-paper p{font-size:11px;line-height:1.8;color:#46536b}
+#glass-composition .gc-paper mark{background:#a9c4f8;color:#273047;padding:1px 2px}
+#glass-composition .gc-paper-chart{width:100%;height:auto;display:block;margin:14px 0}
+#glass-composition .gc-paper-caption{font-size:10px;color:#46536b}
+#glass-composition .gc-page-controls{display:flex;gap:11px;align-items:center;justify-content:center;margin-top:12px;font-size:11px;color:var(--g-soft)}
+#glass-composition .gc-receipt{font-size:11px;color:var(--g-dim);margin-top:13px;line-height:1.7}
+#glass-composition .gc-activity-list{margin-top:15px}
+#glass-composition .gc-activity-entry{border-top:1px solid var(--g-line);padding:10px 0}
+#glass-composition .gc-activity-entry strong{font-size:12px;font-weight:400;display:block}
+#glass-composition .gc-activity-entry span{font-size:11px;color:var(--g-dim)}
+#glass-composition .gc-graph{padding:7px 18px 20px}
+#glass-composition .gc-graph-row{display:flex;justify-content:center;gap:12px}
+#glass-composition .gc-node{border:1px solid #a3baff26;border-radius:9px;padding:10px;font-size:11px;color:var(--g-soft);flex:1;max-width:205px;text-align:left;background:#0b102622}
+#glass-composition .gc-node[aria-pressed=&quot;true&quot;]{border-color:#88a6f88c;color:var(--g-ink)}
+#glass-composition .gc-node span{display:block;font-size:10px;margin-top:3px;color:var(--g-dim)}
+#glass-composition .gc-graph-link{text-align:center;color:#7d8ba9;line-height:25px;font-size:16px}
+#glass-composition .gc-clarify{padding:16px 19px}
+#glass-composition .gc-clarify h3{font-size:16px;font-weight:500;margin:0 0 7px}
+#glass-composition .gc-clarify p{font-size:12px;color:var(--g-soft);margin:0 0 14px}
+#glass-composition .gc-choice-list{display:flex;gap:7px;flex-wrap:wrap}
+#glass-composition .gc-choice-list button{font-size:12px;padding:7px 10px;border:1px solid #a3baff29;border-radius:8px}
+#glass-composition .gc-choice-list button:hover{background:#a3baff0c}
+#glass-composition .gc-earlier{border-left:1px solid var(--g-line);padding:0 0 0 14px;margin:0 0 26px}
+#glass-composition .gc-earlier p{font-size:13px;color:var(--g-soft);margin:5px 0}
+#glass-composition .gc-edit-note{padding:5px 17px 10px;color:var(--g-soft);font-size:11px}
+#glass-composition .gc-empty{padding:15px 10px;font-size:12px;color:var(--g-soft)}
+@keyframes gc-open{from{opacity:.7;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes gc-inspect{from{opacity:.75;transform:translateX(8px)}to{opacity:1;transform:none}}
+@media(max-width:740px){#glass-composition .gc-layout{padding:0 22px 26px}#glass-composition[data-inspect=&quot;open&quot;] .gc-layout{display:block}#glass-composition .gc-inspector{border-left:0;border-top:1px solid var(--g-line);padding:19px 0 0;margin:26px 0 0}#glass-composition .gc-paper{max-width:400px;margin:auto}#glass-composition .gc-arrival{padding-top:95px}#glass-composition .gc-thread-title{max-width:70%}}
+@media(max-width:450px){#glass-composition .gc-layout{padding:0 17px 25px}#glass-composition .gc-arrival h1{font-size:30px}#glass-composition .gc-arrival{padding-top:85px}#glass-composition .gc-toolbar{gap:3px;flex-wrap:wrap}#glass-composition .gc-picker{font-size:11px;padding:4px}#glass-composition .gc-body{padding:16px}#glass-composition .gc-work-head{padding:12px 13px 10px}#glass-composition .gc-work-foot{flex-wrap:wrap;gap:3px 10px;padding:8px 13px}#glass-composition .gc-work-foot .gc-run-controls{margin-left:auto}#glass-composition .gc-answer h2{font-size:26px}#glass-composition .gc-suggestions{justify-content:flex-start;gap:6px 14px}#glass-composition .gc-thread-title{display:none}#glass-composition .gc-plan-list{padding:0 13px 8px}#glass-composition .gc-plan-row{gap:5px}#glass-composition .gc-mode-receipt{display:none}}
+@media(pointer:coarse){#glass-composition .gc-icon,#glass-composition .gc-menu,#glass-composition .gc-picker,#glass-composition .gc-small,#glass-composition .gc-history-item,#glass-composition .gc-run-controls button{min-height:44px}#glass-composition .gc-icon{width:44px}#glass-composition .gc-plan-row .gc-icon{width:32px;min-height:44px}#glass-composition .gc-search .gc-icon{width:44px;height:44px}#glass-composition input,#glass-composition textarea{font-size:16px}#glass-composition .gc-pop-row{min-height:48px}}
+@media(prefers-reduced-motion:reduce){#glass-composition *,#glass-composition *:before,#glass-composition *:after{animation:none!important;transition:none!important}}
+&lt;/style&gt;
+&lt;div class=&quot;gc-app&quot;&gt;
+  &lt;div class=&quot;gc-haze&quot; aria-hidden=&quot;true&quot;&gt;&lt;/div&gt;
+  &lt;button type=&quot;button&quot; class=&quot;gc-icon gc-menu gc-nav-trigger cursor-interaction&quot; data-act=&quot;history&quot; aria-label=&quot;Open history&quot; aria-expanded=&quot;false&quot;&gt;&lt;span&gt;&lt;/span&gt;&lt;span&gt;&lt;/span&gt;&lt;/button&gt;
+  &lt;button type=&quot;button&quot; class=&quot;gc-nav-shade&quot; data-act=&quot;close-history&quot; aria-label=&quot;Close history&quot; hidden&gt;&lt;/button&gt;
+  &lt;aside class=&quot;gc-rail&quot; aria-label=&quot;Conversation history&quot; aria-hidden=&quot;true&quot; inert&gt;
+    &lt;div class=&quot;gc-rail-top&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon gc-menu cursor-interaction&quot; data-act=&quot;close-history&quot; aria-label=&quot;Close history&quot;&gt;&lt;span&gt;&lt;/span&gt;&lt;span&gt;&lt;/span&gt;&lt;/button&gt;&lt;span&gt;History&lt;/span&gt;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon cursor-interaction&quot; data-act=&quot;new&quot; aria-label=&quot;New conversation&quot;&gt;&lt;i data-lucide=&quot;square-pen&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+    &lt;div class=&quot;gc-search&quot;&gt;&lt;i data-lucide=&quot;search&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;input type=&quot;search&quot; aria-label=&quot;Search conversations&quot; placeholder=&quot;Search conversations&quot; autocomplete=&quot;off&quot;&gt;&lt;div class=&quot;gc-wave gc-search-wave&quot; aria-label=&quot;Voice search waveform&quot; hidden&gt;&lt;/div&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon cursor-interaction&quot; data-act=&quot;voice-search&quot; aria-label=&quot;Start voice search preview&quot;&gt;&lt;i data-lucide=&quot;mic&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+    &lt;div class=&quot;gc-history-list&quot;&gt;&lt;/div&gt;
+    &lt;p class=&quot;gc-history-note&quot;&gt;Your work stays here.&lt;/p&gt;
+  &lt;/aside&gt;
+  &lt;div class=&quot;gc-workspace&quot;&gt;
+    &lt;header class=&quot;gc-header&quot;&gt;&lt;span class=&quot;gc-thread-title&quot;&gt;&lt;/span&gt;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon gc-thread-more cursor-interaction&quot; data-act=&quot;thread-menu&quot; aria-label=&quot;Conversation actions&quot; hidden&gt;&lt;i data-lucide=&quot;ellipsis&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/header&gt;
+    &lt;div class=&quot;gc-layout&quot;&gt;
+      &lt;main class=&quot;gc-main&quot;&gt;
+        &lt;div class=&quot;gc-arrival&quot;&gt;&lt;h1&gt;What’s on your mind?&lt;/h1&gt;&lt;p&gt;Start anywhere.&lt;/p&gt;&lt;/div&gt;
+        &lt;div class=&quot;gc-conversation&quot; hidden&gt;&lt;/div&gt;
+        &lt;form class=&quot;gc-composer gc-surface&quot; aria-label=&quot;Glass composer&quot;&gt;
+          &lt;canvas class=&quot;gc-reflection&quot; aria-hidden=&quot;true&quot;&gt;&lt;/canvas&gt;
+          &lt;div class=&quot;gc-attachments&quot; hidden&gt;&lt;/div&gt;
+          &lt;textarea class=&quot;gc-input&quot; rows=&quot;1&quot; aria-label=&quot;Message Glass&quot; placeholder=&quot;Ask, talk, or drop something here…&quot;&gt;&lt;/textarea&gt;
+          &lt;div class=&quot;gc-record&quot; hidden&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon cursor-interaction&quot; data-act=&quot;cancel-voice&quot; aria-label=&quot;Cancel dictation&quot;&gt;&lt;i data-lucide=&quot;x&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;div class=&quot;gc-wave gc-dictation-wave&quot; aria-label=&quot;Dictation waveform&quot;&gt;&lt;/div&gt;&lt;span class=&quot;gc-record-time&quot;&gt;0:00&lt;/span&gt;&lt;button type=&quot;button&quot; class=&quot;gc-icon cursor-interaction&quot; data-act=&quot;voice&quot; aria-label=&quot;Finish dictation&quot;&gt;&lt;i data-lucide=&quot;square&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+          &lt;div class=&quot;gc-toolbar&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;gc-icon cursor-interaction&quot; data-act=&quot;attachments&quot; aria-label=&quot;Add an attachment&quot; aria-expanded=&quot;false&quot;&gt;&lt;i data-lucide=&quot;plus&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;gc-picker cursor-interaction&quot; data-act=&quot;modes&quot; aria-label=&quot;Choose mode&quot; aria-expanded=&quot;false&quot;&gt;&lt;span class=&quot;gc-mode-label&quot;&gt;Auto&lt;/span&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;gc-picker cursor-interaction&quot; data-act=&quot;abilities&quot; aria-label=&quot;Choose abilities&quot; aria-expanded=&quot;false&quot;&gt;&lt;span&gt;Abilities&lt;/span&gt;&lt;i data-lucide=&quot;chevron-down&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+            &lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;
+            &lt;button type=&quot;button&quot; class=&quot;gc-icon gc-mic cursor-interaction&quot; data-act=&quot;voice&quot; aria-label=&quot;Start dictation preview&quot;&gt;&lt;i data-lucide=&quot;mic&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot; data-act=&quot;send&quot; class=&quot;gc-icon gc-send cursor-interaction&quot; aria-label=&quot;Send message&quot;&gt;&lt;i data-lucide=&quot;arrow-up&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/form&gt;
+        &lt;div class=&quot;gc-suggestions&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;gc-footer&quot;&gt;Interactive concept · example content&lt;/div&gt;
+      &lt;/main&gt;
+      &lt;aside class=&quot;gc-inspector&quot; aria-label=&quot;Evidence and activity&quot; hidden&gt;&lt;/aside&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;gc-overlay-layer&quot;&gt;&lt;/div&gt;
+  &lt;div class=&quot;gc-toast&quot; role=&quot;status&quot; hidden&gt;&lt;/div&gt;
+  &lt;div class=&quot;gc-announcement&quot; role=&quot;status&quot; aria-live=&quot;polite&quot; style=&quot;position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)&quot;&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;script&gt;
+(()=&gt;{
+  const root=document.getElementById(&#x27;glass-composition&#x27;);
+  const q=s=&gt;root.querySelector(s);
+  const qa=s=&gt;Array.from(root.querySelectorAll(s));
+  const esc=s=&gt;String(s??&#x27;&#x27;).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g,c=&gt;({&#x27;&amp;&#x27;:&#x27;&amp;amp;&#x27;,&#x27;&lt;&#x27;:&#x27;&amp;lt;&#x27;,&#x27;&gt;&#x27;:&#x27;&amp;gt;&#x27;,&#x27;&quot;&#x27;:&#x27;&amp;quot;&#x27;,&quot;&#x27;&quot;:&#x27;&amp;#39;&#x27;}[c]));
+  const icon=n=&gt;&#x27;&lt;i data-lucide=&quot;&#x27;+n+&#x27;&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&#x27;;
+  const button=(act,text,cls=&#x27;gc-small&#x27;,attrs=&#x27;&#x27;)=&gt;&#x27;&lt;button type=&quot;button&quot; class=&quot;&#x27;+cls+&#x27; cursor-interaction&quot; data-act=&quot;&#x27;+act+&#x27;&quot; &#x27;+attrs+&#x27;&gt;&#x27;+text+&#x27;&lt;/button&gt;&#x27;;
+  const modes=[[&#x27;Auto&#x27;,&#x27;sparkles&#x27;,&#x27;Let the request take shape&#x27;],[&#x27;Direct&#x27;,&#x27;message-circle&#x27;,&#x27;One agent, available abilities&#x27;],[&#x27;Plan&#x27;,&#x27;list-checks&#x27;,&#x27;Review the approach before starting&#x27;],[&#x27;Parallel&#x27;,&#x27;columns-3&#x27;,&#x27;Independent work, brought together&#x27;],[&#x27;Chain&#x27;,&#x27;list-ordered&#x27;,&#x27;Each step builds on the last&#x27;],[&#x27;Graph&#x27;,&#x27;workflow&#x27;,&#x27;Work organised by dependencies&#x27;]];
+  const abilityInfo=[[&#x27;web&#x27;,&#x27;globe&#x27;,&#x27;Web&#x27;,&#x27;Search and read the open web&#x27;],[&#x27;documents&#x27;,&#x27;files&#x27;,&#x27;Documents&#x27;,&#x27;Read PDFs, pages and figures&#x27;],[&#x27;corpus&#x27;,&#x27;library&#x27;,&#x27;Corpus&#x27;,&#x27;Search a Markdown collection&#x27;],[&#x27;wikipedia&#x27;,&#x27;book-open&#x27;,&#x27;Wikipedia&#x27;,&#x27;Search articles and summaries&#x27;]];
+  const scenarios={
+    office:{title:&#x27;A quieter home office&#x27;,question:&#x27;Help me make my home office quieter. Compare what is worth changing first.&#x27;,heading:&#x27;Start with the sound that reaches you.&#x27;,intro:&#x27;A few targeted changes can make the room more comfortable. The best first step depends on whether the noise comes through the door, from outside, or from equipment in the room.&#x27;,tasks:[
+      [&#x27;Find the source&#x27;,&#x27;Noise&#x27;,&#x27;Separate outside sound from noise inside the room.&#x27;,&#x27;The door gap is the clearest place to start in this example. It leaves a direct path for hallway noise. The desk fan is a separate source; soft furnishings would not remove either of them.&#x27;,&#x27;Room notes&#x27;,&#x27;files&#x27;],
+      [&#x27;Compare changes&#x27;,&#x27;Options&#x27;,&#x27;Compare practical changes without rebuilding the room.&#x27;,&#x27;A removable door seal addresses the gap directly. Curtains and rugs can soften reflections, but their effect is different from blocking incoming sound. Move the fan before buying acoustic treatment.&#x27;,&#x27;Acoustics guide&#x27;,&#x27;book-open&#x27;],
+      [&#x27;Check the trade-offs&#x27;,&#x27;Trade-offs&#x27;,&#x27;Check cost, reversibility and what to measure.&#x27;,&#x27;Try the reversible changes first and repeat the same listening check. The example readings show an improvement after sealing the door, but one short measurement cannot establish the result for every room.&#x27;,&#x27;Room sound study · p. 2&#x27;,&#x27;chart-no-axes-column&#x27;]
+    ],bullets:[&#x27;Move the noisy equipment away from the desk.&#x27;,&#x27;Try a removable seal around the door gap.&#x27;,&#x27;Repeat the same check before buying anything else.&#x27;],closing:&#x27;If voices are still the problem after that, the next useful question is where they enter the room.&#x27;,follow:[&#x27;Check the cost&#x27;,&#x27;Use only my files&#x27;,&#x27;Make it shorter&#x27;]},
+    event:{title:&#x27;An evening for the neighbourhood&#x27;,question:&#x27;Help organise a small neighbourhood evening, from choosing a space to sending the invitation.&#x27;,heading:&#x27;A simple evening, with room to change.&#x27;,intro:&#x27;Start by agreeing the capacity and accessibility needs. Those decisions let venue and activity planning happen together, while the invitation waits for confirmed details.&#x27;,tasks:[
+      [&#x27;Agree the essentials&#x27;,&#x27;Essentials&#x27;,&#x27;Set the audience, capacity and accessibility requirements.&#x27;,&#x27;A small, accessible gathering with flexible seating is the working assumption. Keep the date provisional until the venue is confirmed.&#x27;,&#x27;Event notes&#x27;,&#x27;files&#x27;],
+      [&#x27;Choose a space&#x27;,&#x27;Venue&#x27;,&#x27;Use the agreed requirements to compare suitable spaces.&#x27;,&#x27;The community room is the strongest example option: step-free access, a sheltered entrance and enough room for a quiet corner. Booking availability still needs confirmation.&#x27;,&#x27;Venue checklist&#x27;,&#x27;building-2&#x27;],
+      [&#x27;Shape the evening&#x27;,&#x27;Activities&#x27;,&#x27;Use the audience and time available to draft the programme.&#x27;,&#x27;Keep arrival informal, allow a short introduction, and leave most of the evening open. A shared activity gives people a starting point without making participation compulsory.&#x27;,&#x27;Community guide&#x27;,&#x27;book-open&#x27;],
+      [&#x27;Draft the invitation&#x27;,&#x27;Invitation&#x27;,&#x27;Bring the venue and programme into one clear invitation.&#x27;,&#x27;Come along for a relaxed neighbourhood evening. There will be time to meet people, join a shared activity or simply sit and talk. Add the confirmed date, location and access details before sending.&#x27;,&#x27;Invitation draft&#x27;,&#x27;file-text&#x27;]
+    ],bullets:[&#x27;Confirm the space and its access arrangements.&#x27;,&#x27;Choose a date with the organisers.&#x27;,&#x27;Add those details to the invitation before sharing it.&#x27;],closing:&#x27;The venue and programme can develop in parallel. The invitation stays provisional until both are settled.&#x27;,follow:[&#x27;Review the invitation&#x27;,&#x27;Show dependencies&#x27;,&#x27;Make it shorter&#x27;]},
+    guide:{title:&#x27;From notes to a useful guide&#x27;,question:&#x27;Turn these scattered notes into a clear, practical guide someone can follow.&#x27;,heading:&#x27;A guide that starts where the reader does.&#x27;,intro:&#x27;The useful structure is a short sequence: prepare, try the first step, check the result, then adjust. The notes support a compact guide with one decision at each stage.&#x27;,tasks:[
+      [&#x27;Read the notes&#x27;,&#x27;Read&#x27;,&#x27;Identify the goal, assumptions and missing details.&#x27;,&#x27;The notes contain three useful actions but mix preparation with troubleshooting. The reader needs to know what to have ready before starting.&#x27;,&#x27;Working notes&#x27;,&#x27;files&#x27;],
+      [&#x27;Build the outline&#x27;,&#x27;Structure&#x27;,&#x27;Organise the material around the reader’s next action.&#x27;,&#x27;Start with the goal and a short preparation list. Put the first attempt next, then a clear check. Keep optional adjustments after the reader has seen a result.&#x27;,&#x27;Outline&#x27;,&#x27;list-tree&#x27;],
+      [&#x27;Write the guide&#x27;,&#x27;Write&#x27;,&#x27;Use the outline and preserve the important qualifications.&#x27;,&#x27;Prepare what you need, try one change, then check the result. If it helped, keep it. If it did not, return to the previous state and try the next option. Record what changed so the comparison stays useful.&#x27;,&#x27;Guide draft&#x27;,&#x27;file-text&#x27;]
+    ],bullets:[&#x27;Prepare the materials and note the starting point.&#x27;,&#x27;Make one change and check its effect.&#x27;,&#x27;Keep the useful change, or restore the starting point.&#x27;],closing:&#x27;A short checklist can sit beside the guide for someone using it a second time.&#x27;,follow:[&#x27;Make a checklist&#x27;,&#x27;Show the outline&#x27;,&#x27;Make it shorter&#x27;]},
+    document:{title:&#x27;What the chart actually shows&#x27;,question:&#x27;Explain the chart on page 2. Does it support the conclusion?&#x27;,heading:&#x27;An improvement, with a limited claim.&#x27;,intro:&#x27;The example chart shows a lower reading after the door was sealed. It supports a difference between these two checks; it does not establish how much quieter every room would become.&#x27;,tasks:[
+      [&#x27;Read the surrounding text&#x27;,&#x27;Text&#x27;,&#x27;Read the method and the claim beside the figure.&#x27;,&#x27;The same room and measurement position were used for both checks. The note describes a short observation rather than a controlled series of trials.&#x27;,&#x27;Room sound study · p. 2&#x27;,&#x27;files&#x27;],
+      [&#x27;Inspect the figure&#x27;,&#x27;Figure&#x27;,&#x27;View the chart and check its axes and labels.&#x27;,&#x27;The bars are labelled 48 and 39 dB(A). This is a 9 dB difference in the example readings. Decibels are logarithmic, so the bar lengths should not be described as a percentage reduction in perceived loudness.&#x27;,&#x27;Figure 1 · viewed image&#x27;,&#x27;image&#x27;],
+      [&#x27;Check the conclusion&#x27;,&#x27;Conclusion&#x27;,&#x27;Match the language of the conclusion to the evidence.&#x27;,&#x27;“The second check recorded a lower level” is supported. “This treatment makes any room this much quieter” goes beyond the example. Longer, repeated observations would strengthen the comparison.&#x27;,&#x27;Method note · p. 3&#x27;,&#x27;file-text&#x27;]
+    ],bullets:[&#x27;The chart reports 48 dB(A) before and 39 dB(A) after.&#x27;,&#x27;The setup describes one room and two short checks.&#x27;,&#x27;The conclusion should stay specific to those observations.&#x27;],closing:&#x27;The original document and the exact chart image are available beside the answer.&#x27;,follow:[&#x27;Open the figure&#x27;,&#x27;Check the method&#x27;,&#x27;Make it shorter&#x27;]},
+    sky:{title:&#x27;Why is the sky blue?&#x27;,question:&#x27;Why is the sky blue?&#x27;,heading:&#x27;Sunlight takes a detour.&#x27;,intro:&#x27;Sunlight contains many colours. As it passes through the air, tiny molecules scatter blue light more strongly than red light, sending it in every direction.&#x27;,tasks:[
+      [&#x27;Explain the idea&#x27;,&#x27;Explanation&#x27;,&#x27;Answer in everyday language.&#x27;,&#x27;That scattered blue light reaches your eyes from across the sky. At sunset, sunlight travels through more air, leaving more reds and oranges along the direct path.&#x27;,&#x27;Light and colour&#x27;,&#x27;book-open&#x27;]
+    ],bullets:[],closing:&#x27;That scattered light is why the sky can look blue even when you are looking away from the sun.&#x27;,follow:[&#x27;What changes at sunset?&#x27;,&#x27;Make it shorter&#x27;]},
+    weekend:{title:&#x27;A weekend without driving&#x27;,question:&#x27;Help me plan a relaxed weekend away by train.&#x27;,heading:&#x27;Keep the journey part of the weekend.&#x27;,intro:&#x27;Choose somewhere with a simple rail journey and a walkable centre. Leave the arrival day loose, put one main activity on the second day, and leave room for the weather.&#x27;,tasks:[
+      [&#x27;Choose the pace&#x27;,&#x27;Priorities&#x27;,&#x27;Agree how far to travel and how much to fit in.&#x27;,&#x27;A relaxed pace points to one base and a short journey. A direct train keeps the weekend flexible and avoids spending the first afternoon making connections.&#x27;,&#x27;Your preferences&#x27;,&#x27;message-circle&#x27;],
+      [&#x27;Compare destinations&#x27;,&#x27;Places&#x27;,&#x27;Compare a few walkable destinations against that pace.&#x27;,&#x27;The example shortlist favours a compact town over a spread-out destination. Look for somewhere with a station close to accommodation and an indoor option for poor weather.&#x27;,&#x27;Travel notes&#x27;,&#x27;globe&#x27;],
+      [&#x27;Check the journey&#x27;,&#x27;Journey&#x27;,&#x27;Check rail times before committing to a destination.&#x27;,&#x27;Check the operator’s current timetable and any planned works before booking. Keep the return flexible enough to avoid a rushed final afternoon.&#x27;,&#x27;Journey checklist&#x27;,&#x27;train-front&#x27;]
+    ],bullets:[&#x27;One base for the whole weekend.&#x27;,&#x27;One main activity each day.&#x27;,&#x27;Confirm the train before booking accommodation.&#x27;],closing:&#x27;The exact destination can follow once the starting city and travel time are agreed.&#x27;,follow:[&#x27;Compare destinations&#x27;,&#x27;Make it shorter&#x27;]}
+  };
+  const copy=o=&gt;JSON.parse(JSON.stringify(o));
+  function makeRun(key,mode,status=&#x27;running&#x27;){
+    const sc=scenarios[key];
+    const topology=mode===&#x27;Auto&#x27;?(key===&#x27;sky&#x27;?&#x27;Direct&#x27;:key===&#x27;guide&#x27;?&#x27;Chain&#x27;:key===&#x27;event&#x27;?&#x27;Graph&#x27;:&#x27;Parallel&#x27;):mode;
+    const tasks=sc.tasks.map((a,i)=&gt;({id:&#x27;t&#x27;+i,title:a[0],tab:a[1],purpose:a[2],text:a[3],source:a[4],sourceIcon:a[5],progress:status===&#x27;complete&#x27;?1:0,status:status===&#x27;complete&#x27;?&#x27;complete&#x27;:&#x27;waiting&#x27;,deps:topology===&#x27;Chain&#x27;&amp;&amp;i?[&#x27;t&#x27;+(i-1)]:topology===&#x27;Graph&#x27;&amp;&amp;i?(i===3?[&#x27;t1&#x27;,&#x27;t2&#x27;]:[&#x27;t0&#x27;]):[]}));
+    if(topology===&#x27;Direct&#x27;&amp;&amp;tasks.length&gt;1)tasks.splice(1);
+    return {id:&#x27;r&#x27;+Date.now().toString(36)+Math.random().toString(36).slice(2,5),key,mode,topology,title:sc.title,question:sc.question,status:mode===&#x27;Plan&#x27;&amp;&amp;status===&#x27;running&#x27;?&#x27;plan&#x27;:status,tasks,active:0,collapsed:status===&#x27;complete&#x27;,revision:1,editing:false,elapsed:0,synthesis:status===&#x27;complete&#x27;?1:0,short:false,graph:false,previous:[],nextId:tasks.length,started:false,finishing:false,usedAbilities:[],partial:false};
+  }
+  let conversations=[makeRun(&#x27;office&#x27;,&#x27;Parallel&#x27;,&#x27;complete&#x27;),makeRun(&#x27;document&#x27;,&#x27;Auto&#x27;,&#x27;complete&#x27;),makeRun(&#x27;event&#x27;,&#x27;Graph&#x27;,&#x27;paused&#x27;),makeRun(&#x27;guide&#x27;,&#x27;Chain&#x27;,&#x27;complete&#x27;),makeRun(&#x27;sky&#x27;,&#x27;Direct&#x27;,&#x27;complete&#x27;)];
+  conversations[2].tasks[0].progress=1;conversations[2].tasks[0].status=&#x27;complete&#x27;;conversations[2].tasks[1].progress=.6;conversations[2].tasks[1].status=&#x27;working&#x27;;conversations[2].tasks[2].progress=.35;conversations[2].tasks[2].status=&#x27;working&#x27;;conversations[2].elapsed=12;
+  let current=null,mode=&#x27;Auto&#x27;,abilities={web:true,documents:true,corpus:false,wikipedia:true},corpusConfigured=false,attachments=[],nav=false,search=&#x27;&#x27;,pop=null,inspect=null,voice=null,voiceFrame=0,voiceTimer=0,tickTimer=0,toastTimer=0,lightFrame=0;
+  const motion=window.matchMedia(&#x27;(prefers-reduced-motion: reduce)&#x27;);
+  const app=q(&#x27;.gc-app&#x27;),workspace=q(&#x27;.gc-workspace&#x27;),composer=q(&#x27;.gc-composer&#x27;),conversation=q(&#x27;.gc-conversation&#x27;),overlay=q(&#x27;.gc-overlay-layer&#x27;);
+  const version=3;
+  let stateSignature=JSON.stringify(window.openai?.widgetState?.privateContent||null);
+  const focusedRun=()=&gt;conversations.find(r=&gt;r.id===current)||null;
+  const busy=r=&gt;r&amp;&amp;[&#x27;running&#x27;,&#x27;synthesizing&#x27;].includes(r.status);
+  function compact(r){const {editBackup,...record}=r;return {...record,tasks:r.tasks.map(t=&gt;({...t})),previous:r.previous.slice(-2)};}
+  function rememberRevision(r){
+    if(r.revisions?.some(v=&gt;v.number===r.revision))return;
+    const entry={number:r.revision,findings:r.tasks.filter(t=&gt;t.progress&gt;0).map(t=&gt;({title:t.title,status:t.status,text:t.text.slice(0,Math.min(220,Math.floor(t.text.length*t.progress)))}))};
+    r.revisions=[...(r.revisions||[]),entry].slice(-2);
+  }
+  function persist(){
+    const payload={version,current,mode,abilities,corpusConfigured,attachments,nav,search,inspect,conversations:conversations.slice(0,7).map(compact)};
+    // Session fixtures are reconstructed; persist only reader-created changes and compact task state.
+    payload.conversations=payload.conversations.map(r=&gt;({...r,tasks:r.tasks.map(t=&gt;({id:t.id,title:t.title,tab:t.tab,progress:t.progress,status:t.status,deps:t.deps,custom:!!t.custom})),previous:r.previous.map(p=&gt;({key:p.key,heading:p.heading,question:p.question}))}));
+    // The standalone host echoes writes synchronously. An acknowledgement is not a restore.
+    stateSignature=JSON.stringify(payload);
+    window.openai?.setWidgetState?.({modelContent:{concept:&#x27;Glass capability composition&#x27;,mode,view:focusedRun()?.status||&#x27;arrival&#x27;,conversation:focusedRun()?.title||null,abilities:Object.keys(abilities).filter(k=&gt;abilities[k]),history:nav?&#x27;open&#x27;:&#x27;closed&#x27;},privateContent:payload})?.catch(()=&gt;{});
+  }
+  function restore(s){
+    if(!s||s.version!==version||!Array.isArray(s.conversations))return false;
+    conversations=s.conversations.filter(r=&gt;scenarios[r.key]).map(r=&gt;{const fallback=makeRun(r.key,r.mode,r.status);return {...fallback,...r,editing:false,tasks:r.tasks.map((t,i)=&gt;({...fallback.tasks[i%fallback.tasks.length],...t,text:t.custom?&#x27;This added step will be carried into the revised approach. Its output will appear here as it develops.&#x27;:(fallback.tasks[Number(t.id.slice(1))]?.text||fallback.tasks[i%fallback.tasks.length].text)}))};});
+    current=s.current;mode=modes.some(m=&gt;m[0]===s.mode)?s.mode:&#x27;Auto&#x27;;abilities={...abilities,...s.abilities};corpusConfigured=!!s.corpusConfigured;attachments=s.attachments||[];nav=!!s.nav;search=s.search||&#x27;&#x27;;inspect=s.inspect||null;return true;
+  }
+  restore(window.openai?.widgetState?.privateContent);
+  function icons(){globalThis.lucide?.createIcons({attrs:{width:16,height:16}});}
+  function announce(s){q(&#x27;.gc-announcement&#x27;).textContent=s;}
+  function toast(s){clearTimeout(toastTimer);q(&#x27;.gc-toast&#x27;).textContent=s;q(&#x27;.gc-toast&#x27;).hidden=false;toastTimer=setTimeout(()=&gt;{q(&#x27;.gc-toast&#x27;).hidden=true;},3300);announce(s);}
+  function sourceKind(name){return /study|Figure|Method/i.test(name)?&#x27;document&#x27;:/notes|preferences|description|outline|draft/i.test(name)?&#x27;notes&#x27;:&#x27;excerpt&#x27;;}
+  function sourceButton(t){
+    const kind=sourceKind(t.source);
+    return button(&#x27;source&#x27;,icon(t.sourceIcon)+&#x27; &#x27;+esc(t.source),&#x27;gc-source-link&#x27;,&#x27;data-kind=&quot;&#x27;+kind+&#x27;&quot; data-title=&quot;&#x27;+esc(t.source)+&#x27;&quot; data-excerpt=&quot;&#x27;+esc(t.text)+&#x27;&quot; data-tab=&quot;&#x27;+(/Figure/.test(t.source)?&#x27;viewed&#x27;:&#x27;original&#x27;)+&#x27;&quot; data-page=&quot;&#x27;+(/Method/.test(t.source)?3:2)+&#x27;&quot;&#x27;);
+  }
+  function mark(t){return t.status===&#x27;complete&#x27;?icon(&#x27;check&#x27;):t.status===&#x27;cancelled&#x27;?icon(&#x27;minus&#x27;):t.status===&#x27;partial&#x27;?icon(&#x27;circle-dashed&#x27;):t.status===&#x27;blocked&#x27;?icon(&#x27;git-branch&#x27;):&#x27;&lt;span class=&quot;gc-dot &#x27;+(t.status===&#x27;working&#x27;?&#x27;working&#x27;:&#x27;waiting&#x27;)+&#x27;&quot;&gt;&lt;/span&gt;&#x27;;}
+  function taskStatus(r,t){
+    if(t.status===&#x27;complete&#x27;)return &#x27;Complete&#x27;;
+    if(t.status===&#x27;cancelled&#x27;)return &#x27;Cancelled&#x27;;
+    if(t.status===&#x27;partial&#x27;)return &#x27;Partial finding retained&#x27;;
+    if(t.status===&#x27;blocked&#x27;)return &#x27;Needs a revised dependency&#x27;;
+    if(r.status===&#x27;paused&#x27;)return t.progress?&#x27;Paused · draft retained&#x27;:&#x27;Paused&#x27;;
+    if(r.status===&#x27;stopped&#x27;)return t.progress?&#x27;Stopped · partial finding&#x27;:&#x27;Not started&#x27;;
+    if(t.status===&#x27;waiting&#x27;)return t.deps.length?&#x27;Waiting for &#x27;+t.deps.map(id=&gt;r.tasks.find(x=&gt;x.id===id)?.tab||&#x27;an earlier step&#x27;).join(&#x27; + &#x27;):&#x27;Queued&#x27;;
+    return t.progress&lt;.13?&#x27;Opening sources&#x27;:t.progress&lt;.3?&#x27;Reading and checking&#x27;:&#x27;Writing a finding&#x27;;
+  }
+  function selectedTask(r){return r.tasks[Math.min(r.active,r.tasks.length-1)];}
+  function runControls(r){
+    if(r.status===&#x27;complete&#x27;)return button(&#x27;followup&#x27;,icon(&#x27;corner-down-right&#x27;)+&#x27; Continue&#x27;,&#x27;gc-small&#x27;,&#x27;data-text=&quot;Check the cost&quot;&#x27;);
+    if(r.status===&#x27;stopped&#x27;)return button(&#x27;resume&#x27;,icon(&#x27;play&#x27;)+&#x27; Continue&#x27;,&#x27;gc-small&#x27;);
+    if(r.status===&#x27;paused&#x27;)return &#x27;&lt;div class=&quot;gc-run-controls&quot;&gt;&#x27;+button(&#x27;resume&#x27;,icon(&#x27;play&#x27;)+&#x27; Resume&#x27;)+button(&#x27;finish&#x27;,icon(&#x27;check&#x27;)+&#x27; Finish up&#x27;)+button(&#x27;stop&#x27;,icon(&#x27;square&#x27;)+&#x27; Stop&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    if([&#x27;running&#x27;,&#x27;synthesizing&#x27;].includes(r.status))return &#x27;&lt;div class=&quot;gc-run-controls&quot;&gt;&#x27;+button(&#x27;pause&#x27;,icon(&#x27;pause&#x27;)+&#x27; Pause&#x27;)+button(&#x27;finish&#x27;,icon(&#x27;check&#x27;)+&#x27; Finish up&#x27;)+button(&#x27;stop&#x27;,icon(&#x27;square&#x27;)+&#x27; Stop&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    return &#x27;&#x27;;
+  }
+  function workFoot(r){
+    const completed=r.tasks.filter(t=&gt;t.status===&#x27;complete&#x27;).length;
+    const label=r.status===&#x27;paused&#x27;?&#x27;Paused · progress saved&#x27;:r.status===&#x27;stopped&#x27;?&#x27;Stopped · partial work saved&#x27;:r.status===&#x27;complete&#x27;?completed+&#x27; findings kept&#x27;:r.finishing?&#x27;Finishing with available findings&#x27;:completed+&#x27; of &#x27;+r.tasks.length+&#x27; complete&#x27;;
+    return &#x27;&lt;div class=&quot;gc-work-foot&quot;&gt;&lt;span class=&quot;gc-work-caption&quot; data-progress-label&gt;&#x27;+label+&#x27;&lt;/span&gt;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&#x27;+runControls(r)+&#x27;&lt;/div&gt;&#x27;;
+  }
+  function planHTML(r){
+    const draft=r.status===&#x27;plan&#x27;;
+    const rows=r.tasks.map((t,i)=&gt;{
+      const dependencyLabel=t.deps.length?&#x27;After &#x27;+t.deps.map(id=&gt;r.tasks.find(x=&gt;x.id===id)?.tab||&#x27;removed step&#x27;).join(&#x27; + &#x27;):&#x27;Independent&#x27;;
+      return &#x27;&lt;div class=&quot;gc-plan-row&quot; draggable=&quot;true&quot; data-task-id=&quot;&#x27;+t.id+&#x27;&quot;&gt;&lt;span class=&quot;gc-plan-number&quot;&gt;&#x27;+(i+1)+&#x27;&lt;/span&gt;&lt;div class=&quot;gc-plan-content&quot;&gt;&lt;input data-edit=&quot;&#x27;+t.id+&#x27;&quot; aria-label=&quot;Step &#x27;+(i+1)+&#x27;&quot; value=&quot;&#x27;+esc(t.title)+&#x27;&quot;&gt;&#x27;+button(&#x27;edit-dependencies&#x27;,icon(&#x27;git-branch&#x27;)+&#x27; &#x27;+esc(dependencyLabel),&#x27;gc-dependency-button&#x27;,&#x27;data-task=&quot;&#x27;+t.id+&#x27;&quot; aria-label=&quot;Dependencies for &#x27;+esc(t.title)+&#x27;&quot;&#x27;)+&#x27;&lt;/div&gt;&#x27;+button(&#x27;move-up&#x27;,icon(&#x27;arrow-up&#x27;),&#x27;gc-icon&#x27;,&#x27;data-task=&quot;&#x27;+t.id+&#x27;&quot; aria-label=&quot;Move step &#x27;+(i+1)+&#x27; earlier&quot; &#x27;+(!i?&#x27;disabled&#x27;:&#x27;&#x27;))+button(&#x27;remove-step&#x27;,icon(&#x27;x&#x27;),&#x27;gc-icon&#x27;,&#x27;data-task=&quot;&#x27;+t.id+&#x27;&quot; aria-label=&quot;Remove step &#x27;+(i+1)+&#x27;&quot; &#x27;+(r.tasks.length===1?&#x27;disabled&#x27;:&#x27;&#x27;))+&#x27;&lt;/div&gt;&#x27;;
+    }).join(&#x27;&#x27;);
+    const unresolved=r.tasks.some(t=&gt;t.deps.some(id=&gt;!r.tasks.some(x=&gt;x.id===id)));
+    return &#x27;&lt;section class=&quot;gc-work gc-surface&quot; aria-label=&quot;Editable plan&quot;&gt;&lt;div class=&quot;gc-work-head&quot;&gt;&lt;span class=&quot;gc-work-title&quot;&gt;&#x27;+(draft?&#x27;Proposed approach&#x27;:&#x27;Revise the approach&#x27;)+&#x27;&lt;/span&gt;&lt;span class=&quot;gc-work-caption&quot;&gt;Revision &#x27;+r.revision+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;gc-plan-description&quot;&gt;&#x27;+(unresolved?&#x27;A removed step is still needed. Update its dependants before starting.&#x27;:draft?&#x27;Adjust the steps, then start when you’re ready.&#x27;:&#x27;Completed findings stay available. Changes apply to the work that follows.&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-plan-list&quot;&gt;&#x27;+rows+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-edit-note&quot;&gt;&#x27;+button(&#x27;add-step&#x27;,icon(&#x27;plus&#x27;)+&#x27; Add step&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-work-foot&quot;&gt;&#x27;+button(&#x27;dependencies&#x27;,icon(&#x27;workflow&#x27;)+&#x27; Dependencies&#x27;)+&#x27;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&#x27;+(draft?&#x27;&#x27;:button(&#x27;cancel-edit&#x27;,&#x27;Cancel&#x27;))+button(draft?&#x27;start-plan&#x27;:&#x27;apply-plan&#x27;,draft?&#x27;Start&#x27;:&#x27;Apply changes&#x27;,&#x27;gc-primary&#x27;,unresolved?&#x27;disabled&#x27;:&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;/section&gt;&#x27;;
+  }
+  function graphHTML(r){
+    const byLayer=[r.tasks.filter(t=&gt;!t.deps.length),r.tasks.filter(t=&gt;t.deps.length&amp;&amp;t.deps.every(id=&gt;!r.tasks.find(x=&gt;x.id===id)?.deps.length)),r.tasks.filter(t=&gt;t.deps.some(id=&gt;r.tasks.find(x=&gt;x.id===id)?.deps.length))].filter(a=&gt;a.length);
+    return &#x27;&lt;div class=&quot;gc-graph&quot; aria-label=&quot;Dependency graph&quot;&gt;&#x27;+byLayer.map((a,j)=&gt;(j?&#x27;&lt;div class=&quot;gc-graph-link&quot; aria-hidden=&quot;true&quot;&gt;↓&lt;/div&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;div class=&quot;gc-graph-row&quot;&gt;&#x27;+a.map(t=&gt;button(&#x27;task&#x27;,esc(t.tab)+&#x27;&lt;span&gt;&#x27;+esc(taskStatus(r,t))+&#x27;&lt;/span&gt;&#x27;,&#x27;gc-node&#x27;,&#x27;data-id=&quot;&#x27;+t.id+&#x27;&quot; aria-pressed=&quot;&#x27;+(selectedTask(r)?.id===t.id)+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+  }
+  function workHTML(r){
+    if(r.status===&#x27;plan&#x27;||r.editing)return planHTML(r);
+    if(r.topology===&#x27;Direct&#x27;&amp;&amp;!r.showDetails){
+      if(r.status===&#x27;complete&#x27;)return &#x27;&#x27;;
+      return &#x27;&lt;div class=&quot;gc-direct&quot;&gt;&lt;span class=&quot;gc-status&quot;&gt;&lt;span class=&quot;gc-dot &#x27;+(busy(r)?&#x27;working&#x27;:&#x27;waiting&#x27;)+&#x27;&quot;&gt;&lt;/span&gt; &#x27;+(r.status===&#x27;paused&#x27;?&#x27;Paused&#x27;:r.status===&#x27;stopped&#x27;?&#x27;Partial answer saved&#x27;:r.status===&#x27;synthesizing&#x27;?&#x27;Writing an answer&#x27;:&#x27;Working through your question&#x27;)+&#x27;&lt;/span&gt;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&#x27;+runControls(r)+&#x27;&lt;/div&gt;&#x27;;
+    }
+    const head=r.topology===&#x27;Parallel&#x27;?&#x27;Working in parallel&#x27;:r.topology===&#x27;Chain&#x27;?&#x27;Step by step&#x27;:r.topology===&#x27;Graph&#x27;?&#x27;Connected work&#x27;:&#x27;Working through it&#x27;;
+    if(r.collapsed)return &#x27;&lt;section class=&quot;gc-work gc-surface&quot; aria-label=&quot;Saved work&quot;&gt;&lt;div class=&quot;gc-work-head&quot;&gt;&#x27;+button(&#x27;expand-work&#x27;,icon(&#x27;chevron-right&#x27;)+&#x27; &#x27;+r.tasks.filter(t=&gt;t.status===&#x27;complete&#x27;).length+&#x27; findings · &#x27;+r.topology,&#x27;gc-small&#x27;)+&#x27;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&#x27;+button(&#x27;activity&#x27;,&#x27;Activity&#x27;)+&#x27;&lt;/div&gt;&lt;/section&gt;&#x27;;
+    const t=selectedTask(r);
+    const tabs=r.topology===&#x27;Chain&#x27;?&#x27;&lt;div class=&quot;gc-step-trail&quot; role=&quot;tablist&quot; aria-label=&quot;Steps&quot;&gt;&#x27;+r.tasks.map((t,i)=&gt;(i?icon(&#x27;chevron-right&#x27;):&#x27;&#x27;)+button(&#x27;task&#x27;,mark(t)+&#x27; &#x27;+esc(t.tab),&#x27;&#x27;,&#x27;data-id=&quot;&#x27;+t.id+&#x27;&quot; role=&quot;tab&quot; aria-selected=&quot;&#x27;+(r.active===i)+&#x27;&quot; aria-controls=&quot;gc-task-panel&quot; id=&quot;gc-task-tab-&#x27;+t.id+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;:&#x27;&lt;div class=&quot;gc-tabs&quot; role=&quot;tablist&quot; aria-label=&quot;Work streams&quot;&gt;&#x27;+r.tasks.map((t,i)=&gt;button(&#x27;task&#x27;,mark(t)+&#x27; &#x27;+esc(t.tab),&#x27;gc-tab&#x27;,&#x27;data-id=&quot;&#x27;+t.id+&#x27;&quot; role=&quot;tab&quot; aria-selected=&quot;&#x27;+(r.active===i)+&#x27;&quot; aria-controls=&quot;gc-task-panel&quot; id=&quot;gc-task-tab-&#x27;+t.id+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    return &#x27;&lt;section class=&quot;gc-work gc-surface&quot; aria-label=&quot;&#x27;+head+&#x27;&quot;&gt;&lt;div class=&quot;gc-work-head&quot;&gt;&lt;span class=&quot;gc-work-title&quot;&gt;&#x27;+head+&#x27;&lt;/span&gt;&lt;div class=&quot;gc-inline-actions&quot;&gt;&#x27;+(r.topology===&#x27;Graph&#x27;?button(&#x27;graph&#x27;,icon(&#x27;workflow&#x27;),&#x27;gc-small&#x27;,&#x27;aria-label=&quot;Toggle dependency graph&quot; aria-pressed=&quot;&#x27;+r.graph+&#x27;&quot;&#x27;):&#x27;&#x27;)+button(&#x27;edit-plan&#x27;,&#x27;Edit&#x27;)+button(&#x27;activity&#x27;,icon(&#x27;ellipsis&#x27;),&#x27;gc-icon&#x27;,&#x27;aria-label=&quot;Inspect activity&quot;&#x27;)+button(&#x27;collapse-work&#x27;,icon(&#x27;chevron-up&#x27;),&#x27;gc-icon&#x27;,&#x27;aria-label=&quot;Collapse work&quot;&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&#x27;+(r.graph?graphHTML(r):&#x27;&#x27;)+tabs+&#x27;&lt;div class=&quot;gc-body&quot; id=&quot;gc-task-panel&quot; role=&quot;tabpanel&quot; aria-labelledby=&quot;gc-task-tab-&#x27;+t.id+&#x27;&quot;&gt;&lt;div class=&quot;gc-status&quot; data-task-status&gt;&#x27;+mark(t)+&#x27; &#x27;+esc(taskStatus(r,t))+&#x27;&lt;/div&gt;&lt;h3&gt;&#x27;+esc(t.purpose)+&#x27;&lt;/h3&gt;&lt;p data-task-text&gt;&#x27;+esc(t.progress&gt;0?t.text.slice(0,Math.floor(t.text.length*Math.max(0,(t.progress-.1)/.9))):&#x27;&#x27;)+&#x27;&lt;/p&gt;&lt;div class=&quot;gc-task-footer&quot;&gt;&lt;div class=&quot;gc-sources&quot;&gt;&#x27;+(t.progress&gt;.15?sourceButton(t):&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;+([&#x27;complete&#x27;,&#x27;cancelled&#x27;].includes(t.status)?&#x27;&#x27;:button(&#x27;cancel-task&#x27;,&#x27;Cancel this part&#x27;,&#x27;gc-small&#x27;,&#x27;data-task=&quot;&#x27;+t.id+&#x27;&quot;&#x27;))+&#x27;&lt;/div&gt;&lt;/div&gt;&#x27;+workFoot(r)+&#x27;&lt;/section&gt;&#x27;;
+  }
+  function answerHTML(r){
+    const sc=scenarios[r.key];
+    if(r.synthesis===0)return &#x27;&#x27;;
+    const ready=r.synthesis&gt;=1;
+    const partialLead=&#x27;Some of the checks were still in progress when this was brought together. The findings below are a starting point; the remaining questions are kept with the work.&#x27;;
+    const lead=r.partial?partialLead:r.short?(r.key===&#x27;sky&#x27;?&#x27;Air scatters blue light across the sky.&#x27;:sc.bullets[0]||sc.intro):sc.intro;
+    const points=r.partial?r.tasks.filter(t=&gt;t.status===&#x27;complete&#x27;||t.status===&#x27;partial&#x27;).map(t=&gt;t.title+(t.status===&#x27;partial&#x27;?&#x27; · partial finding&#x27;:&#x27; · complete&#x27;)):sc.bullets;
+    const follow=r.partial?[&#x27;Finish remaining checks&#x27;,&#x27;Show the work&#x27;]:sc.follow;
+    const n=ready?lead.length:Math.floor(lead.length*Math.min(1,r.synthesis*1.4));
+    const details=r.key===&#x27;office&#x27;&amp;&amp;!r.partial?&#x27;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Change&lt;/th&gt;&lt;th&gt;Helps with&lt;/th&gt;&lt;th&gt;Start here?&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;Move equipment&lt;/td&gt;&lt;td&gt;Noise inside the room&lt;/td&gt;&lt;td&gt;Yes · reversible&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Seal the door gap&lt;/td&gt;&lt;td&gt;Sound from the hallway&lt;/td&gt;&lt;td&gt;Yes · test first&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Add soft furnishings&lt;/td&gt;&lt;td&gt;Reflections in the room&lt;/td&gt;&lt;td&gt;After the first checks&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&#x27;:r.key===&#x27;guide&#x27;&amp;&amp;!r.partial?&#x27;&lt;ul class=&quot;gc-checklist&quot;&gt;&#x27;+points.map((s,i)=&gt;&#x27;&lt;li&gt;&lt;label&gt;&lt;input type=&quot;checkbox&quot; data-check=&quot;&#x27;+i+&#x27;&quot; &#x27;+(r.checked?.includes(i)?&#x27;checked&#x27;:&#x27;&#x27;)+&#x27;&gt;&lt;span&gt;&#x27;+esc(s)+&#x27;&lt;/span&gt;&lt;/label&gt;&lt;/li&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/ul&gt;&#x27;:&#x27;&lt;ul&gt;&#x27;+points.map(s=&gt;&#x27;&lt;li&gt;&#x27;+esc(s)+&#x27;&lt;/li&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/ul&gt;&#x27;;
+    return &#x27;&lt;article class=&quot;gc-answer&quot; aria-label=&quot;Combined answer&quot;&gt;&lt;div class=&quot;gc-status&quot;&gt;&#x27;+(ready?(r.partial?icon(&#x27;square&#x27;)+&#x27; Answer from partial findings&#x27;:icon(&#x27;check&#x27;)+&#x27; Answer&#x27;):(&#x27;&lt;span class=&quot;gc-dot working&quot;&gt;&lt;/span&gt; &#x27;+(r.topology===&#x27;Direct&#x27;?&#x27;Writing&#x27;:&#x27;Bringing the findings together&#x27;)))+&#x27;&lt;/div&gt;&lt;h2&gt;&#x27;+esc(r.partial?&#x27;Here’s what is ready so far.&#x27;:sc.heading)+&#x27;&lt;/h2&gt;&lt;p data-synthesis-text&gt;&#x27;+esc(lead.slice(0,n))+(ready&amp;&amp;!r.partial?button(&#x27;source&#x27;,&#x27;1&#x27;,&#x27;gc-cite&#x27;,&#x27;aria-label=&quot;Inspect supporting source&quot; data-kind=&quot;&#x27;+(r.key===&#x27;document&#x27;?&#x27;document&#x27;:&#x27;web&#x27;)+&#x27;&quot;&#x27;):&#x27;&#x27;)+&#x27;&lt;/p&gt;&#x27;+(r.synthesis&gt;.65&amp;&amp;!r.short?details:&#x27;&#x27;)+(ready&amp;&amp;!r.short&amp;&amp;!r.partial?&#x27;&lt;p&gt;&#x27;+esc(sc.closing)+&#x27;&lt;/p&gt;&#x27;:&#x27;&#x27;)+(ready?&#x27;&lt;div class=&quot;gc-answer-actions&quot;&gt;&#x27;+button(&#x27;source&#x27;,icon(&#x27;files&#x27;)+&#x27; Sources&#x27;,&#x27;gc-small&#x27;,&#x27;data-kind=&quot;&#x27;+(r.key===&#x27;document&#x27;?&#x27;document&#x27;:&#x27;web&#x27;)+&#x27;&quot;&#x27;)+button(&#x27;shorter&#x27;,icon(r.short?&#x27;plus&#x27;:&#x27;minus&#x27;)+&#x27; &#x27;+(r.short?&#x27;Full answer&#x27;:&#x27;Shorter&#x27;))+button(&#x27;expand-work&#x27;,icon(&#x27;layers&#x27;)+&#x27; Work&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-followups&quot;&gt;&#x27;+follow.map(s=&gt;button(&#x27;followup&#x27;,esc(s),&#x27;&#x27;,&#x27;data-text=&quot;&#x27;+esc(s)+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;/article&gt;&#x27;;
+  }
+  function clarifyHTML(){return &#x27;&lt;section class=&quot;gc-work gc-surface gc-clarify&quot;&gt;&lt;h3&gt;What should the weekend feel like?&lt;/h3&gt;&lt;p&gt;A little direction will make the plan more useful. You can also tell me in your own words.&lt;/p&gt;&lt;div class=&quot;gc-choice-list&quot;&gt;&#x27;+[&#x27;Quiet and unhurried&#x27;,&#x27;Outdoors&#x27;,&#x27;A bit of both&#x27;].map(s=&gt;button(&#x27;clarify&#x27;,s,&#x27;&#x27;,&#x27;data-text=&quot;&#x27;+s+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;/section&gt;&#x27;;}
+  function renderConversation(){
+    const r=focusedRun();
+    q(&#x27;.gc-arrival&#x27;).hidden=!!r;conversation.hidden=!r;q(&#x27;.gc-thread-more&#x27;).hidden=!r;
+    q(&#x27;.gc-thread-title&#x27;).textContent=r?r.title:&#x27;&#x27;;
+    root.dataset.view=r?&#x27;conversation&#x27;:&#x27;arrival&#x27;;
+    if(!r){conversation.innerHTML=&#x27;&#x27;;return;}
+    const earlier=r.previous.map(p=&gt;&#x27;&lt;div class=&quot;gc-earlier&quot;&gt;&lt;span class=&quot;gc-status&quot;&gt;Earlier in this conversation&lt;/span&gt;&lt;p&gt;&#x27;+esc(p.heading)+&#x27;&lt;/p&gt;&#x27;+button(&#x27;earlier&#x27;,&#x27;Read answer&#x27;,&#x27;gc-small&#x27;,&#x27;data-key=&quot;&#x27;+p.key+&#x27;&quot;&#x27;)+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;);
+    const question=&#x27;&lt;div class=&quot;gc-question&quot;&gt;&lt;p&gt;&#x27;+esc(r.question)+&#x27;&lt;/p&gt;&lt;span class=&quot;gc-mode-receipt&quot;&gt;&#x27;+esc(r.mode)+&#x27;&lt;/span&gt;&lt;/div&gt;&#x27;;
+    const interrupted=[&#x27;paused&#x27;,&#x27;stopped&#x27;].includes(r.status)?&#x27;&lt;div class=&quot;gc-interruption&quot;&gt;&#x27;+icon(r.status===&#x27;paused&#x27;?&#x27;pause&#x27;:&#x27;square&#x27;)+&#x27; &#x27;+(r.status===&#x27;paused&#x27;?&#x27;Paused. Your place is kept.&#x27;:&#x27;Stopped. What’s here is saved.&#x27;)+&#x27;&lt;/div&gt;&#x27;:&#x27;&#x27;;
+    conversation.innerHTML=earlier+question+interrupted+(r.status===&#x27;clarify&#x27;?clarifyHTML():workHTML(r)+answerHTML(r));
+  }
+  function renderHistory(){
+    const term=search.toLowerCase().trim();
+    const items=conversations.filter(r=&gt;(r.title+&#x27; &#x27;+r.question).toLowerCase().includes(term));
+    q(&#x27;.gc-history-list&#x27;).innerHTML=&#x27;&lt;div class=&quot;gc-nav-label&quot;&gt;&#x27;+(term?&#x27;Matches&#x27;:&#x27;Recents&#x27;)+&#x27;&lt;/div&gt;&#x27;+items.map(r=&gt;button(&#x27;reopen&#x27;,&#x27;&lt;span&gt;&#x27;+esc(r.title)+&#x27;&lt;/span&gt;&#x27;+([&#x27;paused&#x27;,&#x27;stopped&#x27;].includes(r.status)?icon(r.status===&#x27;paused&#x27;?&#x27;pause&#x27;:&#x27;square&#x27;):busy(r)?&#x27;&lt;span class=&quot;gc-dot working&quot;&gt;&lt;/span&gt;&#x27;:&#x27;&#x27;),&#x27;gc-history-item&#x27;,&#x27;data-id=&quot;&#x27;+r.id+&#x27;&quot; aria-current=&quot;&#x27;+(r.id===current?&#x27;page&#x27;:&#x27;false&#x27;)+&#x27;&quot; data-tooltip=&quot;&#x27;+esc(r.title)+&#x27;&quot;&#x27;)).join(&#x27;&#x27;)+(items.length?&#x27;&#x27;:&#x27;&lt;div class=&quot;gc-empty&quot;&gt;No conversations found.&lt;/div&gt;&#x27;);
+  }
+  function renderComposer(){
+    q(&#x27;.gc-mode-label&#x27;).textContent=mode;
+    const r=focusedRun();
+    q(&#x27;.gc-input&#x27;).placeholder=r?(busy(r)?&#x27;Add a detail, or change direction…&#x27;:&#x27;Stay with this, or take it somewhere else…&#x27;):&#x27;Ask, talk, or drop something here…&#x27;;
+    q(&#x27;.gc-attachments&#x27;).hidden=!attachments.length;
+    q(&#x27;.gc-attachments&#x27;).innerHTML=attachments.map(name=&gt;&#x27;&lt;span class=&quot;gc-file&quot;&gt;&#x27;+icon(&#x27;file-text&#x27;)+button(&#x27;attachment-source&#x27;,esc(name),&#x27;&#x27;,&#x27;data-name=&quot;&#x27;+esc(name)+&#x27;&quot;&#x27;)+button(&#x27;remove-attachment&#x27;,icon(&#x27;x&#x27;),&#x27;&#x27;,&#x27;data-name=&quot;&#x27;+esc(name)+&#x27;&quot; aria-label=&quot;Remove &#x27;+esc(name)+&#x27;&quot;&#x27;)+&#x27;&lt;/span&gt;&#x27;).join(&#x27;&#x27;);
+    const example=mode===&#x27;Graph&#x27;?[&#x27;Organise an evening&#x27;,&#x27;Work through an idea&#x27;]:mode===&#x27;Chain&#x27;?[&#x27;Turn notes into a guide&#x27;,&#x27;Work through an idea&#x27;]:mode===&#x27;Plan&#x27;?[&#x27;Plan a weekend away&#x27;,&#x27;Compare a few options&#x27;]:mode===&#x27;Direct&#x27;?[&#x27;Explain something&#x27;,&#x27;Talk it through&#x27;]:[&#x27;Compare a few options&#x27;,&#x27;Explain something&#x27;,&#x27;Talk it through&#x27;];
+    q(&#x27;.gc-suggestions&#x27;).hidden=!!r;
+    q(&#x27;.gc-suggestions&#x27;).innerHTML=example.map((s,i)=&gt;button(&#x27;example&#x27;,icon(i===0?&#x27;sparkles&#x27;:i===1?&#x27;orbit&#x27;:&#x27;audio-lines&#x27;)+&#x27; &#x27;+s,&#x27;&#x27;,&#x27;data-example=&quot;&#x27;+s+&#x27;&quot;&#x27;)).join(&#x27;&#x27;);
+    q(&#x27;.gc-input&#x27;).hidden=voice?.kind===&#x27;dictation&#x27;;q(&#x27;.gc-record&#x27;).hidden=voice?.kind!==&#x27;dictation&#x27;;q(&#x27;.gc-mic&#x27;).hidden=!!voice;
+  }
+  function chart(){return &#x27;&lt;svg class=&quot;gc-paper-chart&quot; viewBox=&quot;0 0 250 160&quot; role=&quot;img&quot; aria-label=&quot;Example chart: before 48 decibels, after 39 decibels&quot;&gt;&lt;line x1=&quot;36&quot; y1=&quot;126&quot; x2=&quot;235&quot; y2=&quot;126&quot; stroke=&quot;#77859d&quot; stroke-width=&quot;1&quot;/&gt;&lt;line x1=&quot;36&quot; y1=&quot;24&quot; x2=&quot;36&quot; y2=&quot;126&quot; stroke=&quot;#77859d&quot; stroke-width=&quot;1&quot;/&gt;&lt;text x=&quot;3&quot; y=&quot;19&quot; fill=&quot;#52627b&quot; font-family=&quot;Inter,sans-serif&quot; font-size=&quot;10&quot;&gt;dB(A)&lt;/text&gt;&lt;text x=&quot;19&quot; y=&quot;129&quot; fill=&quot;#52627b&quot; font-size=&quot;10&quot;&gt;0&lt;/text&gt;&lt;text x=&quot;13&quot; y=&quot;30&quot; fill=&quot;#52627b&quot; font-size=&quot;10&quot;&gt;50&lt;/text&gt;&lt;rect x=&quot;67&quot; y=&quot;30&quot; width=&quot;47&quot; height=&quot;96&quot; rx=&quot;2&quot; fill=&quot;#7189b6&quot;/&gt;&lt;rect x=&quot;157&quot; y=&quot;48&quot; width=&quot;47&quot; height=&quot;78&quot; rx=&quot;2&quot; fill=&quot;#3565bc&quot;/&gt;&lt;text x=&quot;90&quot; y=&quot;23&quot; text-anchor=&quot;middle&quot; fill=&quot;#273047&quot; font-size=&quot;11&quot;&gt;48&lt;/text&gt;&lt;text x=&quot;180&quot; y=&quot;41&quot; text-anchor=&quot;middle&quot; fill=&quot;#273047&quot; font-size=&quot;11&quot;&gt;39&lt;/text&gt;&lt;text x=&quot;90&quot; y=&quot;146&quot; text-anchor=&quot;middle&quot; fill=&quot;#46536b&quot; font-size=&quot;10&quot;&gt;Before&lt;/text&gt;&lt;text x=&quot;180&quot; y=&quot;146&quot; text-anchor=&quot;middle&quot; fill=&quot;#46536b&quot; font-size=&quot;10&quot;&gt;After&lt;/text&gt;&lt;/svg&gt;&#x27;;}
+  function renderInspector(){
+    const pane=q(&#x27;.gc-inspector&#x27;);pane.hidden=!inspect;root.dataset.inspect=inspect?&#x27;open&#x27;:&#x27;closed&#x27;;
+    if(!inspect)return;
+    const r=focusedRun();
+    let html=&#x27;&lt;div class=&quot;gc-inspector-head&quot;&gt;&lt;span&gt;&#x27;+esc(({document:&#x27;Room sound study&#x27;,web:&#x27;Sources&#x27;,activity:&#x27;Activity&#x27;,earlier:&#x27;Earlier answer&#x27;,dependencies:&#x27;Dependencies&#x27;,notes:inspect.title||&#x27;Working notes&#x27;,excerpt:inspect.title||&#x27;Source excerpt&#x27;}[inspect.kind]||&#x27;Details&#x27;))+&#x27;&lt;/span&gt;&lt;span class=&quot;gc-spacer&quot;&gt;&lt;/span&gt;&#x27;+button(&#x27;close-inspector&#x27;,icon(&#x27;x&#x27;),&#x27;gc-icon&#x27;,&#x27;aria-label=&quot;Close inspection pane&quot;&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    if(inspect.kind===&#x27;document&#x27;){
+      const viewed=inspect.tab===&#x27;viewed&#x27;,page=inspect.page||2;
+      html+=&#x27;&lt;div class=&quot;gc-inspector-tabs&quot; role=&quot;tablist&quot; aria-label=&quot;Document representation&quot;&gt;&#x27;+button(&#x27;document-tab&#x27;,&#x27;Original&#x27;,&#x27;&#x27;,&#x27;role=&quot;tab&quot; aria-selected=&quot;&#x27;+!viewed+&#x27;&quot; data-tab=&quot;original&quot;&#x27;)+button(&#x27;document-tab&#x27;,&#x27;What Glass viewed&#x27;,&#x27;&#x27;,&#x27;role=&quot;tab&quot; aria-selected=&quot;&#x27;+viewed+&#x27;&quot; data-tab=&quot;viewed&quot;&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-paper&quot;&gt;&lt;small&gt;ROOM SOUND STUDY · &#x27;+(viewed?&#x27;FIGURE 1&#x27;:&#x27;PAGE &#x27;+page)+&#x27;&lt;/small&gt;&#x27;+(page===1&amp;&amp;!viewed?&#x27;&lt;h4&gt;A small change to a noisy room.&lt;/h4&gt;&lt;p&gt;An example study of a door seal and two short sound-level checks.&lt;/p&gt;&lt;p&gt;Prepared for a discussion of measurement, evidence and practical changes.&lt;/p&gt;&#x27;:page===3&amp;&amp;!viewed?&#x27;&lt;h4&gt;Method and limits&lt;/h4&gt;&lt;p&gt;Measurements were taken at the same position in one room. Each reading covered a short interval.&lt;/p&gt;&lt;p&gt;&lt;mark&gt;These observations do not establish a general effect across rooms or sound sources.&lt;/mark&gt;&lt;/p&gt;&#x27;:&#x27;&lt;h4&gt;Sound level before and after&lt;/h4&gt;&#x27;+chart()+&#x27;&lt;div class=&quot;gc-paper-caption&quot;&gt;Figure 1. Two checks in the same room.&lt;/div&gt;&#x27;+(!viewed?&#x27;&lt;p&gt;The second check recorded a lower level after sealing the door. &lt;mark&gt;48 dB(A) before; 39 dB(A) after.&lt;/mark&gt;&lt;/p&gt;&#x27;:&#x27;&#x27;))+&#x27;&lt;/div&gt;&#x27;+(viewed?&#x27;&lt;div class=&quot;gc-receipt&quot;&gt;Figure 1 · page 2&lt;br&gt;Example admitted image · 900 × 600&lt;br&gt;The original document remains available separately.&lt;/div&gt;&#x27;:&#x27;&lt;div class=&quot;gc-page-controls&quot;&gt;&#x27;+button(&#x27;page-prev&#x27;,icon(&#x27;chevron-left&#x27;),&#x27;gc-icon&#x27;,&#x27;aria-label=&quot;Previous page&quot; &#x27;+(page===1?&#x27;disabled&#x27;:&#x27;&#x27;))+&#x27;&lt;span&gt;&#x27;+page+&#x27; / 3&lt;/span&gt;&#x27;+button(&#x27;page-next&#x27;,icon(&#x27;chevron-right&#x27;),&#x27;gc-icon&#x27;,&#x27;aria-label=&quot;Next page&quot; &#x27;+(page===3?&#x27;disabled&#x27;:&#x27;&#x27;))+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-receipt&quot;&gt;Example PDF · 3 pages extracted&lt;br&gt;Viewed as an image: page 2, figure 1&lt;/div&gt;&#x27;);
+    } else if(inspect.kind===&#x27;activity&#x27;){
+      html+=&#x27;&lt;p&gt;What this work has used and produced.&lt;/p&gt;&lt;div class=&quot;gc-activity-list&quot;&gt;&#x27;+(r?r.tasks.map(t=&gt;&#x27;&lt;div class=&quot;gc-activity-entry&quot;&gt;&lt;strong&gt;&#x27;+esc(t.title)+&#x27;&lt;/strong&gt;&lt;span&gt;&#x27;+esc(taskStatus(r,t))+&#x27;&lt;/span&gt;&#x27;+(t.progress&gt;.1?&#x27;&lt;p&gt;&#x27;+esc(t.source)+&#x27;&lt;/p&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;):&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;gc-receipt&quot;&gt;Mode: &#x27;+esc(r?.mode||mode)+&#x27;&lt;br&gt;Approach revision: &#x27;+(r?.revision||1)+&#x27;&lt;br&gt;Useful findings and partial drafts stay with the conversation.&lt;/div&gt;&#x27;+(r?.revisions||[]).map(v=&gt;&#x27;&lt;details class=&quot;gc-activity-entry&quot;&gt;&lt;summary style=&quot;font-size:12px;color:var(--g-soft)&quot;&gt;Revision &#x27;+v.number+&#x27; · retained findings&lt;/summary&gt;&#x27;+v.findings.map(f=&gt;&#x27;&lt;p&gt;&lt;strong&gt;&#x27;+esc(f.title)+&#x27;&lt;/strong&gt;&lt;br&gt;&#x27;+esc(f.text)+&#x27;…&lt;/p&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/details&gt;&#x27;).join(&#x27;&#x27;);
+    } else if(inspect.kind===&#x27;dependencies&#x27;){
+      html+=&#x27;&lt;p&gt;A step becomes ready when its required findings are available.&lt;/p&gt;&#x27;+(r?r.tasks.map(t=&gt;&#x27;&lt;div class=&quot;gc-activity-entry&quot;&gt;&lt;strong&gt;&#x27;+esc(t.title)+&#x27;&lt;/strong&gt;&lt;span&gt;&#x27;+esc(t.deps.length?&#x27;After &#x27;+t.deps.map(id=&gt;r.tasks.find(x=&gt;x.id===id)?.title||&#x27;removed step&#x27;).join(&#x27; + &#x27;):&#x27;Can start independently&#x27;)+&#x27;&lt;/span&gt;&lt;/div&gt;&#x27;).join(&#x27;&#x27;):&#x27;&#x27;);
+    } else if(inspect.kind===&#x27;earlier&#x27;){
+      const sc=scenarios[inspect.key]||scenarios.office;
+      html+=&#x27;&lt;h3&gt;&#x27;+esc(sc.heading)+&#x27;&lt;/h3&gt;&lt;p&gt;&#x27;+esc(sc.intro)+&#x27;&lt;/p&gt;&lt;p&gt;&#x27;+esc(sc.closing)+&#x27;&lt;/p&gt;&#x27;;
+    } else if(inspect.kind===&#x27;notes&#x27;){
+      html+=&#x27;&lt;div class=&quot;gc-paper&quot;&gt;&lt;small&gt;CONVERSATION MATERIAL&lt;/small&gt;&lt;h4&gt;&#x27;+esc(inspect.title||&#x27;Working notes&#x27;)+&#x27;&lt;/h4&gt;&lt;p&gt;&#x27;+esc(inspect.text||&#x27;Goal: make a practical guide from these notes. Start with the preparation. Try one change at a time. Check what happened before deciding what to do next.&#x27;)+&#x27;&lt;/p&gt;&lt;p&gt;Keep the starting point so a change can be reversed. Put optional troubleshooting after the first attempt.&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;gc-receipt&quot;&gt;Example text attachment · retained with this conversation.&lt;/div&gt;&#x27;;
+    } else if(inspect.kind===&#x27;excerpt&#x27;){
+      html+=&#x27;&lt;h3&gt;&#x27;+esc(inspect.title||&#x27;Source excerpt&#x27;)+&#x27;&lt;/h3&gt;&lt;p&gt;&#x27;+esc(inspect.text||&#x27;The relevant passage appears here, alongside its source and the part of the answer it supports.&#x27;)+&#x27;&lt;/p&gt;&lt;div class=&quot;gc-receipt&quot;&gt;Illustrative source excerpt for this design preview.&lt;/div&gt;&#x27;;
+    } else {
+      const sc=scenarios[r?.key||&#x27;office&#x27;];
+      html+=&#x27;&lt;p&gt;Supporting material for this example conversation.&lt;/p&gt;&#x27;+sc.tasks.map(t=&gt;&#x27;&lt;div class=&quot;gc-activity-entry&quot;&gt;&lt;strong&gt;&#x27;+esc(t[4])+&#x27;&lt;/strong&gt;&lt;p&gt;&#x27;+esc(t[3].slice(0,180))+&#x27;&lt;/p&gt;&#x27;+sourceButton({source:t[4],sourceIcon:t[5],text:t[3]})+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;);
+    }
+    pane.innerHTML=html;
+  }
+  function render(){
+    root.dataset.nav=nav?&#x27;open&#x27;:&#x27;closed&#x27;;
+    q(&#x27;.gc-rail&#x27;).inert=!nav;q(&#x27;.gc-rail&#x27;).setAttribute(&#x27;aria-hidden&#x27;,String(!nav));
+    q(&#x27;.gc-nav-shade&#x27;).hidden=!nav;q(&#x27;.gc-nav-trigger&#x27;).hidden=nav;q(&#x27;.gc-nav-trigger&#x27;).setAttribute(&#x27;aria-expanded&#x27;,String(nav));
+    workspace.inert=nav;
+    renderConversation();renderComposer();renderHistory();renderInspector();icons();
+  }
+  function closePop(restoreFocus=true){
+    const anchor=pop?.anchor;pop=null;overlay.innerHTML=&#x27;&#x27;;
+    qa(&#x27;[aria-expanded=&quot;true&quot;]&#x27;).filter(el=&gt;el!==q(&#x27;.gc-nav-trigger&#x27;)).forEach(el=&gt;el.setAttribute(&#x27;aria-expanded&#x27;,&#x27;false&#x27;));
+    if(restoreFocus&amp;&amp;anchor?.isConnected)anchor.focus({preventScroll:true});
+  }
+  function placePop(){
+    if(!pop)return;
+    const box=q(&#x27;.gc-popover&#x27;);if(!box)return;
+    const ar=app.getBoundingClientRect(),br=pop.anchor.getBoundingClientRect();
+    const left=Math.max(12,Math.min(br.left-ar.left,ar.width-box.offsetWidth-12));
+    const top=br.top-ar.top-box.offsetHeight-8;
+    box.style.left=left+&#x27;px&#x27;;box.style.top=(top&gt;12?top:Math.min(br.bottom-ar.top+8,Math.max(12,ar.height-box.offsetHeight-12)))+&#x27;px&#x27;;
+  }
+  function openPop(kind,anchor){
+    if(pop?.kind===kind){closePop();return;}
+    closePop(false);pop={kind,anchor};anchor?.setAttribute(&#x27;aria-expanded&#x27;,&#x27;true&#x27;);
+    let html=&#x27;&#x27;;
+    if(kind===&#x27;modes&#x27;)html=&#x27;&lt;div class=&quot;gc-pop-heading&quot;&gt;Mode&lt;/div&gt;&#x27;+modes.map(m=&gt;button(&#x27;choose-mode&#x27;,icon(m[1])+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;&#x27;+m[0]+&#x27;&lt;/strong&gt;&lt;small&gt;&#x27;+m[2]+&#x27;&lt;/small&gt;&lt;/span&gt;&#x27;+(mode===m[0]?&#x27;&lt;span class=&quot;gc-selected&quot;&gt;&#x27;+icon(&#x27;check&#x27;)+&#x27;&lt;/span&gt;&#x27;:&#x27;&#x27;),&#x27;gc-pop-row&#x27;,&#x27;data-mode=&quot;&#x27;+m[0]+&#x27;&quot; role=&quot;menuitemradio&quot; aria-checked=&quot;&#x27;+(mode===m[0])+&#x27;&quot;&#x27;)).join(&#x27;&#x27;);
+    if(kind===&#x27;abilities&#x27;)html=&#x27;&lt;div class=&quot;gc-pop-heading&quot;&gt;Available to the next request&lt;/div&gt;&#x27;+abilityInfo.map(a=&gt;{
+      const needs=a[0]===&#x27;corpus&#x27;&amp;&amp;!corpusConfigured;
+      const detail=needs?&#x27;Choose a Markdown collection&#x27;:a[0]===&#x27;documents&#x27;&amp;&amp;!attachments.length?&#x27;Attach a PDF to use&#x27;:a[3];
+      return &#x27;&lt;div class=&quot;gc-ability-row&quot;&gt;&#x27;+button(needs?&#x27;configure&#x27;:a[0]===&#x27;documents&#x27;&amp;&amp;!attachments.length?&#x27;attach-document&#x27;:&#x27;toggle-ability&#x27;,icon(a[1])+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;&#x27;+a[2]+&#x27;&lt;/strong&gt;&lt;small&gt;&#x27;+detail+&#x27;&lt;/small&gt;&lt;/span&gt;&#x27;+(needs||a[0]===&#x27;documents&#x27;&amp;&amp;!attachments.length?icon(&#x27;chevron-right&#x27;):&#x27;&lt;span class=&quot;gc-switch &#x27;+(abilities[a[0]]?&#x27;on&#x27;:&#x27;&#x27;)+&#x27;&quot; aria-hidden=&quot;true&quot;&gt;&lt;/span&gt;&#x27;),&#x27;gc-pop-row&#x27;,&#x27;data-ability=&quot;&#x27;+a[0]+&#x27;&quot; aria-label=&quot;&#x27;+a[2]+(needs?&#x27; setup&#x27;:&#x27;&#x27;)+&#x27;&quot; &#x27;+(!needs&amp;&amp;!(a[0]===&#x27;documents&#x27;&amp;&amp;!attachments.length)?&#x27;role=&quot;menuitemcheckbox&quot; aria-checked=&quot;&#x27;+abilities[a[0]]+&#x27;&quot;&#x27;:&#x27;&#x27;))+(a[0]===&#x27;web&#x27;||a[0]===&#x27;corpus&#x27;?button(&#x27;configure&#x27;,icon(&#x27;settings-2&#x27;),&#x27;gc-icon&#x27;,&#x27;data-ability=&quot;&#x27;+a[0]+&#x27;&quot; aria-label=&quot;&#x27;+a[2]+&#x27; settings&quot;&#x27;):&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    }).join(&#x27;&#x27;);
+    if(kind===&#x27;attachments&#x27;)html=&#x27;&lt;div class=&quot;gc-pop-heading&quot;&gt;Add example material&lt;/div&gt;&#x27;+button(&#x27;attach-document&#x27;,icon(&#x27;files&#x27;)+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;Room sound study.pdf&lt;/strong&gt;&lt;small&gt;3 pages · includes a chart&lt;/small&gt;&lt;/span&gt;&#x27;,&#x27;gc-pop-row&#x27;)+button(&#x27;attach-notes&#x27;,icon(&#x27;file-text&#x27;)+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;Working notes&lt;/strong&gt;&lt;small&gt;A short set of notes to develop&lt;/small&gt;&lt;/span&gt;&#x27;,&#x27;gc-pop-row&#x27;);
+    if(kind===&#x27;thread-menu&#x27;)html=button(&#x27;new&#x27;,icon(&#x27;square-pen&#x27;)+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;New conversation&lt;/strong&gt;&lt;/span&gt;&#x27;,&#x27;gc-pop-row&#x27;)+button(&#x27;activity&#x27;,icon(&#x27;activity&#x27;)+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;Activity&lt;/strong&gt;&lt;/span&gt;&#x27;,&#x27;gc-pop-row&#x27;)+button(&#x27;discard-confirm&#x27;,icon(&#x27;trash-2&#x27;)+&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;Discard conversation&lt;/strong&gt;&lt;/span&gt;&#x27;,&#x27;gc-pop-row&#x27;);
+    if(kind===&#x27;discard-confirm&#x27;)html=&#x27;&lt;div class=&quot;gc-config&quot;&gt;&lt;strong style=&quot;font-size:13px;font-weight:500&quot;&gt;Discard this conversation?&lt;/strong&gt;&lt;p&gt;Its saved answers, plan and partial work will be removed from this preview.&lt;/p&gt;&lt;div class=&quot;gc-config-actions&quot;&gt;&#x27;+button(&#x27;close-pop&#x27;,&#x27;Keep&#x27;)+button(&#x27;discard&#x27;,&#x27;Discard&#x27;,&#x27;gc-primary&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&#x27;;
+    overlay.innerHTML=&#x27;&lt;div class=&quot;gc-popover&quot; role=&quot;&#x27;+([&#x27;modes&#x27;,&#x27;abilities&#x27;,&#x27;attachments&#x27;,&#x27;thread-menu&#x27;].includes(kind)?&#x27;menu&#x27;:&#x27;dialog&#x27;)+&#x27;&quot; aria-label=&quot;&#x27;+esc(kind)+&#x27;&quot;&gt;&#x27;+html+&#x27;&lt;/div&gt;&#x27;;
+    icons();placePop();q(&#x27;.gc-popover button&#x27;)?.focus({preventScroll:true});
+  }
+  function configure(name,anchor){
+    closePop(false);pop={kind:&#x27;config&#x27;,anchor};
+    overlay.innerHTML=&#x27;&lt;div class=&quot;gc-popover&quot; role=&quot;dialog&quot; aria-label=&quot;&#x27;+(name===&#x27;web&#x27;?&#x27;Web settings&#x27;:&#x27;Corpus settings&#x27;)+&#x27;&quot;&gt;&lt;div class=&quot;gc-config&quot;&gt;&lt;strong style=&quot;font-size:13px;font-weight:500&quot;&gt;&#x27;+(name===&#x27;web&#x27;?&#x27;Web&#x27;:&#x27;Corpus&#x27;)+&#x27;&lt;/strong&gt;&lt;p&gt;&#x27;+(name===&#x27;web&#x27;?&#x27;Keyless search is available. A Tavily key is optional.&#x27;:&#x27;Connect a Markdown collection on the host running Glass.&#x27;)+&#x27;&lt;/p&gt;&lt;label for=&quot;gc-config-value&quot;&gt;&#x27;+(name===&#x27;web&#x27;?&#x27;Tavily key&#x27;:&#x27;Collection path&#x27;)+&#x27;&lt;/label&gt;&lt;input id=&quot;gc-config-value&quot; type=&quot;&#x27;+(name===&#x27;web&#x27;?&#x27;password&#x27;:&#x27;text&#x27;)+&#x27;&quot; placeholder=&quot;&#x27;+(name===&#x27;web&#x27;?&#x27;Preview only · do not enter a real key&#x27;:&#x27;/collections/notes&#x27;)+&#x27;&quot; autocomplete=&quot;off&quot;&gt;&lt;p&gt;Settings preview. No credentials are sent or saved.&lt;/p&gt;&lt;div class=&quot;gc-config-actions&quot;&gt;&#x27;+button(&#x27;close-pop&#x27;,&#x27;Cancel&#x27;)+button(&#x27;save-config&#x27;,&#x27;Save&#x27;,&#x27;gc-primary&#x27;,&#x27;data-ability=&quot;&#x27;+name+&#x27;&quot;&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;
+    icons();placePop();q(&#x27;#gc-config-value&#x27;).focus({preventScroll:true});
+  }
+  function dependsOn(r,from,to,seen=new Set()){
+    if(from===to)return true;
+    if(seen.has(from))return false;seen.add(from);
+    return !!r.tasks.find(t=&gt;t.id===from)?.deps.some(id=&gt;dependsOn(r,id,to,seen));
+  }
+  function dependenciesMenu(r,id,anchor){
+    closePop(false);pop={kind:&#x27;dependency&#x27;,anchor,task:id};
+    const task=r.tasks.find(t=&gt;t.id===id);
+    const options=[...task.deps.filter(dep=&gt;!r.tasks.some(t=&gt;t.id===dep)).map(dep=&gt;({id:dep,title:&#x27;Removed step · unlink this dependency&#x27;,deps:[]})),...r.tasks.filter(t=&gt;t.id!==id)];
+    overlay.innerHTML=&#x27;&lt;div class=&quot;gc-popover&quot; role=&quot;menu&quot; aria-label=&quot;Step dependencies&quot;&gt;&lt;div class=&quot;gc-pop-heading&quot;&gt;Needs a finding from&lt;/div&gt;&#x27;+options.map(t=&gt;{
+      const cycle=dependsOn(r,t.id,id);
+      return button(&#x27;toggle-dependency&#x27;,&#x27;&lt;span class=&quot;gc-pop-copy&quot;&gt;&lt;strong&gt;&#x27;+esc(t.title)+&#x27;&lt;/strong&gt;&#x27;+(cycle?&#x27;&lt;small&gt;This step already depends on it&lt;/small&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;/span&gt;&#x27;+(task.deps.includes(t.id)?icon(&#x27;check&#x27;):&#x27;&#x27;),&#x27;gc-pop-row&#x27;,&#x27;data-task=&quot;&#x27;+id+&#x27;&quot; data-dependency=&quot;&#x27;+t.id+&#x27;&quot; role=&quot;menuitemcheckbox&quot; aria-checked=&quot;&#x27;+task.deps.includes(t.id)+&#x27;&quot; &#x27;+(cycle?&#x27;disabled&#x27;:&#x27;&#x27;));
+    }).join(&#x27;&#x27;)+button(&#x27;close-pop&#x27;,&#x27;Done&#x27;,&#x27;gc-pop-row&#x27;)+&#x27;&lt;/div&gt;&#x27;;
+    icons();placePop();q(&#x27;.gc-popover button:not(:disabled)&#x27;)?.focus({preventScroll:true});
+  }
+  function allowed(){return Object.keys(abilities).filter(k=&gt;abilities[k]&amp;&amp;(k!==&#x27;documents&#x27;||attachments.length)&amp;&amp;(k!==&#x27;corpus&#x27;||corpusConfigured));}
+  function start(key,request){
+    closePop(false);stopVoice(false);nav=false;inspect=null;
+    const old=focusedRun();
+    if(old&amp;&amp;busy(old)){toast(&#x27;Pause or finish the current work before starting another request.&#x27;);return;}
+    const r=makeRun(key,mode);
+    if(request)r.question=request;
+    if(old&amp;&amp;/cost|method|check this|check one/i.test(request||&#x27;&#x27;)&amp;&amp;r.tasks.length&gt;1){
+      r.tasks=r.tasks.slice(-2);
+      r.tasks.forEach((t,i)=&gt;{t.deps=r.topology===&#x27;Chain&#x27;&amp;&amp;i?[r.tasks[i-1].id]:[];});
+    }
+    r.usedAbilities=allowed();
+    if(old&amp;&amp;old.status!==&#x27;plan&#x27;&amp;&amp;old.status!==&#x27;clarify&#x27;){r.id=old.id;r.previous=[...old.previous,{key:old.key,heading:scenarios[old.key].heading,question:old.question}].slice(-2);conversations=conversations.filter(x=&gt;x.id!==old.id);}
+    conversations.unshift(r);conversations=conversations.slice(0,7);current=r.id;r.started=true;
+    if(key===&#x27;weekend&#x27;&amp;&amp;mode===&#x27;Auto&#x27;)r.status=&#x27;clarify&#x27;;
+    q(&#x27;.gc-input&#x27;).value=&#x27;&#x27;;render();persist();schedule();
+  }
+  function inferKey(text){const t=text.toLowerCase();return /sky|sunset|blue light/.test(t)?&#x27;sky&#x27;:/pdf|chart|figure|page/.test(t)?&#x27;document&#x27;:/event|neighbour|invitation|evening/.test(t)?&#x27;event&#x27;:/guide|notes|checklist|outline/.test(t)?&#x27;guide&#x27;:/weekend|trip|train|holiday/.test(t)?&#x27;weekend&#x27;:focusedRun()?.key||(mode===&#x27;Graph&#x27;?&#x27;event&#x27;:mode===&#x27;Chain&#x27;?&#x27;guide&#x27;:&#x27;office&#x27;);}
+  function submit(){
+    const text=q(&#x27;.gc-input&#x27;).value.trim();if(!text){q(&#x27;.gc-input&#x27;).focus();return;}
+    const r=focusedRun();
+    if(busy(r)){rememberRevision(r);r.beforeEditStatus=r.status;r.status=&#x27;paused&#x27;;r.editing=true;r.editBackup=copy(r.tasks);r.pendingDirection=text;q(&#x27;.gc-input&#x27;).value=&#x27;&#x27;;render();toast(&#x27;Work paused. Revise the steps to apply your direction.&#x27;);persist();return;}
+    start(inferKey(text),text);flash(composer,{right:true,bottom:true});
+  }
+  function tickRun(r,dt){
+    if(!busy(r))return;
+    r.elapsed+=dt;
+    if(r.status===&#x27;synthesizing&#x27;){
+      r.synthesis=Math.min(1,r.synthesis+dt/7);
+      if(r.synthesis===1){r.status=&#x27;complete&#x27;;announce(&#x27;Answer ready.&#x27;);}
+      return;
+    }
+    for(const t of r.tasks){
+      if([&#x27;complete&#x27;,&#x27;cancelled&#x27;,&#x27;blocked&#x27;,&#x27;partial&#x27;].includes(t.status))continue;
+      const deps=t.deps.map(id=&gt;r.tasks.find(x=&gt;x.id===id));
+      if(deps.some(d=&gt;!d||d.status===&#x27;cancelled&#x27;||d.status===&#x27;blocked&#x27;)){t.status=&#x27;blocked&#x27;;continue;}
+      if(deps.some(d=&gt;d.status!==&#x27;complete&#x27;))continue;
+      t.status=&#x27;working&#x27;;
+      t.progress=Math.min(1,t.progress+dt/(r.topology===&#x27;Direct&#x27;?5:10+r.tasks.indexOf(t)*3));
+      if(t.progress===1)t.status=&#x27;complete&#x27;;
+    }
+    if(r.tasks.every(t=&gt;[&#x27;complete&#x27;,&#x27;cancelled&#x27;,&#x27;blocked&#x27;,&#x27;partial&#x27;].includes(t.status))){
+      if(r.tasks.every(t=&gt;t.status!==&#x27;complete&#x27;)){r.status=&#x27;stopped&#x27;;r.partial=true;return;}
+      r.partial=r.tasks.some(t=&gt;t.status!==&#x27;complete&#x27;);r.status=&#x27;synthesizing&#x27;;r.synthesis=.01;announce(&#x27;Bringing the findings together.&#x27;);
+    }
+  }
+  function livePaint(){
+    const r=focusedRun();if(!r)return;
+    const active=q(&#x27;#gc-task-panel&#x27;);
+    if(active&amp;&amp;!r.editing){
+      const t=selectedTask(r);
+      const body=active.querySelector(&#x27;[data-task-text]&#x27;);
+      if(body)body.textContent=t.text.slice(0,Math.floor(t.text.length*Math.max(0,(t.progress-.1)/.9)));
+      const status=active.querySelector(&#x27;[data-task-status]&#x27;);if(status)status.innerHTML=mark(t)+&#x27; &#x27;+esc(taskStatus(r,t));
+      const sources=active.querySelector(&#x27;.gc-sources&#x27;);if(sources&amp;&amp;t.progress&gt;.15&amp;&amp;!sources.innerHTML)sources.innerHTML=sourceButton(t);
+    }
+    const label=q(&#x27;[data-progress-label]&#x27;);if(label)label.textContent=r.tasks.filter(t=&gt;t.status===&#x27;complete&#x27;).length+&#x27; of &#x27;+r.tasks.length+&#x27; complete&#x27;;
+    const answer=q(&#x27;[data-synthesis-text]&#x27;);
+    if(answer&amp;&amp;r.synthesis&lt;1){const text=r.partial?&#x27;Some of the checks were still in progress when this was brought together. The findings below are a starting point; the remaining questions are kept with the work.&#x27;:scenarios[r.key].intro;answer.textContent=text.slice(0,Math.floor(text.length*Math.min(1,r.synthesis*1.4)));}
+  }
+  function schedule(){
+    clearTimeout(tickTimer);
+    if(!conversations.some(busy))return;
+    tickTimer=setTimeout(()=&gt;{
+      let structural=false;
+      conversations.forEach(r=&gt;{const before=r.status+&#x27;|&#x27;+r.tasks.map(t=&gt;t.status).join(&#x27;,&#x27;)+&#x27;|&#x27;+(r.synthesis&gt;.65);tickRun(r,.4);if(r.id===current&amp;&amp;before!==r.status+&#x27;|&#x27;+r.tasks.map(t=&gt;t.status).join(&#x27;,&#x27;)+&#x27;|&#x27;+(r.synthesis&gt;.65))structural=true;});
+      if(structural){renderConversation();icons();persist();}else livePaint();
+      if(conversations.some(r=&gt;busy(r)&amp;&amp;Math.floor(r.elapsed/4)&gt;(r.checkpoint||0))){conversations.forEach(r=&gt;r.checkpoint=Math.floor(r.elapsed/4));persist();}
+      schedule();
+    },400);
+  }
+  function clearFlash(){cancelAnimationFrame(lightFrame);lightFrame=0;q(&#x27;.gc-reflection&#x27;).style.opacity=&#x27;0&#x27;;}
+  function flash(surface,corner={right:false,bottom:false}){
+    clearFlash();if(motion.matches)return;
+    const canvas=q(&#x27;.gc-reflection&#x27;),box=surface.getBoundingClientRect(),w=box.width,h=box.height,pad=24,dpr=Math.min(devicePixelRatio||1,2),r=Math.min(23,h/2);
+    canvas.width=(w+pad*2)*dpr;canvas.height=(h+pad*2)*dpr;canvas.style.width=w+pad*2+&#x27;px&#x27;;canvas.style.height=h+pad*2+&#x27;px&#x27;;
+    const ctx=canvas.getContext(&#x27;2d&#x27;);if(!ctx)return;ctx.scale(dpr,dpr);ctx.translate(pad,pad);
+    const start=Math.min(h-r-7,78),vertical=Math.max(0,start-r),arc=Math.PI*r/2,total=vertical+arc+Math.min(w*.44,210)-r,tail=85,begun=performance.now();
+    function point(d){d=Math.max(0,Math.min(total,d));let x,y;if(d&lt;vertical){x=0;y=start-d;}else if(d&lt;vertical+arc){const angle=Math.PI+(d-vertical)/r;x=r+Math.cos(angle)*r;y=r+Math.sin(angle)*r;}else{x=r+d-vertical-arc;y=0;}return {x:corner.right?w-x:x,y:corner.bottom?h-y:y};}
+    function draw(now){const t=Math.min(1,(now-begun)/800);ctx.clearRect(-pad,-pad,w+pad*2,h+pad*2);if(t&gt;=1){clearFlash();return;}canvas.style.opacity=String(Math.min(1,t/.045));const head=t*(total+tail),from=Math.max(0,head-tail),to=Math.min(total,head);ctx.lineCap=&#x27;round&#x27;;
+      for(let d=from;d&lt;to;d+=2){const a=point(d),b=point(Math.min(to,d+2)),s=Math.max(0,1-(head-d)/tail),white=s**3;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=&#x27;rgba(&#x27;+Math.round(72+183*white)+&#x27;,&#x27;+Math.round(142+113*white)+&#x27;,255,&#x27;+Math.min(1,s*1.6)+&#x27;)&#x27;;ctx.lineWidth=1.8;ctx.shadowColor=&#x27;#2861ff&#x27;;ctx.shadowBlur=14*s;ctx.stroke();}ctx.shadowBlur=0;lightFrame=requestAnimationFrame(draw);}
+    lightFrame=requestAnimationFrame(draw);
+  }
+  function waveMarkup(n){return Array.from({length:n},(_,i)=&gt;&#x27;&lt;span style=&quot;height:&#x27;+(4+13*Math.sin(i*.6)**2)+&#x27;px&quot;&gt;&lt;/span&gt;&#x27;).join(&#x27;&#x27;);}
+  q(&#x27;.gc-search-wave&#x27;).innerHTML=waveMarkup(21);q(&#x27;.gc-dictation-wave&#x27;).innerHTML=waveMarkup(37);
+  function paintVoice(now){
+    voiceFrame=0;if(!voice)return;
+    const elapsed=(now-voice.start)/1000;
+    const wave=q(voice.kind===&#x27;search&#x27;?&#x27;.gc-search-wave&#x27;:&#x27;.gc-dictation-wave&#x27;);
+    if(!motion.matches)Array.from(wave.children).forEach((bar,i)=&gt;bar.style.height=(3+24*(.3+.7*Math.sin(now*.002+i*.23)**2)*Math.sin(now*.008-i*.65)**2)+&#x27;px&#x27;);
+    q(&#x27;.gc-record-time&#x27;).textContent=&#x27;0:&#x27;+String(Math.floor(elapsed)).padStart(2,&#x27;0&#x27;);
+    voiceFrame=requestAnimationFrame(paintVoice);
+  }
+  function stopVoice(insert){
+    const kind=voice?.kind;voice=null;cancelAnimationFrame(voiceFrame);voiceFrame=0;clearTimeout(voiceTimer);
+    q(&#x27;.gc-search input&#x27;).hidden=false;q(&#x27;.gc-search-wave&#x27;).hidden=true;
+    q(&#x27;[data-act=&quot;voice-search&quot;]&#x27;).innerHTML=icon(&#x27;mic&#x27;);q(&#x27;[data-act=&quot;voice-search&quot;]&#x27;).setAttribute(&#x27;aria-label&#x27;,&#x27;Start voice search preview&#x27;);
+    if(insert&amp;&amp;kind===&#x27;search&#x27;){search=&#x27;home&#x27;;q(&#x27;.gc-search input&#x27;).value=search;renderHistory();}
+    if(insert&amp;&amp;kind===&#x27;dictation&#x27;){q(&#x27;.gc-input&#x27;).value=&#x27;Help me make my home office quieter.&#x27;;q(&#x27;.gc-input&#x27;).hidden=false;q(&#x27;.gc-input&#x27;).focus({preventScroll:true});}
+    renderComposer();icons();
+  }
+  function startVoice(kind){
+    closePop(false);if(voice?.kind===kind){stopVoice(true);persist();return;}stopVoice(false);
+    voice={kind,start:performance.now()};renderComposer();
+    if(kind===&#x27;search&#x27;){q(&#x27;.gc-search input&#x27;).hidden=true;q(&#x27;.gc-search-wave&#x27;).hidden=false;q(&#x27;[data-act=&quot;voice-search&quot;]&#x27;).innerHTML=icon(&#x27;square&#x27;);q(&#x27;[data-act=&quot;voice-search&quot;]&#x27;).setAttribute(&#x27;aria-label&#x27;,&#x27;Finish voice search preview&#x27;);}
+    icons();voiceFrame=requestAnimationFrame(paintVoice);voiceTimer=setTimeout(()=&gt;{stopVoice(true);persist();},6000);
+    if(kind===&#x27;dictation&#x27;)flash(composer,{right:true,bottom:true});
+  }
+  function openInspection(kind,extra={}){closePop(false);inspect={kind,...extra};renderInspector();icons();persist();}
+  function reviseDependencies(r){if(r.topology===&#x27;Chain&#x27;)r.tasks.forEach((t,i)=&gt;t.deps=i?[r.tasks[i-1].id]:[]);}
+  function invalidate(r,id,seen=new Set()){
+    if(seen.has(id))return;seen.add(id);
+    const task=r.tasks.find(t=&gt;t.id===id);
+    if(task&amp;&amp;task.progress&gt;0){task.previousProgress=task.progress;task.status=&#x27;waiting&#x27;;task.progress=0;}
+    r.tasks.filter(t=&gt;t.deps.includes(id)).forEach(t=&gt;invalidate(r,t.id,seen));
+  }
+  root.addEventListener(&#x27;click&#x27;,e=&gt;{
+    const b=e.target.closest(&#x27;[data-act]&#x27;);if(!b)return;const a=b.dataset.act,r=focusedRun();
+    // Explicit action: sandboxed exports allow scripts, but block native form submission.
+    if(a===&#x27;send&#x27;){e.preventDefault();submit();return;}
+    if([&#x27;modes&#x27;,&#x27;abilities&#x27;,&#x27;attachments&#x27;,&#x27;thread-menu&#x27;,&#x27;discard-confirm&#x27;].includes(a)){openPop(a,b);return;}
+    if(a===&#x27;close-pop&#x27;){closePop();return;}
+    if(a===&#x27;choose-mode&#x27;){mode=b.dataset.mode;closePop();renderComposer();icons();flash(composer,{right:false,bottom:true});}
+    if(a===&#x27;configure&#x27;){configure(b.dataset.ability,b);return;}
+    if(a===&#x27;save-config&#x27;){if(b.dataset.ability===&#x27;corpus&#x27;){corpusConfigured=true;abilities.corpus=true;}closePop();toast(&#x27;Example settings applied to this preview.&#x27;);}
+    if(a===&#x27;toggle-ability&#x27;){abilities[b.dataset.ability]=!abilities[b.dataset.ability];const anchor=pop.anchor;closePop(false);openPop(&#x27;abilities&#x27;,anchor);persist();return;}
+    if(a===&#x27;attach-document&#x27;||a===&#x27;attach-notes&#x27;){const file=a===&#x27;attach-document&#x27;?&#x27;Room sound study.pdf&#x27;:&#x27;Working notes&#x27;;if(!attachments.includes(file))attachments.push(file);abilities.documents=true;closePop();if(!q(&#x27;.gc-input&#x27;).value)q(&#x27;.gc-input&#x27;).value=a===&#x27;attach-document&#x27;?&#x27;Explain the chart on page 2. Does it support the conclusion?&#x27;:&#x27;Turn these notes into a practical guide.&#x27;;renderComposer();icons();flash(composer,{right:false,bottom:false});}
+    if(a===&#x27;remove-attachment&#x27;){attachments=attachments.filter(x=&gt;x!==b.dataset.name);renderComposer();icons();}
+    if(a===&#x27;attachment-source&#x27;)openInspection(b.dataset.name===&#x27;Working notes&#x27;?&#x27;notes&#x27;:&#x27;document&#x27;,{page:1,tab:&#x27;original&#x27;,title:b.dataset.name});
+    if(a===&#x27;history&#x27;){closePop(false);nav=true;render();q(&#x27;.gc-search input&#x27;).focus({preventScroll:true});}
+    if(a===&#x27;close-history&#x27;){nav=false;stopVoice(false);render();q(&#x27;.gc-nav-trigger&#x27;).focus({preventScroll:true});}
+    if(a===&#x27;new&#x27;){closePop(false);stopVoice(false);current=null;inspect=null;nav=false;attachments=[];q(&#x27;.gc-input&#x27;).value=&#x27;&#x27;;render();}
+    if(a===&#x27;reopen&#x27;){current=b.dataset.id;nav=false;stopVoice(false);inspect=null;render();}
+    if(a===&#x27;discard&#x27;){if(r){conversations=conversations.filter(x=&gt;x.id!==r.id);current=null;}closePop(false);inspect=null;render();toast(&#x27;Conversation discarded.&#x27;);schedule();}
+    if(a===&#x27;example&#x27;){
+      const s=b.dataset.example;if(s===&#x27;Talk it through&#x27;){startVoice(&#x27;dictation&#x27;);return;}
+      const key=s===&#x27;Explain something&#x27;?&#x27;sky&#x27;:s===&#x27;Organise an evening&#x27;?&#x27;event&#x27;:s===&#x27;Turn notes into a guide&#x27;?&#x27;guide&#x27;:s===&#x27;Plan a weekend away&#x27;?&#x27;weekend&#x27;:&#x27;office&#x27;;
+      q(&#x27;.gc-input&#x27;).value=scenarios[key].question;q(&#x27;.gc-input&#x27;).focus({preventScroll:true});
+      if(key===&#x27;guide&#x27;&amp;&amp;!attachments.includes(&#x27;Working notes&#x27;))attachments.push(&#x27;Working notes&#x27;);
+      renderComposer();icons();flash(composer,{right:false,bottom:true});
+    }
+    if(a===&#x27;voice&#x27;||a===&#x27;voice-search&#x27;){startVoice(a===&#x27;voice-search&#x27;?&#x27;search&#x27;:&#x27;dictation&#x27;);return;}
+    if(a===&#x27;cancel-voice&#x27;){stopVoice(false);return;}
+    if(a===&#x27;source&#x27;)openInspection(b.dataset.kind||&#x27;web&#x27;,{tab:b.dataset.tab||(b.dataset.kind===&#x27;document&#x27;?&#x27;viewed&#x27;:&#x27;original&#x27;),page:Number(b.dataset.page)||2,title:b.dataset.title,text:b.dataset.excerpt});
+    if(a===&#x27;activity&#x27;)openInspection(&#x27;activity&#x27;);
+    if(a===&#x27;dependencies&#x27;)openInspection(&#x27;dependencies&#x27;);
+    if(a===&#x27;earlier&#x27;)openInspection(&#x27;earlier&#x27;,{key:b.dataset.key});
+    if(a===&#x27;close-inspector&#x27;){inspect=null;renderInspector();}
+    if(a===&#x27;document-tab&#x27;){inspect.tab=b.dataset.tab;inspect.page=2;renderInspector();icons();}
+    if(a===&#x27;page-prev&#x27;||a===&#x27;page-next&#x27;){inspect.page=Math.max(1,Math.min(3,inspect.page+(a===&#x27;page-prev&#x27;?-1:1)));renderInspector();icons();}
+    if(r){
+      if(a===&#x27;edit-dependencies&#x27;){
+        if(r.topology===&#x27;Chain&#x27;){toast(&#x27;In Chain mode, each step follows the one above. Reorder the steps to change the sequence.&#x27;);return;}
+        if(r.topology===&#x27;Parallel&#x27;){toast(&#x27;Parallel steps are independent. Graph mode supports dependencies.&#x27;);return;}
+        dependenciesMenu(r,b.dataset.task,b);return;
+      }
+      if(a===&#x27;toggle-dependency&#x27;){
+        const t=r.tasks.find(t=&gt;t.id===b.dataset.task),id=b.dataset.dependency,anchor=pop.anchor;
+        if(!t.deps.includes(id)&amp;&amp;dependsOn(r,id,t.id)){toast(&#x27;That dependency would create a loop.&#x27;);return;}
+        invalidate(r,t.id);
+        t.deps=t.deps.includes(id)?t.deps.filter(x=&gt;x!==id):[...t.deps,id];
+        closePop(false);renderConversation();icons();dependenciesMenu(r,t.id,q(&#x27;[data-act=&quot;edit-dependencies&quot;][data-task=&quot;&#x27;+t.id+&#x27;&quot;]&#x27;)||anchor);persist();return;
+      }
+      if(a===&#x27;task&#x27;){r.active=Math.max(0,r.tasks.findIndex(t=&gt;t.id===b.dataset.id));renderConversation();icons();}
+      if(a===&#x27;expand-work&#x27;){r.showDetails=true;r.collapsed=false;renderConversation();icons();}
+      if(a===&#x27;collapse-work&#x27;){r.collapsed=true;renderConversation();icons();}
+      if(a===&#x27;graph&#x27;){r.graph=!r.graph;renderConversation();icons();}
+      if(a===&#x27;start-plan&#x27;){r.topology=r.tasks.some(t=&gt;t.deps.length)?&#x27;Graph&#x27;:&#x27;Parallel&#x27;;r.status=&#x27;running&#x27;;r.started=true;render();schedule();}
+      if(a===&#x27;clarify&#x27;){r.question+=&#x27; &#x27;+b.dataset.text+&#x27;.&#x27;;r.status=&#x27;plan&#x27;;render();}
+      if(a===&#x27;pause&#x27;){r.resumeStatus=r.status;r.status=&#x27;paused&#x27;;render();schedule();announce(&#x27;Paused. Progress saved.&#x27;);}
+      if(a===&#x27;resume&#x27;){r.status=r.resumeStatus|| (r.synthesis&gt;0?&#x27;synthesizing&#x27;:&#x27;running&#x27;);r.started=true;render();schedule();}
+      if(a===&#x27;stop&#x27;){r.resumeStatus=r.status===&#x27;paused&#x27;?r.resumeStatus:r.status;r.status=&#x27;stopped&#x27;;r.editing=false;r.collapsed=false;render();schedule();announce(&#x27;Stopped. Partial work saved.&#x27;);}
+      if(a===&#x27;finish&#x27;){
+        if(!r.tasks.some(t=&gt;t.progress&gt;.2)){toast(&#x27;There are no findings to combine yet. Let the first check develop, or stop and keep the request.&#x27;);return;}
+        r.tasks.forEach(t=&gt;{if(![&#x27;complete&#x27;,&#x27;cancelled&#x27;,&#x27;blocked&#x27;].includes(t.status))t.status=t.progress&gt;.2?&#x27;partial&#x27;:&#x27;cancelled&#x27;;});
+        r.finishing=true;r.partial=r.tasks.some(t=&gt;t.status!==&#x27;complete&#x27;);r.status=&#x27;synthesizing&#x27;;r.synthesis=Math.max(.01,r.synthesis);render();schedule();
+      }
+      if(a===&#x27;cancel-task&#x27;){const t=r.tasks.find(x=&gt;x.id===b.dataset.task);if(t)t.status=&#x27;cancelled&#x27;;r.tasks.filter(x=&gt;x.deps.includes(t.id)).forEach(x=&gt;x.status=&#x27;blocked&#x27;);render();schedule();}
+      if(a===&#x27;shorter&#x27;){r.short=!r.short;renderConversation();icons();}
+      if(a===&#x27;edit-plan&#x27;){rememberRevision(r);r.editBackup=copy(r.tasks);r.beforeEditStatus=r.status;r.status=&#x27;paused&#x27;;r.editing=true;render();schedule();}
+      if(a===&#x27;cancel-edit&#x27;){r.tasks=r.editBackup||r.tasks;r.editing=false;r.status=r.beforeEditStatus||&#x27;paused&#x27;;delete r.editBackup;render();schedule();}
+      if(a===&#x27;apply-plan&#x27;){r.editing=false;r.revision++;if(r.pendingDirection){r.question=r.pendingDirection;delete r.pendingDirection;}r.tasks.forEach(t=&gt;{if(t.status===&#x27;blocked&#x27;&amp;&amp;t.deps.every(id=&gt;r.tasks.some(x=&gt;x.id===id&amp;&amp;x.status!==&#x27;cancelled&#x27;)))t.status=&#x27;waiting&#x27;;});r.status=&#x27;running&#x27;;r.synthesis=0;r.started=true;delete r.editBackup;render();schedule();}
+      if(a===&#x27;move-up&#x27;){const i=r.tasks.findIndex(t=&gt;t.id===b.dataset.task);if(i&gt;0){[r.tasks[i-1],r.tasks[i]]=[r.tasks[i],r.tasks[i-1]];reviseDependencies(r);}renderConversation();icons();}
+      if(a===&#x27;remove-step&#x27;){invalidate(r,b.dataset.task);r.tasks=r.tasks.filter(t=&gt;t.id!==b.dataset.task);reviseDependencies(r);r.active=Math.min(r.active,r.tasks.length-1);renderConversation();icons();}
+      if(a===&#x27;add-step&#x27;){const id=&#x27;t&#x27;+r.nextId++;r.tasks.push({id,title:&#x27;Check one more detail&#x27;,tab:&#x27;Check&#x27;,purpose:&#x27;Check one more detail&#x27;,text:&#x27;This added check develops alongside the revised work. Its finding stays with this conversation.&#x27;,source:&#x27;Additional check&#x27;,sourceIcon:&#x27;file-search&#x27;,deps:[],status:&#x27;waiting&#x27;,progress:0,custom:true});reviseDependencies(r);renderConversation();icons();q(&#x27;[data-edit=&quot;&#x27;+id+&#x27;&quot;]&#x27;)?.focus();}
+      if(a===&#x27;followup&#x27;){
+        const text=b.dataset.text;
+        if(/shorter/i.test(text)){r.short=true;renderConversation();icons();}
+        else if(/remaining checks/i.test(text)){r.tasks.forEach(t=&gt;{if(t.status===&#x27;partial&#x27;||t.status===&#x27;cancelled&#x27;){t.status=&#x27;waiting&#x27;;}});r.partial=false;r.finishing=false;r.synthesis=0;r.status=&#x27;running&#x27;;r.collapsed=false;render();schedule();}
+        else if(/show the work/i.test(text)){r.showDetails=true;r.collapsed=false;renderConversation();icons();}
+        else if(/figure/i.test(text))openInspection(&#x27;document&#x27;,{tab:&#x27;viewed&#x27;,page:2});
+        else if(/dependencies/i.test(text))openInspection(&#x27;dependencies&#x27;);
+        else if(/outline/i.test(text))openInspection(&#x27;activity&#x27;);
+        else if(/files/i.test(text)){abilities.web=false;abilities.wikipedia=false;if(!attachments.length)attachments.push(&#x27;Room sound study.pdf&#x27;);abilities.documents=true;q(&#x27;.gc-input&#x27;).value=&#x27;Check this using only the attached document.&#x27;;renderComposer();icons();toast(&#x27;Web and Wikipedia left out of the next request.&#x27;);}
+        else {q(&#x27;.gc-input&#x27;).value=text;q(&#x27;.gc-input&#x27;).focus({preventScroll:true});flash(composer,{right:false,bottom:true});}
+      }
+    }
+    persist();
+  });
+  root.addEventListener(&#x27;input&#x27;,e=&gt;{
+    if(e.target.matches(&#x27;.gc-search input&#x27;)){search=e.target.value;renderHistory();icons();}
+    if(e.target.dataset.edit){const r=focusedRun(),t=r?.tasks.find(x=&gt;x.id===e.target.dataset.edit);if(t){invalidate(r,t.id);t.title=e.target.value;t.tab=e.target.value.length&gt;22?e.target.value.slice(0,21)+&#x27;…&#x27;:e.target.value;t.purpose=e.target.value;t.custom=true;}}
+    if(e.target.dataset.check!==undefined){const r=focusedRun(),i=Number(e.target.dataset.check);if(r)r.checked=e.target.checked?[...(r.checked||[]),i]:(r.checked||[]).filter(x=&gt;x!==i);}
+  });
+  root.addEventListener(&#x27;change&#x27;,persist);
+  let dragId=null;
+  root.addEventListener(&#x27;dragstart&#x27;,e=&gt;{const row=e.target.closest(&#x27;[data-task-id]&#x27;);if(row){dragId=row.dataset.taskId;e.dataTransfer?.setData(&#x27;text/plain&#x27;,dragId);}});
+  root.addEventListener(&#x27;dragover&#x27;,e=&gt;{if(e.target.closest(&#x27;[data-task-id]&#x27;))e.preventDefault();});
+  root.addEventListener(&#x27;drop&#x27;,e=&gt;{const row=e.target.closest(&#x27;[data-task-id]&#x27;),r=focusedRun();if(row&amp;&amp;r&amp;&amp;dragId){e.preventDefault();const i=r.tasks.findIndex(t=&gt;t.id===dragId),j=r.tasks.findIndex(t=&gt;t.id===row.dataset.taskId);if(i&gt;=0&amp;&amp;j&gt;=0){r.tasks.splice(j,0,r.tasks.splice(i,1)[0]);reviseDependencies(r);renderConversation();icons();persist();}}dragId=null;});
+  composer.addEventListener(&#x27;submit&#x27;,e=&gt;{e.preventDefault();submit();});
+  q(&#x27;.gc-input&#x27;).addEventListener(&#x27;keydown&#x27;,e=&gt;{if(e.key===&#x27;Enter&#x27;&amp;&amp;!e.shiftKey&amp;&amp;!e.isComposing){e.preventDefault();submit();}});
+  root.addEventListener(&#x27;keydown&#x27;,e=&gt;{
+    if(e.key===&#x27;Escape&#x27;){if(pop)closePop();else if(voice)stopVoice(false);else if(nav){nav=false;render();q(&#x27;.gc-nav-trigger&#x27;).focus({preventScroll:true});}else if(inspect){inspect=null;renderInspector();}persist();}
+    if(pop&amp;&amp;[&#x27;ArrowDown&#x27;,&#x27;ArrowUp&#x27;,&#x27;Home&#x27;,&#x27;End&#x27;].includes(e.key)&amp;&amp;!e.target.matches(&#x27;input,textarea&#x27;)){
+      const items=Array.from(q(&#x27;.gc-popover&#x27;).querySelectorAll(&#x27;button:not(:disabled)&#x27;)),i=items.indexOf(document.activeElement);
+      const n=e.key===&#x27;Home&#x27;?0:e.key===&#x27;End&#x27;?items.length-1:(i+(e.key===&#x27;ArrowDown&#x27;?1:-1)+items.length)%items.length;items[n]?.focus();e.preventDefault();
+    }
+    if(e.target.matches(&#x27;[role=&quot;tab&quot;][data-act=&quot;task&quot;]&#x27;)&amp;&amp;[&#x27;ArrowLeft&#x27;,&#x27;ArrowRight&#x27;,&#x27;Home&#x27;,&#x27;End&#x27;].includes(e.key)){
+      const items=qa(&#x27;[role=&quot;tab&quot;][data-act=&quot;task&quot;]&#x27;),i=items.indexOf(e.target);
+      const n=e.key===&#x27;Home&#x27;?0:e.key===&#x27;End&#x27;?items.length-1:(i+(e.key===&#x27;ArrowRight&#x27;?1:-1)+items.length)%items.length;
+      const id=items[n].dataset.id;items[n].click();q(&#x27;[role=&quot;tab&quot;][data-id=&quot;&#x27;+id+&#x27;&quot;]&#x27;)?.focus({preventScroll:true});e.preventDefault();
+    }
+    if(e.key===&#x27;Tab&#x27;&amp;&amp;nav){const items=Array.from(q(&#x27;.gc-rail&#x27;).querySelectorAll(&#x27;button,input&#x27;)).filter(el=&gt;!el.hidden),first=items[0],last=items[items.length-1];if(e.shiftKey&amp;&amp;document.activeElement===first){last.focus();e.preventDefault();}else if(!e.shiftKey&amp;&amp;document.activeElement===last){first.focus();e.preventDefault();}}
+  });
+  document.addEventListener(&#x27;pointerdown&#x27;,e=&gt;{if(pop&amp;&amp;!q(&#x27;.gc-popover&#x27;)?.contains(e.target)&amp;&amp;!pop.anchor?.contains(e.target))closePop(false);});
+  composer.addEventListener(&#x27;pointerdown&#x27;,e=&gt;{if(!e.target.closest(&#x27;button&#x27;)){const box=composer.getBoundingClientRect();flash(composer,{right:e.clientX&gt;box.left+box.width/2,bottom:e.clientY&gt;box.top+box.height/2});}});
+  composer.addEventListener(&#x27;focusin&#x27;,e=&gt;{if(!composer.contains(e.relatedTarget))flash(composer,{right:false,bottom:false});});
+  window.addEventListener(&#x27;resize&#x27;,()=&gt;{clearFlash();placePop();});
+  motion.addEventListener(&#x27;change&#x27;,clearFlash);
+  window.addEventListener(&#x27;pagehide&#x27;,()=&gt;{clearTimeout(tickTimer);clearTimeout(toastTimer);stopVoice(false);clearFlash();});
+  window.addEventListener(&#x27;openai:set_globals&#x27;,e=&gt;{const s=e.detail?.globals?.widgetState?.privateContent;if(s?.version===version){const signature=JSON.stringify(s);if(signature===stateSignature)return;stateSignature=signature;clearTimeout(tickTimer);closePop(false);stopVoice(false);restore(s);render();schedule();}});
+  render();schedule();
+  if(globalThis.Tweak){
+    const settings={scene:&#x27;Arrival&#x27;};
+    const tweak=new Tweak({container:root,onChange:()=&gt;{
+      closePop(false);stopVoice(false);nav=false;inspect=null;
+      if(settings.scene===&#x27;Arrival&#x27;){current=null;render();persist();return;}
+      const setup={Plan:[&#x27;weekend&#x27;,&#x27;Plan&#x27;,&#x27;plan&#x27;],Parallel:[&#x27;office&#x27;,&#x27;Parallel&#x27;,&#x27;running&#x27;],Chain:[&#x27;guide&#x27;,&#x27;Chain&#x27;,&#x27;running&#x27;],Graph:[&#x27;event&#x27;,&#x27;Graph&#x27;,&#x27;running&#x27;],Document:[&#x27;document&#x27;,&#x27;Auto&#x27;,&#x27;complete&#x27;],Paused:[&#x27;event&#x27;,&#x27;Graph&#x27;,&#x27;paused&#x27;],Stopped:[&#x27;office&#x27;,&#x27;Parallel&#x27;,&#x27;stopped&#x27;],Answer:[&#x27;office&#x27;,&#x27;Parallel&#x27;,&#x27;complete&#x27;],Clarification:[&#x27;weekend&#x27;,&#x27;Auto&#x27;,&#x27;clarify&#x27;]}[settings.scene];
+      if(setup){const r=makeRun(...setup);r.started=true;if([&#x27;paused&#x27;,&#x27;stopped&#x27;].includes(r.status)){r.tasks[0].progress=1;r.tasks[0].status=&#x27;complete&#x27;;r.tasks[1].progress=.6;r.tasks[1].status=&#x27;working&#x27;;}conversations.unshift(r);conversations=conversations.slice(0,7);current=r.id;mode=r.mode;if(settings.scene===&#x27;Document&#x27;){attachments=[&#x27;Room sound study.pdf&#x27;];inspect={kind:&#x27;document&#x27;,tab:&#x27;viewed&#x27;,page:2};}render();schedule();persist();}
+    }});
+    tweak.addSelect(settings,&#x27;scene&#x27;,{label:&#x27;Moment&#x27;,options:[&#x27;Arrival&#x27;,&#x27;Plan&#x27;,&#x27;Parallel&#x27;,&#x27;Chain&#x27;,&#x27;Graph&#x27;,&#x27;Document&#x27;,&#x27;Paused&#x27;,&#x27;Stopped&#x27;,&#x27;Answer&#x27;,&#x27;Clarification&#x27;]});
+  }
+})();
+&lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (event) =&gt; {
+    for (const target of event.composedPath()) {
+      if (target?.nodeType === Node.ELEMENT_NODE) {
+        const trigger = target.closest(&quot;[data-tooltip]&quot;);
+        if (trigger) return trigger;
+      }
+    }
+    return null;
+  };
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handlers = {
+    pointerover: handlePointerOpen,
+    pointerdown: handlePointer,
+    pointercancel: handlePointer,
+    click: handleTouchClick,
+    pointerout: handleLeave,
+    focusin: handleFocusIn,
+    focusout: handleLeave,
+    keydown: handleKeyDown,
+    contextmenu: handleContextMenu,
+  };
+  const roots = new Map();
+  const handledEvents = new WeakSet();
+  const handleEvent = (event) =&gt; {
+    if (handledEvents.has(event)) return;
+    handledEvents.add(event);
+    handlers[event.type](event);
+  };
+  const discoverRoots = (node) =&gt; {
+    if (node.shadowRoot) listen(node.shadowRoot);
+    for (const element of node.querySelectorAll(&quot;*&quot;)) {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    }
+  };
+  const listen = (root) =&gt; {
+    if (roots.has(root)) return;
+    for (const type of Object.keys(handlers)) root.addEventListener(type, handleEvent);
+    const observer = new window.MutationObserver((records) =&gt; {
+      for (const { addedNodes } of records) {
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) discoverRoots(node);
+        }
+      }
+      for (const [root, cleanup] of roots) {
+        if (root.host &amp;&amp; !root.host.isConnected) {
+          cleanup();
+          roots.delete(root);
+        }
+      }
+      if (activeTrigger &amp;&amp; !activeTrigger.isConnected) closeTooltip(false);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    roots.set(root, () =&gt; {
+      observer.disconnect();
+      for (const type of Object.keys(handlers)) root.removeEventListener(type, handleEvent);
+    });
+    discoverRoots(root);
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    for (const cleanup of roots.values()) cleanup();
+    roots.clear();
+    tooltip = null;
+  };
+
+  // Events between children of one shadow root never reach the document.
+  listen(document);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-carousel&quot;&gt;
+  (() =&gt; {
+    for (const root of document.querySelectorAll(&quot;.viz-carousel&quot;)) {
+      const panels = Array.from(
+        root.querySelectorAll(&quot;:scope &gt; [data-variant]&quot;),
+      );
+      if (panels.length === 0) {
+        continue;
+      }
+      root.setAttribute(&quot;role&quot;, &quot;group&quot;);
+      panels.forEach((panel, index) =&gt; {
+        panel.hidden = index !== 0;
+        panel.setAttribute(&quot;role&quot;, &quot;group&quot;);
+        if (!panel.hasAttribute(&quot;aria-label&quot;)) {
+          panel.setAttribute(&quot;aria-label&quot;, panel.dataset.variant);
+        }
+      });
+      root.dataset.activeVariant = panels[0].dataset.variant;
+      if (panels.length === 1) {
+        continue;
+      }
+
+      const controls = document.createElement(&quot;div&quot;);
+      controls.className = &quot;viz-carousel-controls&quot;;
+      // Portable copy of the settings dropdown&#x27;s legacy glyph; no 14px icon-package preset matches it.
+      // https://github.com/openai/openai/blob/master/codex/codex-apps/webview/src/icons/chevron.svg
+      controls.innerHTML = `
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-previous cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-left&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;details class=&quot;viz-carousel-picker&quot;&gt;
+        &lt;summary class=&quot;cursor-interaction&quot;&gt;
+          &lt;span class=&quot;viz-carousel-count tabular-nums&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;viz-carousel-name&quot;&gt;&lt;/span&gt;
+          &lt;svg class=&quot;viz-carousel-caret&quot; width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 20 21&quot; fill=&quot;none&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;&gt;
+            &lt;path d=&quot;M15.2793 7.71101C15.539 7.45131 15.961 7.45131 16.2207 7.71101C16.4804 7.97071 16.4804 8.39272 16.2207 8.65242L10.4707 14.4024C10.211 14.6621 9.78902 14.6621 9.52932 14.4024L3.77932 8.65242L3.69436 8.54792C3.52385 8.28979 3.55205 7.93828 3.77932 7.71101C4.00659 7.48374 4.3581 7.45554 4.61623 7.62605L4.72073 7.71101L10 12.9903L15.2793 7.71101Z&quot; fill=&quot;currentColor&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;0.6&quot; /&gt;
+          &lt;/svg&gt;
+        &lt;/summary&gt;
+        &lt;div class=&quot;viz-carousel-options&quot;&gt;&lt;/div&gt;
+      &lt;/details&gt;
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-next cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-right&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;`;
+      const previous = controls.querySelector(&quot;.viz-carousel-previous&quot;);
+      const next = controls.querySelector(&quot;.viz-carousel-next&quot;);
+      const picker = controls.querySelector(&quot;.viz-carousel-picker&quot;);
+      const summary = picker.querySelector(&quot;summary&quot;);
+      const count = controls.querySelector(&quot;.viz-carousel-count&quot;);
+      const name = controls.querySelector(&quot;.viz-carousel-name&quot;);
+      const options = controls.querySelector(&quot;.viz-carousel-options&quot;);
+      const status = document.createElement(&quot;span&quot;);
+      status.className = &quot;sr-only&quot;;
+      status.setAttribute(&quot;role&quot;, &quot;status&quot;);
+      status.setAttribute(&quot;aria-live&quot;, &quot;polite&quot;);
+      status.setAttribute(&quot;aria-atomic&quot;, &quot;true&quot;);
+      previous.setAttribute(
+        &quot;aria-label&quot;,
+        root.dataset.previousLabel ?? &quot;Previous variant&quot;,
+      );
+      next.setAttribute(&quot;aria-label&quot;, root.dataset.nextLabel ?? &quot;Next variant&quot;);
+
+      let active = 0;
+      let mousePointerId = null;
+      let summaryPointerHandled = false;
+      summary.addEventListener(&quot;pointerdown&quot;, (event) =&gt; {
+        summaryPointerHandled =
+          event.pointerType === &quot;mouse&quot; &amp;&amp; event.button === 0 &amp;&amp; !event.ctrlKey;
+        if (!summaryPointerHandled) {
+          return;
+        }
+        event.preventDefault();
+        summary.focus({ preventScroll: true });
+        picker.open = !picker.open;
+        mousePointerId = picker.open ? event.pointerId : null;
+      });
+      summary.addEventListener(&quot;click&quot;, (event) =&gt; {
+        if (summaryPointerHandled &amp;&amp; event.detail &gt; 0) {
+          event.preventDefault();
+        }
+      });
+      const choices = panels.map((panel, index) =&gt; {
+        const choice = document.createElement(&quot;button&quot;);
+        choice.type = &quot;button&quot;;
+        choice.className = &quot;cursor-interaction&quot;;
+        choice.textContent = panel.dataset.variant;
+        choice.addEventListener(&quot;click&quot;, () =&gt; {
+          select(index);
+          summary.focus();
+        });
+        choice.addEventListener(&quot;pointerup&quot;, (event) =&gt; {
+          if (
+            picker.open &amp;&amp;
+            event.pointerType === &quot;mouse&quot; &amp;&amp;
+            event.button === 0 &amp;&amp;
+            event.pointerId === mousePointerId
+          ) {
+            choice.click();
+          }
+        });
+        options.appendChild(choice);
+        return choice;
+      });
+      const select = (index) =&gt; {
+        const changed = active !== index;
+        active = index;
+        panels.forEach((panel, position) =&gt; {
+          panel.hidden = position !== active;
+          choices[position].setAttribute(
+            &quot;aria-current&quot;,
+            String(position === active),
+          );
+        });
+        root.dataset.activeVariant = panels[active].dataset.variant;
+        count.textContent = `${active + 1} / ${panels.length}`;
+        name.textContent = panels[active].dataset.variant;
+        picker.open = false;
+        mousePointerId = null;
+        if (changed) {
+          status.textContent = `${count.textContent}: ${name.textContent}`;
+        }
+      };
+      previous.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + panels.length - 1) % panels.length),
+      );
+      next.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + 1) % panels.length),
+      );
+      picker.addEventListener(&quot;keydown&quot;, (event) =&gt; {
+        if (event.key === &quot;Escape&quot; &amp;&amp; picker.open) {
+          event.preventDefault();
+          picker.open = false;
+          mousePointerId = null;
+          summary.focus();
+          return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+        const index = choices.indexOf(document.activeElement);
+        let nextIndex;
+        if (event.key === &quot;ArrowDown&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + 1) % choices.length;
+        } else if (event.key === &quot;ArrowUp&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + choices.length - 1) % choices.length;
+        } else if (picker.open &amp;&amp; event.key === &quot;Home&quot;) {
+          nextIndex = 0;
+        } else if (picker.open &amp;&amp; event.key === &quot;End&quot;) {
+          nextIndex = choices.length - 1;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        picker.open = true;
+        choices[nextIndex].focus();
+      });
+      picker.addEventListener(&quot;focusout&quot;, (event) =&gt; {
+        if (!picker.contains(event.relatedTarget)) {
+          picker.open = false;
+          mousePointerId = null;
+        }
+      });
+      const dismiss = (event) =&gt; {
+        if (!summary.contains(event.target)) {
+          mousePointerId = null;
+        }
+        if (!picker.contains(event.target)) {
+          picker.open = false;
+        }
+      };
+      const endPointerSelection = () =&gt; {
+        mousePointerId = null;
+      };
+      const sizePicker = () =&gt; {
+        root.style.setProperty(
+          &quot;--viz-carousel-picker-height&quot;,
+          `${picker.open ? options.offsetHeight : 0}px`,
+        );
+      };
+      picker.addEventListener(&quot;toggle&quot;, sizePicker);
+      window.addEventListener(&quot;resize&quot;, sizePicker);
+      document.addEventListener(&quot;pointerdown&quot;, dismiss);
+      document.addEventListener(&quot;pointerup&quot;, endPointerSelection);
+      document.addEventListener(&quot;pointercancel&quot;, endPointerSelection);
+      window.addEventListener(&quot;blur&quot;, endPointerSelection);
+      window.addEventListener(
+        &quot;pagehide&quot;,
+        () =&gt; {
+          document.removeEventListener(&quot;pointerdown&quot;, dismiss);
+          document.removeEventListener(&quot;pointerup&quot;, endPointerSelection);
+          document.removeEventListener(&quot;pointercancel&quot;, endPointerSelection);
+          window.removeEventListener(&quot;blur&quot;, endPointerSelection);
+          window.removeEventListener(&quot;resize&quot;, sizePicker);
+        },
+        { once: true },
+      );
+      root.append(controls, status);
+      select(0);
+    }
+  })();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  let viewportHeight = globalThis.innerHeight;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height >= 0 &&
+        height <= 10_000
+      ) {
+        frame.style.height = Math.ceil(height) + "px";
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!Number.isFinite(height) || height <= viewportHeight) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  frame.srcdoc = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>

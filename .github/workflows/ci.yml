@@ -130,6 +130,35 @@ jobs:
           node ../bin/run.js install lloyal/web
           npx tsc --noEmit
 
+  # Glass has its own conversation contracts, renderer assets and declared services.
+  # Exercise the actual registry scaffold, not just files in templates/.
+  glass-template:
+    name: Glass scaffold (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build
+      - run: node bin/run.js new glass-smoke --yes --targets cli,desktop,web --template glass
+      - run: npm install
+        working-directory: glass-smoke
+      - run: npm run typecheck
+        working-directory: glass-smoke
+      - run: npm test
+        working-directory: glass-smoke
+      - run: npm run build:web
+        working-directory: glass-smoke
+      - run: npm run build:desktop
+        working-directory: glass-smoke
+
   # `lloyal publish` needs a registered publisher, so CI cannot run it end to end
   # — which is exactly how a broken `npm pack` shipped in the PR that fixed the
   # other two call sites: the import landed, the call site did not, and no test

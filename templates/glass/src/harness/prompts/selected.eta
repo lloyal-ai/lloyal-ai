@@ -1,0 +1,4 @@
+The person selected this part of an accepted answer (turn <%= it.selection.turnId %>, unit <%= it.selection.unit %>):
+<%= it.selection.text %>
+Their follow-up about that selection:
+<%= it.query %>

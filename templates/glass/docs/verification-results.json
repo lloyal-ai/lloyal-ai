@@ -1,0 +1,1181 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14",
+  "scope": "Selected controlled fixtures; no general benchmark claim. Raw local events include model content and are excluded from source control.",
+  "timingNote": "Early receipts counted initial generation (including thinking); current helper counts plan or visible answer. Do not aggregate these as one latency series.",
+  "invariantTests": {
+    "pass": 37,
+    "fail": 0
+  },
+  "models": [
+    {
+      "file": "models/llm/qwen3.5-4b.gguf",
+      "bytes": 2740937888,
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
+    },
+    {
+      "file": "models/reranker/qwen3-reranker-0.6b-q8.gguf",
+      "bytes": 639153184,
+      "sha256": "22c9979ce4fbcdc5acdc310c6641c32797eff1aa980b8f7a2db8a8ea23429a48"
+    },
+    {
+      "file": "models/transcription/qwen3-asr-0.6b-q8.gguf",
+      "bytes": 804749248,
+      "sha256": "bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971"
+    },
+    {
+      "file": "models/transcription.projector/qwen3-asr-0.6b-mmproj-q8.gguf",
+      "bytes": 214392480,
+      "sha256": "41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d"
+    },
+    {
+      "file": "models/vision/qwen3.5-4b-mmproj.gguf",
+      "bytes": 672423616,
+      "sha256": "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864"
+    }
+  ],
+  "nativeJourneys": [
+    {
+      "receipt": "2026-10-13T19-29-31-356Z-plan.json",
+      "sha256": "a2f194731af3340a785a161c6443c6e8da80ee3d31a460b6e92645829bfbcbed",
+      "note": "Plan completed the requested three-sentence explanation.",
+      "seed": null,
+      "mode": "Plan",
+      "query": "Plan two independent explanations of a rainbow for a curious ten-year-old, then combine them into three sentences. Use general knowledge only.",
+      "durationMs": 21864,
+      "firstUsefulMs": 9730,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Rainbows form when sunlight enters water droplets in the air, bends, reflects, and separates into its colorful components. Each raindrop acts like a tiny prism, splitting white sunlight into the familiar colors of the rainbow. When you see a rainbow, you're witnessing millions of these tiny prisms working together to create that beautiful arc of colors.",
+      "payload": {
+        "kind": "prose",
+        "result": "Rainbows form when sunlight enters water droplets in the air, bends, reflects, and separates into its colorful components. Each raindrop acts like a tiny prism, splitting white sunlight into the familiar colors of the rainbow. When you see a rainbow, you're witnessing millions of these tiny prisms working together to create that beautiful arc of colors.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-39-00-381Z-parallel.json",
+      "sha256": "e7a15b2c78ac9be31b0fd2c291f5da74d4b1fe471703cf85787763c41d1d7051",
+      "note": "Counterexample: unnecessary unsupported numeric weighting in a qualitative comparison.",
+      "seed": null,
+      "mode": "Parallel",
+      "query": "Compare paper books and e-readers for a daily commuter in a concise table. Consider portability and reading comfort independently, then combine. Use general knowledge only and avoid model-specific specifications.",
+      "durationMs": 27541,
+      "firstUsefulMs": 9781,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Comparison of paper books and e-readers for daily commuters across portability, reading comfort, and combined assessment\n\n| Factor | Paper Books | E-readers | Assessment |\n| --- | --- | --- | --- |\n| Portability - Weight | 1-2 lbs per book | 7-10 oz (single device) | E-readers win - much lighter |\n| Portability - Storage | Limited by physical space (1-5 books) | Unlimited in device capacity | E-readers win - carries entire library |\n| Portability - Power | None required | Requires charging access | Paper books win - no battery needed |\n| Portability - Bulk | Bulky, takes significant bag space | Compact, fits small bags | E-readers win - minimal bulk |\n| Comfort - Visual Strain | No screen glare | Potential digital eye strain | Paper books win - no screen issues |\n| Comfort - Text Customization | Fixed size | Adjustable font/spacing | E-readers win - customizable |\n| Comfort - Lighting | Works in all light conditions | Needs backlight in dark | Paper books win - no lighting dependency |\n| Comfort - Physical Feel | Natural paper texture | E-ink mimics paper | Paper books win - natural reading experience |\n| Combined Recommendation | Better for focused reading sessions | Better for long commutes and frequent switching | E-readers for convenience; paper for comfort |",
+      "payload": {
+        "kind": "table",
+        "result": "Comparison of paper books and e-readers for daily commuters across portability, reading comfort, and combined assessment",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Factor",
+            "Paper Books",
+            "E-readers",
+            "Assessment"
+          ],
+          "rows": [
+            [
+              "Portability - Weight",
+              "1-2 lbs per book",
+              "7-10 oz (single device)",
+              "E-readers win - much lighter"
+            ],
+            [
+              "Portability - Storage",
+              "Limited by physical space (1-5 books)",
+              "Unlimited in device capacity",
+              "E-readers win - carries entire library"
+            ],
+            [
+              "Portability - Power",
+              "None required",
+              "Requires charging access",
+              "Paper books win - no battery needed"
+            ],
+            [
+              "Portability - Bulk",
+              "Bulky, takes significant bag space",
+              "Compact, fits small bags",
+              "E-readers win - minimal bulk"
+            ],
+            [
+              "Comfort - Visual Strain",
+              "No screen glare",
+              "Potential digital eye strain",
+              "Paper books win - no screen issues"
+            ],
+            [
+              "Comfort - Text Customization",
+              "Fixed size",
+              "Adjustable font/spacing",
+              "E-readers win - customizable"
+            ],
+            [
+              "Comfort - Lighting",
+              "Works in all light conditions",
+              "Needs backlight in dark",
+              "Paper books win - no lighting dependency"
+            ],
+            [
+              "Comfort - Physical Feel",
+              "Natural paper texture",
+              "E-ink mimics paper",
+              "Paper books win - natural reading experience"
+            ],
+            [
+              "Combined Recommendation",
+              "Better for focused reading sessions",
+              "Better for long commutes and frequent switching",
+              "E-readers for convenience; paper for comfort"
+            ]
+          ]
+        }
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-41-17-367Z-chain.json",
+      "sha256": "b2c917430c1a520ca12b7da32ba0118205137cedf9c7f737efe044f124153123",
+      "note": "Chain: area 40 square metres; cost 800.",
+      "seed": null,
+      "mode": "Chain",
+      "query": "Starting with a rectangle 8 metres long and 5 metres wide, first calculate its area, then calculate the cost of flooring it at 20 dollars per square metre. Give the calculations and total cost concisely. Use only the supplied facts.",
+      "durationMs": 16445,
+      "firstUsefulMs": 7618,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Starting with a rectangle that is 8 metres long and 5 metres wide, the area was calculated using the standard formula: length \u00d7 width. This gives 8 m \u00d7 5 m = 40 square metres.\n\nUsing this area to determine the total flooring cost, the rate provided was 20 dollars per square metre. Multiplying the total area by the cost per unit area: 40 m\u00b2 \u00d7 $20/m\u00b2 = $800.\n\nThe total cost for flooring the entire rectangle is $800.",
+      "payload": {
+        "kind": "prose",
+        "result": "Starting with a rectangle that is 8 metres long and 5 metres wide, the area was calculated using the standard formula: length \u00d7 width. This gives 8 m \u00d7 5 m = 40 square metres.\n\nUsing this area to determine the total flooring cost, the rate provided was 20 dollars per square metre. Multiplying the total area by the cost per unit area: 40 m\u00b2 \u00d7 $20/m\u00b2 = $800.\n\nThe total cost for flooring the entire rectangle is $800.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-41-33-943Z-graph.json",
+      "sha256": "a89c32a133d7f329a356755d2d40bbf5849b0b074bfcad0616c10288de7a9444",
+      "note": "Graph: totals 140 and 135; difference 5.",
+      "seed": null,
+      "mode": "Graph",
+      "query": "Plan a dependency graph to compare two quotes for the same job: Quote A is 4 hours at 30 dollars per hour plus 20 dollars in materials; Quote B is 5 hours at 25 dollars per hour plus 10 dollars in materials. Calculate the quotes independently and then compare their totals. Use only the supplied facts and give a concise answer.",
+      "durationMs": 17512,
+      "firstUsefulMs": 9672,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Here is the comparison of Quote A and Quote B for the same job, with calculated totals and a recommendation.\n\n| Quote | Labor Cost | Materials | Total Cost | Difference |\n| --- | --- | --- | --- | --- |\n| Quote A | $120 | $20 | $140 | $5 more than B |\n| Quote B | $125 | $10 | $135 | $5 less than A |",
+      "payload": {
+        "kind": "table",
+        "result": "Here is the comparison of Quote A and Quote B for the same job, with calculated totals and a recommendation.",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Quote",
+            "Labor Cost",
+            "Materials",
+            "Total Cost",
+            "Difference"
+          ],
+          "rows": [
+            [
+              "Quote A",
+              "$120",
+              "$20",
+              "$140",
+              "$5 more than B"
+            ],
+            [
+              "Quote B",
+              "$125",
+              "$10",
+              "$135",
+              "$5 less than A"
+            ]
+          ]
+        }
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-45-23-270Z-direct.json",
+      "sha256": "ef827f7d3f06458434e912efe8393c8abb1a7d297ce663fd469346085471e774",
+      "note": "PDF text: 45 parcels and a page citation.",
+      "seed": null,
+      "mode": "Direct",
+      "query": "Read the attached document. How many parcels did Cedar and Willow carry together on Monday? Cite the page and answer in one sentence.",
+      "durationMs": 5493,
+      "firstUsefulMs": 411,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Cedar and Willow carried a combined total of 45 parcels together on Monday.\n\nSources:\n- [A small delivery study](attachment://bdfae350a554/page/1)",
+      "payload": {
+        "kind": "prose",
+        "result": "Cedar and Willow carried a combined total of 45 parcels together on Monday.\n\nSources:\n- [A small delivery study](attachment://bdfae350a554/page/1)",
+        "sources": [
+          {
+            "title": "A small delivery study",
+            "url": "attachment://bdfae350a554/page/1"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "search_documents"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "read_document"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-45-28-975Z-direct.json",
+      "sha256": "11ffee331e03eb30a0547f03a7685b7b64494061fc0a35296b158c279cbf9fb7",
+      "note": "Framework limitation: vector-only second page rejected as text-only.",
+      "seed": null,
+      "mode": "Direct",
+      "query": "Visually inspect page 2 of the attached PDF. What shapes and colors are Marker A and Marker B, and which is on the left? The text does not name the colors, so inspect the actual page image. Answer briefly with the page citation.",
+      "durationMs": 15241,
+      "firstUsefulMs": 406,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Page 2 of the document appears to be text-only based on the available view, and does not contain a visual diagram that can be inspected. The text on that page reads \"Inspect the diagram and describe the colors and positions\" followed by \"Marker A Marker B,\" but there is no actual diagram or colored shapes visible on the page. The document on page 1 mentions that \"The next page contains a diagram with no color names in its text,\" but the visual inspection of page 2 shows only text content.\n\nSources:\n- [A small delivery study](attachment://bdfae350a554/page/2)",
+      "payload": {
+        "kind": "prose",
+        "result": "Page 2 of the document appears to be text-only based on the available view, and does not contain a visual diagram that can be inspected. The text on that page reads \"Inspect the diagram and describe the colors and positions\" followed by \"Marker A Marker B,\" but there is no actual diagram or colored shapes visible on the page. The document on page 1 mentions that \"The next page contains a diagram with no color names in its text,\" but the visual inspection of page 2 shows only text content.\n\nSources:\n- [A small delivery study](attachment://bdfae350a554/page/2)",
+        "sources": [
+          {
+            "title": "A small delivery study",
+            "url": "attachment://bdfae350a554/page/2"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "read_document"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-50-27-913Z-direct.json",
+      "sha256": "b0d45625b053d879d194c6e66943958951a1610b9dd87f7beecef0c01604e74a",
+      "note": "Vision: admitted raster page, blue circle left of red square.",
+      "seed": 42,
+      "mode": "Direct",
+      "query": "Inspect the diagram in this PDF and identify the shapes and colors of Marker A and Marker B, including which is on the left. Give a brief answer with the page citation.",
+      "durationMs": 7383,
+      "firstUsefulMs": 504,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Based on the diagram on page 1, Marker A is on the left and is a blue circle. Marker B is on the right and is a red square.\n\nSources:\n- [Two markers](attachment://99781336a733/page/1)",
+      "payload": {
+        "kind": "prose",
+        "result": "Based on the diagram on page 1, Marker A is on the left and is a blue circle. Marker B is on the right and is a red square.\n\nSources:\n- [Two markers](attachment://99781336a733/page/1)",
+        "sources": [
+          {
+            "title": "Two markers",
+            "url": "attachment://99781336a733/page/1"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "search_documents"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "read_document"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-52-09-882Z-auto.json",
+      "sha256": "590e1081f2b6dd26952a6b63f1eaa957fbfc77326940698d1a6d172ee2b196e4",
+      "note": "Simple explanation seed 7. Human child suitability review remains open.",
+      "seed": 7,
+      "mode": "Auto",
+      "query": "Why is the sky blue? Explain in three short sentences for an eight-year-old. Use general knowledge only.",
+      "durationMs": 4684,
+      "firstUsefulMs": 2450,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "When sunlight hits the Earth, it hits all the colors of the rainbow. But the blue colors scatter more than the other colors, so we see blue in the sky. This is called the Rayleigh effect.",
+      "payload": {
+        "kind": "prose",
+        "result": "When sunlight hits the Earth, it hits all the colors of the rainbow. But the blue colors scatter more than the other colors, so we see blue in the sky. This is called the Rayleigh effect.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-52-14-702Z-auto.json",
+      "sha256": "ffb6ff7e0920799fd15066e92d7c94c9976a0760e1b18e8593b82340daf336ea",
+      "note": "Simple explanation seed 19. Human child suitability review remains open.",
+      "seed": 19,
+      "mode": "Auto",
+      "query": "Why is the sky blue? Explain in three short sentences for an eight-year-old. Use general knowledge only.",
+      "durationMs": 5605,
+      "firstUsefulMs": 2739,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Sunlight is made of all different colors like a rainbow. The blue color bounces off air molecules in the sky more than other colors. That's why we see blue when we look up at the sky.",
+      "payload": {
+        "kind": "prose",
+        "result": "Sunlight is made of all different colors like a rainbow. The blue color bounces off air molecules in the sky more than other colors. That's why we see blue when we look up at the sky.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T19-52-20-439Z-auto.json",
+      "sha256": "b0db1a0e2e93ef714d646daa5c7ad47e7ff5caa765d9452ab1d203b790d90a6f",
+      "note": "Ambiguous comparison seed 7 asks for the options and criteria.",
+      "seed": 7,
+      "mode": "Auto",
+      "query": "Help me choose between the two options.",
+      "durationMs": 3665,
+      "firstUsefulMs": null,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Please specify the two options you are comparing and the criteria you want to use to evaluate them.",
+      "payload": {
+        "kind": "prose",
+        "result": "Please specify the two options you are comparing and the criteria you want to use to evaluate them.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": []
+    },
+    {
+      "receipt": "2026-10-13T19-52-24-237Z-auto.json",
+      "sha256": "1e79af135b567692da3fcb7cc031d62de309954cd817fa7849a643adbc6e5953",
+      "note": "Ambiguous comparison seed 19 asks for the options and criteria.",
+      "seed": 19,
+      "mode": "Auto",
+      "query": "Help me choose between the two options.",
+      "durationMs": 3725,
+      "firstUsefulMs": null,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Please specify the two options you want me to compare and the criteria you should use to evaluate them.",
+      "payload": {
+        "kind": "prose",
+        "result": "Please specify the two options you want me to compare and the criteria you should use to evaluate them.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": []
+    },
+    {
+      "receipt": "2026-10-13T19-58-40-626Z-direct.json",
+      "sha256": "0c767397b5fdbf2f3f61def3142d2b73f0b2b9bd5ee8eab595e7efe4a797e2df",
+      "note": "Counterexample: Direct union produced empty object; replaced with flat output schema.",
+      "seed": 19,
+      "mode": "Direct",
+      "query": "Make a typed checklist with exactly three things to pack: keys, water, and a map. Keep each detail to five words or fewer.",
+      "durationMs": 2481,
+      "firstUsefulMs": 1409,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "{}",
+      "payload": {
+        "kind": "prose",
+        "result": "{}",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T20-03-56-292Z-direct.json",
+      "sha256": "b4eb14ae00fc67c6c876b0e866d0cc7bc6afb135edc655aa365f467bc73ba414",
+      "note": "Counterexample: repeated checklist prose; output instructions subsequently refined.",
+      "seed": 19,
+      "mode": "Direct",
+      "query": "Make a typed checklist with exactly three things to pack: keys, water, and a map. Keep each detail to five words or fewer.",
+      "durationMs": 3539,
+      "firstUsefulMs": 1674,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "- Keys: Keep in your pocket or bag\n- Water: Bring at least one bottle\n- Map: Carry a printed copy\n\n- Keys: Keep in your pocket or bag\n- Water: Bring at least one bottle\n- Map: Carry a printed copy",
+      "payload": {
+        "kind": "checklist",
+        "result": "- Keys: Keep in your pocket or bag\n- Water: Bring at least one bottle\n- Map: Carry a printed copy",
+        "sources": [],
+        "checklist": [
+          {
+            "text": "Keys",
+            "detail": "Keep in your pocket or bag"
+          },
+          {
+            "text": "Water",
+            "detail": "Bring at least one bottle"
+          },
+          {
+            "text": "Map",
+            "detail": "Carry a printed copy"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T20-03-59-975Z-parallel.json",
+      "sha256": "2c56c6c4fa54e59843c6af006d11226656ceb1032beae6c4219f89230ce7531c",
+      "note": "Parallel isolated fixture totals correct with external abilities disabled.",
+      "seed": 7,
+      "mode": "Parallel",
+      "query": "Compare only these supplied facts: Option A costs 120 units and delivery costs 20 units. Option B costs 135 units including delivery. Check each option separately, then give a two-row comparison table and identify the cheaper total. Do not invent other differences.",
+      "durationMs": 21898,
+      "firstUsefulMs": 10507,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Based on the supplied facts, Option A totals 140 units (120 base cost plus 20 delivery), while Option B totals 135 units including delivery. Option B is cheaper by 5 units.\n\n| Option | Base Cost | Delivery Cost | Total Cost |\n| --- | --- | --- | --- |\n| Option A | 120 units | 20 units | 140 units |\n| Option B | N/A | N/A | 135 units |",
+      "payload": {
+        "kind": "table",
+        "result": "Based on the supplied facts, Option A totals 140 units (120 base cost plus 20 delivery), while Option B totals 135 units including delivery. Option B is cheaper by 5 units.",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Option",
+            "Base Cost",
+            "Delivery Cost",
+            "Total Cost"
+          ],
+          "rows": [
+            [
+              "Option A",
+              "120 units",
+              "20 units",
+              "140 units"
+            ],
+            [
+              "Option B",
+              "N/A",
+              "N/A",
+              "135 units"
+            ]
+          ]
+        }
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T20-09-11-420Z-direct.json",
+      "sha256": "2453c4a42cd87e87d3e8b655152ca0b450b9a7ed2390a4e2004c36fef3b7fc63",
+      "note": "Direct flat typed checklist: exactly three requested items.",
+      "seed": 19,
+      "mode": "Direct",
+      "query": "Make a typed checklist with exactly three things to pack: keys, water, and a map. Keep each detail to five words or fewer.",
+      "durationMs": 5784,
+      "firstUsefulMs": 4431,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Here are three essential items to pack.\n\n- Keys: House or car keys\n- Water: Bottled drinking water\n- Map: Physical or digital map",
+      "payload": {
+        "kind": "checklist",
+        "result": "Here are three essential items to pack.",
+        "sources": [],
+        "checklist": [
+          {
+            "text": "Keys",
+            "detail": "House or car keys"
+          },
+          {
+            "text": "Water",
+            "detail": "Bottled drinking water"
+          },
+          {
+            "text": "Map",
+            "detail": "Physical or digital map"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T22-38-02-442Z-direct.json",
+      "sha256": "6a4607896e18d539e442cebfc10961dbbc04c4f57baa71c25d6c9e5135c1478f",
+      "note": "New PDF turn correctly inspects page and cites it.",
+      "seed": 42,
+      "mode": "Direct",
+      "query": "Inspect the image on page 1. What are the two shapes, their colours, and their left-to-right order? Cite the page.",
+      "durationMs": 7454,
+      "firstUsefulMs": 3009,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "On page 1 of the \"Two markers\" document, the image displays two shapes in left-to-right order: Marker A is a blue circle on the left, and Marker B is a red square on the right.\n\nSources:\n- [Two markers](attachment://99781336a733/page/1)",
+      "payload": {
+        "kind": "prose",
+        "result": "On page 1 of the \"Two markers\" document, the image displays two shapes in left-to-right order: Marker A is a blue circle on the left, and Marker B is a red square on the right.\n\nSources:\n- [Two markers](attachment://99781336a733/page/1)",
+        "sources": [
+          {
+            "title": "Two markers",
+            "url": "attachment://99781336a733/page/1"
+          }
+        ]
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "search_documents"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "view_page"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T22-53-21-227Z-direct.json",
+      "sha256": "2159af0a496469bf8c9f8c354c43a564be2f1526f2d61b1535f01fb88f41644a",
+      "note": "Counterexample: free-text document answer accepted malformed attachment URL.",
+      "seed": 42,
+      "mode": "Direct",
+      "query": "Inspect page 1 of the attached Two markers PDF again. Give one sentence naming the shapes in left-to-right order and cite the page.",
+      "durationMs": 2658,
+      "firstUsefulMs": 1997,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "On page 1 of the Two markers PDF, from left to right: a blue circle followed by a red square.\n\nSource: [Two markers \u2014 1 page](attachment://Two markers \u2014 1 page/page/1)",
+      "payload": {
+        "kind": "prose",
+        "result": "On page 1 of the Two markers PDF, from left to right: a blue circle followed by a red square.\n\nSource: [Two markers \u2014 1 page](attachment://Two markers \u2014 1 page/page/1)",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": []
+    },
+    {
+      "receipt": "2026-10-13T22-55-21-714Z-direct.json",
+      "sha256": "0f8634a244d7b7351af7e781248e66a0ee4e7f1acbe855bd839d425e47eb0a0e",
+      "note": "After typed attachment-output requirement: same saved conversation returns valid digest/page citation.",
+      "seed": 42,
+      "mode": "Direct",
+      "query": "Inspect page 1 of the attached Two markers PDF again. Give one sentence naming the shapes in left-to-right order and cite the page.",
+      "durationMs": 6407,
+      "firstUsefulMs": 1706,
+      "excluded": null,
+      "timedOut": false,
+      "status": "complete",
+      "answer": "On page 1 of the Two markers PDF, from left to right: a blue circle followed by a red square.\n\nSource: [Two markers \u2014 1 page](attachment://99781336a733/page/1)",
+      "payload": {
+        "kind": "prose",
+        "result": "On page 1 of the Two markers PDF, from left to right: a blue circle followed by a red square.\n\nSource: [Two markers \u2014 1 page](attachment://99781336a733/page/1)",
+        "sources": []
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "search_documents"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "read_document"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T23-03-51-467Z-parallel.json",
+      "sha256": "14cc26c048c334467dde7b02a08151379484a6f3a3840a06d2b513506d34a90d",
+      "note": "Final supplied-facts repeat with all abilities available: correct typed table (140/135/difference 5); no external tools called.",
+      "seed": 7,
+      "mode": "Parallel",
+      "query": "Compare only these supplied facts: A costs 120 units plus 20 delivery; B costs 135 including delivery. Independently check each total and combine them into a small table showing which is cheaper.",
+      "durationMs": 20002,
+      "firstUsefulMs": 10400,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Based on the supplied facts, Option A totals 140 units (120 base cost plus 20 delivery) while Option B totals 135 units. Option B is cheaper by 5 units.\n\n| Option | Base Cost | Delivery | Total Cost |\n| --- | --- | --- | --- |\n| A | 120 units | 20 units | 140 units |\n| B | - | - | 135 units |",
+      "payload": {
+        "kind": "table",
+        "result": "Based on the supplied facts, Option A totals 140 units (120 base cost plus 20 delivery) while Option B totals 135 units. Option B is cheaper by 5 units.",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Option",
+            "Base Cost",
+            "Delivery",
+            "Total Cost"
+          ],
+          "rows": [
+            [
+              "A",
+              "120 units",
+              "20 units",
+              "140 units"
+            ],
+            [
+              "B",
+              "-",
+              "-",
+              "135 units"
+            ]
+          ]
+        }
+      },
+      "sourceScope": {
+        "inputs": [],
+        "excluded": [
+          "web",
+          "wikipedia"
+        ],
+        "roots": []
+      },
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        },
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "receipt": "2026-10-13T23-04-11-607Z-parallel.json",
+      "sha256": "d6b46b87910e02650d4440b5a4f4611b31ee69bcbd2d8acbb10477de51754e25",
+      "note": "Final supplied-facts repeat with all abilities available: correct typed table (140/135/difference 5); no external tools called.",
+      "seed": 19,
+      "mode": "Parallel",
+      "query": "Compare only these supplied facts: A costs 120 units plus 20 delivery; B costs 135 including delivery. Independently check each total and combine them into a small table showing which is cheaper.",
+      "durationMs": 17188,
+      "firstUsefulMs": 8383,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Based on the supplied facts, Option B is cheaper by 5 units. Option A totals 140 units (120 base + 20 delivery), while Option B totals 135 units (including delivery).\n\n| Option | Cost Breakdown | Total Cost | Cheaper? |\n| --- | --- | --- | --- |\n| A | 120 units base + 20 units delivery | 140 units | No |\n| B | 135 units (including delivery) | 135 units | Yes - 5 units cheaper |",
+      "payload": {
+        "kind": "table",
+        "result": "Based on the supplied facts, Option B is cheaper by 5 units. Option A totals 140 units (120 base + 20 delivery), while Option B totals 135 units (including delivery).",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Option",
+            "Cost Breakdown",
+            "Total Cost",
+            "Cheaper?"
+          ],
+          "rows": [
+            [
+              "A",
+              "120 units base + 20 units delivery",
+              "140 units",
+              "No"
+            ],
+            [
+              "B",
+              "135 units (including delivery)",
+              "135 units",
+              "Yes - 5 units cheaper"
+            ]
+          ]
+        }
+      },
+      "sourceScope": null,
+      "tools": [
+        {
+          "type": "agent:tool_call",
+          "tool": "report"
+        }
+      ]
+    },
+    {
+      "seed": 42,
+      "mode": "Direct",
+      "query": "What total did we calculate for Option A earlier in this conversation?",
+      "durationMs": 2709,
+      "firstUsefulMs": 1683,
+      "excluded": [
+        "web",
+        "wikipedia",
+        "corpus"
+      ],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "The total we calculated for Option A earlier was 140 units. This was computed as 120 units for the base cost plus 20 units for delivery.",
+      "payload": {
+        "kind": "prose",
+        "result": "The total we calculated for Option A earlier was 140 units. This was computed as 120 units for the base cost plus 20 units for delivery.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-11-32-515Z-direct.json",
+      "sha256": "49d0e496c57022c57376dfbf8effc90ad1aeae2d0538942726858ca921df1660",
+      "note": "Reconstructed saved table conversation: Direct recalls Option A total 140."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "What total did we calculate for Option B earlier in this conversation?",
+      "durationMs": 5101,
+      "firstUsefulMs": 3737,
+      "excluded": [
+        "web",
+        "wikipedia",
+        "corpus"
+      ],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "The total we calculated for Option B earlier was 135 units, which included both the base cost and delivery.\n\n| Option | Total Cost |\n| --- | --- |\n| B | 135 units |",
+      "payload": {
+        "kind": "table",
+        "result": "The total we calculated for Option B earlier was 135 units, which included both the base cost and delivery.",
+        "sources": [],
+        "table": {
+          "columns": [
+            "Option",
+            "Total Cost"
+          ],
+          "rows": [
+            [
+              "B",
+              "135 units"
+            ]
+          ]
+        }
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-11-35-370Z-auto.json",
+      "sha256": "b18fad76775dc0ee673e5de99cf3bf527acb194b6a8dd78a47c8723bfb018eb5",
+      "note": "Reconstructed saved table conversation: Auto recalls Option B total 135."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "What is 18 plus 24? Answer in one sentence.",
+      "durationMs": 5203,
+      "firstUsefulMs": 4691,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "18 plus 24 equals 42.",
+      "payload": {
+        "kind": "prose",
+        "result": "18 plus 24 equals 42.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-13-31-513Z-auto.json",
+      "sha256": "6d1b3a91d84851ba666c283e53ca1475a991771cc2815688b1e8a73ccc9d0404",
+      "note": "Auto initial addition 18 + 24 = 42 before bounded decision context change."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "And what is half of that?",
+      "durationMs": 4170,
+      "firstUsefulMs": null,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Which number or value from the previous conversation are you referring to when you ask for half of it?",
+      "payload": {
+        "kind": "prose",
+        "result": "Which number or value from the previous conversation are you referring to when you ask for half of it?",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-13-36-851Z-auto.json",
+      "sha256": "841d212e2696d54f8f019a0031824057df0229e73442dae3bfec0fd80804cc04",
+      "note": "Counterexample: Auto over-clarifies contextual half-that request after reconnect; trunk was intact."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "Which two numbers did I ask you to add in my first message?",
+      "durationMs": 5426,
+      "firstUsefulMs": 3230,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "You asked me to add 18 and 24 in your first message, and I calculated that 18 + 24 = 42. Half of that number (42) is 21.",
+      "payload": {
+        "kind": "prose",
+        "result": "You asked me to add 18 and 24 in your first message, and I calculated that 18 + 24 = 42. Half of that number (42) is 21.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-13-41-152Z-auto.json",
+      "sha256": "10eae03b43ee0dd37ea5145499688dc90949661b9736e9a72e9da613fb19b93a",
+      "note": "Auto correctly recalls original numbers despite preceding clarification."
+    },
+    {
+      "seed": 42,
+      "mode": "Plan",
+      "query": "Plan two independent ways to explain a rainbow in three sentences, using general knowledge only.",
+      "durationMs": 12539,
+      "firstUsefulMs": null,
+      "excluded": [],
+      "timedOut": false,
+      "status": "failed",
+      "answer": null,
+      "payload": null,
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-13-57-759Z-plan.json",
+      "sha256": "07d9bd16f0fb06515ada16f78eed445d80cee805ff5bdd38759a0b0d61034b59",
+      "note": "Counterexample: decision requested unavailable sources; decision grammar subsequently constrained to available source names and input digests."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "What is 18 plus 24? Answer in one sentence.",
+      "durationMs": 5088,
+      "firstUsefulMs": 4586,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "18 plus 24 equals 42.",
+      "payload": {
+        "kind": "prose",
+        "result": "18 plus 24 equals 42.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-16-46-554Z-auto.json",
+      "sha256": "34f41b990d3ba988bda480afd1ad238696be0b64288cfa0250f4de4c82f583da",
+      "note": "After bounded last-accepted-exchange decision context: Auto addition returns 42."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "And what is half of that?",
+      "durationMs": 4421,
+      "firstUsefulMs": 2887,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "Half of 42 is 21.",
+      "payload": {
+        "kind": "prose",
+        "result": "Half of 42 is 21.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-16-51-784Z-auto.json",
+      "sha256": "917a20a7828daa2dee4cb946912d037e40bb0d8fce84eb34e0717efa7110ed9b",
+      "note": "After bounded decision context: separate reconstructed Auto session returns half of 42 as 21."
+    },
+    {
+      "seed": 42,
+      "mode": "Auto",
+      "query": "Which two numbers did I ask you to add in my first message?",
+      "durationMs": 4217,
+      "firstUsefulMs": 2444,
+      "excluded": [],
+      "timedOut": false,
+      "status": "complete",
+      "answer": "You asked me to add 18 and 24 in your first message, which I calculated to be 42. You then followed up by asking for half of that result, which is 21.",
+      "payload": {
+        "kind": "prose",
+        "result": "You asked me to add 18 and 24 in your first message, which I calculated to be 42. You then followed up by asking for half of that result, which is 21.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-16-56-345Z-auto.json",
+      "sha256": "15d6da67bf1cb35066d3878d17f6bf32b9c9ded4b28293150d755d23c51efc4a",
+      "note": "After bounded decision context: another reconstructed Auto session recalls original 18 and 24."
+    },
+    {
+      "seed": 42,
+      "mode": "Plan",
+      "query": "Plan two independent ways to explain a rainbow in three sentences, using general knowledge only.",
+      "durationMs": 16793,
+      "firstUsefulMs": 11318,
+      "excluded": [],
+      "timedOut": false,
+      "status": "partial",
+      "answer": "**Way 1 (Refraction and Reflection):**\n1. Rainbows form when sunlight enters water droplets in the atmosphere and undergoes refraction, reflection, and refraction again.\n2. As light passes through the droplet, it bends and reflects off the inner surface before exiting.\n3. This process separates the white sunlight into its component colors, creating the visible arc we see.\n\n**Way 2 (Dispersion and Scattering):**\n1. Sunlight is actually a mixture of all visible colors that are normally combined to appear white.\n2. When this light passes through raindrops, it disperses into its constituent colors at different angles.\n3. Our eyes receive light from different colors at different positions, forming the rainbow's colored bands.",
+      "payload": {
+        "kind": "prose",
+        "result": "**Way 1 (Refraction and Reflection):**\n1. Rainbows form when sunlight enters water droplets in the atmosphere and undergoes refraction, reflection, and refraction again.\n2. As light passes through the droplet, it bends and reflects off the inner surface before exiting.\n3. This process separates the white sunlight into its component colors, creating the visible arc we see.\n\n**Way 2 (Dispersion and Scattering):**\n1. Sunlight is actually a mixture of all visible colors that are normally combined to appear white.\n2. When this light passes through raindrops, it disperses into its constituent colors at different angles.\n3. Our eyes receive light from different colors at different positions, forming the rainbow's colored bands.",
+        "sources": []
+      },
+      "sourceScope": null,
+      "receipt": "2026-10-13T23-17-00-717Z-plan.json",
+      "sha256": "187bc43d3d29b44bd16b1cec975ee5cd2d48ac246adb2e6ff9f34c9d7eeccc9c",
+      "note": "Finish before plan approval returns partial answer, without claiming all planned tasks completed."
+    }
+  ],
+  "otherReceipts": [
+    {
+      "receipt": "verification/qwen-sessions/isolation-admission.json",
+      "sha256": "d2bf444232f030249b7a0c059629e52cc9bb7342866eb7282c48b17b30d04280",
+      "checks": {
+        "checks": {
+          "thirdQueued": true,
+          "distinctConversations": true,
+          "firstAnswer": true,
+          "secondAnswer": true,
+          "noCrossTalk": true,
+          "admittedAfterRelease": true,
+          "thirdAnswer": true
+        }
+      }
+    },
+    {
+      "receipt": "verification/sessions/isolation-admission.json",
+      "sha256": "8d65ee9f216496d2f602b74a4bd2914c3230ba3cec35d3e56da1cccc591564b0",
+      "checks": {
+        "checks": {
+          "thirdQueued": true,
+          "distinctConversations": true,
+          "firstAnswer": true,
+          "secondAnswer": false,
+          "noCrossTalk": true,
+          "admittedAfterRelease": true,
+          "thirdAnswer": true
+        }
+      }
+    },
+    {
+      "receipt": "verification/smollm2/trunk-reopened.json",
+      "sha256": "09ac2870eb30cb8c052aee68a4ce0556c2a8727c61017dabf140e1b0df3e6f02",
+      "checks": {
+        "turns": [
+          {
+            "status": "complete",
+            "answer": "I remember that the test codeword is MARIGOLD."
+          },
+          {
+            "status": "complete",
+            "answer": "\"MARIGOLD\""
+          }
+        ],
+        "repeatedReopen": true
+      }
+    },
+    {
+      "receipt": "verification/audio/voice-events.json",
+      "sha256": "4dff90a6e24d134718b951fed049c7fc4335e257a17873fe575fafd068acf0b6",
+      "checks": {
+        "events": [
+          {
+            "type": "voice:capabilities",
+            "capabilities": {
+              "enabled": true,
+              "limits": {
+                "maxBytes": 16777216,
+                "maxDurationSeconds": 60,
+                "maxChannels": 2,
+                "maxSampleRate": 48000
+              },
+              "model": "Transcription"
+            }
+          },
+          {
+            "type": "voice:progress",
+            "requestId": "cancel-first",
+            "phase": "transcribing"
+          },
+          {
+            "type": "voice:cancelled",
+            "requestId": "cancel-first"
+          },
+          {
+            "type": "voice:progress",
+            "requestId": "complete-second",
+            "phase": "transcribing"
+          },
+          {
+            "type": "voice:result",
+            "requestId": "complete-second",
+            "result": {
+              "audio": {
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "digest": "sha256:8266105f436827943a6de0ac7118fd13a3100b7331075eb9a1c3151c6f7b28d1",
+                "size": 470
+              },
+              "representation": {
+                "mediaType": "audio/wav",
+                "digest": "sha256:c21b6cd991f34dbd80c3f8d799df6cf65f4b814f81689dc2865c352909e6c783",
+                "size": 149474,
+                "annotations": {
+                  "ai.lloyal.role": "representation"
+                }
+              },
+              "durationSeconds": 3.38843537414966,
+              "silent": false,
+              "provenance": {
+                "model": "qwen3-asr-0.6b-q8",
+                "projector": "paired",
+                "sampleRate": 16000,
+                "context": 4096,
+                "maxTokens": 512
+              },
+              "language": "English",
+              "text": "Explain why rainbows form in three sentences."
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "desktop": {
+    "platform": "macOS arm64",
+    "package": "Glass-0.1.0-arm64.dmg",
+    "signed": false,
+    "question": "What is 18 plus 24? Answer in one sentence.",
+    "answer": "18 plus 24 equals 42.",
+    "followup": "And what is half of that?",
+    "followupAnswer": "Half of 42 is 21.",
+    "followupAfterProcessRestart": true,
+    "mode": "Auto"
+  },
+  "cliTests": {
+    "pass": 469,
+    "skip": 16,
+    "fail": 0,
+    "tarballAssetsVerified": true
+  }
+}

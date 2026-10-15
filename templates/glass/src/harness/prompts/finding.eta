@@ -1,0 +1,1 @@
+Accepted finding for <%= it.title %> (step <%= it.id %>).

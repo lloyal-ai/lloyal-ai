@@ -32,10 +32,11 @@ const USAGE = [
   '                terminal to launch the interactive picker.',
   '',
   'Options:',
-  '  --template <basic|research>',
+  '  --template <basic|research|glass>',
   '                Starting point (default: basic). basic = a Wikipedia research',
   '                harness (2-agent pipeline + article UI); research = the tuned',
-  '                recon→plan→agents→synth pipeline (grounded multi-agent research).',
+  '                recon→plan→agents→synth pipeline; glass = a conversational app',
+  '                with editable plans, evidence and typed composition.',
   '  --targets <list>',
   '                Comma-separated run surfaces to keep (default: cli,desktop,web).',
   '                cli is always included; the rest are pruned from the scaffold.',
@@ -85,6 +86,7 @@ const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
  */
 export const DEFAULT_ABILITIES: Record<TemplateKind, string[]> = {
   basic: ['lloyal/wikipedia@3.0.0'],
+  glass: ['lloyal/corpus@3.0.0', 'lloyal/web@3.0.0', 'lloyal/documents@0.3.0', 'lloyal/wikipedia@3.0.0'],
   research: ['lloyal/corpus@3.0.0', 'lloyal/web@3.0.0', 'lloyal/documents@0.3.0'],
 };
 
@@ -208,8 +210,8 @@ function validateFlags(values: {
 }): Flags | { error: string } {
   let template: TemplateKind | undefined;
   if (values.template != null) {
-    if (values.template !== 'basic' && values.template !== 'research') {
-      return { error: `lloyal: invalid --template "${values.template}" — expected "basic" or "research".` };
+    if (values.template !== 'basic' && values.template !== 'research' && values.template !== 'glass') {
+      return { error: `lloyal: invalid --template "${values.template}" — expected "basic", "research" or "glass".` };
     }
     template = values.template;
   }

@@ -1,0 +1,2 @@
+Request: <%= it.query %>
+Source: <%= JSON.stringify(it.ability) %>

@@ -101,6 +101,7 @@ export const SHARED_RENDERER_DEPS = [
   'rehype-katex',
   'katex',
   'zustand',
+  '@fontsource-variable/inter',
   '@fontsource-variable/geist',
   '@fontsource-variable/geist-mono',
 ];

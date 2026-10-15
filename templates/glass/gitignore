@@ -1,0 +1,46 @@
+node_modules/
+dist/
+traces/
+trace-*.jsonl
+
+# Build outputs: cli (dist/ above), desktop (electron-vite → out/),
+# web (vite → dist-web/). `lloyal ship` wraps out/ into a disk image under
+# release/ — a hundred megabytes and rebuildable, so never committed.
+out/
+dist-web/
+release/
+
+# Model weights are fetched or dropped locally, never committed.
+models/**/*.gguf
+
+# Project-owned media content (an OCI Image Layout). `oci-layout` is committed
+# so the directory survives a clone; the mutable index, the payload, and the
+# write-staging area are not. NOTE: never place a .gitkeep inside
+# blobs/<algorithm>/ — every entry there must be a blob named by its own
+# encoded digest, so a placeholder is a malformed entry. The store recreates
+# index.json and blobs/sha256/ on first write.
+media/index.json
+media/blobs/
+media/.tmp/
+
+# Per-run attachment storage, superseded by media/.
+trace-*.attachments/
+
+# Local environment overrides — one machine's values, never the project's. `.env.local` is where a
+# signing certificate and notary credentials go, so this line is what keeps them off a branch.
+*.local
+
+*.log
+.DS_Store
+harness.json
+reports/
+
+conversations/
+playwright-report/
+test-results/
+
+# Local verification artifacts and provisioned models never enter the app repository.
+verification/
+**/*.gguf
+**/models/dev/
+._*

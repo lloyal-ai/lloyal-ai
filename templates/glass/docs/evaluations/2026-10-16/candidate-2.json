@@ -1,0 +1,1556 @@
+{
+  "environment": {
+    "corpusVersion": 1,
+    "corpusHash": "f4c3535ed09a3e97d3d0a0b33971e2569aa40eb0d8e675635e9afc9a93ab2010",
+    "promptHashes": {
+      "decision.system": "af854e5efffd4b7a6de19f823c5fc8d9a113b4a2beb06c7b08630e56bde8b8e4",
+      "decision.user": "848eb9832c92749ff6343593e449a1d5e0c45bdd607450f02a4b98eff6eac63b",
+      "boundary": "2337f7da63a7d48e10ac4b040880a6d9cf11ae0ed7f00f2a835ef2575134338d"
+    },
+    "sourceHashes": {
+      "src/domain/work.ts": "b4da2a850a0e47d05c10e971eea7fecfd1257449cb0ac636220f861dfce5d9df",
+      "src/harness/decisions.ts": "2d4181996bbccf4324d8f36337645bc68fe5021aa7beb03473c463cb5362fa56",
+      "test/native/decisions.ts": "39ea1ab8d2b1f1de9e19676745fa0d5a59939037a9b66839f9339358ecf5f4bd",
+      "test/eval/decisions/score.ts": "9d1b60f1b92d36c5fda68e1cb3f43d1b53d71f2b620a9212ccc001ea9188a763"
+    },
+    "packages": {
+      "rig": "6.0.0",
+      "sdk": "5.0.0",
+      "lloyal-agents": "7.0.0",
+      "lloyal.node": "4.0.0",
+      "media": "0.2.1",
+      "dev-tools": "0.6.0"
+    },
+    "git": "20d958fb0bef26124d03a2165baa65584b1ea807",
+    "dirty": "M AGENTS.md\n M docs/implementation-plan.md\n M package.json\n M src/domain/work.ts\n M src/harness/prompts/decision.system.eta\n M test/eval/decisions/score.ts\n M test/native/decisions.ts",
+    "node": "v24.15.0",
+    "platform": "linux",
+    "gpu": "NVIDIA L40S, GPU-d8477ad4-c9d6-d6be-2c59-ccb7da096717, 565.57.01",
+    "initialProcesses": "",
+    "dev": true,
+    "lockHash": "caa6f5be087656e2bc2cda49986d60e909c4a75e1ff78896191d138e4bcb9ffd",
+    "startedAt": "2026-10-15T14:51:28.650Z",
+    "seeds": [
+      7,
+      42
+    ],
+    "cases": [
+      "ordinary-explanation",
+      "writing",
+      "supplied-facts",
+      "manual-plan",
+      "manual-parallel",
+      "manual-chain",
+      "manual-graph",
+      "auto-dependent",
+      "landscape-fanout",
+      "missing-documents",
+      "missing-web",
+      "focused-pdf",
+      "document-only",
+      "conversation-recall",
+      "complete-revisit-plan",
+      "complete-revisit-parallel",
+      "complete-revisit-chain",
+      "complete-revisit-graph",
+      "incomplete-revisit"
+    ],
+    "model": {
+      "llm": {
+        "id": "qwen3.5-4b",
+        "path": "/data/glass/models/llm/qwen3.5-4b.gguf",
+        "context": 16384,
+        "gpu": "cuda",
+        "branches": 4
+      },
+      "reranker": {
+        "id": "qwen3-reranker-0.6b-q8",
+        "path": "/data/glass/models/reranker/qwen3-reranker-0.6b-q8.gguf",
+        "context": 16384
+      },
+      "vision": {
+        "path": "/data/glass/models/vision/qwen3.5-4b-mmproj.gguf"
+      }
+    },
+    "modelHash": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "modelBytes": 2740937888,
+    "allocation": "132046, GPU-d8477ad4-c9d6-d6be-2c59-ccb7da096717, 7396",
+    "pid": 132046
+  },
+  "comparisonKey": {
+    "corpusHash": "f4c3535ed09a3e97d3d0a0b33971e2569aa40eb0d8e675635e9afc9a93ab2010",
+    "modelHash": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "model": {
+      "llm": {
+        "id": "qwen3.5-4b",
+        "path": "/data/glass/models/llm/qwen3.5-4b.gguf",
+        "context": 16384,
+        "gpu": "cuda",
+        "branches": 4
+      },
+      "reranker": {
+        "id": "qwen3-reranker-0.6b-q8",
+        "path": "/data/glass/models/reranker/qwen3-reranker-0.6b-q8.gguf",
+        "context": 16384
+      },
+      "vision": {
+        "path": "/data/glass/models/vision/qwen3.5-4b-mmproj.gguf"
+      }
+    },
+    "packages": {
+      "rig": "6.0.0",
+      "sdk": "5.0.0",
+      "lloyal-agents": "7.0.0",
+      "lloyal.node": "4.0.0",
+      "media": "0.2.1",
+      "dev-tools": "0.6.0"
+    },
+    "node": "v24.15.0",
+    "gpu": "NVIDIA L40S, GPU-d8477ad4-c9d6-d6be-2c59-ccb7da096717, 565.57.01",
+    "dev": true
+  },
+  "results": [
+    {
+      "caseId": "ordinary-explanation",
+      "seed": 7,
+      "ms": 1883.072983,
+      "firstTokenMs": 166.8713800000005,
+      "tokens": 52,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request asks for general knowledge that can be answered directly without needing to search the web or Wikipedia.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[\"wikipedia\"],\"inputs\":[]},\"action\":\"answer\",\"clarification\": \"\",\"plan\":null}",
+      "decision": {
+        "reason": "The request asks for general knowledge that can be answered directly without needing to search the web or Wikipedia.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [
+            "wikipedia"
+          ],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "ordinary-explanation",
+      "seed": 42,
+      "ms": 1738.0119680000007,
+      "firstTokenMs": 124.98017900000013,
+      "tokens": 50,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request asks for general knowledge about a scientific concept, which is covered by the Wikipedia ability.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[\"wikipedia\"],\"inputs\":[]},\"action\":\"answer\",\"clarification\":\"\",\"plan\":null}",
+      "decision": {
+        "reason": "The request asks for general knowledge about a scientific concept, which is covered by the Wikipedia ability.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [
+            "wikipedia"
+          ],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "writing",
+      "seed": 7,
+      "ms": 2425.879314,
+      "firstTokenMs": 125.8778970000003,
+      "tokens": 70,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by the text provided, so no tools or attachments are needed.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"answer\",\"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request is fully specified by the text provided, so no tools or attachments are needed.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "writing",
+      "seed": 42,
+      "ms": 2612.0734009999996,
+      "firstTokenMs": 127.20249500000136,
+      "tokens": 75,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is a text rewriting task with no attachments or external data needs, so it uses no tools.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"answer\",\n  \"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request is a text rewriting task with no attachments or external data needs, so it uses no tools.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "supplied-facts",
+      "seed": 7,
+      "ms": 1704.0453500000003,
+      "firstTokenMs": 126.60067300000082,
+      "tokens": 48,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request is fully specified by supplied facts with no attachments, so no tools are needed.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[],\"inputs\":[]},\"action\":\"answer\",\"clarification\":\"\",\"plan\":null}",
+      "decision": {
+        "reason": "The request is fully specified by supplied facts with no attachments, so no tools are needed.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "supplied-facts",
+      "seed": 42,
+      "ms": 1711.8396210000028,
+      "firstTokenMs": 126.02616300000227,
+      "tokens": 48,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request is fully specified by supplied facts with no attachments, so no tools are needed.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[],\"inputs\":[]},\"action\":\"answer\",\"clarification\":\"\",\"plan\":null}",
+      "decision": {
+        "reason": "The request is fully specified by supplied facts with no attachments, so no tools are needed.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "manual-plan",
+      "seed": 7,
+      "ms": 9557.595642,
+      "firstTokenMs": 126.03985300000204,
+      "tokens": 291,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by facts and requires no external tools or attachments.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Create an editable plan comparing bike and bus commuting based on supplied assumptions.\",\n    \"reason\": \"The request is fully specified by facts and requires no external tools or attachments.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"t1\",\n        \"title\": \"Compare Bike Commuting\",\n        \"instruction\": \"Compare bike commuting using the assumption: 25 minutes and $0 cost.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t2\",\n        \"title\": \"Compare Bus Commuting\",\n        \"instruction\": \"Compare bus commuting using the assumption: 35 minutes and $4 cost each way.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request is fully specified by facts and requires no external tools or attachments.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Create an editable plan comparing bike and bus commuting based on supplied assumptions.",
+          "reason": "The request is fully specified by facts and requires no external tools or attachments.",
+          "topology": "parallel",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Compare Bike Commuting",
+              "instruction": "Compare bike commuting using the assumption: 25 minutes and $0 cost.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t2",
+              "title": "Compare Bus Commuting",
+              "instruction": "Compare bus commuting using the assumption: 35 minutes and $4 cost each way.",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-plan",
+      "seed": 42,
+      "ms": 10910.844097000001,
+      "firstTokenMs": 132.82073899999887,
+      "tokens": 321,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified with all facts and requires an editable plan, so no tools or attachments are needed.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Create an editable plan comparing bike and bus commuting based on provided time and cost data.\",\n    \"reason\": \"The request is fully specified with all facts and requires an editable plan, so no tools or attachments are needed.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Bike Commuting Summary\",\n        \"instruction\": \"Summarize the bike commuting option using the provided assumptions: 25 minutes and $0 cost.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Bus Commuting Summary\",\n        \"instruction\": \"Summarize the bus commuting option using the provided assumptions: 35 minutes and $4 cost per way.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request is fully specified with all facts and requires an editable plan, so no tools or attachments are needed.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Create an editable plan comparing bike and bus commuting based on provided time and cost data.",
+          "reason": "The request is fully specified with all facts and requires an editable plan, so no tools or attachments are needed.",
+          "topology": "parallel",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Bike Commuting Summary",
+              "instruction": "Summarize the bike commuting option using the provided assumptions: 25 minutes and $0 cost.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Bus Commuting Summary",
+              "instruction": "Summarize the bus commuting option using the provided assumptions: 35 minutes and $4 cost per way.",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-parallel",
+      "seed": 7,
+      "ms": 9829.672607999993,
+      "firstTokenMs": 120.81577699999616,
+      "tokens": 298,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by facts typed into the conversation, so no tools or attachments are needed.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Compare A's total (140) and B's total (135) based on provided facts.\",\n    \"reason\": \"The request is fully specified by facts typed into the conversation, so no tools or attachments are needed.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"check_a\",\n        \"title\": \"Calculate A's total\",\n        \"instruction\": \"Sum 120 and 20.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"check_b\",\n        \"title\": \"Calculate B's total\",\n        \"instruction\": \"Verify B's total is 135 including delivery.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": false,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request is fully specified by facts typed into the conversation, so no tools or attachments are needed.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Compare A's total (140) and B's total (135) based on provided facts.",
+          "reason": "The request is fully specified by facts typed into the conversation, so no tools or attachments are needed.",
+          "topology": "parallel",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "check_a",
+              "title": "Calculate A's total",
+              "instruction": "Sum 120 and 20.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "check_b",
+              "title": "Calculate B's total",
+              "instruction": "Verify B's total is 135 including delivery.",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": false,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-parallel",
+      "seed": 42,
+      "ms": 10212.990864,
+      "firstTokenMs": 120.93663200000447,
+      "tokens": 287,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by facts and requires no tools or attachments.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Compare A's total (120 + 20) with B's total (135).\",\n    \"reason\": \"The request is fully specified by facts and requires no tools or attachments.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Calculate A's Total\",\n        \"instruction\": \"Compute 120 plus 20.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Identify B's Total\",\n        \"instruction\": \"Confirm B's total is 135.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": false,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request is fully specified by facts and requires no tools or attachments.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Compare A's total (120 + 20) with B's total (135).",
+          "reason": "The request is fully specified by facts and requires no tools or attachments.",
+          "topology": "parallel",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Calculate A's Total",
+              "instruction": "Compute 120 plus 20.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Identify B's Total",
+              "instruction": "Confirm B's total is 135.",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": false,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-chain",
+      "seed": 7,
+      "ms": 12594.918003000006,
+      "firstTokenMs": 126.22396899999876,
+      "tokens": 372,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires a multi-step chain of reasoning (research, draft, audit, revise) based on provided requirements, which fits the Chain topology.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Generate a two-day schedule, audit its dependencies, and revise it based on the audit findings.\",\n    \"reason\": \"The request explicitly mandates a sequential process: research, draft, audit, and revise, requiring a chain of dependent tasks.\",\n    \"topology\": \"chain\",\n    \"presentation\": \"prose\",\n    \"tasks\": [\n      {\n        \"id\": \"t1\",\n        \"title\": \"Draft Initial Schedule\",\n        \"instruction\": \"Create a two-day schedule based on the provided requirements.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t2\",\n        \"title\": \"Audit Dependencies\",\n        \"instruction\": \"Analyze the drafted schedule to identify and list any logical or temporal dependencies between tasks.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t1\"]\n      },\n      {\n        \"id\": \"t3\",\n        \"title\": \"Revise Schedule\",\n        \"instruction\": \"Modify the initial schedule to resolve the identified dependencies.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request requires a multi-step chain of reasoning (research, draft, audit, revise) based on provided requirements, which fits the Chain topology.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Generate a two-day schedule, audit its dependencies, and revise it based on the audit findings.",
+          "reason": "The request explicitly mandates a sequential process: research, draft, audit, and revise, requiring a chain of dependent tasks.",
+          "topology": "chain",
+          "presentation": "prose",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Draft Initial Schedule",
+              "instruction": "Create a two-day schedule based on the provided requirements.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t2",
+              "title": "Audit Dependencies",
+              "instruction": "Analyze the drafted schedule to identify and list any logical or temporal dependencies between tasks.",
+              "ability": "",
+              "dependsOn": [
+                "t1"
+              ]
+            },
+            {
+              "id": "t3",
+              "title": "Revise Schedule",
+              "instruction": "Modify the initial schedule to resolve the identified dependencies.",
+              "ability": "",
+              "dependsOn": [
+                "t2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-chain",
+      "seed": 42,
+      "ms": 14282.719092,
+      "firstTokenMs": 118.44552900000417,
+      "tokens": 417,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires a multi-step chain of reasoning (research, draft, audit, revise) based on specific constraints, which fits the Chain topology.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Generate a two-day schedule following the research-draft-edit sequence, audit it for dependencies, and revise based on the audit.\",\n    \"reason\": \"The request explicitly mandates a sequential workflow (research -> draft -> edit) and a subsequent audit/revision step, requiring a chain of dependent tasks.\",\n    \"topology\": \"chain\",\n    \"presentation\": \"prose\",\n    \"tasks\": [\n      {\n        \"id\": \"t1\",\n        \"title\": \"Derive Initial Schedule\",\n        \"instruction\": \"Create a two-day schedule adhering to the sequence: research first, then drafting, then editing. Use only the provided requirements.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t2\",\n        \"title\": \"Audit Dependencies\",\n        \"instruction\": \"Analyze the schedule from t1 to identify any logical or temporal dependencies between the research, drafting, and editing phases.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t1\"]\n      },\n      {\n        \"id\": \"t3\",\n        \"title\": \"Revise Schedule\",\n        \"instruction\": \"Modify the schedule from t1 based on the dependency findings from t2 to ensure all constraints are met.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request requires a multi-step chain of reasoning (research, draft, audit, revise) based on specific constraints, which fits the Chain topology.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Generate a two-day schedule following the research-draft-edit sequence, audit it for dependencies, and revise based on the audit.",
+          "reason": "The request explicitly mandates a sequential workflow (research -> draft -> edit) and a subsequent audit/revision step, requiring a chain of dependent tasks.",
+          "topology": "chain",
+          "presentation": "prose",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Derive Initial Schedule",
+              "instruction": "Create a two-day schedule adhering to the sequence: research first, then drafting, then editing. Use only the provided requirements.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t2",
+              "title": "Audit Dependencies",
+              "instruction": "Analyze the schedule from t1 to identify any logical or temporal dependencies between the research, drafting, and editing phases.",
+              "ability": "",
+              "dependsOn": [
+                "t1"
+              ]
+            },
+            {
+              "id": "t3",
+              "title": "Revise Schedule",
+              "instruction": "Modify the schedule from t1 based on the dependency findings from t2 to ensure all constraints are met.",
+              "ability": "",
+              "dependsOn": [
+                "t2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-graph",
+      "seed": 7,
+      "ms": 14296.601855999994,
+      "firstTokenMs": 124.01228199999605,
+      "tokens": 412,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request specifies a graph topology with explicit facts, so I will compose a plan with a shared spine to check budget and staffing, followed by a feasibility check that depends on both.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Plan independent checks of budget and staffing, then a feasibility check that needs both findings.\",\n    \"reason\": \"The request specifies a graph topology with explicit facts, so I will compose a plan with a shared spine to check budget and staffing, followed by a feasibility check that depends on both.\",\n    \"topology\": \"graph\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"t1\",\n        \"title\": \"Budget Check\",\n        \"instruction\": \"Verify if the available budget of 100 units meets the project requirement of 90 units.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t2\",\n        \"title\": \"Staffing Check\",\n        \"instruction\": \"Verify if the available staffing of 2 people for 3 days meets the project requirement of 5 person-days.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t3\",\n        \"title\": \"Feasibility Check\",\n        \"instruction\": \"Determine feasibility based on the budget and staffing findings from t1 and t2.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t1\", \"t2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request specifies a graph topology with explicit facts, so I will compose a plan with a shared spine to check budget and staffing, followed by a feasibility check that depends on both.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Plan independent checks of budget and staffing, then a feasibility check that needs both findings.",
+          "reason": "The request specifies a graph topology with explicit facts, so I will compose a plan with a shared spine to check budget and staffing, followed by a feasibility check that depends on both.",
+          "topology": "graph",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Budget Check",
+              "instruction": "Verify if the available budget of 100 units meets the project requirement of 90 units.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t2",
+              "title": "Staffing Check",
+              "instruction": "Verify if the available staffing of 2 people for 3 days meets the project requirement of 5 person-days.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t3",
+              "title": "Feasibility Check",
+              "instruction": "Determine feasibility based on the budget and staffing findings from t1 and t2.",
+              "ability": "",
+              "dependsOn": [
+                "t1",
+                "t2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "manual-graph",
+      "seed": 42,
+      "ms": 13607.12483,
+      "firstTokenMs": 123.2326699999976,
+      "tokens": 402,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request specifies a graph topology with no external tools, so the plan must rely entirely on the provided facts to perform the independent checks and the combined feasibility check.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\n    \"abilities\": [],\n    \"inputs\": []\n  },\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Perform independent budget and staffing checks followed by a combined feasibility check using only the provided facts.\",\n    \"reason\": \"The request explicitly requires a graph topology and restricts the analysis to the given facts without external tools.\",\n    \"topology\": \"graph\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"t1\",\n        \"title\": \"Budget Check\",\n        \"instruction\": \"Compare the project requirement of 90 units against the available budget of 100 units.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t2\",\n        \"title\": \"Staffing Check\",\n        \"instruction\": \"Compare the project requirement of 5 person-days against the available staffing of 2 people for 3 days (6 person-days).\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"t3\",\n        \"title\": \"Feasibility Check\",\n        \"instruction\": \"Synthesize the results of the budget and staffing checks to determine overall project feasibility.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"t1\", \"t2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request specifies a graph topology with no external tools, so the plan must rely entirely on the provided facts to perform the independent checks and the combined feasibility check.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Perform independent budget and staffing checks followed by a combined feasibility check using only the provided facts.",
+          "reason": "The request explicitly requires a graph topology and restricts the analysis to the given facts without external tools.",
+          "topology": "graph",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Budget Check",
+              "instruction": "Compare the project requirement of 90 units against the available budget of 100 units.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t2",
+              "title": "Staffing Check",
+              "instruction": "Compare the project requirement of 5 person-days against the available staffing of 2 people for 3 days (6 person-days).",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "t3",
+              "title": "Feasibility Check",
+              "instruction": "Synthesize the results of the budget and staffing checks to determine overall project feasibility.",
+              "ability": "",
+              "dependsOn": [
+                "t1",
+                "t2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "auto-dependent",
+      "seed": 7,
+      "ms": 12868.859637000001,
+      "firstTokenMs": 124.36949599999934,
+      "tokens": 377,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request specifies general knowledge and no attachments, so no tools are needed; the three steps can be executed sequentially in a single composed plan.\",\n  \"presentation\": \"checklist\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Draft a migration checklist, audit it for risks, and revise it based on the audit.\",\n    \"reason\": \"The request requires three sequential steps using general knowledge, which fits a chain topology.\",\n    \"topology\": \"chain\",\n    \"presentation\": \"checklist\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Draft Migration Checklist\",\n        \"instruction\": \"Create a comprehensive migration checklist for a small static website using general knowledge.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Audit Checklist for Risks\",\n        \"instruction\": \"Review the drafted checklist to identify potential broken-link issues and rollback risks.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"task_1\"]\n      },\n      {\n        \"id\": \"task_3\",\n        \"title\": \"Revise Migration Checklist\",\n        \"instruction\": \"Incorporate the identified risks and improvements into a revised version of the checklist.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"task_2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request specifies general knowledge and no attachments, so no tools are needed; the three steps can be executed sequentially in a single composed plan.",
+        "presentation": "checklist",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Draft a migration checklist, audit it for risks, and revise it based on the audit.",
+          "reason": "The request requires three sequential steps using general knowledge, which fits a chain topology.",
+          "topology": "chain",
+          "presentation": "checklist",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Draft Migration Checklist",
+              "instruction": "Create a comprehensive migration checklist for a small static website using general knowledge.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Audit Checklist for Risks",
+              "instruction": "Review the drafted checklist to identify potential broken-link issues and rollback risks.",
+              "ability": "",
+              "dependsOn": [
+                "task_1"
+              ]
+            },
+            {
+              "id": "task_3",
+              "title": "Revise Migration Checklist",
+              "instruction": "Incorporate the identified risks and improvements into a revised version of the checklist.",
+              "ability": "",
+              "dependsOn": [
+                "task_2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "auto-dependent",
+      "seed": 42,
+      "ms": 12230.855532999994,
+      "firstTokenMs": 122.77230899999267,
+      "tokens": 369,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires three sequential steps using only general knowledge, so a chain topology with explicit dependencies is the correct approach.\",\n  \"presentation\": \"checklist\",\n  \"sourceScope\": {\n    \"abilities\": [],\n    \"inputs\": []\n  },\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Execute the three-step migration workflow: draft, audit, and revise.\",\n    \"reason\": \"The request explicitly asks for three separate work steps with a clear dependency order.\",\n    \"topology\": \"chain\",\n    \"presentation\": \"checklist\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Draft Migration Checklist\",\n        \"instruction\": \"Create a migration checklist for a small static website using general knowledge.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Audit Checklist\",\n        \"instruction\": \"Review the draft from task_1 to identify broken-link and rollback risks.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"task_1\"]\n      },\n      {\n        \"id\": \"task_3\",\n        \"title\": \"Revise Checklist\",\n        \"instruction\": \"Incorporate findings from task_2 to produce a final revised checklist.\",\n        \"ability\": \"\",\n        \"dependsOn\": [\"task_2\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request requires three sequential steps using only general knowledge, so a chain topology with explicit dependencies is the correct approach.",
+        "presentation": "checklist",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Execute the three-step migration workflow: draft, audit, and revise.",
+          "reason": "The request explicitly asks for three separate work steps with a clear dependency order.",
+          "topology": "chain",
+          "presentation": "checklist",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Draft Migration Checklist",
+              "instruction": "Create a migration checklist for a small static website using general knowledge.",
+              "ability": "",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Audit Checklist",
+              "instruction": "Review the draft from task_1 to identify broken-link and rollback risks.",
+              "ability": "",
+              "dependsOn": [
+                "task_1"
+              ]
+            },
+            {
+              "id": "task_3",
+              "title": "Revise Checklist",
+              "instruction": "Incorporate findings from task_2 to produce a final revised checklist.",
+              "ability": "",
+              "dependsOn": [
+                "task_2"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "landscape-fanout",
+      "seed": 7,
+      "ms": 13221.207762999984,
+      "firstTokenMs": 128.3129309999931,
+      "tokens": 390,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires a multi-step workflow starting with a broad survey followed by specific independent investigations, which fits the fanout topology.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [\"web\", \"wikipedia\"], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Survey solar energy storage approaches, then compare two selected options.\",\n    \"reason\": \"The request explicitly asks for a landscape survey followed by a comparison of two specific approaches.\",\n    \"topology\": \"fanout\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Survey Solar Storage Approaches\",\n        \"instruction\": \"Survey the main approaches to storing solar energy at home using web sources to identify the landscape of options.\",\n        \"ability\": \"web\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Investigate Option A\",\n        \"instruction\": \"Investigate the first promising approach identified in the survey, focusing on cost and maintenance.\",\n        \"ability\": \"web\",\n        \"dependsOn\": [\"task_1\"]\n      },\n      {\n        \"id\": \"task_3\",\n        \"title\": \"Investigate Option B\",\n        \"instruction\": \"Investigate the second promising approach identified in the survey, focusing on cost and maintenance.\",\n        \"ability\": \"web\",\n        \"dependsOn\": [\"task_1\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request requires a multi-step workflow starting with a broad survey followed by specific independent investigations, which fits the fanout topology.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "web",
+            "wikipedia"
+          ],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Survey solar energy storage approaches, then compare two selected options.",
+          "reason": "The request explicitly asks for a landscape survey followed by a comparison of two specific approaches.",
+          "topology": "fanout",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Survey Solar Storage Approaches",
+              "instruction": "Survey the main approaches to storing solar energy at home using web sources to identify the landscape of options.",
+              "ability": "web",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Investigate Option A",
+              "instruction": "Investigate the first promising approach identified in the survey, focusing on cost and maintenance.",
+              "ability": "web",
+              "dependsOn": [
+                "task_1"
+              ]
+            },
+            {
+              "id": "task_3",
+              "title": "Investigate Option B",
+              "instruction": "Investigate the second promising approach identified in the survey, focusing on cost and maintenance.",
+              "ability": "web",
+              "dependsOn": [
+                "task_1"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "landscape-fanout",
+      "seed": 42,
+      "ms": 13448.176768999983,
+      "firstTokenMs": 128.26664299998083,
+      "tokens": 398,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires a multi-step process involving an initial survey followed by independent deep dives into specific options, which fits the fanout topology pattern.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [\"web\", \"wikipedia\"], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Survey solar storage approaches, then compare two selected options.\",\n    \"reason\": \"The request explicitly asks for a landscape survey followed by separate investigations into two specific approaches, requiring a fanout structure.\",\n    \"topology\": \"fanout\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"task_1\",\n        \"title\": \"Survey Solar Storage Approaches\",\n        \"instruction\": \"Survey the main approaches to storing solar energy at home using web sources to identify the most promising options.\",\n        \"ability\": \"web\",\n        \"dependsOn\": []\n      },\n      {\n        \"id\": \"task_2\",\n        \"title\": \"Investigate Option A\",\n        \"instruction\": \"Investigate the first promising approach identified in the survey, focusing on cost and maintenance.\",\n        \"ability\": \"web\",\n        \"dependsOn\": [\"task_1\"]\n      },\n      {\n        \"id\": \"task_3\",\n        \"title\": \"Investigate Option B\",\n        \"instruction\": \"Investigate the second promising approach identified in the survey, focusing on cost and maintenance.\",\n        \"ability\": \"web\",\n        \"dependsOn\": [\"task_1\"]\n      }\n    ],\n    \"review\": true,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The request requires a multi-step process involving an initial survey followed by independent deep dives into specific options, which fits the fanout topology pattern.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "web",
+            "wikipedia"
+          ],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Survey solar storage approaches, then compare two selected options.",
+          "reason": "The request explicitly asks for a landscape survey followed by separate investigations into two specific approaches, requiring a fanout structure.",
+          "topology": "fanout",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "task_1",
+              "title": "Survey Solar Storage Approaches",
+              "instruction": "Survey the main approaches to storing solar energy at home using web sources to identify the most promising options.",
+              "ability": "web",
+              "dependsOn": []
+            },
+            {
+              "id": "task_2",
+              "title": "Investigate Option A",
+              "instruction": "Investigate the first promising approach identified in the survey, focusing on cost and maintenance.",
+              "ability": "web",
+              "dependsOn": [
+                "task_1"
+              ]
+            },
+            {
+              "id": "task_3",
+              "title": "Investigate Option B",
+              "instruction": "Investigate the second promising approach identified in the survey, focusing on cost and maintenance.",
+              "ability": "web",
+              "dependsOn": [
+                "task_1"
+              ]
+            }
+          ],
+          "review": true,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "missing-documents",
+      "seed": 7,
+      "ms": 2368.750297999999,
+      "firstTokenMs": 128.5119120000163,
+      "tokens": 63,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request asks for a comparison of two attached contracts, but no attachments are present in the current context.\",\"presentation\":\"table\",\"sourceScope\":{\"abilities\":[\"web\",\"wikipedia\"],\"inputs\":[]},\"action\":\"clarify\",\"clarification\":\"Please provide the two contracts you wish to compare.\",\"plan\":null}",
+      "decision": {
+        "reason": "The request asks for a comparison of two attached contracts, but no attachments are present in the current context.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "web",
+            "wikipedia"
+          ],
+          "inputs": []
+        },
+        "action": "clarify",
+        "clarification": "Please provide the two contracts you wish to compare.",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "missing-documents",
+      "seed": 42,
+      "ms": 2459.2621230000223,
+      "firstTokenMs": 128.55800300001283,
+      "tokens": 63,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The request asks for a comparison of clauses in two attached contracts, but no attachments were provided in the conversation context.\",\"presentation\":\"table\",\"sourceScope\":{\"abilities\":[],\"inputs\":[]},\"action\":\"clarify\",\"clarification\":\"Please provide the two contract files you wish to compare.\",\"plan\":null}",
+      "decision": {
+        "reason": "The request asks for a comparison of clauses in two attached contracts, but no attachments were provided in the conversation context.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "clarify",
+        "clarification": "Please provide the two contract files you wish to compare.",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "missing-web",
+      "seed": 7,
+      "ms": 3985.8739329999953,
+      "firstTokenMs": 120.98018199999933,
+      "tokens": 103,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires live data verification, but the available abilities list is empty, preventing access to any tools or sources.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"clarify\",\n  \"clarification\": \"Please provide the specific ability or tool you would like me to use to verify the weather, as the current available abilities list is empty.\",\"plan\": null\n}",
+      "decision": {
+        "reason": "The request requires live data verification, but the available abilities list is empty, preventing access to any tools or sources.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "clarify",
+        "clarification": "Please provide the specific ability or tool you would like me to use to verify the weather, as the current available abilities list is empty.",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "missing-web",
+      "seed": 42,
+      "ms": 3274.7809019999986,
+      "firstTokenMs": 120.76645900000585,
+      "tokens": 87,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request requires live data which cannot be retrieved with the current empty ability set, so clarification is needed.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"clarify\",\"clarification\": \"Please specify which live online source you would like me to use for verifying the Sydney weather.\",\"plan\": null}",
+      "decision": {
+        "reason": "The request requires live data which cannot be retrieved with the current empty ability set, so clarification is needed.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "clarify",
+        "clarification": "Please specify which live online source you would like me to use for verifying the Sydney weather.",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "focused-pdf",
+      "seed": 7,
+      "ms": 5264.554078999994,
+      "firstTokenMs": 128.95349299997906,
+      "tokens": 160,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request asks for a specific calculation from the attached document, so I must read the document to find the necessary data.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\n    \"abilities\": [\n      \"documents\"\n    ],\n    \"inputs\": [\n      \"sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e\"\n    ]\n  },\n  \"action\": \"answer\",\n  \"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request asks for a specific calculation from the attached document, so I must read the document to find the necessary data.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "documents"
+          ],
+          "inputs": [
+            "sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e"
+          ]
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "focused-pdf",
+      "seed": 42,
+      "ms": 5176.030238999985,
+      "firstTokenMs": 128.08354599997983,
+      "tokens": 157,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request asks for a specific calculation based on the attached study, which is available via the documents ability.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\n    \"abilities\": [\n      \"documents\"\n    ],\n    \"inputs\": [\n      \"sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e\"\n    ]\n  },\n  \"action\": \"answer\",\n  \"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request asks for a specific calculation based on the attached study, which is available via the documents ability.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "documents"
+          ],
+          "inputs": [
+            "sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e"
+          ]
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "document-only",
+      "seed": 7,
+      "ms": 4238.735427999985,
+      "firstTokenMs": 135.0230959999899,
+      "tokens": 134,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by the attached PDF and requires a direct comparison from that source only.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [\"documents\"], \"inputs\": [\"sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e\"]},\n  \"action\": \"answer\",\"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request is fully specified by the attached PDF and requires a direct comparison from that source only.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "documents"
+          ],
+          "inputs": [
+            "sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e"
+          ]
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "document-only",
+      "seed": 42,
+      "ms": 4233.859293000016,
+      "firstTokenMs": 134.93199599999934,
+      "tokens": 134,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The request is fully specified by the attached PDF and requires a direct comparison based on its contents.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [\"documents\"], \"inputs\": [\"sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e\"]},\n  \"action\": \"answer\",\"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The request is fully specified by the attached PDF and requires a direct comparison based on its contents.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [
+            "documents"
+          ],
+          "inputs": [
+            "sha256:bdfae350a55404fde59c09183ea5121c471698282edfe4385dfe31c9a5749f5e"
+          ]
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "conversation-recall",
+      "seed": 7,
+      "ms": 2938.977724999975,
+      "firstTokenMs": 127.97630799998296,
+      "tokens": 83,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The user is asking for a comparison between two previously mentioned options based on factual context already established in the conversation.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\n    \"abilities\": [],\n    \"inputs\": []\n  },\n  \"action\": \"answer\",\n  \"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The user is asking for a comparison between two previously mentioned options based on factual context already established in the conversation.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "conversation-recall",
+      "seed": 42,
+      "ms": 2800.219305000006,
+      "firstTokenMs": 128.0086789999914,
+      "tokens": 80,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The user is asking for a comparison of two previously mentioned options based on the conversation history.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\n    \"abilities\": [],\n    \"inputs\": []\n  },\n  \"action\": \"answer\",\n  \"clarification\": \"\",\n  \"plan\": null\n}",
+      "decision": {
+        "reason": "The user is asking for a comparison of two previously mentioned options based on the conversation history.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-plan",
+      "seed": 7,
+      "ms": 2104.069785999978,
+      "firstTokenMs": 127.83579599999939,
+      "tokens": 60,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is complete and verified, satisfying the request.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\",\"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and verified, satisfying the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-plan",
+      "seed": 42,
+      "ms": 1567.2255750000186,
+      "firstTokenMs": 130.40523800000665,
+      "tokens": 44,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The existing combined answer is complete and verified, satisfying the request.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[],\"inputs\":[]},\"action\":\"answer\",\"clarification\": \"\", \"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and verified, satisfying the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-parallel",
+      "seed": 7,
+      "ms": 2172.7411830000055,
+      "firstTokenMs": 129.73379500000738,
+      "tokens": 61,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is complete and verified, satisfying the request.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\", \"plan\": null\n}",
+      "decision": {
+        "reason": "The existing combined answer is complete and verified, satisfying the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-parallel",
+      "seed": 42,
+      "ms": 1492.5119699999923,
+      "firstTokenMs": 130.5306709999859,
+      "tokens": 42,
+      "failures": [],
+      "rawOutput": "{\"reason\":\"The existing combined answer is complete and satisfies the request.\",\"presentation\":\"prose\",\"sourceScope\":{\"abilities\":[],\"inputs\":[]},\"action\":\"answer\",\"clarification\": \"\", \"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and satisfies the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-chain",
+      "seed": 7,
+      "ms": 2146.3214970000263,
+      "firstTokenMs": 130.87754800001858,
+      "tokens": 60,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is complete and accepted, satisfying the request.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\", \"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and accepted, satisfying the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-chain",
+      "seed": 42,
+      "ms": 1989.1887099999876,
+      "firstTokenMs": 128.70341600000393,
+      "tokens": 58,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is complete and satisfies the request.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\",\"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and satisfies the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-graph",
+      "seed": 7,
+      "ms": 1885.93082899999,
+      "firstTokenMs": 129.98233100000652,
+      "tokens": 55,
+      "failures": [],
+      "rawOutput": "{\n\"reason\": \"The existing combined answer is complete and satisfies the request.\",\n\"presentation\": \"prose\",\n\"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\",\"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and satisfies the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "complete-revisit-graph",
+      "seed": 42,
+      "ms": 2029.773664999986,
+      "firstTokenMs": 129.76642800000263,
+      "tokens": 58,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is complete and satisfies the request.\",\n  \"presentation\": \"prose\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\"action\": \"answer\",\"clarification\": \"\",\"plan\": null}",
+      "decision": {
+        "reason": "The existing combined answer is complete and satisfies the request.",
+        "presentation": "prose",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "answer",
+        "clarification": "",
+        "plan": null
+      }
+    },
+    {
+      "caseId": "incomplete-revisit",
+      "seed": 7,
+      "ms": 7716.519990000001,
+      "firstTokenMs": 130.4910830000008,
+      "tokens": 230,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is incomplete because task C was not checked, so the three-way comparison cannot be finalized.\",\n  \"presentation\": \"table\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Complete the missing check for C and finalize the three-way comparison.\",\n    \"reason\": \"Task C is the only unresolved item needed to satisfy the request.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"table\",\n    \"tasks\": [\n      {\n        \"id\": \"c\",\n        \"title\": \"Check C\",\n        \"instruction\": \"Calculate C as 110 plus 18 using only the supplied facts.\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": false,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The existing combined answer is incomplete because task C was not checked, so the three-way comparison cannot be finalized.",
+        "presentation": "table",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Complete the missing check for C and finalize the three-way comparison.",
+          "reason": "Task C is the only unresolved item needed to satisfy the request.",
+          "topology": "parallel",
+          "presentation": "table",
+          "tasks": [
+            {
+              "id": "c",
+              "title": "Check C",
+              "instruction": "Calculate C as 110 plus 18 using only the supplied facts.",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": false,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    },
+    {
+      "caseId": "incomplete-revisit",
+      "seed": 42,
+      "ms": 8290.990592000016,
+      "firstTokenMs": 130.8278510000091,
+      "tokens": 244,
+      "failures": [],
+      "rawOutput": "{\n  \"reason\": \"The existing combined answer is incomplete because task C was not checked, so I must add that specific missing task to the current plan.\",\n  \"presentation\": \"checklist\",\n  \"sourceScope\": {\"abilities\": [], \"inputs\": []},\n  \"action\": \"compose\",\n  \"clarification\": \"\",\n  \"plan\": {\n    \"objective\": \"Check the total for C (110 + 18) and update the combined answer.\",\n    \"reason\": \"Task C is the only missing component required to complete the three-way comparison requested.\",\n    \"topology\": \"parallel\",\n    \"presentation\": \"checklist\",\n    \"tasks\": [\n      {\n        \"id\": \"c\",\n        \"title\": \"Check C\",\n        \"instruction\": \"Calculate the total for C (110 + 18).\",\n        \"ability\": \"\",\n        \"dependsOn\": []\n      }\n    ],\n    \"review\": false,\n    \"preflight\": false,\n    \"revisit\": false,\n    \"inputs\": []\n  }\n}",
+      "decision": {
+        "reason": "The existing combined answer is incomplete because task C was not checked, so I must add that specific missing task to the current plan.",
+        "presentation": "checklist",
+        "sourceScope": {
+          "abilities": [],
+          "inputs": []
+        },
+        "action": "compose",
+        "clarification": "",
+        "plan": {
+          "objective": "Check the total for C (110 + 18) and update the combined answer.",
+          "reason": "Task C is the only missing component required to complete the three-way comparison requested.",
+          "topology": "parallel",
+          "presentation": "checklist",
+          "tasks": [
+            {
+              "id": "c",
+              "title": "Check C",
+              "instruction": "Calculate the total for C (110 + 18).",
+              "ability": "",
+              "dependsOn": []
+            }
+          ],
+          "review": false,
+          "preflight": false,
+          "revisit": false,
+          "inputs": []
+        }
+      }
+    }
+  ],
+  "comparison": [
+    {
+      "caseId": "ordinary-explanation",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": -293.4606960000001
+    },
+    {
+      "caseId": "ordinary-explanation",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -513.9865829999999
+    },
+    {
+      "caseId": "writing",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 135.2610939999995
+    },
+    {
+      "caseId": "writing",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": 290.74427900000046
+    },
+    {
+      "caseId": "supplied-facts",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": -570.9076629999981
+    },
+    {
+      "caseId": "supplied-facts",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": -674.805889999996
+    },
+    {
+      "caseId": "manual-plan",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": -1249.5454229999996
+    },
+    {
+      "caseId": "manual-plan",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": 3820.1233439999996
+    },
+    {
+      "caseId": "manual-parallel",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 868.5074369999929
+    },
+    {
+      "caseId": "manual-parallel",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": 288.3246600000057
+    },
+    {
+      "caseId": "manual-chain",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": -1519.1467099999936
+    },
+    {
+      "caseId": "manual-chain",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": 313.7969249999878
+    },
+    {
+      "caseId": "manual-graph",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 1757.4930960000056
+    },
+    {
+      "caseId": "manual-graph",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": 7513.801817
+    },
+    {
+      "caseId": "auto-dependent",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 604.2089559999877
+    },
+    {
+      "caseId": "auto-dependent",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": 948.4446419999877
+    },
+    {
+      "caseId": "landscape-fanout",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": 1503.7312789999705
+    },
+    {
+      "caseId": "landscape-fanout",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": 1492.156354000006
+    },
+    {
+      "caseId": "missing-documents",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": -616.7092469999916
+    },
+    {
+      "caseId": "missing-documents",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -1763.6866289999743
+    },
+    {
+      "caseId": "missing-web",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": -25.751201000006404
+    },
+    {
+      "caseId": "missing-web",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -393.6931870000262
+    },
+    {
+      "caseId": "focused-pdf",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": 22.550202999991598
+    },
+    {
+      "caseId": "focused-pdf",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": -3611.004355000012
+    },
+    {
+      "caseId": "document-only",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": -157.27126199999475
+    },
+    {
+      "caseId": "document-only",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -7289.7501729999785
+    },
+    {
+      "caseId": "conversation-recall",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 391.6497709999676
+    },
+    {
+      "caseId": "conversation-recall",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -348.02927399997134
+    },
+    {
+      "caseId": "complete-revisit-plan",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 131.9272779999883
+    },
+    {
+      "caseId": "complete-revisit-plan",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -507.1477279999817
+    },
+    {
+      "caseId": "complete-revisit-parallel",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 300.8293779999949
+    },
+    {
+      "caseId": "complete-revisit-parallel",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -599.2793139999849
+    },
+    {
+      "caseId": "complete-revisit-chain",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": 44.59216100003687
+    },
+    {
+      "caseId": "complete-revisit-chain",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -1.7272390000289306
+    },
+    {
+      "caseId": "complete-revisit-graph",
+      "seed": 7,
+      "change": "still passing",
+      "latencyDeltaMs": -189.07794899999863
+    },
+    {
+      "caseId": "complete-revisit-graph",
+      "seed": 42,
+      "change": "still passing",
+      "latencyDeltaMs": -57.35355500000878
+    },
+    {
+      "caseId": "incomplete-revisit",
+      "seed": 7,
+      "change": "recovered",
+      "latencyDeltaMs": 5472.341759999981
+    },
+    {
+      "caseId": "incomplete-revisit",
+      "seed": 42,
+      "change": "recovered",
+      "latencyDeltaMs": 6090.478577000031
+    }
+  ],
+  "receiptNote": "Raw model text is included; baseline/candidate-1 text was reconstructed from preserved agent:produce events. Complete dev JSONL retained separately."
+}

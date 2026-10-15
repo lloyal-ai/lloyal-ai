@@ -1,0 +1,6 @@
+Current request and latest direction:
+<%= it.query %>
+Mode: <%= it.mode %>
+Current plan: <%= JSON.stringify(it.plan) %>
+Available abilities: <%= JSON.stringify(it.abilities) %>
+Input digests: <%= JSON.stringify(it.inputs) %>
