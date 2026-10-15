@@ -17,11 +17,7 @@ import { color, font, radius } from "../theme.js";
 import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
 import { parseAttachmentHref, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
-
-const textOf = (node: ReactNode): string =>
-  typeof node === "string" ? node
-  : Array.isArray(node) ? node.map(textOf).join("")
-  : "";
+import { textOf } from "../text-of.js";
 
 /** The heading scale, stepping down from the document's 31px title. */
 const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
