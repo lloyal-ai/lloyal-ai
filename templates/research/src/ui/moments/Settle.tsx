@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 import { color, font, radius } from "../theme.js";
 import { useProjection } from "@lloyal-labs/ui";
 import {
-  DEPTHS, SHAPES, selectAnswer, selectAsk, selectUnanswered, selectCitations, selectDepth,
+  DEPTHS, SHAPES, selectAnswer, selectAsk, selectUnanswered, selectUnsettled, selectCitations, selectDepth,
   selectExchanges, selectMarks, selectRail, selectRunShape, selectSettleProse,
   selectSourceNotes, selectTitle,
 } from "../select.js";
@@ -19,12 +19,13 @@ import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
-import { nothingKept } from "../presentation.js";
+import { UNSETTLED, nothingKept } from "../presentation.js";
 
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);
   const answer = useProjection(selectAnswer);
   const unanswered = useProjection(selectUnanswered);
+  const unsettled = useProjection(selectUnsettled);
   const prose = useProjection(selectSettleProse);
   const citations = useProjection(selectCitations);
   const notes = useProjection(selectSourceNotes);
@@ -119,6 +120,7 @@ export function Settle(): ReactElement {
         </button>
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
+      {prose && unsettled && <p style={S.mark}>{UNSETTLED}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
       {answer === null && !ask && <p style={S.mark}>{nothingKept(unanswered)}</p>}
       <Sources citations={citations} notes={notes} />

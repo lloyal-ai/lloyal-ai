@@ -1,7 +1,7 @@
 /** The Settle moment: the answer, the sources it cites, the marks in its margin, and the follow-ups threaded
  *  beneath it. */
 import { type AppState, type AgentRuntime, type DocState } from "../state.js";
-import type { Unanswered } from "../../protocol.js";
+import type { Unanswered, Unsettled } from "../../protocol.js";
 import { hostOf } from "@lloyal-labs/ui/fold";
 import { linksOf } from "@lloyal-labs/ui/prose";
 import { type Answer, activeDoc } from "./canvas.js";
@@ -36,6 +36,9 @@ export const selectAnswer = (app: AppState): Answer | null => {
 
 /** Why the shown brief's answer is empty, when its run said. */
 export const selectUnanswered = (app: AppState): Unanswered | null => activeDoc(app).unanswered;
+
+/** Why the shown brief's answer is its inquiries' findings as written, when it is. */
+export const selectUnsettled = (app: AppState): Unsettled | null => activeDoc(app).unsettled;
 
 export interface Citation {
   ordinal: number;

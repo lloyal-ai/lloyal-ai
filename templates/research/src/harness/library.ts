@@ -53,6 +53,8 @@ export const BriefRecord = z.object({
   elapsedMs: z.number(),
   synthTokens: z.number().optional(),
   synthPpl: z.number().optional(),
+  /** The answer is the inquiries' findings as written: the context had no room left to settle them. */
+  unsettled: z.literal("no_room").optional(),
 });
 export type BriefRecord = z.infer<typeof BriefRecord>;
 
@@ -223,6 +225,7 @@ export function* openLibrary(
       mode: root.mode, effort: root.effort, direct: root.direct,
       exchanges: exchanges.map((e) => ({ question: e.query, body: e.answer, attachments: e.attachments })),
       thread: [root.answer, ...exchanges.map((e) => `---\n\n# ${e.query}\n\n${e.answer}`)].join("\n\n"),
+      ...(root.unsettled ? { unsettled: root.unsettled } : {}),
     };
   }
 
@@ -251,6 +254,7 @@ export function* openLibrary(
       attachments: r.attachments, answer: w.answer.trim(), inquiries: w.inquiries, elapsedMs: Date.now() - r.startedAt,
       ...(w.complete.synthTokens !== undefined ? { synthTokens: w.complete.synthTokens } : {}),
       ...(w.complete.synthPpl !== undefined ? { synthPpl: w.complete.synthPpl } : {}),
+      ...(w.unsettled ? { unsettled: w.unsettled } : {}),
     }, { exchange: r.appending, annexuresFrom: r.ordinalBase });
   }
 

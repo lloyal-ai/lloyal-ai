@@ -25,6 +25,10 @@ export type Mode = "flat" | "deep";
  *  start. Absent, the inquiries ran and found nothing to settle. */
 export type Unanswered = "no_room";
 
+/** Why an answer is the inquiries' findings as they were written, not one settled answer: `no_room` when the
+ *  context had no room left for the agent that settles them. */
+export type Unsettled = "no_room";
+
 /** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;
@@ -53,6 +57,8 @@ export interface Thread {
   direct: boolean;
   /** The whole conversation as one text — what a restore commits to the trunk. */
   thread: string;
+  /** Present when the answer is the inquiries' findings as written, not one settled answer. */
+  unsettled?: Unsettled;
 }
 
 /** The terminal event's stats payload. Everything optional: research fills its
@@ -144,11 +150,11 @@ export type BriefEvent =
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
   /** The answer — or null when the inquiries found nothing to settle: the ask is over, nothing was invented,
    *  committed or kept, and the view says so. */
-  | { type: "answer"; text: string | null; unanswered?: Unanswered }
+  | { type: "answer"; text: string | null; unanswered?: Unanswered; unsettled?: Unsettled }
   | { type: "stats"; ctxPct: number; ctxPos: number; ctxTotal: number }
   | { type: "complete"; data: CompleteData }
   /** A settled brief, whole, from disk. Does not activate. */
-  | { type: "doc"; docId: DocId; title: string; mode: Mode; effort: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; exchanges: { question: string; body: string; attachments: string[] }[] }
+  | { type: "doc"; docId: DocId; title: string; mode: Mode; effort: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; unsettled?: Unsettled; exchanges: { question: string; body: string; attachments: string[] }[] }
   /** What the canvas shows. Null is the picker. */
   | { type: "doc:active"; docId: DocId | null }
   /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
@@ -179,6 +185,7 @@ export const docEvent = (thread: Thread, restored: Descriptor[]): Extract<BriefE
   direct: thread.direct,
   ...(restored.length > 0 ? { attachments: restored } : {}),
   answer: thread.body,
+  ...(thread.unsettled ? { unsettled: thread.unsettled } : {}),
   exchanges: thread.exchanges,
 });
 
