@@ -15,7 +15,7 @@ import { FileAttachmentStore } from "@lloyal-labs/media/node";
 import { composeVideo, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
 import type { Attachment } from "@lloyal-labs/media";
 import type { MockSessionContext } from "@lloyal-labs/sdk/testing";
-import { runHarness } from "./harness.js";
+import { runHarness, writeReportFixture } from "./harness.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const frame = (name: string): Uint8Array => new Uint8Array(fs.readFileSync(path.join(here, "../fixtures/video", name)));
@@ -81,15 +81,19 @@ test("a video that would fill more of the context than the budget allows is refu
   assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
 });
 
-test("a video that fits what is free but would leave the run no room to work in is refused before any prefill", async () => {
+const SAVED = "2026-01-01T00-00-00-000";
+
+test("a follow-up's video that fits what is free but would leave the run no room to work in is refused before any prefill", async () => {
   const { store, video } = await plant();
   let ctx!: MockSessionContext;
   const run = await runHarness({
     attachmentStore: store,
+    setup: (dir) => writeReportFixture(dir, SAVED, "Saved brief", "The saved body."),
     // About 2,000 cells of media into 3,000 free: it fits, and leaves less than the effort's working reserve.
     instrument: (c) => { ctx = c; c.mockImageCells = 1_000; c.cellsUsed = c.nCtx - 3_000; },
     script: [
-      { send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
+      { send: { type: "open_doc", docId: SAVED } },
+      { on: (ev) => ev.type === "doc:active", send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
       { on: (ev) => ev.type === "ui:error" },
     ],
   });
@@ -98,4 +102,21 @@ test("a video that fits what is free but would leave the run no room to work in 
   assert.equal(errors.length, 1);
   assert.match(errors[0].message, /^Not enough space for work after attachments \([\d,]+ tokens\)\. Try smaller attachments or adjust budgets \([\d,]+ max allowed for attachments\)\.$/);
   assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
+});
+
+test("a new brief's video is judged by the empty context the brief starts in, not by the brief it leaves", async () => {
+  const { store, video } = await plant();
+  let ctx!: MockSessionContext;
+  const run = await runHarness({
+    attachmentStore: store,
+    // The context as it stands has 3,000 free; the new brief lets that go before its media lands.
+    instrument: (c) => { ctx = c; c.mockImageCells = 1_000; c.cellsUsed = c.nCtx - 3_000; },
+    script: [
+      { send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
+      { on: (ev) => ev.type === "complete" || ev.type === "ui:error" },
+    ],
+  });
+  const refusals = (run.events.filter((e) => e.type === "ui:error") as { message: string }[]).filter((e) => /Not enough space/.test(e.message));
+  assert.deepEqual(refusals, [], "not refused for room the new brief does not need");
+  assert.equal(ctx.multimodalPrefills.length, 1, "the video was read in");
 });

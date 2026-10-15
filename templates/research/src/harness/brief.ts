@@ -10,7 +10,7 @@
 import { scoped } from "effection";
 import type { Channel, Operation } from "effection";
 import type { Session } from "@lloyal-labs/sdk";
-import { waitUntilSettled } from "@lloyal-labs/lloyal-agents";
+import { ContextPressure, Ctx, waitUntilSettled } from "@lloyal-labs/lloyal-agents";
 import { admitted, singleTaskPlan, OperationFailure } from "@lloyal-labs/rig";
 import type { Execution, Handlers, PlanResult, ResearchTask, Coverage } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
@@ -147,14 +147,16 @@ export function briefs(deps: {
   /** Begin a brief, or ask into the one shown. Returns the accepted run, or null when the ask was refused. */
   function* submit(text: string, opts: SubmitOptions = {}): Operation<Operation<void> | null> {
     const { mode = config().defaults.reasoningMode, direct = false, attachments = [], review = true } = opts;
-    // The claims checked once: shape, store, sight, size, and room left for the run's agents to work in.
+    const warm = direct && activeDocId !== null;   // into the brief on the canvas; whether that is a first report or an exchange is the library's to say
+    // The claims checked once: shape, store, sight, size, and room left for the run's agents to work in. A new
+    // brief lets the one on the canvas go before its media lands, so it is judged by the whole context.
     const reserve = BUDGETS.effort[config().defaults.effort].context.softLimit;
-    const seen = yield* admitted(attachments, { ...BUDGETS.attachments, reserve });
+    const free = warm ? undefined : new ContextPressure(yield* Ctx.expect()).nCtx;
+    const seen = yield* admitted(attachments, { ...BUDGETS.attachments, reserve, ...(free !== undefined ? { free } : {}) });
     if ("refused" in seen) {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;
     }
-    const warm = direct && activeDocId !== null;   // into the brief on the canvas; whether that is a first report or an exchange is the library's to say
     let docId: DocId;
     try {
       docId = warm ? activeDocId! : library.reserve();   // a new brief owns its folder before anything is abandoned
