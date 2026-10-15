@@ -29,6 +29,14 @@ export type Unanswered = "no_room";
  *  context had no room left for the agent that settles them. */
 export type Unsettled = "no_room";
 
+/** Said above an answer that is the inquiries' findings as they were written, not one settled answer. */
+export const UNSETTLED = "These are the inquiries' findings as they were written: the context had no room left to settle them into one answer.";
+
+/** An answer as it leaves the app (the saved report, the terminal, a copy or a download), saying it was not
+ *  settled when it was not. The canvas sets the same sentence in its own style. */
+export const answerText = (body: string, unsettled: Unsettled | null | undefined): string =>
+  unsettled ? `> ${UNSETTLED}\n\n${body}` : body;
+
 /** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;

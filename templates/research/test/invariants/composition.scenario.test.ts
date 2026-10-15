@@ -28,6 +28,7 @@ import * as research from "../../src/harness/research.js";
 
 import type { Evidence, Inputs, Research, Written } from "../../src/harness/research.js";
 import { reduce, initialState } from "../../src/ui/state.js";
+import { UNSETTLED } from "../../src/protocol.js";
 import type { AppState } from "../../src/ui/state.js";
 import { selectClarify, selectOutline, selectSections } from "../../src/ui/select.js";
 import { FRAMING } from "../../src/ui/devtools.js";
@@ -345,6 +346,7 @@ test("a settling pass the context has no room for keeps the run: the findings st
   assert.equal(run.events.reduce(reduce, initialState).documents.get(docId)?.unsettled, "no_room");
   const report = fs.readFileSync(path.join(run.outputDir, docId, "report.md"), "utf8");
   assert.ok(report.includes("FIRST-FINDING") && report.includes("SECOND-FINDING"), "the brief was saved with its findings");
+  assert.ok(report.includes(UNSETTLED), "the saved report says, as the canvas does, that it was not settled");
   const record = JSON.parse(fs.readFileSync(path.join(run.outputDir, docId, "report.json"), "utf8")) as { unsettled?: string };
   assert.equal(record.unsettled, "no_room", "a reopened brief says so too");
 });

@@ -19,7 +19,8 @@ import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
-import { UNSETTLED, nothingKept } from "../presentation.js";
+import { nothingKept } from "../presentation.js";
+import { UNSETTLED, answerText } from "../../protocol.js";
 
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);
@@ -106,8 +107,8 @@ export function Settle(): ReactElement {
         {depthTitle && <span>{depthTitle}</span>}
         {citations.length > 0 && <span>{citations.length} sources</span>}
         <span style={{ flex: 1 }} />
-        <button type="button" style={S.action} onClick={() => copy(answer?.body ?? "", "a")}>{copied === "a" ? "Copied" : "Copy"}</button>
-        <button type="button" style={S.action} onClick={() => download(answer?.body ?? "", title)}>Download</button>
+        <button type="button" style={S.action} onClick={() => copy(answerText(answer?.body ?? "", unsettled), "a")}>{copied === "a" ? "Copied" : "Copy"}</button>
+        <button type="button" style={S.action} onClick={() => download(answerText(answer?.body ?? "", unsettled), title)}>Download</button>
       </p>
       {marks.length > 0 && (
         <div style={S.marks}>

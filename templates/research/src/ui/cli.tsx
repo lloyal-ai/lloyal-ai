@@ -15,6 +15,7 @@ import { initialState, reduce } from "./state.js";
 import type { AgentRuntime, AppState } from "./state.js";
 import { selectAnswer } from "./select.js";
 import type { Command, WorkflowEvent } from "../protocol.js";
+import { answerText } from "../protocol.js";
 import { useDevOverlay } from "@lloyal-labs/dev-tools/ink";
 import { APP, nothingKept } from "./presentation.js";
 import { FRAMING } from "./devtools.js";
@@ -98,7 +99,7 @@ function View({
     answer?.streaming ? answer.body
     : latest ? latest.body ?? nothingKept(latest.unanswered)
     : doc && doc.phase === "done" && doc.answer === null ? nothingKept(doc.unanswered)
-    : answer?.body ?? "";
+    : answerText(answer?.body ?? "", doc?.unsettled);
 
   // Input is offered when nothing is mid-flight: no doc, a settled doc, or
   // the planner waiting on a clarification.

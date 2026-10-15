@@ -19,9 +19,6 @@ export const NOTHING_KEPT = "The sources turned up nothing to settle this on —
 /** Said instead when the context was too full for an agent to start: nothing was searched, so nothing was found. */
 export const NO_ROOM = "This brief's context had no room left for an agent to work in, so nothing was kept. Start a new brief, or ask without attaching more.";
 
-/** Said above an answer that is the inquiries' findings as they were written, not one settled answer. */
-export const UNSETTLED = "These are the inquiries' findings as they were written: the context had no room left to settle them into one answer.";
-
 /** The words for an empty answer: why it is empty, when the run said. */
 export const nothingKept = (unanswered: Unanswered | null | undefined): string =>
   unanswered === "no_room" ? NO_ROOM : NOTHING_KEPT;
