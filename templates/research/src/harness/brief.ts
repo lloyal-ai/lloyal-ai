@@ -147,7 +147,9 @@ export function briefs(deps: {
   /** Begin a brief, or ask into the one shown. Returns the accepted run, or null when the ask was refused. */
   function* submit(text: string, opts: SubmitOptions = {}): Operation<Operation<void> | null> {
     const { mode = config().defaults.reasoningMode, direct = false, attachments = [], review = true } = opts;
-    const seen = yield* admitted(attachments, BUDGETS.attachments);   // the claims checked once: shape, store, sight, size
+    // The claims checked once: shape, store, sight, size, and room left for the run's agents to work in.
+    const reserve = BUDGETS.effort[config().defaults.effort].context.softLimit;
+    const seen = yield* admitted(attachments, { ...BUDGETS.attachments, reserve });
     if ("refused" in seen) {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;

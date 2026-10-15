@@ -80,3 +80,22 @@ test("a video that would fill more of the context than the budget allows is refu
   assert.match(errors[0].message, /would take [\d,]+ of the [\d,]+-token context; this harness lets attachments fill up to 70% of it/);
   assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
 });
+
+test("a video that fits what is free but would leave the run no room to work in is refused before any prefill", async () => {
+  const { store, video } = await plant();
+  let ctx!: MockSessionContext;
+  const run = await runHarness({
+    attachmentStore: store,
+    // About 2,000 cells of media into 3,000 free: it fits, and leaves less than the effort's working reserve.
+    instrument: (c) => { ctx = c; c.mockImageCells = 1_000; c.cellsUsed = c.nCtx - 3_000; },
+    script: [
+      { send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
+      { on: (ev) => ev.type === "ui:error" },
+    ],
+  });
+
+  const errors = run.events.filter((e) => e.type === "ui:error") as { message: string }[];
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /^Not enough space for work after attachments \([\d,]+ tokens\)\. Try smaller attachments or adjust budgets \([\d,]+ max allowed for attachments\)\.$/);
+  assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
+});
