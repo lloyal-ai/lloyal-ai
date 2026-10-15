@@ -60,7 +60,7 @@ export type Stages = { answer: typeof answer; inquire: typeof inquire; settle: t
  *  spine, so findings the strategy committed there are ATTENDED already and saying them again costs their length
  *  twice; findings it did not commit are nowhere the agent can see unless the prompt carries them. That depends on
  *  the strategy that ran, never on the shape the reader chose. */
-export type Evidence = { findings: readonly string[]; attended: boolean };
+export type Evidence = { findings: readonly string[]; onSpine: readonly boolean[] };
 
 /** One task's spawn, made for the strategy that asks. `beside` says its siblings work at the same time, which
  *  is what the agent is told about them. */
@@ -171,9 +171,12 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: 
   yield* wire.send({ type: "synthesize:start" });
   const at = timer();
   // Findings the spine holds are read from it; findings it does not are given in the prompt, one block per task.
-  const told = evidence.attended
-    ? prompt("synthesize", { query: ask.text })
-    : prompt("synthesize-flat", { query: ask.text, findings: evidence.findings.map((body, i) => ({ task: plan.tasks[i]?.description ?? `task ${i + 1}`, body: body.trim() })) });
+  const findings = evidence.findings.map((body, i) => ({ task: plan.tasks[i]?.description ?? `task ${i + 1}`, body: body.trim() }));
+  // What the spine holds is read from it, and only what it does not is said beside the question; with nothing on
+  // the spine (a survey commits none), every finding is handed over as the fan-in it is.
+  const told = evidence.onSpine.some(Boolean)
+    ? prompt("synthesize", { query: ask.text, findings: findings.filter((f, i) => f.body && !evidence.onSpine[i]) })
+    : prompt("synthesize-flat", { query: ask.text, findings });
   const agent = yield* useAgent({ ...told, parent: spine, budget: BUDGETS.settle, acceptFreeText: true });
   const timeMs = at();
   const ppl = agent.branch.disposed ? 0 : agent.branch.perplexity;
@@ -273,11 +276,16 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       if (tasks.length === 1) text = found[0].trim() || null;  // one inquiry is its own answer
       else if (found.every((f) => !f.trim())) text = null;     // nothing to settle
       else {
-        // Attended only if EVERY finding there is was committed — each one, not each distinct text: one that was
-        // not would be lost to a prompt that supplies none, so anything short of all of them is handed over whole.
-        const said = found.filter((f) => f.trim());
-        const attended = said.every((f) => (strategy.committed.get(f) ?? 0) >= said.filter((g) => g === f).length);
-        const r = yield* s.settle(spine, ask, plan, { findings: found, attended });
+        // Which findings the spine holds: each one, not each distinct text. Two inquiries can say the same words,
+        // and only as many as were committed are there to read; the rest are handed over beside the question.
+        const left = new Map(strategy.committed);
+        const onSpine = found.map((f) => {
+          const held = left.get(f) ?? 0;
+          if (!f.trim() || held === 0) return false;
+          left.set(f, held - 1);
+          return true;
+        });
+        const r = yield* s.settle(spine, ask, plan, { findings: found, onSpine });
         text = r.answer.trim() ? r.answer : null; settled = r;
       }
 

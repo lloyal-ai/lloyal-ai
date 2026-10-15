@@ -301,6 +301,24 @@ test("a strategy that commits one of two identical findings has not attended bot
   assert.ok(saw.prompt.includes("THE-SAME-FINDING"), "the finding the spine does not hold was not handed to the settling pass");
 });
 
+test("a finding the spine does not hold is handed over alone: those it holds are read from it, not said again", async () => {
+  // A chain whose later report had no room on the spine: the settling pass reads the first from the spine and is
+  // given the second, not both again.
+  const firstOnly: Research["write"] = (trunk, ask, plan) =>
+    research.write(trunk, ask, plan, {
+      inquire: (_ask, tasks, specFor) => function* (ctx) {
+        const first = yield* ctx.waitFor(yield* ctx.spawn(specFor(tasks[0], 0, false)));
+        if (first.result) yield* ctx.extendSpine(research.nextTask(tasks[0]), first.result);
+        yield* ctx.waitFor(yield* ctx.spawn(specFor(tasks[1], 1, false)));
+      },
+    });
+  const run = await runHarness({ harness: composed({ ...research, write: firstOnly }), utterances: twoFindings, script: planned("deep") });
+  const saw = settlingSaw(run);
+  assert.equal(saw.spineGrew, 1, "the first finding joined the spine");
+  assert.ok(saw.prompt.includes("SECOND-FINDING"), "the finding the spine does not hold was not handed over");
+  assert.ok(!saw.prompt.includes("FIRST-FINDING"), "a finding the spine already holds was said again");
+});
+
 test("the stock strategies hand their findings over once: on the spine for an investigation, in the prompt for a survey", async () => {
   const deep = settlingSaw(await runHarness({ utterances: twoFindings, script: planned("deep") }));
   assert.equal(deep.spineGrew, 2, "each inquiry's findings joined the spine");

@@ -23,7 +23,7 @@ the same input. A single turn is one file. Two files are not prompts but parts e
 | `preflight-recover` | a probe reaped under budget | `budget: number`, the words it may still write |
 | `inquiry.system` | every research agent | `preamble: string`, `takesSources: boolean`, `writesTheAnswer: boolean`, `tool: string` |
 | `recovery` | an inquiry reaped under budget | `budget: number`, `tool: string`, `writesTheAnswer: boolean` |
-| `synthesize` / `synthesize-flat` | the settling pass, findings on the spine / in the prompt | `query: string`; flat adds `findings: { task, body }[]` |
+| `synthesize` / `synthesize-flat` | the settling pass, findings on the spine / in the prompt | `query: string`, `findings: { task, body }[]`: for `synthesize`, only those the spine does not hold |
 | `answer.system` | a direct answer from the trunk | nothing beyond the frame |
 | `clarify` | the planner's questions, as the assistant's turn | `questions: string[]` |
 
