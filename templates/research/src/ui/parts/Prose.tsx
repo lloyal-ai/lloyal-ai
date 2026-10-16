@@ -8,7 +8,7 @@
  *  derives — the same pure list the outline rail reads, indexed in render
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
-import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { createContext, memo, useContext, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Lightbox, Markdown, momentClock, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
 import type { LightboxProps } from "@lloyal-labs/ui";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
@@ -29,6 +29,10 @@ const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
 
 /** Models sometimes wrap a woven link in literal brackets — shed them. */
 const shed = (raw: string): string => raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
+
+/** Whether what is rendering sits inside a link. A code span there is the link's label, not a citation of its
+ *  own: the link is already the control, and a button inside a button is not markup a page may have. */
+const InsideLink = createContext(false);
 
 /** Memoized on its props: a section keeps its parse while a sibling streams.
  *  Headings take their ids from `anchors` when given, else from `anchorPrefix`
@@ -58,11 +62,17 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
     const text = textOf(children).trim();
     const moment = parseAttachmentMoment(text);
     const page = moment ? null : parseAttachmentHref(text);
-    if (moment) return link({ href: text });
-    if (page) return link({ href: text, children: `page ${page.page}` });
+    if (moment) return linked({ href: text });
+    if (page) return linked({ href: text, children: `page ${page.page}` });
     return null;
   };
-  const link = ({ href, children }: { href?: string; children?: ReactNode }): ReactElement => {
+  /** An inline code span: a citation when its text is an attachment address, unless a link already holds it. */
+  const InlineCode = ({ children }: { children?: ReactNode }): ReactElement =>
+    (useContext(InsideLink) ? null : citedInCode(children)) ?? <code style={S.code}>{children}</code>;
+  /** A link, and the fact of being inside one for whatever it renders. */
+  const link = (props: { href?: string; children?: ReactNode }): ReactElement =>
+    <InsideLink.Provider value={true}>{linked(props)}</InsideLink.Provider>;
+  const linked = ({ href, children }: { href?: string; children?: ReactNode }): ReactElement => {
     const ordinal = href ? citations?.get(href) : undefined;
     const moment = href ? parseAttachmentMoment(href) : null;
     if (moment) {
@@ -160,7 +170,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
             className ? (
               <code className={className} style={S.codeBlock}>{children}</code>
             ) : (
-              citedInCode(children) ?? <code style={S.code}>{children}</code>
+              <InlineCode>{children}</InlineCode>
             ),
           pre: ({ children }) => <pre style={S.pre}>{children}</pre>,
         }}
