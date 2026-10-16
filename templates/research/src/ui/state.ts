@@ -151,6 +151,9 @@ export interface DocState {
   exchanges: { question: string; body: string | null; attachments: string[]; unanswered?: Unanswered }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
+  /** How many asks this document has accepted, its birth included. A composer reads it before and after a
+   *  send: the document took that ask when the count moved, whatever else the fold shows. */
+  asks: number;
   /** The in-flight ask's media digests, landed on the settled exchange. */
   askAttachments: string[];
   paused: boolean;

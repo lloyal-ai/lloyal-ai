@@ -25,8 +25,8 @@ import type { AppState } from "../state.js";
 // Stable identities — the composer re-renders per keystroke, and a fresh
 // inline closure per render would grow the fold's memo map (store contract).
 const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
-const selectActiveAsk = (app: AppState): string | null =>
-  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.ask ?? null : null;
+const selectActiveAsks = (app: AppState): number =>
+  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.asks ?? 0 : 0;
 const selectClarifying = (app: AppState): boolean =>
   app.activeDocId !== null &&
   app.documents.get(app.activeDocId)?.phase === "clarifying";
@@ -170,7 +170,7 @@ export function Composer({ shape, placeholder }: {
   const [configFor, setConfigFor] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const configPanel = sources.find((l) => l.name === configFor) ?? null;
-  const askNow = useProjection(selectActiveAsk);
+  const asks = useProjection(selectActiveAsks);
   const notice = useProjection(selectNotice);
   /** Dictation lives in the question row: the mic beside the field, and while
    *  it records the field itself gives way to the waveform. A transcript lands
@@ -207,14 +207,14 @@ export function Composer({ shape, placeholder }: {
 
   useEffect(() => {
     if (pending === null) return;
-    const fate = sentFate(pending, { activeDocId, ask: askNow, clarifying, notice });
+    const fate = sentFate(pending, { activeDocId, asks, clarifying, notice });
     if (fate === "waiting") return;
     if (fate === "refused") {
       setDraft(pending.draft);
       setImages((tray) => [...pending.images, ...tray]);   // anything attached while it was out stays
     }
     setPending(null);
-  }, [pending, activeDocId, askNow, clarifying, notice]);
+  }, [pending, activeDocId, asks, clarifying, notice]);
   // The echo must not outlive plausibility — a dead wire has its own banner.
   useEffect(() => {
     if (pending === null) return;
@@ -520,7 +520,7 @@ export function Composer({ shape, placeholder }: {
     if (!text || uploading || pending !== null || live) return;
     if (clarifying) {
       send({ type: "submit_clarification", revision, answer: text });
-      setPending({ text, docId: activeDocId, clarify: true, notice: notice?.id ?? 0, draft, images });
+      setPending({ text, docId: activeDocId, asks, clarify: true, notice: notice?.id ?? 0, draft, images });
       clear();
       return;
     }
@@ -541,7 +541,7 @@ export function Composer({ shape, placeholder }: {
       skipPlanner: willSkipPlanner,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
-    setPending({ text, docId: activeDocId, clarify: false, notice: notice?.id ?? 0, draft, images });
+    setPending({ text, docId: activeDocId, asks, clarify: false, notice: notice?.id ?? 0, draft, images });
     clear();
   };
 

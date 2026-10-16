@@ -167,22 +167,25 @@ export const selectLibrary = (app: AppState): LibraryEntry[] => app.session.libr
 export const selectLibrarySearch = (app: AppState): { query: string; ranked: string[] } | null =>
   app.session.librarySearch;
 
-/** An ask the composer sent, held until the fold says what became of it. `notice` is the notice id current
- *  when it was sent, so only a later one can answer it. */
-export interface Sent { text: string; docId: string | null; clarify: boolean; notice: number }
+/** An ask the composer sent, held until the fold says what became of it. `asks` is the active document's count
+ *  when it was sent, so a higher one is this ask landing; `notice` is the notice id current then, so only a
+ *  later one can answer it. */
+export interface Sent { text: string; docId: string | null; asks: number; clarify: boolean; notice: number }
 
 /** What the fold shows now that can answer a sent ask. */
 export interface SentNow {
   activeDocId: string | null;
-  ask: string | null;
+  /** The active document's accepted asks (`DocState.asks`); 0 at the picker. */
+  asks: number;
   clarifying: boolean;
   notice: { id: number; tone: "info" | "success" | "warn" | "error" } | null;
 }
 
-/** What became of a sent ask. Acknowledged: a document was born or activated, the warm ask echoed, or the
- *  clarify round moved on. Refused: an error notice came first, which is all the host sends for a refused
- *  ask. Otherwise still waiting. */
+/** What became of a sent ask. Acknowledged: a document was born or activated, the document accepted another
+ *  ask, or the clarify round moved on. Refused: an error notice came first, which is all the host sends for a
+ *  refused ask. Otherwise still waiting. The words of the ask decide nothing: a repeat of the brief's own
+ *  question looks like the title it already has. */
 export const sentFate = (sent: Sent, now: SentNow): "waiting" | "acknowledged" | "refused" => {
-  if (now.activeDocId !== sent.docId || now.ask === sent.text || (sent.clarify && !now.clarifying)) return "acknowledged";
+  if (now.activeDocId !== sent.docId || now.asks !== sent.asks || (sent.clarify && !now.clarifying)) return "acknowledged";
   return now.notice !== null && now.notice.tone === "error" && now.notice.id > sent.notice ? "refused" : "waiting";
 };

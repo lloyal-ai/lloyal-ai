@@ -108,7 +108,7 @@ export function emptyDoc(): DocState {
     roster: emptyRoster(),
     reconAgentIds: [],
     researchAgentCount: 0, reports: null,
-    synth: EMPTY_SYNTH, answer: null, unanswered: null, unsettled: null, exchanges: [], ask: null, askAttachments: [],
+    synth: EMPTY_SYNTH, answer: null, unanswered: null, unsettled: null, exchanges: [], ask: null, asks: 0, askAttachments: [],
     paused: false, closing: false, closedEarly: false, stopped: false,
     pipelineElapsedMs: 0, pipelineResumedAt: null,
   };
@@ -242,15 +242,14 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query': {
       const existing = state.documents.get(ev.docId);
-      if (ev.warm)
-        // An ask under a settled answer, or the first report of a document that kept none.
-        return withDoc(state, ev.docId, existing?.answer ? askBranch(existing, ev) : newDoc(ev),
-          { activeDocId: ev.docId, runDocId: ev.docId });
-      if (existing)
+      if (existing && !ev.warm)
         // A clarify/change_mode round's re-echo — same identity, nothing
         // wiped, nothing re-born.
         return { ...state, activeDocId: ev.docId, runDocId: ev.docId };
-      return withDoc(state, ev.docId, newDoc(ev),
+      // A birth, an ask under a settled answer, or the first report of a document that kept none. Each is
+      // an ask the document accepted, and the count is how a composer learns its own send landed.
+      const doc = ev.warm && existing?.answer ? askBranch(existing, ev) : newDoc(ev);
+      return withDoc(state, ev.docId, { ...doc, asks: (existing?.asks ?? 0) + 1 },
         { activeDocId: ev.docId, runDocId: ev.docId });
     }
 
