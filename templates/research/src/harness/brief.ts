@@ -321,7 +321,15 @@ export function briefs(deps: {
     if (dying) trunkDocId = null;   // a stopped run may have landed a pair nobody was shown; the next ask rebuilds from the library
     live = null;
     pendingPlan = null;
-    for (const id of new Set([dying, parked])) if (id && id !== keep) library.release(id);
+    // A run stopped after inquiries had filed their findings ends as the brief the disk already holds: the findings
+    // as written, unsettled, so the canvas and the library agree on what the next ask is beneath. One that filed
+    // nothing is released as before.
+    if (dying && dying !== keep) {
+      const kept = library.asWritten(dying);
+      if (kept !== null) yield* wire.send({ type: "answer", text: kept, unsettled: "failed" });
+      yield* library.settled(dying);
+    }
+    if (parked && parked !== keep && parked !== dying) library.release(parked);
     if (dying ?? parked) yield* wire.send(stopped ? { type: "run:aborted", stopped: true } : { type: "run:aborted" });
   }
 

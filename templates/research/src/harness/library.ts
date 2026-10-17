@@ -166,6 +166,8 @@ export interface Library {
   reserve(): DocId;
   /** The folder goes, unless a brief settled in it (its record reads); the record stops writing for it. */
   release(id: DocId): void;
+  /** What the run on `id` has filed so far, as the answer it would make, or null when it has filed nothing. */
+  asWritten(id: DocId): string | null;
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
   /** One inquiry's findings, as its report returns: filed as an annexure now, so a run that ends any other way
@@ -359,6 +361,10 @@ export function* openLibrary(
       return id;
     },
     release,
+    // What the disk holds of the run so far: a first report's record, written as its findings were filed. An
+    // exchange has no record of its own until it completes, so a stop leaves nothing of it to say; the brief it
+    // was asked into stands.
+    asWritten: (id) => (record?.docId === id && !record.appending && record.filed.size > 0 ? findingsAsWritten(soFar(record).inquiries) : null),
     begin(id, ask, { warm }) {
       const folder = path.join(dir(), id);
       // A brief whose run was stopped before its report lost its folder with the stop but not its place on the
@@ -400,6 +406,7 @@ export function* openLibrary(
     },
     *settled(id) {
       if (!keptIn(id)) return release(id);   // nothing kept in it: the run found nothing, or its record never landed
+      if (record?.docId === id) record = null;   // a run that settled without `complete` (stopped with findings) is over too
       reserved.delete(id);
       yield* reindex();
     },

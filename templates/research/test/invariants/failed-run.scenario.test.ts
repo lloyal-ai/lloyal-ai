@@ -151,3 +151,46 @@ test("a settling pass whose decode fails for room ends the run unsettled, with e
   assert.ok(done && done.tokenCount > 0, "the settling pass sampled tokens before its commit found no room");
   assert.equal(complete?.data.synthTokens, done.tokenCount, "the settling pass's cost is on the record");
 });
+
+test("a run stopped after two of three stages ends as an unsettled brief: the canvas and the disk agree, and the next ask is an exchange beneath it", async () => {
+  let spawns = 0;
+  const run = await runHarness({
+    config: threeTasksAllowed,
+    // The third stage's words and the follow-up's are both plain text: whichever of them the stop leaves
+    // unspoken, the follow-up answers in prose.
+    utterances: [...threeStages.slice(0, 3), { text: "THIRD-STAGE-TEXT", kind: "text" }, { text: "the follow-up answer", kind: "text" }],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "deep" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      // The third stage has just been seated when the reader stops: two reports are filed, the third never written.
+      { on: (ev) => ev.type === "agent:spawn" && ++spawns === 3, send: { type: "stop" } },
+      { on: (ev) => ev.type === "run:aborted", send: { type: "submit_query", query: "And then?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const types = run.events.map((e) => e.type);
+  const answerAt = types.indexOf("answer");
+  const abortedAt = types.indexOf("run:aborted");
+  assert.ok(answerAt >= 0 && answerAt < abortedAt, `the stopped run said its answer before the stop was marked: ${types.join(" ")}`);
+  const answer = run.events[answerAt] as { text: string | null; unsettled?: string };
+  assert.ok(answer.text?.includes("FIRST-FINDING") && answer.text.includes("SECOND-FINDING") && !answer.text.includes("THIRD"), answer.text ?? "");
+  assert.equal(answer.unsettled, "failed", "a stopped run's findings are an answer that was not settled");
+  assert.deepEqual(run.events[abortedAt], { type: "run:aborted", stopped: true });
+
+  // The canvas at the stop: the brief holds its answer and the run bar reads Incomplete.
+  const docId = docIdOfQuery(run.events);
+  const atStop = run.events.slice(0, abortedAt + 1).reduce(reduce, initialState);
+  assert.equal(atStop.documents.get(docId)!.unsettled, "failed");
+  assert.equal(selectStatus(atStop), "Incomplete");
+
+  // The follow-up: an exchange beneath the brief on the canvas, and on disk.
+  const s = run.events.reduce(reduce, initialState);
+  const doc = s.documents.get(docId)!;
+  assert.ok(doc.answer?.includes("FIRST-FINDING"), "the root answer stands");
+  assert.equal(doc.exchanges.length, 1, "the follow-up is an exchange beneath it, not a new root");
+  const dir = path.join(run.outputDir, docId);
+  // The stopped run's two annexures stand; the follow-up's own finding is filed after them, as an exchange's is.
+  assert.deepEqual(annexures(dir), ["annexure-1.md", "annexure-2.md", "annexure-3.md"]);
+  assert.ok(fs.existsSync(path.join(dir, "exchange-1.json")), "the follow-up is an exchange on disk too");
+  assert.equal(asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"))?.unsettled, "failed");
+});

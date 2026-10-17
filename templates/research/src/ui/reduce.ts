@@ -210,12 +210,18 @@ function abortRun(state: AppState, stopped: boolean): AppState {
       pipelineResumedAt: null,
     }, { runDocId: null });
   }
+  // A document with an answer: a settled brief whose follow-up was aborted, or a run stopped after it had filed
+  // findings, which the harness said as the answer before the stop. Its agents stop where they stand, and the
+  // brief is done, the mark above its answer saying why it was not settled.
   if (doc.answer !== null) {
+    const now = Date.now();
     const banked = doc.pipelineResumedAt
-      ? doc.pipelineElapsedMs + (Date.now() - doc.pipelineResumedAt)
+      ? doc.pipelineElapsedMs + (now - doc.pipelineResumedAt)
       : doc.pipelineElapsedMs;
     return withDoc(state, id, {
       ...doc,
+      roster: stopRoster(doc.roster, now),
+      phase: 'done',
       ask: null,
       askAttachments: [],
       revision: null,
