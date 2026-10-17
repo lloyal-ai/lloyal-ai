@@ -250,7 +250,8 @@ export function briefs(deps: {
   function* write(ask: Inputs, plan: PlanResult, warm: boolean): Operation<void> {
     library.begin(ask.docId, ask, { warm });   // its folder: a first report, or a thread beside a settled one
     yield* wire.send({ type: "research:start", agentCount: plan.tasks.length, mode: ask.mode, reports: research.reports ?? null });
-    const written = yield* research.write(session.trunk, ask, plan);
+    // Each inquiry's findings are filed as its report returns, so a run that ends any other way keeps what had finished.
+    const written = yield* research.write(session.trunk, ask, plan, { keep: (index, task, findings) => library.annexure(ask.docId, index, task, findings) });
     yield* commitAnswer(ask.text, written.answer);
     library.written(ask.docId, written);   // held until `complete` is said, which is when the report is made
     yield* wire.send({

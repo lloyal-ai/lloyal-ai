@@ -13,17 +13,18 @@
 import type { Operation } from "effection";
 import type { Branch } from "@lloyal-labs/sdk";
 import { Ctx, SpawnRefused, agentPool, useAgent, chain, parallel, withSpine } from "@lloyal-labs/lloyal-agents";
-import type { Budget, GuardOverrides, NudgeInput, Orchestrator, PoolContext, PromptOf, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
+import type { Agent, Budget, GuardOverrides, NudgeInput, Orchestrator, PoolContext, PromptOf, SpawnSpec, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Attachment, Descriptor } from "@lloyal-labs/media";
 import {
   PlanTool, abilityToc, citedReport, coverage as probe, participating,
-  renderAgentPreamble, renderSpine, singleTaskPlan, taskKey, taskToContent, useWire,
+  renderAgentPreamble, renderSpine, singleTaskPlan, taskIndexOf, taskKey, taskToContent, useWire,
 } from "@lloyal-labs/rig";
 import type { Ability, Coverage, Output, PlanResult, Reports, ResearchTask } from "@lloyal-labs/rig";
 import { BUDGETS } from "./budgets.js";
 import type { Effort } from "./budgets.js";
 import { prompt, render } from "./prompts.js";
 import type { CompleteData, DocId, Mode, Unanswered, Unsettled, WorkflowEvent } from "../protocol.js";
+import { errorMessage, findingsAsWritten } from "../protocol.js";
 
 /** An ask, as the brief hands it over. */
 export type Inputs = {
@@ -46,16 +47,20 @@ export type Inputs = {
 export type Stats = { ctxPct: number; ctxPos: number; ctxTotal: number };
 /** What a writing produced. `answer` is the brief, or null when there is none: the inquiries found nothing to
  *  settle, or none had room to start (`unanswered`). The view says which; nothing is invented, committed or
- *  kept. An unsettled answer is the findings as written (`unsettled`). `inquiries` is what each line of inquiry found, in
- *  plan order: the library keeps one annexure for each that found something, so a writer that ran none returns
- *  none. `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
+ *  kept. An unsettled answer is the findings as written (`unsettled`): the settling pass had no room, or the
+ *  run failed after some inquiries had finished. `inquiries` is what each line of inquiry found, in plan order:
+ *  the library keeps one annexure for each that found something, so a writer that ran none returns none.
+ *  `stats` and `complete` are what the run bar and the dev pane are told as the run ends. */
 export type Written = { answer: string | null; unanswered?: Unanswered; unsettled?: Unsettled; inquiries: { task: string; findings: string }[]; stats: Stats; complete: CompleteData };
 /** What the brief is handed: the planner, the writer, and how the writer's inquiries hand in their findings,
  *  which is what lets the view show them. Replace `write`'s `output` and you replace `reports` with it. */
 export type Research = { plan: typeof plan; write: typeof write; reports?: Reports };
+/** How one inquiry's findings are kept the moment its report returns, by plan index — the brief files them. */
+export type Keep = (index: number, task: string, findings: string) => void;
 /** The writer's stages. Each defaults to this file's own; hand `write` one to replace it alone. `output` is
- *  an output whose `read` yields the findings as text — research's contract. */
-export type Stages = { answer: typeof answer; inquire: typeof inquire; settle: typeof settle; output: Output<string> };
+ *  an output whose `read` yields the findings as text — research's contract. `keep` is told each inquiry's
+ *  findings as they return; by default nobody is. */
+export type Stages = { answer: typeof answer; inquire: typeof inquire; settle: typeof settle; output: Output<string>; keep: Keep };
 /** What the inquiries found, as it is handed to the settling stage: each task's findings in plan order, and the
  *  one fact only the run can establish — whether the spine already holds them. The settling agent is a fork of the
  *  spine, so findings the strategy committed there are ATTENDED already and saying them again costs their length
@@ -166,8 +171,10 @@ export function inquire(ask: Inputs, tasks: readonly ResearchTask[], specFor: Sp
 }
 
 /** The settling pass: one agent on the same spine folds the inquiries' findings into the answer. Findings the
- *  spine already holds are read from it; findings it does not hold are given in the prompt. Sends synthesize:*. */
-export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: Evidence): Operation<{ answer: string; tokens: number; timeMs: number; ppl?: number }> {
+ *  spine already holds are read from it; findings it does not hold are given in the prompt. Sends synthesize:*.
+ *  `failed` names the agent's terminal failure when it handed back no answer: `commit_failed` is a decode that
+ *  found no room, which the writer reads as it reads a refused seat. */
+export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: Evidence): Operation<{ answer: string; tokens: number; timeMs: number; ppl?: number; failed?: string }> {
   const wire = yield* useWire<WorkflowEvent>();
   yield* wire.send({ type: "synthesize:start" });
   const at = timer();
@@ -182,7 +189,32 @@ export function* settle(spine: Branch, ask: Inputs, plan: PlanResult, evidence: 
   const timeMs = at();
   const ppl = agent.branch.disposed ? 0 : agent.branch.perplexity;
   yield* wire.send({ type: "synthesize:done", agentId: agent.id, ppl, tokenCount: agent.tokenCount, toolCallCount: agent.toolCallCount, timeMs });
-  return { answer: agent.result || "", tokens: agent.tokenCount, timeMs, ppl };
+  return { answer: agent.result || "", tokens: agent.tokenCount, timeMs, ppl, ...(agent.failed ? { failed: agent.failed } : {}) };
+}
+
+/** A strategy, run as it is, with each inquiry's findings handed to `keep` as its report returns — the final
+ *  agent across heals, as `waitFor` resolves it, read through the output it was written with. The brief files
+ *  them, so a run that ends any other way has what had finished. */
+function keepingReports(orchestrate: Orchestrator, output: Output<string>, tasks: readonly ResearchTask[], keep: Keep): Orchestrator {
+  const keyOf = new Map<Agent, string | undefined>();   // the task each requested agent was spawned for
+  const keeping = (ctx: PoolContext): PoolContext => ({
+    get spine() { return ctx.spine; },
+    *spawn(spec) {
+      const agent = yield* ctx.spawn(spec);
+      keyOf.set(agent, spec.key);
+      return agent;
+    },
+    *waitFor(agent) {
+      const final = yield* ctx.waitFor(agent);
+      const index = taskIndexOf(keyOf.get(agent));
+      const findings = index === null ? null : output.read({ result: final.result });
+      if (index !== null && findings?.trim()) keep(index, tasks[index]?.description ?? "", findings);
+      return final;
+    },
+    extendSpine: (userContent, assistantContent) => ctx.extendSpine(userContent, assistantContent),
+    canFit: (tokens) => ctx.canFit(tokens),
+  });
+  return (ctx) => orchestrate(keeping(ctx));
 }
 
 /** A strategy, run as it is, with a note kept of what it commits to the spine. Nothing else can say whether the
@@ -206,7 +238,7 @@ function watchingTheSpine(orchestrate: Orchestrator): { orchestrate: Orchestrato
 /** Every inquiry under one shared spine, then the settling pass. The brief has already said the writing began;
  *  this says `research:done` when the inquiries are over, and the settling pass says synthesize:*. */
 export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stages: Partial<Stages> = {}): Operation<Written> {
-  const s: Stages = { answer, inquire, settle, output: citedReport, ...stages };
+  const s: Stages = { answer, inquire, settle, output: citedReport, keep: () => {}, ...stages };
   if (plan.intent === "passthrough") {
     if (trunk) return yield* s.answer(trunk, ask, plan);
     plan = singleTaskPlan(ask.text);   // a cold trunk has nothing to answer from
@@ -260,7 +292,7 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
   return yield* withSpine<Written>(
     { parent: trunk ?? undefined, systemPrompt: renderSpine({ abilities: sources, reference: ask.sources }), tools },
     function* (spine) {
-      const strategy = watchingTheSpine(s.inquire(ask, tasks, specFor));
+      const strategy = watchingTheSpine(keepingReports(s.inquire(ask, tasks, specFor), s.output, tasks, s.keep));
       const pool = yield* agentPool({
         parent: spine, tools, terminal: s.output.tool, attachments: ask.sources,
         budget, guards: ask.guards, hooks: sources.length > 0 ? [EVIDENCE_FIRST] : [], acceptFreeText: ask.direct,
@@ -271,12 +303,21 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
       yield* wire.send({ type: "research:done", totalTokens: pool.totalTokens, totalToolCalls: pool.totalToolCalls, timeMs: researchMs });
       // One final outcome per inquiry, across heals, read through the output it was written with; a refused spawn reads empty.
       const found = tasks.map((_, i) => { const o = pool.byKey(taskKey(i)); return o ? (s.output.read(o) ?? "") : ""; });
+      const asWritten = (): string => findingsAsWritten(tasks.map((task, i) => ({ task: task.description, findings: found[i] })));
+      const kept = found.some((f) => f.trim());
+      // A run that failed after some inquiries finished ends as an unsettled brief: what they found is the answer,
+      // and the reader is told why it stopped there. One that failed with nothing finished fails as it did.
+      if (pool.failure) {
+        if (!kept) throw pool.failure;
+        yield* wire.send({ type: "ui:error", message: `The run ended before it could settle: ${pool.failure.message}` });
+      }
       let text: string | null;
       let settled: { tokens: number; timeMs: number; ppl?: number } = { tokens: 0, timeMs: 0 };
       let unsettled: Unsettled | undefined;
       // An answer with no text is no answer, whichever path produced it: the view says so; nothing is invented.
-      if (tasks.length === 1) text = found[0].trim() || null;  // one inquiry is its own answer
-      else if (found.every((f) => !f.trim())) text = null;     // nothing to settle
+      if (pool.failure) { text = asWritten(); unsettled = "failed"; }
+      else if (tasks.length === 1) text = found[0].trim() || null;  // one inquiry is its own answer
+      else if (!kept) text = null;                                  // nothing to settle
       else {
         // Which findings the spine holds: each one, not each distinct text. Two inquiries can say the same words,
         // and only as many as were committed are there to read; the rest are handed over beside the question.
@@ -287,15 +328,20 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
           left.set(f, held - 1);
           return true;
         });
+        // The inquiries finished; whatever keeps the pass that settles them from answering, what they found stands
+        // as the answer, each under its task, and the answer says why it was not settled: no room (a seat refused,
+        // or a decode that found none) or a failure.
         try {
           const r = yield* s.settle(spine, ask, plan, { findings: found, onSpine });
-          text = r.answer.trim() ? r.answer : null; settled = r;
+          if (r.answer.trim()) { text = r.answer; settled = r; }
+          else { text = asWritten(); unsettled = r.failed === "commit_failed" ? "no_room" : "failed"; }
         } catch (e) {
-          // The inquiries finished; only the agent that settles them found no room. What they found stands as the
-          // answer, each under its task, and the answer says it was not settled. Any other failure fails the run.
-          if (!(e instanceof SpawnRefused && e.reason === "pressure_init")) throw e;
-          text = found.flatMap((f, i) => (f.trim() ? [`## ${tasks[i].description}\n\n${f.trim()}`] : [])).join("\n\n");
-          unsettled = "no_room";
+          if (e instanceof SpawnRefused && e.reason === "pressure_init") unsettled = "no_room";
+          else {
+            unsettled = "failed";
+            yield* wire.send({ type: "ui:error", message: `The run ended before it could settle: ${errorMessage(e)}` });
+          }
+          text = asWritten();
         }
       }
 

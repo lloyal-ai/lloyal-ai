@@ -29,7 +29,7 @@ import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs
 import { config } from "../config.js";
 import type { Inputs, Written } from "../harness/research.js";
 import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
-import { answerText, errorMessage } from "../protocol.js";
+import { answerText, errorMessage, findingsAsWritten } from "../protocol.js";
 
 const CORPUS = "corpus";
 const RECORD = "report.json";
@@ -53,8 +53,9 @@ export const BriefRecord = z.object({
   elapsedMs: z.number(),
   synthTokens: z.number().optional(),
   synthPpl: z.number().optional(),
-  /** The answer is the inquiries' findings as written: the context had no room left to settle them. */
-  unsettled: z.literal("no_room").optional(),
+  /** The answer is the inquiries' findings as written: the context had no room left to settle them (`no_room`),
+   *  or the run ended before it could (`failed`) — which is also what a run still being written says of itself. */
+  unsettled: z.enum(["no_room", "failed"]).optional(),
 });
 export type BriefRecord = z.infer<typeof BriefRecord>;
 
@@ -68,16 +69,23 @@ export const asBriefRecord = (json: string): BriefRecord | null => {
   }
 };
 
+/** File one inquiry's findings as the first free annexure numbered at or after `from`; returns its number. The
+ *  name is reserved, never assumed: another session may be writing beside this one. */
+export function writeAnnexure(dir: string, from: number, task: string, findings: string): number {
+  const n = reserveName(dir, "annexure", ".md", from);
+  fs.writeFileSync(path.join(dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${task ? `**Task:** ${task}\n\n` : ""}---\n\n${findings.trimEnd()}\n`, "utf8");
+  return n;
+}
+
 /** The one writer of a brief's files, for a first report or an exchange beside a settled one: the markdown a
- *  reader opens first — one annexure per inquiry that found something, then the answer with its meta line and
- *  the index of those annexures — and the record LAST, so a crash before it leaves a folder that was never
- *  settled. An annexure's name is reserved, never assumed: another session may be writing beside this one. */
-export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: boolean; annexuresFrom: number }): void {
+ *  reader opens first — one annexure per inquiry that found something (those `filed` as the run went are
+ *  indexed, not written again), then the answer with its meta line and the index of those annexures — and the
+ *  record LAST, so a crash before it leaves a folder that holds only what the run had kept. */
+export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: boolean; annexuresFrom: number; filed?: ReadonlyMap<number, number> }): void {
   const refs: string[] = [];
   record.inquiries.forEach(({ task, findings }, i) => {
     if (!findings.trim()) return;
-    const n = reserveName(dir, "annexure", ".md", opts.annexuresFrom + i + 1);
-    fs.writeFileSync(path.join(dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${task ? `**Task:** ${task}\n\n` : ""}---\n\n${findings.trimEnd()}\n`, "utf8");
+    const n = opts.filed?.get(i) ?? writeAnnexure(dir, opts.annexuresFrom + i + 1, task, findings);
     refs.push(`- [Annexure ${n}](./annexure-${n}.md)${task ? ` — ${task}` : ""}`);
   });
   const annexures = refs.length ? `\n---\n\n## Annexures\n\n${refs.join("\n")}\n` : "";
@@ -107,6 +115,11 @@ const readRecord = (file: string): BriefRecord | null => {
   try { return asBriefRecord(fs.readFileSync(file, "utf8")); } catch { return null; }
 };
 
+/** Whether a record holds anything a reader can open: a settled answer, or the findings a run still being
+ *  written had filed. A record with neither settles nothing, and its folder goes like one with no record. */
+const kept = (record: BriefRecord): boolean =>
+  record.answer.trim() !== "" || record.inquiries.some((i) => i.findings.trim() !== "");
+
 /** What the library keeps for one brief's run: where it writes, and what its inquiries said. */
 interface RunRecord {
   docId: DocId;
@@ -123,6 +136,8 @@ interface RunRecord {
   /** Annexure numbers the folder already held when this run began: this run's annexures are numbered after them. */
   ordinalBase: number;
   startedAt: number;
+  /** What each inquiry found, filed as its report returned: by plan index, with the annexure number it took. */
+  filed: Map<number, { task: string; findings: string; annexure: number }>;
   /** What the writer returned, held until the run says `complete`. */
   written: Written | null;
 }
@@ -145,6 +160,9 @@ export interface Library {
   release(id: DocId): void;
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
+  /** One inquiry's findings, as its report returns: filed as an annexure now, so a run that ends any other way
+   *  has what had finished. A first report's record says what the run has so far, unsettled, until it settles. */
+  annexure(id: DocId, index: number, task: string, findings: string): void;
   /** What the writer returned for the brief being written. The report is made from it when the run says `complete`. */
   written(id: DocId, written: Written): void;
   /** A settled brief, its pictures checked against the store; null when there is none. */
@@ -173,16 +191,18 @@ export function* openLibrary(
   yield* ensure(() => { for (const id of [...reserved]) release(id); });
 
   const recordPath = (id: DocId): string | null => confined(dir(), path.join(dir(), id, RECORD));
-  /** Whether a brief settled in its folder: it holds a record that READS. A file that exists but does not (a write
-   *  cut short) settles nothing — the folder is as unsettled as one with no record, and is treated the same. */
-  const settledIn = (id: DocId): boolean => { const file = recordPath(id); return file !== null && readRecord(file) !== null; };
+  /** Whether a brief's folder holds anything kept: a record that READS and has an answer or filed findings. A file
+   *  that exists but does not read (a write cut short), or a record of a run that had found nothing yet, settles
+   *  nothing — the folder is as unsettled as one with no record, and is treated the same. */
+  const keptIn = (id: DocId): boolean => { const file = recordPath(id); const r = file === null ? null : readRecord(file); return r !== null && kept(r); };
 
-  /** Every settled brief's record, newest first — a folder without one, or with one of another shape, is not listed. */
+  /** Every brief's record that holds something, newest first — a settled brief, or a run that ended with its
+   *  findings filed; a folder without one, or with one of another shape, is not listed. */
   function records(): { path: string; docId: DocId; record: BriefRecord }[] {
     const found: { path: string; docId: DocId; record: BriefRecord }[] = [];
     for (const { name, path: file } of listFolders(dir(), RECORD)) {
       const r = readRecord(file);
-      if (r) found.push({ path: file, docId: name, record: r });
+      if (r && kept(r)) found.push({ path: file, docId: name, record: r });
     }
     return found.sort((a, b) => (a.record.savedAt < b.record.savedAt ? 1 : -1));
   }
@@ -195,9 +215,23 @@ export function* openLibrary(
   function release(id: DocId): void {
     if (record?.docId === id) record = null;
     const folder = path.join(dir(), id);
-    if (fs.existsSync(folder) && !settledIn(id)) removeFolder(folder);
+    if (fs.existsSync(folder) && !keptIn(id)) removeFolder(folder);
     reserved.delete(id);
   }
+
+  /** The facts of the run so far, as a record: the findings filed, in plan order, as the answer they would make;
+   *  unsettled until the run settles. What a reader finds of a run that was killed. */
+  const soFar = (r: RunRecord): BriefRecord => {
+    const inquiries: BriefRecord["inquiries"] = [];
+    for (const [index, { task, findings }] of r.filed) {
+      while (inquiries.length < index) inquiries.push({ task: "", findings: "" });
+      inquiries[index] = { task, findings };
+    }
+    return {
+      version: 1, query: r.query, savedAt: new Date().toISOString(), mode: r.mode, effort: r.effort, direct: r.direct,
+      attachments: r.attachments, answer: findingsAsWritten(inquiries), inquiries, elapsedMs: Date.now() - r.startedAt, unsettled: "failed",
+    };
+  };
 
   function read(id: DocId): Thread | null {
     const file = recordPath(id);
@@ -255,7 +289,7 @@ export function* openLibrary(
       ...(w.complete.synthTokens !== undefined ? { synthTokens: w.complete.synthTokens } : {}),
       ...(w.complete.synthPpl !== undefined ? { synthPpl: w.complete.synthPpl } : {}),
       ...(w.unsettled ? { unsettled: w.unsettled } : {}),
-    }, { exchange: r.appending, annexuresFrom: r.ordinalBase });
+    }, { exchange: r.appending, annexuresFrom: r.ordinalBase, filed: new Map([...r.filed].map(([i, f]) => [i, f.annexure])) });
   }
 
   /** The two things the library takes from the bus, because no value carries them: the roots a tool admitted
@@ -322,15 +356,23 @@ export function* openLibrary(
       // A brief whose run was stopped before its report lost its folder with the stop but not its place on the
       // canvas: an ask into it writes its first report, so the folder is back and reserved again.
       fs.mkdirSync(folder, { recursive: true });
-      const settledAlready = warm && settledIn(id);
+      const settledAlready = warm && keptIn(id);
       if (!settledAlready) reserved.add(id);
       let taken = 0;
       if (settledAlready) for (const name of fs.readdirSync(folder)) { const m = /^annexure-(\d+)\.md$/.exec(name); if (m) taken = Math.max(taken, Number(m[1])); }
       record = {
         docId: id, dir: folder, query: ask.text, mode: ask.mode, effort: ask.effort, direct: ask.direct,
         attachments: ask.attachments.map((a) => a.digest),
-        appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), written: null,
+        appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), filed: new Map(), written: null,
       };
+    },
+    annexure(id, index, task, findings) {
+      const r = record;
+      if (r?.docId !== id || !findings.trim()) return;
+      const n = writeAnnexure(r.dir, r.ordinalBase + index + 1, task, findings);
+      r.filed.set(index, { task, findings, annexure: n });
+      // An exchange lands beside a settled brief, whose record stands; a first report's record is the run's own.
+      if (!r.appending) fs.writeFileSync(path.join(r.dir, RECORD), JSON.stringify(soFar(r), null, 2) + "\n", "utf8");
     },
     written(id, w) { if (record?.docId === id) record.written = w; },
     read,
@@ -349,7 +391,7 @@ export function* openLibrary(
       return heldRoots(store, thread.attachments);
     },
     *settled(id) {
-      if (!settledIn(id)) return release(id);   // nothing settled in it: the run found nothing, or its record never landed
+      if (!keptIn(id)) return release(id);   // nothing kept in it: the run found nothing, or its record never landed
       reserved.delete(id);
       yield* reindex();
     },

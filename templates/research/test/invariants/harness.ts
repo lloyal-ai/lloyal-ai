@@ -11,11 +11,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadYml } from "@lloyal-labs/rig/node";
+import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@lloyal-labs/rig";
+import { loadYml, settings } from "@lloyal-labs/rig/node";
 import { runHarness as runRig } from "@lloyal-labs/rig/testing";
 import type { HarnessRun as RigRun, HarnessSpec as RigSpec, Sendable as RigSendable, Step as RigStep } from "@lloyal-labs/rig/testing";
-import { harness, config } from "../../src/app.js";
-import { writeBrief } from "../../src/harness/library.js";
+import { abilities, harness, config } from "../../src/app.js";
+import { briefs } from "../../src/harness/brief.js";
+import { openLibrary, writeBrief } from "../../src/harness/library.js";
+import type { Research } from "../../src/harness/research.js";
 import type { WorkflowEvent, Command } from "../../src/protocol.js";
 
 /** The scaffold itself — where its harness.yml is. */
@@ -36,6 +39,17 @@ export interface HarnessSpec extends Omit<Spec, "harness" | "config" | "override
   /** The composition to run in place of the app's own `harness` — a scenario that swaps a part. */
   harness?: typeof harness;
 }
+
+/** `app.ts`'s composition with the algorithm exchanged — the one line a developer changes. A scenario hands it a
+ *  research with one part replaced (a settling stage, a planner, the whole writer) and runs it for real. */
+export const composed = (algorithm: Research): typeof harness => function* (ctx, events, commands) {
+  const { session, wire, runner, registry, store } = yield* initializeHarness(ctx, events, { abilities, config });
+  const run = yield* useExecution();
+  const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
+  const brief = briefs({ session, library, run, wire, config: runner.config, research: algorithm });
+  yield* wire.send({ type: "weights:done" });
+  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], serveDefaults({ wire, run, abandon: brief.abortRun }));
+};
 
 /** The planning round the harness last armed (`ui:plan_review` / `ui:clarify`) in the run in flight — what a yes or an
  *  answer must name. Scenarios run one at a time, so one module-level number is the current run's. */
