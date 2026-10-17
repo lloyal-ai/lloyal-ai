@@ -87,7 +87,7 @@ export function briefs(deps: {
           // The round joins the trunk as it is answered: the question paired with what was asked, then the answer as the
           // open user side the planner's fork reads. A round the reader walks away from leaves nothing on the trunk.
           yield* commitAnswer(inputs.text, render("clarify", { questions: plan.clarifyQuestions }));   // the planner's questions as the assistant's turn, so the next fork attends the dialogue
-          yield* waitUntilSettled(session.prefillUser(answer));
+          yield* onTrunk(session.prefillUser(answer));
           yield* frame(inputs, true);
         });
       },
@@ -250,7 +250,8 @@ export function briefs(deps: {
   function* write(ask: Inputs, plan: PlanResult, warm: boolean): Operation<void> {
     library.begin(ask.docId, ask, { warm });   // its folder: a first report, or a thread beside a settled one
     yield* wire.send({ type: "research:start", agentCount: plan.tasks.length, mode: ask.mode, reports: research.reports ?? null });
-    const written = yield* research.write(session.trunk, ask, plan);
+    // Each inquiry's findings are filed as its report returns, so a run that ends any other way keeps what had finished.
+    const written = yield* research.write(session.trunk, ask, plan, { keep: (index, task, findings) => library.annexure(ask.docId, index, task, findings) });
     yield* commitAnswer(ask.text, written.answer);
     library.written(ask.docId, written);   // held until `complete` is said, which is when the report is made
     yield* wire.send({
@@ -267,7 +268,20 @@ export function briefs(deps: {
   /** The answer joins the trunk: it closes the reader's side when one is open, else lands as a pair with its question. */
   function* commitAnswer(question: string, text: string | null): Operation<void> {
     if (!text) return;
-    yield* waitUntilSettled(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
+    yield* onTrunk(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
+  }
+
+  /** A write on the trunk itself. One that fails may have left part of a turn there, so the brief stops trusting
+   *  the trunk and the next ask rebuilds it from the library. A turn written on a fork of the trunk is not one of
+   *  these: its failure prunes the fork and the trunk stands as it was, so the conversation — its images and
+   *  videos included — is kept for the next ask. */
+  function* onTrunk(write: Promise<void>): Operation<void> {
+    try {
+      yield* waitUntilSettled(write);
+    } catch (err) {
+      trunkDocId = null;
+      throw err;
+    }
   }
 
   /** Run one step of a brief's life under `run`, the session's one owner of long work, and return the accepted
@@ -289,7 +303,8 @@ export function briefs(deps: {
         if (live !== ask.docId) throw err;
         live = null;
         pendingPlan = null;
-        trunkDocId = null;   // a write that failed may have left part of a turn; the next ask rebuilds from the library
+        // The trunk is kept unless a write on it failed (`onTrunk`) or the session released it: a turn that failed on
+        // its fork left the trunk whole, and the next ask threads it through `holds` as it would after a settled run.
         library.release(ask.docId);
         yield* wire.send({ type: "run:aborted" });
         yield* wire.send({ type: "ui:error", message: errorMessage(err) });
@@ -306,7 +321,15 @@ export function briefs(deps: {
     if (dying) trunkDocId = null;   // a stopped run may have landed a pair nobody was shown; the next ask rebuilds from the library
     live = null;
     pendingPlan = null;
-    for (const id of new Set([dying, parked])) if (id && id !== keep) library.release(id);
+    // A run stopped after inquiries had filed their findings ends as the brief the disk already holds: the findings
+    // as written, unsettled, so the canvas and the library agree on what the next ask is beneath. One that filed
+    // nothing is released as before.
+    if (dying && dying !== keep) {
+      const kept = library.asWritten(dying);
+      if (kept !== null) yield* wire.send({ type: "answer", text: kept, unsettled: "failed" });
+      yield* library.settled(dying);
+    }
+    if (parked && parked !== keep && parked !== dying) library.release(parked);
     if (dying ?? parked) yield* wire.send(stopped ? { type: "run:aborted", stopped: true } : { type: "run:aborted" });
   }
 

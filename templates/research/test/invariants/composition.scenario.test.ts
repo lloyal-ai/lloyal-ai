@@ -17,13 +17,8 @@ import type { Branch } from "@lloyal-labs/sdk";
 import { Tool, parallel } from "@lloyal-labs/lloyal-agents";
 import type { Agent, JsonSchema, ToolLifecycleHooks } from "@lloyal-labs/lloyal-agents";
 import type { Output } from "@lloyal-labs/rig";
-import { initializeHarness, useExecution, serveCommands, serveDefaults } from "@lloyal-labs/rig";
 import type { PlanResult } from "@lloyal-labs/rig";
-import { settings } from "@lloyal-labs/rig/node";
-import { abilities, config, harness } from "../../src/app.js";
-import { briefs } from "../../src/harness/brief.js";
-import { openLibrary } from "../../src/harness/library.js";
-import type { Command, WorkflowEvent } from "../../src/protocol.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
 import * as research from "../../src/harness/research.js";
 
 import type { Evidence, Inputs, Research, Written } from "../../src/harness/research.js";
@@ -35,7 +30,7 @@ import { FRAMING } from "../../src/ui/devtools.js";
 import { createPaneModel, foldEvent } from "@lloyal-labs/dev-tools";
 import type { DevEvent } from "@lloyal-labs/dev-tools";
 import { WebSearchTool } from "../../node_modules/@lloyal-labs/web-ability/dist/tools/web-search.js";
-import { runHarness, docIdOfQuery, accept } from "./harness.js";
+import { runHarness, docIdOfQuery, accept, composed } from "./harness.js";
 import { SpawnRefused } from "@lloyal-labs/lloyal-agents";
 import type { Utterance } from "./harness.js";
 import * as os from "node:os";
@@ -44,16 +39,6 @@ import { DOCUMENT_CONFIG_TYPE } from "@lloyal-labs/media";
 import type { Attachment, DocumentMeta } from "@lloyal-labs/media";
 
 const TWO_TASKS = JSON.stringify({ intent: "research", tasks: [{ description: "one" }, { description: "two" }], clarifyQuestions: [] });
-
-/** `app.ts`'s composition with the algorithm exchanged — the one line a developer changes. */
-const composed = (algorithm: Research): typeof harness => function* (ctx, events, commands) {
-  const { session, wire, runner, registry, store } = yield* initializeHarness(ctx, events, { abilities, config });
-  const run = yield* useExecution();
-  const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
-  const brief = briefs({ session, library, run, wire, config: runner.config, research: algorithm });
-  yield* wire.send({ type: "weights:done" });
-  yield* serveCommands<Command>(commands, [brief, library, settings({ runner, registry, store, wire, run, abilities, config })], serveDefaults({ wire, run, abandon: brief.abortRun }));
-};
 
 /** What the canvas holds the moment `at` is announced: the real fold over the wire this run carried. */
 const foldTo = (events: readonly WorkflowEvent[], at: WorkflowEvent["type"]): AppState => {
@@ -346,7 +331,7 @@ test("a settling pass the context has no room for keeps the run: the findings st
   assert.equal(run.events.reduce(reduce, initialState).documents.get(docId)?.unsettled, "no_room");
   const report = fs.readFileSync(path.join(run.outputDir, docId, "report.md"), "utf8");
   assert.ok(report.includes("FIRST-FINDING") && report.includes("SECOND-FINDING"), "the brief was saved with its findings");
-  assert.ok(report.includes(UNSETTLED), "the saved report says, as the canvas does, that it was not settled");
+  assert.ok(report.includes(UNSETTLED.no_room), "the saved report says, as the canvas does, that it was not settled");
   const record = JSON.parse(fs.readFileSync(path.join(run.outputDir, docId, "report.json"), "utf8")) as { unsettled?: string };
   assert.equal(record.unsettled, "no_room", "a reopened brief says so too");
 });

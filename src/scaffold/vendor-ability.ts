@@ -23,6 +23,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readPackageJson, writeJson } from './package-json.js';
 import type { PackageJson } from './package-json.js';
+import { recordInstalledAbility } from './write-marker.js';
 import {
   fetchAndVerifyCatalog,
   resolveAbilityVersion,
@@ -296,8 +297,10 @@ export async function verifyAndVendorAbility(
 
   // 7. Point package.json at the local tarball (npm 12 installs `file:` deps
   // without --allow-remote; `npm ci` reproduces it offline from the committed
-  // tarball) — through the one owner of the file.
+  // tarball) — through the one owner of the file. The marker's recorded spec for
+  // this ability moves with it, so the scaffold's preflight reads the two together.
   pkg.dependencies = { ...(pkg.dependencies ?? {}), [entry.importName]: `file:${vendorRelPath}` };
+  recordInstalledAbility(pkg, spec.name, manifest.version);
   writeJson(pkgPath, pkg)();
 
   return {

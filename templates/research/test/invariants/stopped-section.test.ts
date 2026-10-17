@@ -82,7 +82,8 @@ test("a stopped report whose write-up has not landed: the draft is frozen, the r
   assert.equal(section.prose, "What it found, in short");
   assert.equal(section.streaming, true);
   assert.deepEqual(section.stopped, { note: "closed early — writing up what it found", tail: null });
-  assert.deepEqual(verbOf(a, REPORTS), { kind: "writing", text: "closed early — settling the section into the brief" });
+  // Until the recovery lands, the row says the inquiry is recovering what it found, however much has streamed.
+  assert.deepEqual(verbOf(a, REPORTS), { kind: "writing", text: "closed early — recovering what it found…" });
 });
 
 test("a working turn dropped mid call: its JSON is no draft and the section shows nothing of it", () => {
@@ -94,7 +95,7 @@ test("a working turn dropped mid call: its JSON is no draft and the section show
   assert.equal(section.draft, null);
   assert.equal(section.prose, null);
   assert.equal(section.stopped, null);
-  assert.deepEqual(verbOf(a, REPORTS), { kind: "writing", text: "out of time — settling the section into the brief" });
+  assert.deepEqual(verbOf(a, REPORTS), { kind: "writing", text: "out of time — recovering what it found…" });
 });
 
 test("a voluntary return is untouched: settled, no stop, no tail", () => {

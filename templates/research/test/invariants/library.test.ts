@@ -271,3 +271,106 @@ test("roots a tool result admitted ride the record beside the ask's own, once ea
   const record = asBriefRecord(fs.readFileSync(path.join(lib, id, "report.json"), "utf8"));
   assert.deepEqual(record?.attachments, [own, admitted]);
 });
+
+const annexuresIn = (dir: string): string[] => fs.readdirSync(dir).filter((n) => /^annexure-\d+\.md$/.test(n)).sort();
+
+test("each inquiry's annexure is filed as its report returns, and the record says what the run has so far: unsettled, read back as the findings as written", async () => {
+  const lib = fresh();
+  const id = await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    const docId = library.reserve();
+    library.begin(docId, ask(docId), { warm: false });
+    library.annexure(docId, 0, "the near half", "FIRST-FINDING");
+    library.annexure(docId, 1, "the far half", "SECOND-FINDING");
+    return docId;
+  });
+  const dir = path.join(lib, id);
+  assert.deepEqual(annexuresIn(dir), ["annexure-1.md", "annexure-2.md"]);
+  const record = asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"));
+  assert.equal(record?.unsettled, "failed", "a run still being written is unsettled until it settles");
+  assert.deepEqual(record?.inquiries, [{ task: "the near half", findings: "FIRST-FINDING" }, { task: "the far half", findings: "SECOND-FINDING" }]);
+  // Another session's library lists it and reads it back: the findings as written are its body.
+  const seen = await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    return { thread: library.read(id), unfinished: library.unfinished(id) };
+  });
+  assert.equal(seen.thread?.unsettled, "failed");
+  assert.ok(seen.thread?.body.includes("## the near half\n\nFIRST-FINDING") && seen.thread.body.includes("SECOND-FINDING"));
+});
+
+test("the report made at the end indexes the annexures already filed and files no second copy", async () => {
+  const lib = fresh();
+  const id = await run(function* () {
+    const { lib: library, bus } = yield* opened(lib);
+    const docId = library.reserve();
+    library.begin(docId, ask(docId), { warm: false });
+    library.annexure(docId, 0, "the near half", "FIRST-FINDING");
+    library.written(docId, wrote([{ task: "the near half", findings: "FIRST-FINDING" }, { task: "the far half", findings: "SECOND-FINDING" }]));
+    bus.send(ev({ type: "complete", data: {} }));
+    yield* library.settled(docId);
+    return docId;
+  });
+  const dir = path.join(lib, id);
+  assert.deepEqual(annexuresIn(dir), ["annexure-1.md", "annexure-2.md"], "the first was filed as it returned, the second at the end, neither twice");
+  const report = fs.readFileSync(path.join(dir, "report.md"), "utf8");
+  assert.match(report, /- \[Annexure 1\]\(\.\/annexure-1\.md\) — the near half/);
+  assert.match(report, /- \[Annexure 2\]\(\.\/annexure-2\.md\) — the far half/);
+  const record = asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"));
+  assert.equal(record?.unsettled, undefined, "settled: the run's own mark is gone");
+  assert.equal(record?.answer, "the answer");
+});
+
+test("a run released with nothing filed leaves no folder, as before; one with findings filed keeps it, and is listed", async () => {
+  const lib = fresh();
+  const { empty, kept } = await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    const empty = library.reserve();
+    library.begin(empty, ask(empty), { warm: false });
+    library.release(empty);
+    const kept = library.reserve();
+    library.begin(kept, ask(kept), { warm: false });
+    library.annexure(kept, 0, "a task", "A FINDING");
+    library.release(kept);
+    return { empty, kept };
+  });
+  assert.equal(fs.existsSync(path.join(lib, empty)), false, "nothing was kept: the folder goes");
+  assert.equal(fs.existsSync(path.join(lib, kept)), true, "a finding was filed: the folder stays");
+  const read = await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    return { empty: library.read(empty), kept: library.read(kept) };
+  });
+  assert.equal(read.empty, null);
+  assert.equal(read.kept?.unsettled, "failed", "what was kept reads back as an unsettled brief");
+});
+
+test("a record write that dies midway leaves the last whole record on disk, so the folder and its annexures survive a release", async () => {
+  const lib = fresh();
+  await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    const id = library.reserve();
+    library.begin(id, ask(id), { warm: false });
+    library.annexure(id, 0, "one", "FIRST");
+    const before = fs.readFileSync(path.join(lib, id, "report.json"), "utf8");
+    // The next record write dies after it has begun: what it wrote so far is on disk, and no more. A quit lands
+    // wherever it lands.
+    const writeFileSync = fsModule.writeFileSync;
+    fsModule.writeFileSync = ((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, ...rest: unknown[]) => {
+      if (typeof file === "string" && path.basename(file).startsWith("report.json")) {
+        (writeFileSync as (...a: unknown[]) => void)(file, String(data).slice(0, 24), ...rest);
+        throw new Error("ENOSPC: the disk is full");
+      }
+      return (writeFileSync as (...a: unknown[]) => void)(file, data, ...rest);
+    }) as typeof fs.writeFileSync;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => library.annexure(id, 1, "two", "SECOND"), /ENOSPC/);
+    } finally {
+      fsModule.writeFileSync = writeFileSync;
+      syncBuiltinESMExports();
+    }
+    assert.equal(fs.readFileSync(path.join(lib, id, "report.json"), "utf8"), before, "the last whole record is what is on disk");
+    library.release(id);
+    assert.ok(fs.existsSync(path.join(lib, id, "annexure-1.md")), "the folder, with what the run had filed, survives");
+    assert.ok(fs.existsSync(path.join(lib, id, "annexure-2.md")));
+  });
+});

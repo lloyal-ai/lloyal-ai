@@ -121,7 +121,7 @@ export function Settle(): ReactElement {
         </button>
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
-      {prose && unsettled && <p style={S.mark}>{UNSETTLED}</p>}
+      {prose && unsettled && <p style={S.mark}>{UNSETTLED[unsettled]}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
       {answer === null && !ask && <p style={S.mark}>{nothingKept(unanswered)}</p>}
       <Sources citations={citations} notes={notes} />

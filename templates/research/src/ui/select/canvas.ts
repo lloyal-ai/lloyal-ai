@@ -138,7 +138,11 @@ export const selectStatus = (app: AppState): string => {
   // controls command that document, whatever the canvas shows.
   const d = running ?? activeDoc(app);
   if (d.stopped) return "Stopped";
-  return d.ask !== null ? "Writing" : PHASES[d.phase].status;
+  if (d.ask !== null) return "Writing";
+  // A brief whose answer is its inquiries' findings as written was not settled, whatever left it so; the mark
+  // above the answer says why.
+  if (d.phase === "done" && d.unsettled !== null) return "Incomplete";
+  return PHASES[d.phase].status;
 };
 
 /** A follow-up ask is in flight — writing under the settled document. */

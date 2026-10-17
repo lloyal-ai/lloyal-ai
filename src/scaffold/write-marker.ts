@@ -72,6 +72,26 @@ export function setMarkerTargets(projectDir: string, targets: Target[]): void {
   writePkg(projectDir, pkg);
 }
 
+/**
+ * Record an install in the marker, in the manifest object the installer is about to write: the recorded spec
+ * for the same ability moves to the version that was vendored, so `harnessdev.abilities` and the `file:`
+ * dependency move together and the scaffold's preflight, which checks the one against the other, keeps
+ * passing after an upgrade. A marker that never recorded the ability is left as it is: the marker says what
+ * the template's harness imports, and an install does not change that.
+ */
+export function recordInstalledAbility(pkg: Record<string, unknown>, name: string, version: string): void {
+  const marker = pkg.harnessdev as PkgWithMarker['harnessdev'];
+  if (!marker || !Array.isArray(marker.abilities)) return;
+  marker.abilities = marker.abilities.map((spec: unknown) =>
+    typeof spec === 'string' && abilityNameOf(spec) === name ? `${name}@${version}` : spec);
+}
+
+/** `lloyal/web@1.3.0` → `lloyal/web`; a spec with no version is its own name. */
+const abilityNameOf = (spec: string): string => {
+  const at = spec.lastIndexOf('@');
+  return at > 0 ? spec.slice(0, at) : spec;
+};
+
 interface PkgWithMarker {
   harnessdev?: { template?: unknown; targets?: unknown; abilities?: unknown };
   [k: string]: unknown;
