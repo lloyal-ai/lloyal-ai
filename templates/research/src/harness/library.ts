@@ -411,8 +411,13 @@ export function* openLibrary(
     },
     *settled(id) {
       if (!keptIn(id)) return release(id);   // nothing kept in it: the run found nothing, or its record never landed
-      if (record?.docId === id) record = null;   // a run that settled without `complete` (stopped with findings) is over too
       reserved.delete(id);
+      if (record?.docId === id) {
+        // A run that settled without saying `complete`, ended with findings filed: it is over, and the shelf, which
+        // `complete` would have refreshed, hears of it here.
+        record = null;
+        yield* wire.send({ type: "library:list", entries: list() });
+      }
       yield* reindex();
     },
   };

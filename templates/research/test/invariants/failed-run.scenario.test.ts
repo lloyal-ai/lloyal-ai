@@ -176,6 +176,9 @@ test("a run stopped after two of three stages ends as an unsettled brief: the ca
   assert.ok(answer.text?.includes("FIRST-FINDING") && answer.text.includes("SECOND-FINDING") && !answer.text.includes("THIRD"), answer.text ?? "");
   assert.equal(answer.unsettled, "failed", "a stopped run's findings are an answer that was not settled");
   assert.deepEqual(run.events[abortedAt], { type: "run:aborted", stopped: true });
+  // The shelf hears of it too: the stopped brief is listed without a restart.
+  const listed = run.events.slice(0, abortedAt + 1).filter((e) => e.type === "library:list") as { entries: { docId: string }[] }[];
+  assert.ok(listed.length > 0 && listed[listed.length - 1].entries.some((e) => e.docId === docIdOfQuery(run.events)), "the library list was refreshed with the stopped brief in it");
 
   // The canvas at the stop: the brief holds its answer and the run bar reads Incomplete.
   const docId = docIdOfQuery(run.events);
