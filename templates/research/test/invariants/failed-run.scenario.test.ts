@@ -145,4 +145,9 @@ test("a settling pass whose decode fails for room ends the run unsettled, with e
   const dir = path.join(run.outputDir, docIdOfQuery(run.events));
   assert.deepEqual(annexures(dir), ["annexure-1.md", "annexure-2.md", "annexure-3.md"]);
   assert.equal(asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"))?.unsettled, "no_room");
+  // What the settling pass cost is kept with the brief, answer or no answer.
+  const done = run.events.find((e) => e.type === "synthesize:done") as { tokenCount: number } | undefined;
+  const complete = run.events.find((e) => e.type === "complete") as { data: { synthTokens: number } } | undefined;
+  assert.ok(done && done.tokenCount > 0, "the settling pass sampled tokens before its commit found no room");
+  assert.equal(complete?.data.synthTokens, done.tokenCount, "the settling pass's cost is on the record");
 });

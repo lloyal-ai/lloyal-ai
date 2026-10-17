@@ -333,7 +333,8 @@ export function* write(trunk: Branch | null, ask: Inputs, plan: PlanResult, stag
         // or a decode that found none) or a failure.
         try {
           const r = yield* s.settle(spine, ask, plan, { findings: found, onSpine });
-          if (r.answer.trim()) { text = r.answer; settled = r; }
+          settled = r;   // what the pass cost is the brief's, whether or not it answered
+          if (r.answer.trim()) text = r.answer;
           else { text = asWritten(); unsettled = r.failed === "commit_failed" ? "no_room" : "failed"; }
         } catch (e) {
           if (e instanceof SpawnRefused && e.reason === "pressure_init") unsettled = "no_room";
