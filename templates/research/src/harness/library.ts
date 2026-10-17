@@ -95,7 +95,7 @@ export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: b
   const doc = `# ${record.query}\n\n${meta}\n\n${answerText(record.answer.trim(), record.unsettled)}\n${annexures}`;
   const name = opts.exchange ? `exchange-${reserveName(dir, "exchange", ".json", 1)}` : "report";
   fs.writeFileSync(path.join(dir, `${name}.md`), doc, "utf8");
-  fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(record, null, 2) + "\n", "utf8");
+  writeRecordFile(path.join(dir, `${name}.json`), record);
 }
 
 /** Create `<dir>/<prefix>-<n><ext>` for the first free n ≥ `from`, exclusively. */
@@ -108,6 +108,14 @@ function reserveName(dir: string, prefix: string, ext: string, from: number): nu
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
     }
   }
+}
+
+/** A record reaches its name whole or not at all: written beside it and renamed into place, so a write that dies
+ *  midway (a quit lands wherever it lands) leaves the last whole record, and the folder it keeps, as they were. */
+function writeRecordFile(file: string, record: BriefRecord): void {
+  const staging = `${file}.tmp`;
+  fs.writeFileSync(staging, JSON.stringify(record, null, 2) + "\n", "utf8");
+  fs.renameSync(staging, file);
 }
 
 /** The record at a confined path, or null where there is none to read. */
@@ -372,7 +380,7 @@ export function* openLibrary(
       const n = writeAnnexure(r.dir, r.ordinalBase + index + 1, task, findings);
       r.filed.set(index, { task, findings, annexure: n });
       // An exchange lands beside a settled brief, whose record stands; a first report's record is the run's own.
-      if (!r.appending) fs.writeFileSync(path.join(r.dir, RECORD), JSON.stringify(soFar(r), null, 2) + "\n", "utf8");
+      if (!r.appending) writeRecordFile(path.join(r.dir, RECORD), soFar(r));
     },
     written(id, w) { if (record?.docId === id) record.written = w; },
     read,

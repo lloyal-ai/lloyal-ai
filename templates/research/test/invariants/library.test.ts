@@ -342,3 +342,35 @@ test("a run released with nothing filed leaves no folder, as before; one with fi
   assert.equal(read.empty, null);
   assert.equal(read.kept?.unsettled, "failed", "what was kept reads back as an unsettled brief");
 });
+
+test("a record write that dies midway leaves the last whole record on disk, so the folder and its annexures survive a release", async () => {
+  const lib = fresh();
+  await run(function* () {
+    const { lib: library } = yield* opened(lib);
+    const id = library.reserve();
+    library.begin(id, ask(id), { warm: false });
+    library.annexure(id, 0, "one", "FIRST");
+    const before = fs.readFileSync(path.join(lib, id, "report.json"), "utf8");
+    // The next record write dies after it has begun: what it wrote so far is on disk, and no more. A quit lands
+    // wherever it lands.
+    const writeFileSync = fsModule.writeFileSync;
+    fsModule.writeFileSync = ((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, ...rest: unknown[]) => {
+      if (typeof file === "string" && path.basename(file).startsWith("report.json")) {
+        (writeFileSync as (...a: unknown[]) => void)(file, String(data).slice(0, 24), ...rest);
+        throw new Error("ENOSPC: the disk is full");
+      }
+      return (writeFileSync as (...a: unknown[]) => void)(file, data, ...rest);
+    }) as typeof fs.writeFileSync;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => library.annexure(id, 1, "two", "SECOND"), /ENOSPC/);
+    } finally {
+      fsModule.writeFileSync = writeFileSync;
+      syncBuiltinESMExports();
+    }
+    assert.equal(fs.readFileSync(path.join(lib, id, "report.json"), "utf8"), before, "the last whole record is what is on disk");
+    library.release(id);
+    assert.ok(fs.existsSync(path.join(lib, id, "annexure-1.md")), "the folder, with what the run had filed, survives");
+    assert.ok(fs.existsSync(path.join(lib, id, "annexure-2.md")));
+  });
+});
