@@ -271,6 +271,15 @@ export function briefs(deps: {
     yield* onTrunk(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
   }
 
+  /** End a run that did not settle. What the disk holds of it, the findings as written, is said as its answer,
+   *  unsettled, so the canvas and the library agree on what the next ask is beneath; a run that filed nothing is
+   *  released as before. One rule for every way a run ends short: a stop, a failure, a replacement. */
+  function* endUnsettled(id: DocId): Operation<void> {
+    const kept = library.asWritten(id);
+    if (kept !== null) yield* wire.send({ type: "answer", text: kept, unsettled: "failed" });
+    yield* library.settled(id);
+  }
+
   /** A write on the trunk itself. One that fails may have left part of a turn there, so the brief stops trusting
    *  the trunk and the next ask rebuilds it from the library. A turn written on a fork of the trunk is not one of
    *  these: its failure prunes the fork and the trunk stands as it was, so the conversation — its images and
@@ -305,7 +314,7 @@ export function briefs(deps: {
         pendingPlan = null;
         // The trunk is kept unless a write on it failed (`onTrunk`) or the session released it: a turn that failed on
         // its fork left the trunk whole, and the next ask threads it through `holds` as it would after a settled run.
-        library.release(ask.docId);
+        yield* endUnsettled(ask.docId);
         yield* wire.send({ type: "run:aborted" });
         yield* wire.send({ type: "ui:error", message: errorMessage(err) });
         throw err;   // the run's future records the failure; the dispatcher ignores it, the one-shot path exits with it
@@ -321,14 +330,10 @@ export function briefs(deps: {
     if (dying) trunkDocId = null;   // a stopped run may have landed a pair nobody was shown; the next ask rebuilds from the library
     live = null;
     pendingPlan = null;
-    // A run stopped after inquiries had filed their findings ends as the brief the disk already holds: the findings
-    // as written, unsettled, so the canvas and the library agree on what the next ask is beneath. One that filed
-    // nothing is released as before.
-    if (dying && dying !== keep) {
-      const kept = library.asWritten(dying);
-      if (kept !== null) yield* wire.send({ type: "answer", text: kept, unsettled: "failed" });
-      yield* library.settled(dying);
-    }
+    // The live run ends short, whether stopped or replaced, and whether or not the new ask is into the same brief:
+    // what it had filed is said and kept, and a run that filed nothing is released (the new ask reserves the folder
+    // again as it begins). A plan awaiting its yes has filed nothing.
+    if (dying) yield* endUnsettled(dying);
     if (parked && parked !== keep && parked !== dying) library.release(parked);
     if (dying ?? parked) yield* wire.send(stopped ? { type: "run:aborted", stopped: true } : { type: "run:aborted" });
   }

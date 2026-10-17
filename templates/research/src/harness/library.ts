@@ -361,10 +361,15 @@ export function* openLibrary(
       return id;
     },
     release,
-    // What the disk holds of the run so far: a first report's record, written as its findings were filed. An
-    // exchange has no record of its own until it completes, so a stop leaves nothing of it to say; the brief it
-    // was asked into stands.
-    asWritten: (id) => (record?.docId === id && !record.appending && record.filed.size > 0 ? findingsAsWritten(soFar(record).inquiries) : null),
+    // What the disk holds of the run so far: a first report's record, read back from the disk (a checkpoint write
+    // that failed left the disk behind what was filed, and the disk is what the next ask meets). An exchange has
+    // no record of its own until it completes, so its end leaves nothing to say; the brief it was asked into stands.
+    asWritten: (id) => {
+      if (record?.docId !== id || record.appending) return null;
+      const file = recordPath(id);
+      const r = file === null ? null : readRecord(file);
+      return r !== null && kept(r) ? r.answer : null;
+    },
     begin(id, ask, { warm }) {
       const folder = path.join(dir(), id);
       // A brief whose run was stopped before its report lost its folder with the stop but not its place on the

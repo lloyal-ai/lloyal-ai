@@ -194,3 +194,73 @@ test("a run stopped after two of three stages ends as an unsettled brief: the ca
   assert.ok(fs.existsSync(path.join(dir, "exchange-1.json")), "the follow-up is an exchange on disk too");
   assert.equal(asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"))?.unsettled, "failed");
 });
+
+/** The same expectations the stop has, for any way a run with filed findings ends: the answer said before the end
+ *  is marked, the canvas and the disk agreeing on the next ask. */
+function endedAsTheDiskHolds(run: Awaited<ReturnType<typeof runHarness>>, endMark: (ev: WorkflowEvent) => boolean, filed: string[]): { text: string } {
+  const types = run.events.map((e) => e.type);
+  const answerAt = types.indexOf("answer");
+  const endAt = run.events.findIndex(endMark);
+  assert.ok(answerAt >= 0 && answerAt < endAt, `the run said its answer before its end was marked: ${types.join(" ")}`);
+  const answer = run.events[answerAt] as { text: string | null; unsettled?: string };
+  assert.ok(answer.text?.includes("FIRST-FINDING") && answer.text.includes("SECOND-FINDING"), answer.text ?? "");
+  assert.equal(answer.unsettled, "failed");
+  const docId = docIdOfQuery(run.events);
+  const s = run.events.reduce(reduce, initialState);
+  const doc = s.documents.get(docId)!;
+  assert.ok(doc.answer?.includes("FIRST-FINDING"), "the root answer stands on the canvas");
+  assert.equal(doc.exchanges.length, 1, "the follow-up is an exchange beneath it, not a new root");
+  const dir = path.join(run.outputDir, docId);
+  assert.deepEqual(annexures(dir), filed);
+  assert.ok(fs.existsSync(path.join(dir, "exchange-1.json")), "the follow-up is an exchange on disk too");
+  assert.equal(asBriefRecord(fs.readFileSync(path.join(dir, "report.json"), "utf8"))?.unsettled, "failed");
+  return { text: answer.text! };
+}
+
+test("a run whose answer the trunk would not take ends as the brief the disk holds: the findings as written, and the next ask is an exchange", async () => {
+  let armed = false;
+  const run = await runHarness({
+    config: threeTasksAllowed,
+    utterances: [...threeStages, { text: "the follow-up answer", kind: "text" }],
+    instrument: (c) => {
+      // After the settling pass, the one single-handle prefill is the answer's commit onto the trunk.
+      const inner = c._storePrefill.bind(c);
+      c._storePrefill = async (handles, tokenArrays) => {
+        if (armed && handles.length === 1) { armed = false; throw new Error("the trunk would not take the answer"); }
+        return inner(handles, tokenArrays);
+      };
+    },
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "deep" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      // The toast is the failed run's last word; the next ask comes after it, as a reader's would.
+      { on: (ev) => { if (ev.type === "synthesize:done") armed = true; return ev.type === "ui:error"; },
+        send: { type: "submit_query", query: "And then?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const told = run.events.find((e) => e.type === "ui:error") as { message: string } | undefined;
+  assert.ok(told?.message.includes("the trunk would not take the answer"), `the reader is told why: ${run.events.map((e) => e.type).join(" ")}`);
+  // Every stage had finished, so the findings as written hold all three; the settled brief the trunk did not take is
+  // not published as if it had been.
+  const { text } = endedAsTheDiskHolds(run, (ev) => ev.type === "run:aborted", ["annexure-1.md", "annexure-2.md", "annexure-3.md", "annexure-4.md"]);
+  assert.ok(text.includes("THIRD-FINDING") && !text.includes("the settled brief"), text);
+});
+
+test("a run replaced by a direct ask into the same brief ends as the brief the disk holds, and the ask is an exchange beneath it", async () => {
+  let spawns = 0;
+  const run = await runHarness({
+    config: threeTasksAllowed,
+    utterances: [...threeStages.slice(0, 3), { text: "THIRD-STAGE-TEXT", kind: "text" }, { text: "the follow-up answer", kind: "text" }],
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "deep" } },
+      { on: (ev) => ev.type === "ui:plan_review", send: accept },
+      // The reader asks into the brief while its third stage is seated: the new ask replaces the run.
+      { on: (ev) => ev.type === "agent:spawn" && ++spawns === 3, send: { type: "submit_query", query: "And then?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  assert.equal(run.events.filter((e) => e.type === "run:aborted").length, 1);
+  const { text } = endedAsTheDiskHolds(run, (ev) => ev.type === "run:aborted", ["annexure-1.md", "annexure-2.md", "annexure-3.md"]);
+  assert.ok(!text.includes("THIRD"), text);
+});
