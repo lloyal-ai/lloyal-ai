@@ -30,7 +30,7 @@ Cite only URLs that appear verbatim in the research turns above. Copy the URL ex
 RULE 1 — THESIS
 ══════════════════════════════════════════════════════════════════════
 
-Commit to ONE thesis. State it in the opening paragraph. Every section that follows must advance that thesis.
+Commit to ONE thesis. State it in the opening paragraph. Every section that follows must develop the argument while covering the user's full question.
 
 The thesis is a POSITION on the user's question, derived from the findings. Examples of the shape:
 - "Sub-100ms with native emotional nuance is not achievable with today's open-source stack — you must choose two of three."
@@ -82,18 +82,14 @@ Prefer fluent paragraphs over bulleted extracts. Use bulleted lists only for gen
 Tables serve the argument. A table comparing four models on three dimensions should support a claim being made in the prose, not stand alone as reference material.
 
 ══════════════════════════════════════════════════════════════════════
-RULE 4 — CUTTING FINDINGS THAT DON'T SERVE THE THESIS
+RULE 4 — COVER THE USER'S FULL QUESTION
 ══════════════════════════════════════════════════════════════════════
 
-The agents did thorough research. Not every finding belongs in the final report.
+Address every part of the user's question using the available findings. The thesis organizes the answer; it must not narrow the scope of the user's request.
 
-If a finding does not advance, support, complicate, or resolve the thesis, either:
-- Mention it briefly and move on (one sentence), or
-- Cut it entirely.
+Preserve the supported findings needed to answer each requested point, including evidence that complicates the thesis. Integrate them into the argument without dropping requested coverage.
 
-Do NOT include a finding because the agents found it. Include it because it serves the argument.
-
-A comprehensive but flat report is weaker than a focused argument that leaves some findings out. Comprehensiveness is a catalog virtue. Coherence is an argument virtue.
+Combine repeated findings and write concisely. If the findings do not support a requested point, state that gap explicitly rather than inventing an answer.
 
 ══════════════════════════════════════════════════════════════════════
 HOW TO WRITE THE REPORT
@@ -102,7 +98,7 @@ HOW TO WRITE THE REPORT
 1. Read every research turn above.
 2. Take stock of the entities, sources, and quantitative claims the research surfaced — these are your factual vocabulary, the only factual vocabulary you may use.
 3. Decide the thesis — one sentence that takes a position on the user's question, derived from what the findings collectively mean.
-4. Identify which findings SUPPORT the thesis, which COMPLICATE it, and which are NOT RELEVANT to it.
+4. Map the findings to every part of the user's question, including evidence that supports or complicates the thesis. Preserve that coverage when organizing the argument.
 5. Draft the report with the structure above — thesis in the opening paragraph, sections that build the argument, prescription that flows from the resolution.
 6. For each section, write fluent paragraphs that cite findings inline (direct quotes, specific numbers, named sources). Every factual claim — every entity, number, quote, URL, or concrete technical assertion — must carry an inline citation in [source title](url) markdown form placed immediately at the claim, not deferred to the Sources list. A claim without an inline citation at its location is unsupported and must be cut or hedged. Bulleted extracts only when items are genuinely parallel.
 7. End with ## Conclusion (restating thesis + prescription, + ### Limitations naming specific gaps) and ## Sources — a convenience index of URLs ALREADY cited inline above. The Sources list does NOT satisfy the citation requirement: a URL that appears only in Sources, not inline at its claim, is an uncited claim.
