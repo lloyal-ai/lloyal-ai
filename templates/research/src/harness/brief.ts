@@ -87,7 +87,7 @@ export function briefs(deps: {
           // The round joins the trunk as it is answered: the question paired with what was asked, then the answer as the
           // open user side the planner's fork reads. A round the reader walks away from leaves nothing on the trunk.
           yield* commitAnswer(inputs.text, render("clarify", { questions: plan.clarifyQuestions }));   // the planner's questions as the assistant's turn, so the next fork attends the dialogue
-          yield* waitUntilSettled(session.prefillUser(answer));
+          yield* onTrunk(session.prefillUser(answer));
           yield* frame(inputs, true);
         });
       },
@@ -268,7 +268,20 @@ export function briefs(deps: {
   /** The answer joins the trunk: it closes the reader's side when one is open, else lands as a pair with its question. */
   function* commitAnswer(question: string, text: string | null): Operation<void> {
     if (!text) return;
-    yield* waitUntilSettled(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
+    yield* onTrunk(session.userSidePending ? session.prefillAssistant(text) : session.commitTurn(question, text));
+  }
+
+  /** A write on the trunk itself. One that fails may have left part of a turn there, so the brief stops trusting
+   *  the trunk and the next ask rebuilds it from the library. A turn written on a fork of the trunk is not one of
+   *  these: its failure prunes the fork and the trunk stands as it was, so the conversation — its images and
+   *  videos included — is kept for the next ask. */
+  function* onTrunk(write: Promise<void>): Operation<void> {
+    try {
+      yield* waitUntilSettled(write);
+    } catch (err) {
+      trunkDocId = null;
+      throw err;
+    }
   }
 
   /** Run one step of a brief's life under `run`, the session's one owner of long work, and return the accepted
@@ -290,7 +303,8 @@ export function briefs(deps: {
         if (live !== ask.docId) throw err;
         live = null;
         pendingPlan = null;
-        trunkDocId = null;   // a write that failed may have left part of a turn; the next ask rebuilds from the library
+        // The trunk is kept unless a write on it failed (`onTrunk`) or the session released it: a turn that failed on
+        // its fork left the trunk whole, and the next ask threads it through `holds` as it would after a settled run.
         library.release(ask.docId);
         yield* wire.send({ type: "run:aborted" });
         yield* wire.send({ type: "ui:error", message: errorMessage(err) });
