@@ -213,6 +213,48 @@ const requiring = (services: readonly string[]): Uint8Array =>
   buildTarball([{ name: 'package/ability.json', content: JSON.stringify({ name: 'corpus', services }) }]);
 const ymlText = (): Promise<string> => readFile(join(cwd, 'harness.yml'), 'utf-8');
 
+// ── the marker: the recorded spec moves with the vendored version ─────────────
+
+/** The dependency the scaffold's `bin/preflight-abilities.js` expects for a recorded spec: its one assumption about the CLI. */
+const preflightExpects = (spec: string): string => {
+  const at = spec.lastIndexOf('@');
+  return `file:vendor/${spec.slice(0, at).replace('/', '__')}-${spec.slice(at + 1)}.tgz`;
+};
+
+describe('the marker', () => {
+  const marker = async (): Promise<{ abilities?: string[] } | undefined> =>
+    (JSON.parse(await readFile(join(cwd, 'package.json'), 'utf-8')) as { harnessdev?: { abilities?: string[] } }).harnessdev;
+
+  it('an install of an ability the marker records moves the recorded spec to the vendored version, so the preflight reads the two together', async () => {
+    await writeFile(join(cwd, 'package.json'), JSON.stringify({
+      name: 'install-smoke', version: '0.0.1',
+      dependencies: { [IMPORT_NAME]: 'file:vendor/lloyal__wikipedia-0.9.0.tgz' },
+      harnessdev: { template: 'research', targets: ['cli'], abilities: ['lloyal/wikipedia@0.9.0', 'lloyal/web@1.3.0'] },
+    }, null, 2));
+    useTarball(requiring([]));
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(`${SCOPED_NAME}@${VERSION}`));
+    const recorded = await marker();
+    expect(recorded?.abilities).toEqual(['lloyal/wikipedia@1.0.0', 'lloyal/web@1.3.0']);
+    // The preflight's rule holds again: the recorded spec names the dependency that was vendored.
+    expect(await depSpec()).toBe(preflightExpects('lloyal/wikipedia@1.0.0'));
+  });
+
+  it('a marker that never recorded the ability, or a project with no marker, is left as it is', async () => {
+    await writeFile(join(cwd, 'package.json'), JSON.stringify({
+      name: 'install-smoke', version: '0.0.1',
+      harnessdev: { template: 'basic', targets: ['cli'], abilities: ['lloyal/web@1.3.0'] },
+    }, null, 2));
+    useTarball(requiring([]));
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME));
+    expect((await marker())?.abilities).toEqual(['lloyal/web@1.3.0']);
+
+    await seedProject();
+    useTarball(requiring([]));
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME));
+    expect(await marker()).toBeUndefined();
+  });
+});
+
 // ── the install gate: can this project select what the ability requires? ─────
 
 describe('the install gate', () => {
