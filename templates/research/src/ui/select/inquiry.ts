@@ -135,7 +135,10 @@ export const verbOf = (a: AgentRuntime, reports: Reports): InquiryVerb => {
       retryAt: a.retry.retryAt,
     };
   }
-  if (a.recovering || liveProse(a, reports) !== null) {
+  // Dropped, and recovering what it found: the recovery's report arrives whole at its end, up to a minute
+  // later, so until then the section says what is happening rather than that prose is settling.
+  if (a.recovering) return { kind: "writing", text: `${stopText(a.stopReason)} — recovering what it found…` };
+  if (liveProse(a, reports) !== null) {
     const writing = "settling the section into the brief";
     return { kind: "writing", text: stoppedEarly(a) ? `${stopText(a.stopReason)} — ${writing}` : writing };
   }
