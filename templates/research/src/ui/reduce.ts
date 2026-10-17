@@ -498,7 +498,9 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
           askAttachments: [],
         };
       }
-      return { ...doc, answer: ev.text, unanswered: ev.unanswered ?? null, unsettled: ev.unsettled ?? null };
+      // The answer supersedes the settling pass, however that pass ended: a pass that failed after it spawned
+      // said no synthesize:done, and what it had written is not the answer.
+      return { ...doc, answer: ev.text, unanswered: ev.unanswered ?? null, unsettled: ev.unsettled ?? null, synth: { ...doc.synth, open: false } };
 
     case 'complete': {
       // Settled — bank the last active slice and freeze the timer.

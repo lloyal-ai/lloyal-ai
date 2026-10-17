@@ -447,3 +447,20 @@ test('the run bar says Incomplete above an unsettled brief, whatever left it uns
   assert.equal(selectStatus(ended('failed')), 'Incomplete', 'a brief whose run failed after its inquiries is not Settled');
   assert.equal(selectMoment(ended('failed')), 'settle', 'the canvas still shows the answer: the findings as written');
 });
+
+test('a root answer closes the settling pass: the answer shows, not what the settling agent had written', () => {
+  const s = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    PLAN,
+    { type: 'research:done', totalTokens: 1, totalToolCalls: 0, timeMs: 1 } as WorkflowEvent,
+    { type: 'synthesize:start' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 9, taskIndex: 0 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 9, text: 'half an answer', tokenCount: 3 } as WorkflowEvent,
+    // The settling pass failed after it had spawned: the run publishes the findings as written, and no
+    // synthesize:done is ever said.
+    { type: 'answer', text: 'FINDINGS AS WRITTEN', unsettled: 'failed' } as WorkflowEvent,
+    COMPLETE,
+  ]);
+  assert.equal(selectAnswer(s)?.body, 'FINDINGS AS WRITTEN');
+  assert.equal(selectAnswer(s)?.streaming, false);
+});
