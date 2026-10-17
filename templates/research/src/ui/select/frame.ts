@@ -29,8 +29,12 @@ const tasksOf = (draft: string, allow: number): string[] => {
   }
 };
 
+/** The brief's attachments are still being read: the plan has not started. */
+export const selectReading = (app: AppState): boolean =>
+  activeDoc(app).phase === "planning" && activeDoc(app).reading;
+
 export const selectOutlineDraft = (app: AppState): OutlineDraft | null => {
-  if (activeDoc(app).phase !== "planning") return null;
+  if (activeDoc(app).phase !== "planning" || activeDoc(app).reading) return null;
   const planner = [...activeDoc(app).roster.agents.values()].find((a) => a.endedAt === null);
   if (!planner) return { settled: [], partial: null };
   const settled = tasksOf(planner.contentBuffer, Allow.ALL & ~Allow.STR);

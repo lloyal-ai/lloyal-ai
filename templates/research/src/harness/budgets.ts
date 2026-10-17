@@ -6,7 +6,9 @@
  * report — what it is told is a prompt, joined in `research.ts`, so the
  * interface can read a row without carrying the model's prose. `high` is the
  * tuned baseline; `medium`/`low` are starting estimates. The context limits
- * are ABSOLUTE free-KV reserves, not nCtx-derived.
+ * are ABSOLUTE free-KV reserves, not nCtx-derived; a row's `softLimit` is also
+ * the room a turn's attachments must leave free for the run that follows them.
+ * `attachments.context` is the one fraction: of the whole context.
  */
 
 export type Effort = "low" | "medium" | "high" | "ultra";
@@ -72,4 +74,6 @@ export const BUDGETS = {
   direct: { minToolCalls: 0, minTokens: 0 },
   /** Tool calls before a report is accepted: a first report short of it is refused once, then stands. */
   evidence: 2,
+  /** Attached images and videos may fill at most this fraction of the context; a turn over it is refused before it is read. */
+  attachments: { context: 0.7 },
 } as const;

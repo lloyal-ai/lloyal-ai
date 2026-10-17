@@ -1,9 +1,8 @@
 /** The evidence the question carried, shown where the question is.
  *
  *  An image shows as the ADMITTED REPRESENTATION — the bytes the model was
- *  actually given. The content plane serves nothing else on purpose: raw
- *  blobs answer HEAD only, so a retained source layer can never be handed out
- *  by mistake. For an image under the pixel ceiling normalization returns the
+ *  actually given, read through its manifest, so a retained source layer is
+ *  never shown in its place. For an image under the pixel ceiling normalization returns the
  *  file byte-identical, so this usually IS what you dropped; where it differs
  *  the image was too large, rotated by its EXIF tag, or carried a non-sRGB
  *  profile — the cases where what the model saw is the honest thing to show,
@@ -11,16 +10,20 @@
  *
  *  A document shows as a card — its title, its page count, its first page —
  *  because what the model was given is its text, and a page image is what the
- *  model looks at only when a tool puts one in front of it. */
+ *  model looks at only when a tool puts one in front of it.
+ *
+ *  A video shows as ui's video card — its poster, a play mark, its length —
+ *  with the start of what the soundtrack said beneath; opening it plays the
+ *  file as attached, the frames the model saw on its time slider. */
 import { useState, type CSSProperties, type ReactElement } from "react";
-import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection } from "@lloyal-labs/ui";
+import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection, VideoCard, videoView } from "@lloyal-labs/ui";
 import type { Asset, LightboxProps } from "@lloyal-labs/ui";
 import { representationUrl, sourceUrl } from "@lloyal-labs/media";
 import { color, font, radius, shadow } from "../theme.js";
 import { selectSeen, selectThreadDigests } from "../select.js";
 import { LIGHTBOX } from "./Prose.js";
 
-export { pageFacts, resolveAsset, useAssets };
+export { pageFacts, resolveAsset, useAssets, videoView };
 export type { Asset };
 
 /** ui's enlarged view, in this document's register — one for the strip, the run bar's marker and a cited page. */
@@ -40,13 +43,19 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
   // Page renders the thread holds — admitted by a tool, persisted with the run —
   // say which pages the model looked at.
   const threadDigests = useProjection(selectThreadDigests);
-  const [open, setOpen] = useState<{ digest: string; label?: string } | { pdf: string; label: string } | null>(null);
+  const [open, setOpen] = useState<
+    { digest: string; label?: string } | { pdf: string; label: string } | { video: NonNullable<LightboxProps["video"]>; label: string } | null
+  >(null);
   // Read off the loaded element rather than the wire: the descriptor carries a
   // byte length, never pixels, and this is the representation's true size.
   const [dims, setDims] = useState<Record<string, string>>({});
 
   if (digests.length === 0 || origin === null) return null;
   const anyDocument = digests.some((d) => assets[d]?.kind === "document");
+  const anyHeard = digests.some((d) => { const a = assets[d]; return a?.kind === "video" && a.transcript !== undefined; });
+  // What a click does: a video plays, a picture enlarges, and a strip holding both opens.
+  const videos = digests.filter((d) => assets[d]?.kind === "video").length;
+  const action = videos === digests.length ? "click to play" : videos > 0 ? "click to open" : "click to enlarge";
 
   return (
     <>
@@ -83,6 +92,16 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
               </button>
             );
           }
+          if (asset?.kind === "video") {
+            const view = videoView(origin, digest, asset);
+            const said = asset.transcript?.segments.map((t) => t.text).join(" ");
+            return (
+              <figure key={digest} style={S.video}>
+                <VideoCard video={view} styles={VIDEO_CARD} onOpen={() => setOpen({ video: view, label: "the attached video" })} />
+                {said ? <figcaption style={S.said}>“{said}”</figcaption> : null}
+              </figure>
+            );
+          }
           return (
             <button
               key={digest}
@@ -109,14 +128,16 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
         })}
       </div>
       <p style={S.caption}>
-        {anyDocument ? "what the model was given" : "what the model saw"}
+        {anyDocument ? "what the model was given" : anyHeard ? "what the model saw and heard" : "what the model saw"}
         {digests.length === 1 && dims[digests[0]] ? ` · ${dims[digests[0]]}` : ""}
-        {" · click to enlarge"}
+        {` · ${action}`}
       </p>
 
       {open !== null && ("pdf" in open
         ? <Lightbox pdf={open.pdf} label={open.label} onClose={() => setOpen(null)} />
-        : <Lightbox digest={open.digest} dims={dims[open.digest]} label={open.label} onClose={() => setOpen(null)} />)}
+        : "video" in open
+          ? <Lightbox video={open.video} label={open.label} onClose={() => setOpen(null)} />
+          : <Lightbox digest={open.digest} dims={dims[open.digest]} label={open.label} onClose={() => setOpen(null)} />)}
     </>
   );
 }
@@ -164,4 +185,18 @@ const S: Record<string, CSSProperties> = {
   },
   cardMeta: { font: `11px/1.35 ${font.ui}`, color: "rgba(255,255,255,.92)" },
   caption: { font: `12px ${font.ui}`, color: color.dim, margin: "0 0 18px" },
+  // A video: ui's card, and under it the start of what was said, as a shared video's title sits under it.
+  video: { display: "flex", flexDirection: "column", gap: 6, width: 262, margin: 0, flex: "none" },
+  said: {
+    font: `12px/1.35 ${font.ui}`, color: color.ink, padding: "0 2px",
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+  },
 };
+
+/** ui's video card in this document's register: the same size, border and lift as a document card. */
+const VIDEO_CARD = {
+  card: {
+    position: "relative", display: "block", padding: 0, width: 262, aspectRatio: "16 / 9", overflow: "hidden", cursor: "pointer",
+    border: `1px solid ${color.line}`, borderRadius: radius.panel, background: "#111", boxShadow: shadow.card,
+  },
+} satisfies Record<string, CSSProperties>;

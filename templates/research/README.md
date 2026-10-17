@@ -265,6 +265,10 @@ siblings mid-run; that is why six lines can run where a request-shaped system wo
 Time and turns are the per-line knobs; the room is the shared one, and the pool watches it for every
 agent at once.
 
+The soft limit does a second job before a run starts: a question's attachments must leave at least
+that much of the room free, or the question is refused before anything is read. `attachments.context`
+caps what attachments may take, as a fraction of the whole context.
+
 **To change them**: `defaults.effort` in `harness.yml` picks the default row; the rows themselves are
 yours in `budgets.ts`, and the pickers learn their minutes from what your machine actually does.
 

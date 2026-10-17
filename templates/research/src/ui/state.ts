@@ -16,7 +16,7 @@ import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../harness/budgets.js';
 import type { Reports } from '@lloyal-labs/rig';
-import type { DocId, Mode, LibraryEntry } from '../protocol.js';
+import type { DocId, Mode, LibraryEntry, Unanswered, Unsettled } from '../protocol.js';
 
 export type { DocId, Mode, LibraryEntry } from '../protocol.js';
 export { reduce } from './reduce.js';
@@ -117,6 +117,8 @@ export interface DocState {
   /** The run's own effort, as submitted — distinct from the config default. */
   runEffort: Effort | null;
   phase: DocPhase;
+  /** The brief's attachments are being read into the conversation: from its query until its plan starts. */
+  reading: boolean;
   plan: {
     intent: string;
     tasks: { description: string; ability?: string }[];
@@ -139,11 +141,19 @@ export interface DocState {
 
   synth: SynthState;
   answer: string | null;
-  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask that found nothing: the reader
-   *  asked, nothing was kept, and the view says so where the answer would be. */
-  exchanges: { question: string; body: string | null; attachments: string[] }[];
+  /** Why the answer is null, when the run said; null otherwise. */
+  unanswered: Unanswered | null;
+  /** Why the answer is the inquiries' findings as written rather than one settled answer; null when settled. */
+  unsettled: Unsettled | null;
+  /** Warm-ask exchanges appended beneath the settled brief. A null body is an ask with no answer: it found
+   *  nothing, or had no room to start (`unanswered`); nothing was kept, and the view says which where the
+   *  answer would be. */
+  exchanges: { question: string; body: string | null; attachments: string[]; unanswered?: Unanswered }[];
   /** The warm ask in flight (its question); null otherwise. */
   ask: string | null;
+  /** How many asks this document has accepted, its birth included. A composer reads it before and after a
+   *  send: the document took that ask when the count moved, whatever else the fold shows. */
+  asks: number;
   /** The in-flight ask's media digests, landed on the settled exchange. */
   askAttachments: string[];
   paused: boolean;

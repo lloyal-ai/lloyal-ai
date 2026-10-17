@@ -6,7 +6,7 @@
  * rig owns two vocabularies that sit beside the brief's own: the controls of a live run (`RunCommand`) and
  * settings (`SettingsCommand`, `SettingsEvent`). Node-free, so a view imports this without importing the engine.
  */
-import type { VoiceCommand, VoiceEvent } from "@lloyal-labs/binding";
+import type { VideoCommand, VideoEvent, VoiceCommand, VoiceEvent } from "@lloyal-labs/binding";
 import type { AgentEvent } from "@lloyal-labs/lloyal-agents";
 import type { HostResourcesEvent } from "@lloyal-labs/rig";
 import type { Descriptor } from "@lloyal-labs/media";
@@ -20,6 +20,22 @@ export type DocId = string;
 
 /** 'deep' is chain-shaped research (each inquiry builds on the last); 'flat' is parallel. */
 export type Mode = "flat" | "deep";
+
+/** Why a run ended with no answer, when it can say: `no_room` when the context was too full for an agent to
+ *  start. Absent, the inquiries ran and found nothing to settle. */
+export type Unanswered = "no_room";
+
+/** Why an answer is the inquiries' findings as they were written, not one settled answer: `no_room` when the
+ *  context had no room left for the agent that settles them. */
+export type Unsettled = "no_room";
+
+/** Said above an answer that is the inquiries' findings as they were written, not one settled answer. */
+export const UNSETTLED = "These are the inquiries' findings as they were written: the context had no room left to settle them into one answer.";
+
+/** An answer as it leaves the app (the saved report, the terminal, a copy or a download), saying it was not
+ *  settled when it was not. The canvas sets the same sentence in its own style. */
+export const answerText = (body: string, unsettled: Unsettled | null | undefined): string =>
+  unsettled ? `> ${UNSETTLED}\n\n${body}` : body;
 
 /** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
@@ -49,6 +65,8 @@ export interface Thread {
   direct: boolean;
   /** The whole conversation as one text — what a restore commits to the trunk. */
   thread: string;
+  /** Present when the answer is the inquiries' findings as written, not one settled answer. */
+  unsettled?: Unsettled;
 }
 
 /** The terminal event's stats payload. Everything optional: research fills its
@@ -106,7 +124,7 @@ export type LibraryCommand =
   /** Remove a brief's whole folder. Confined to the library. */
   | { type: "library_delete"; path: string };
 
-export type Command = VoiceCommand | BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
+export type Command = VoiceCommand | VideoCommand | BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
 
 // ── Events ───────────────────────────────────────────────────────
 
@@ -138,13 +156,13 @@ export type BriefEvent =
   | { type: "research:done"; totalTokens: number; totalToolCalls: number; timeMs: number }
   | { type: "synthesize:start" }
   | { type: "synthesize:done"; agentId: number; ppl: number; tokenCount: number; toolCallCount: number; timeMs: number }
-  /** The answer — or null when the inquiries found nothing to settle: the ask is over, nothing was invented,
-   *  committed or kept, and the view says so. */
-  | { type: "answer"; text: string | null }
+  /** The answer, or null when there is none: the inquiries found nothing to settle, or no agent had room to
+   *  start (`unanswered`). The ask is over, nothing was invented, committed or kept, and the view says which. */
+  | { type: "answer"; text: string | null; unanswered?: Unanswered; unsettled?: Unsettled }
   | { type: "stats"; ctxPct: number; ctxPos: number; ctxTotal: number }
   | { type: "complete"; data: CompleteData }
   /** A settled brief, whole, from disk. Does not activate. */
-  | { type: "doc"; docId: DocId; title: string; mode: Mode; effort: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; exchanges: { question: string; body: string; attachments: string[] }[] }
+  | { type: "doc"; docId: DocId; title: string; mode: Mode; effort: Effort; direct: boolean; attachments?: Descriptor[]; answer: string; unsettled?: Unsettled; exchanges: { question: string; body: string; attachments: string[] }[] }
   /** What the canvas shows. Null is the picker. */
   | { type: "doc:active"; docId: DocId | null }
   /** The run stopped short of complete. A stillborn brief dies with it; a settled one stands. */
@@ -162,7 +180,7 @@ export type LibraryEvent =
   /** The corpus ability indexed the library (at boot, and after every settle). */
   | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
 
-export type WorkflowEvent = VoiceEvent | AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+export type WorkflowEvent = VoiceEvent | VideoEvent | AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
 
 // ── The small builders ───────────────────────────────────────────
 
@@ -175,6 +193,7 @@ export const docEvent = (thread: Thread, restored: Descriptor[]): Extract<BriefE
   direct: thread.direct,
   ...(restored.length > 0 ? { attachments: restored } : {}),
   answer: thread.body,
+  ...(thread.unsettled ? { unsettled: thread.unsettled } : {}),
   exchanges: thread.exchanges,
 });
 

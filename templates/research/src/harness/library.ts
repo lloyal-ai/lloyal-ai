@@ -29,7 +29,7 @@ import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs
 import { config } from "../config.js";
 import type { Inputs, Written } from "../harness/research.js";
 import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
-import { errorMessage } from "../protocol.js";
+import { answerText, errorMessage } from "../protocol.js";
 
 const CORPUS = "corpus";
 const RECORD = "report.json";
@@ -53,6 +53,8 @@ export const BriefRecord = z.object({
   elapsedMs: z.number(),
   synthTokens: z.number().optional(),
   synthPpl: z.number().optional(),
+  /** The answer is the inquiries' findings as written: the context had no room left to settle them. */
+  unsettled: z.literal("no_room").optional(),
 });
 export type BriefRecord = z.infer<typeof BriefRecord>;
 
@@ -82,7 +84,7 @@ export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: b
   const stats = `${record.synthTokens ? ` · ${record.synthTokens} synth tokens` : ""}${record.synthPpl !== undefined ? ` · ppl ${record.synthPpl.toFixed(2)}` : ""}`;
   const media = record.attachments.length > 0 ? ` · media ${record.attachments.join(" ")}` : "";
   const meta = `> ${record.savedAt} · ${record.mode} · ${record.effort}${record.direct ? " · ask" : ""}${stats} · ${(record.elapsedMs / 1000).toFixed(1)}s${media}`;
-  const doc = `# ${record.query}\n\n${meta}\n\n${record.answer.trim()}\n${annexures}`;
+  const doc = `# ${record.query}\n\n${meta}\n\n${answerText(record.answer.trim(), record.unsettled)}\n${annexures}`;
   const name = opts.exchange ? `exchange-${reserveName(dir, "exchange", ".json", 1)}` : "report";
   fs.writeFileSync(path.join(dir, `${name}.md`), doc, "utf8");
   fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(record, null, 2) + "\n", "utf8");
@@ -223,6 +225,7 @@ export function* openLibrary(
       mode: root.mode, effort: root.effort, direct: root.direct,
       exchanges: exchanges.map((e) => ({ question: e.query, body: e.answer, attachments: e.attachments })),
       thread: [root.answer, ...exchanges.map((e) => `---\n\n# ${e.query}\n\n${e.answer}`)].join("\n\n"),
+      ...(root.unsettled ? { unsettled: root.unsettled } : {}),
     };
   }
 
@@ -251,6 +254,7 @@ export function* openLibrary(
       attachments: r.attachments, answer: w.answer.trim(), inquiries: w.inquiries, elapsedMs: Date.now() - r.startedAt,
       ...(w.complete.synthTokens !== undefined ? { synthTokens: w.complete.synthTokens } : {}),
       ...(w.complete.synthPpl !== undefined ? { synthPpl: w.complete.synthPpl } : {}),
+      ...(w.unsettled ? { unsettled: w.unsettled } : {}),
     }, { exchange: r.appending, annexuresFrom: r.ordinalBase });
   }
 

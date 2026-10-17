@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 import { color, font, radius } from "../theme.js";
 import { useProjection } from "@lloyal-labs/ui";
 import {
-  DEPTHS, SHAPES, selectAnswer, selectAsk, selectCitations, selectDepth,
+  DEPTHS, SHAPES, selectAnswer, selectAsk, selectUnanswered, selectUnsettled, selectCitations, selectDepth,
   selectExchanges, selectMarks, selectRail, selectRunShape, selectSettleProse,
   selectSourceNotes, selectTitle,
 } from "../select.js";
@@ -19,11 +19,14 @@ import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
 import { Sources } from "../parts/Sources.js";
-import { NOTHING_KEPT } from "../presentation.js";
+import { nothingKept } from "../presentation.js";
+import { UNSETTLED, answerText } from "../../protocol.js";
 
 export function Settle(): ReactElement {
   const title = useProjection(selectTitle);
   const answer = useProjection(selectAnswer);
+  const unanswered = useProjection(selectUnanswered);
+  const unsettled = useProjection(selectUnsettled);
   const prose = useProjection(selectSettleProse);
   const citations = useProjection(selectCitations);
   const notes = useProjection(selectSourceNotes);
@@ -104,8 +107,8 @@ export function Settle(): ReactElement {
         {depthTitle && <span>{depthTitle}</span>}
         {citations.length > 0 && <span>{citations.length} sources</span>}
         <span style={{ flex: 1 }} />
-        <button type="button" style={S.action} onClick={() => copy(answer?.body ?? "", "a")}>{copied === "a" ? "Copied" : "Copy"}</button>
-        <button type="button" style={S.action} onClick={() => download(answer?.body ?? "", title)}>Download</button>
+        <button type="button" style={S.action} onClick={() => copy(answerText(answer?.body ?? "", unsettled), "a")}>{copied === "a" ? "Copied" : "Copy"}</button>
+        <button type="button" style={S.action} onClick={() => download(answerText(answer?.body ?? "", unsettled), title)}>Download</button>
       </p>
       {marks.length > 0 && (
         <div style={S.marks}>
@@ -118,14 +121,15 @@ export function Settle(): ReactElement {
         </button>
       )}
       {showThinking && answer?.thinking && <p style={S.thinking}>{answer.thinking}</p>}
+      {prose && unsettled && <p style={S.mark}>{UNSETTLED}</p>}
       {prose && <Prose markdown={prose} anchorPrefix="a" citations={ordinals} />}
-      {answer === null && !ask && <p style={S.mark}>{NOTHING_KEPT}</p>}
+      {answer === null && !ask && <p style={S.mark}>{nothingKept(unanswered)}</p>}
       <Sources citations={citations} notes={notes} />
       {exchanges.map((x, i) => (
         <section key={i} style={S.exchange}>
           <h2 id={`e${i}`} style={S.exchangeHead}>{x.question}</h2>
           <FigureStrip digests={x.attachments} />
-          {x.body === null ? <p style={S.mark}>{NOTHING_KEPT}</p> : (
+          {x.body === null ? <p style={S.mark}>{nothingKept(x.unanswered)}</p> : (
             <>
               <p style={S.exchangeActions}>
                 <button type="button" style={S.action} onClick={() => copy(x.body!, `e${i}`)}>{copied === `e${i}` ? "Copied" : "Copy"}</button>

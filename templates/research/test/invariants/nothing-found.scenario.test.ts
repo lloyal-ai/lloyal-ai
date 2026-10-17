@@ -10,7 +10,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { runHarness, warmDeltas, writeReportFixture, docIdOfQuery, dirs } from "./harness.js";
 import { reduce, initialState } from "../../src/ui/state.js";
-import { selectAnswer, selectExchanges } from "../../src/ui/select.js";
+import { selectAnswer, selectExchanges, selectUnanswered } from "../../src/ui/select.js";
+import { NO_ROOM, NOTHING_KEPT, nothingKept } from "../../src/ui/presentation.js";
 
 const SAVED = "2026-01-01T00-00-00-000";
 
@@ -69,4 +70,43 @@ test("a direct ask after a no-result brief becomes its first report, with the sa
   assert.equal(doc.ask, null);
   assert.deepEqual(doc.exchanges, [], "the first report is not a follow-up exchange");
   assert.equal(fs.readdirSync(path.join(run.outputDir, id)).some((name) => name.startsWith("exchange-")), false);
+});
+
+test("a follow-up into a brief too full for an agent to start says so, not that the sources found nothing", async () => {
+  const run = await runHarness({
+    setup: (dir) => writeReportFixture(dir, SAVED, "Saved brief", "The saved body."),
+    // Less free than the effort's working reserve: the pool refuses to start the agent.
+    instrument: (c) => { c.cellsUsed = c.nCtx - 4_000; },
+    script: [
+      { send: { type: "open_doc", docId: SAVED } },
+      { on: (ev) => ev.type === "doc:active", send: { type: "submit_query", query: "And then?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const answer = run.events.find((e) => e.type === "answer") as { text: string | null; unanswered?: string };
+  assert.equal(answer.text, null);
+  assert.equal(answer.unanswered, "no_room", "the run says why it is empty");
+  const s = run.events.reduce(reduce, initialState);
+  assert.deepEqual(selectExchanges(s), [{ question: "And then?", body: null, attachments: [], unanswered: "no_room" }]);
+  assert.equal(nothingKept(selectExchanges(s)[0].unanswered), NO_ROOM);
+});
+
+test("a cold brief too full for an agent to start says so where the answer would be", async () => {
+  const run = await runHarness({
+    instrument: (c) => { c.cellsUsed = c.nCtx - 4_000; },
+    script: [
+      { send: { type: "submit_query", query: "Q?", mode: "flat", skipPlanner: true } },
+      { on: (ev) => ev.type === "complete" },
+    ],
+  });
+  const answer = run.events.find((e) => e.type === "answer") as { text: string | null; unanswered?: string };
+  assert.equal(answer.unanswered, "no_room");
+  const s = run.events.reduce(reduce, initialState);
+  assert.equal(nothingKept(s.documents.get(docIdOfQuery(run.events))!.unanswered), NO_ROOM);
+  assert.equal(nothingKept(selectUnanswered(s)), NO_ROOM, "the canvas reads it off the brief it shows");
+});
+
+test("an empty run whose agents ran says the sources found nothing, as before", () => {
+  assert.equal(nothingKept(null), NOTHING_KEPT);
+  assert.equal(nothingKept(undefined), NOTHING_KEPT);
 });

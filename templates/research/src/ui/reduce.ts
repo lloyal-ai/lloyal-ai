@@ -64,6 +64,9 @@ type Scope = 'session' | 'run' | 'own' | 'ignored';
 const SCOPE: Record<WorkflowEvent['type'], Scope> = {
   'voice:capabilities': 'ignored', 'voice:progress': 'ignored', 'voice:result': 'ignored',
   'voice:error': 'ignored', 'voice:cancelled': 'ignored',
+  // an attaching video's conversation with the host belongs to the composer that started it
+  'video:capabilities': 'ignored', 'video:progress': 'ignored', 'video:composed': 'ignored',
+  'video:error': 'ignored', 'video:cancelled': 'ignored',
   'query': 'own', 'doc': 'own', 'doc:active': 'own', 'run:aborted': 'own', 'ui:error': 'own',
   'agent:trace': 'ignored', 'host:resources': 'ignored',   // the dev pane folds these itself
   // session facts
@@ -101,11 +104,11 @@ function withDoc(
 export function emptyDoc(): DocState {
   return {
     id: '', query: '', attachments: [], mode: null, direct: false, runEffort: null,
-    phase: 'done', plan: null, revision: null,
+    phase: 'done', reading: false, plan: null, revision: null,
     roster: emptyRoster(),
     reconAgentIds: [],
     researchAgentCount: 0, reports: null,
-    synth: EMPTY_SYNTH, answer: null, exchanges: [], ask: null, askAttachments: [],
+    synth: EMPTY_SYNTH, answer: null, unanswered: null, unsettled: null, exchanges: [], ask: null, asks: 0, askAttachments: [],
     paused: false, closing: false, closedEarly: false, stopped: false,
     pipelineElapsedMs: 0, pipelineResumedAt: null,
   };
@@ -121,6 +124,7 @@ function newDoc(ev: Extract<WorkflowEvent, { type: 'query' }>): DocState {
     direct: !!ev.direct,
     runEffort: ev.effort ?? null,
     phase: 'planning',
+    reading: (ev.attachments ?? []).length > 0,
     pipelineResumedAt: Date.now(),
   };
 }
@@ -154,6 +158,7 @@ function settledDoc(ev: Extract<WorkflowEvent, { type: 'doc' }>): DocState {
     runEffort: ev.effort,
     direct: ev.direct,
     answer: ev.answer,
+    unsettled: ev.unsettled ?? null,
     exchanges: ev.exchanges,
   };
 }
@@ -237,15 +242,14 @@ export function reduce(state: AppState, ev: WorkflowEvent): AppState {
   switch (ev.type) {
     case 'query': {
       const existing = state.documents.get(ev.docId);
-      if (ev.warm)
-        // An ask under a settled answer, or the first report of a document that kept none.
-        return withDoc(state, ev.docId, existing?.answer ? askBranch(existing, ev) : newDoc(ev),
-          { activeDocId: ev.docId, runDocId: ev.docId });
-      if (existing)
+      if (existing && !ev.warm)
         // A clarify/change_mode round's re-echo — same identity, nothing
         // wiped, nothing re-born.
         return { ...state, activeDocId: ev.docId, runDocId: ev.docId };
-      return withDoc(state, ev.docId, newDoc(ev),
+      // A birth, an ask under a settled answer, or the first report of a document that kept none. Each is
+      // an ask the document accepted, and the count is how a composer learns its own send landed.
+      const doc = ev.warm && existing?.answer ? askBranch(existing, ev) : newDoc(ev);
+      return withDoc(state, ev.docId, { ...doc, asks: (existing?.asks ?? 0) + 1 },
         { activeDocId: ev.docId, runDocId: ev.docId });
     }
 
@@ -414,10 +418,12 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       // the settled canvas — the ask streams beneath it.
       if (asking) return { ...doc, plan: null, pipelineResumedAt: Date.now() };
       // A planner pass (first or re-plan): recon agents vanish here, the
-      // planner is A0 again, the accumulator keeps counting.
+      // planner is A0 again, the accumulator keeps counting. The attachments
+      // have been read by now.
       return {
         ...doc,
         phase: 'planning',
+        reading: false,
         plan: null,
         revision: null,
         mode: ev.mode === 'flat' ? 'flat' : 'deep',
@@ -484,12 +490,15 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
       if (doc.ask !== null) {
         return {
           ...doc,
-          exchanges: [...doc.exchanges, { question: doc.ask, body: ev.text, attachments: doc.askAttachments }],
+          exchanges: [...doc.exchanges, {
+            question: doc.ask, body: ev.text, attachments: doc.askAttachments,
+            ...(ev.unanswered ? { unanswered: ev.unanswered } : {}),
+          }],
           ask: null,
           askAttachments: [],
         };
       }
-      return { ...doc, answer: ev.text };
+      return { ...doc, answer: ev.text, unanswered: ev.unanswered ?? null, unsettled: ev.unsettled ?? null };
 
     case 'complete': {
       // Settled — bank the last active slice and freeze the timer.

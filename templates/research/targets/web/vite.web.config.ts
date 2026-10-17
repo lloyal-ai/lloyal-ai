@@ -47,6 +47,8 @@ export default defineConfig(({ mode }) => {
   const host = process.env.HOST ?? file.HOST ?? "127.0.0.1";
   const port = process.env.PORT ?? file.PORT ?? "8787";
   const origin = `http://${host}:${port}`;
+  /** How the content plane reaches the host in dev: through this origin, which it names. */
+  const toHost = { target: origin, changeOrigin: true, xfwd: true };
 
   return {
   root: resolve(__dirname),
@@ -90,10 +92,13 @@ export default defineConfig(({ mode }) => {
     // the content plane keeps its requests same-origin, so no CORS preflight is
     // involved and the host needs no `allowedOrigin` for local work.
     // `/v1/media` carries uploads and representations; `/v1/content` answers
-    // existence by digest.
+    // existence by digest. `xfwd` names this origin to the host
+    // (X-Forwarded-Host), which accepts writes only from its own pages.
     proxy: {
-      "/v1/media": { target: origin, changeOrigin: true },
-      "/v1/content": { target: origin, changeOrigin: true },
+      "/v1/media": toHost,
+      "/v1/content": toHost,
+      // `/v2` is the blob upload surface a video's original is pushed over.
+      "/v2": toHost,
     },
   },
   build: { outDir: resolve(__dirname, "../../dist-web"), emptyOutDir: true },

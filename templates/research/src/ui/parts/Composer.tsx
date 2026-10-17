@@ -7,23 +7,26 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
 import { color, font, radius, shadow } from "../theme.js";
-import { MicGlyph, Popover, RecordingWaveform, useContentOrigin, useProjection, useSend, useVoiceInput } from "@lloyal-labs/ui";
-import type { Command } from "../../protocol.js";
-import { ingestMedia, representationUrl } from "@lloyal-labs/media";
-import { resolveAsset } from "./Figures.js";
+import { describeProgress, ingestVideo, MicGlyph, ProgressRing, Popover, RecordingWaveform, useAssets, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput, VideoCard, videoView } from "@lloyal-labs/ui";
+import type { VideoView } from "@lloyal-labs/ui";
+import type { AttachedVideo, VideoProgress } from "@lloyal-labs/ui";
+import type { Command, WorkflowEvent } from "../../protocol.js";
+import { ingestMedia, isVideoContainer, representationUrl } from "@lloyal-labs/media";
+import { Lightbox, resolveAsset } from "./Figures.js";
+import { untranscribedNotice } from "../presentation.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
   DEPTHS, SHAPES, fmtElapsed, selectAbilitiesKnown, selectActiveDocId, selectBanked,
-  selectDepth, selectSources, selectLive, selectMoment, selectResumedAt, selectRevision,
-  type Shape, type Source,
+  selectDepth, selectSources, selectLive, selectMoment, selectNotice, selectResumedAt, selectRevision,
+  sentFate, type Sent, type Shape, type Source,
 } from "../select.js";
 import type { AppState } from "../state.js";
 
 // Stable identities — the composer re-renders per keystroke, and a fresh
 // inline closure per render would grow the fold's memo map (store contract).
 const selectSettled = (app: AppState): boolean => selectMoment(app) === "settle";
-const selectActiveAsk = (app: AppState): string | null =>
-  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.ask ?? null : null;
+const selectActiveAsks = (app: AppState): number =>
+  app.activeDocId !== null ? app.documents.get(app.activeDocId)?.asks ?? 0 : 0;
 const selectClarifying = (app: AppState): boolean =>
   app.activeDocId !== null &&
   app.documents.get(app.activeDocId)?.phase === "clarifying";
@@ -33,7 +36,7 @@ const selectClarifying = (app: AppState): boolean =>
  *  Enumerating types here would be a second copy of a question the bytes
  *  answer — and wrong in both directions (the ingress converts and admits
  *  webp, heic and tiff happily). */
-const ATTACH_TYPES = "image/*,application/pdf";
+const ATTACH_TYPES = "image/*,application/pdf,video/*";
 
 /** An attachment is admitted the moment it is picked: the bytes cross HTTP
  *  once, the host normalizes an image or reads a document, and the tray shows
@@ -43,9 +46,11 @@ const ATTACH_TYPES = "image/*,application/pdf";
  *  is even written. A removed attachment leaves an unreferenced blob behind,
  *  the same harmless orphan class the store's write order already accepts. */
 type Attached =
-  | { id: number; name: string; status: "uploading" }
-  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document"; thumb: string | null; title: string | null }
-  | { id: number; name: string; status: "failed"; error: string };
+  | { id: number; name: string; status: "uploading"; progress?: VideoProgress; video?: boolean }
+  | { id: number; name: string; status: "admitted"; root: Descriptor; kind: "image" | "document" | "video"; thumb: string | null; title: string | null;
+      /** Soundtrack windows the host could not transcribe: the model will not hear them. */
+      untranscribed?: AttachedVideo["untranscribed"] }
+  | { id: number; name: string; status: "failed"; error: string; video?: boolean };
 
 /** Hover and pressed states inline styles cannot express. A selected pill's
  *  inline background always beats the hover class, so selection never dims. */
@@ -82,12 +87,56 @@ function DocGlyph(): ReactElement {
   );
 }
 
+/** A video in the tray: a card while it attaches and once it has, never a strip of text. */
+const isVideoChip = (img: Attached): boolean =>
+  img.status === "admitted" ? img.kind === "video" : img.video === true;
+
+/** While it attaches, the card says what it is doing on a line of its own, whatever the file is called; once
+ *  attached, it is ui's video card, and a click plays the file as attached. */
+function VideoChip({ img }: { img: Attached }): ReactElement {
+  const origin = useContentOrigin();
+  const digest = img.status === "admitted" ? img.root.digest : null;
+  const asset = useAssets(digest ? [digest] : [])[digest ?? ""];
+  const [open, setOpen] = useState<VideoView | null>(null);
+  if (img.status === "admitted" && origin !== null && asset?.kind === "video" && digest) {
+    const view = videoView(origin, digest, asset);
+    return (
+      <>
+        <VideoCard video={view} styles={TRAY_CARD} label={`Play ${img.name}`} onOpen={() => setOpen(view)} />
+        {open && <Lightbox video={open} label={img.name} onClose={() => setOpen(null)} />}
+      </>
+    );
+  }
+  // Before the first report, and once attached while the host is read back, the ring spins.
+  const step = img.status === "uploading" && img.progress ? describeProgress(img.progress) : { fraction: null, text: "Starting" };
+  return (
+    <span style={S.videoPending}>
+      <span style={S.videoName}>{img.name}</span>
+      <ProgressRing fraction={step.fraction} label={`${img.name}: ${step.text}`} size={40} />
+      <span style={S.videoProgress}>{step.text}</span>
+    </span>
+  );
+}
+
+/** A strip of film — a video's glyph in a chip that could not attach it. */
+function FilmGlyph(): ReactElement {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4" />
+    </svg>
+  );
+}
+
 export function Composer({ shape, placeholder }: {
   shape: Shape;
   placeholder: string;
 }): ReactElement {
   const send = useSend<Command>();
   const origin = useContentOrigin();
+  const { bridge } = useHarness<WorkflowEvent, Command>();
+  /** A video is decoded here and composed by the host, which says how it samples one. */
+  const video = useVideoCapabilities();
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<Attached[]>([]);
   const [imageError, setImageError] = useState("");
@@ -96,12 +145,14 @@ export function Composer({ shape, placeholder }: {
   const picker = useRef<HTMLInputElement>(null);
   const draftInput = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
-  /** The question, held after send until the fold acknowledges it. The echo
-   *  mints or names a document within milliseconds, so the first clear arm
-   *  (the active doc changed) does nearly all the work; a warm ask clears on
-   *  its own echo, a clarify answer on leaving 'clarifying'. */
+  /** The work each attachment still has running, by id: stopped when it is removed or the composer goes. */
+  const inFlight = useRef(new Map<number, AbortController>());
+  useEffect(() => () => inFlight.current.forEach((work) => work.abort()), []);
+  /** The question, held after send with its draft and attachments until the
+   *  fold says what became of it (`sentFate`). Acknowledged, it is let go; refused,
+   *  the draft and attachments come back to be edited or removed. */
   const [pending, setPending] = useState<
-    { text: string; docId: string | null; clarify: boolean } | null>(null);
+    (Sent & { draft: string; images: Attached[] }) | null>(null);
   /** An ability just saved toward its first enable — its pill pulses until
    *  `abilities:state` confirms (a corpus enable INDEXES, which takes time). */
   const [enabling, setEnabling] = useState<string | null>(null);
@@ -119,7 +170,8 @@ export function Composer({ shape, placeholder }: {
   const [configFor, setConfigFor] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const configPanel = sources.find((l) => l.name === configFor) ?? null;
-  const askNow = useProjection(selectActiveAsk);
+  const asks = useProjection(selectActiveAsks);
+  const notice = useProjection(selectNotice);
   /** Dictation lives in the question row: the mic beside the field, and while
    *  it records the field itself gives way to the waveform. A transcript lands
    *  as editable text at the cursor and the field takes focus so the next
@@ -153,18 +205,16 @@ export function Composer({ shape, placeholder }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [voice.active]);
 
-  // Acknowledgment: a document was born or activated (the echo lands in
-  // milliseconds), the warm ask echoed, or the clarify round moved on.
   useEffect(() => {
     if (pending === null) return;
-    if (
-      activeDocId !== pending.docId ||
-      askNow === pending.text ||
-      (pending.clarify && !clarifying)
-    ) {
-      setPending(null);
+    const fate = sentFate(pending, { activeDocId, asks, clarifying, notice });
+    if (fate === "waiting") return;
+    if (fate === "refused") {
+      setDraft(pending.draft);
+      setImages((tray) => [...pending.images, ...tray]);   // anything attached while it was out stays
     }
-  }, [pending, activeDocId, askNow, clarifying]);
+    setPending(null);
+  }, [pending, activeDocId, asks, clarifying, notice]);
   // The echo must not outlive plausibility — a dead wire has its own banner.
   useEffect(() => {
     if (pending === null) return;
@@ -360,35 +410,67 @@ export function Composer({ shape, placeholder }: {
     }
     for (const file of chosen) {
       const id = nextId.current++;
+      const work = new AbortController();
+      inFlight.current.set(id, work);
       setImages((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
+      const progress = (p: VideoProgress): void =>
+        setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, progress: p } : a)));
+      let video = false;
       void (async () => {
         try {
-          const root = await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()));
+          // The bytes decide, here as at the host: a video container is decoded on this page and composed
+          // there; anything else crosses once and the host's ingress admits it.
+          video = isVideoContainer(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+          if (video) setImages((prev) => prev.map((a) => (a.id === id && a.status === "uploading" ? { ...a, video } : a)));
+          const { root, untranscribed } = video
+            ? await attachVideo(file, progress, work.signal)
+            : { root: await ingestMedia(origin, new Uint8Array(await file.arrayBuffer()), { signal: work.signal }), untranscribed: [] };
           const asset = await resolveAsset(origin, root.digest);
           const cover = asset.kind === "document" ? asset.meta.pages.find((p) => p.page === 1)?.render : undefined;
           const thumb = asset.kind === "image"
             ? representationUrl(origin, root.digest)
-            : cover ? representationUrl(origin, cover.digest) : null;
+            : asset.kind === "video"
+              ? representationUrl(origin, root.digest, asset.meta.poster)
+              : cover ? representationUrl(origin, cover.digest) : null;
           const title = asset.kind === "document" ? asset.meta.title : null;
-          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title } : a)));
+          setImages((prev) => prev.map((a) => (a.id === id ? {
+            id, name: file.name, status: "admitted", root, kind: asset.kind, thumb, title,
+            ...(untranscribed.length > 0 ? { untranscribed } : {}),
+          } : a)));
         } catch (err) {
+          if (work.signal.aborted) return;   // removed while it worked: there is nothing left to say it failed on
           // The host's own message — 413 too large, 408 too slow, 400 not
           // admitted — beats anything invented here.
           const error = err instanceof Error ? err.message : "Upload failed.";
-          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error } : a)));
+          setImages((prev) => prev.map((a) => (a.id === id ? { id, name: file.name, status: "failed", error, video } : a)));
+        } finally {
+          inFlight.current.delete(id);
         }
       })();
     }
   };
 
+  /** A video: its original pushed, its frames and soundtrack sampled here, and the host composing them. */
+  const attachVideo = async (file: File, onProgress: (p: VideoProgress) => void, signal: AbortSignal): Promise<AttachedVideo> => {
+    if (origin === null) throw new Error("This build cannot accept attachments.");
+    // Before the host has said how it samples a video, ingestVideo asks it.
+    return ingestVideo({ origin, bridge, file, capabilities: video, onProgress, signal });
+  };
+
+  /** Removing an attachment stops the work still running for it: its upload, its sampling, the host's transcription. */
+  const remove = (id: number): void => {
+    inFlight.current.get(id)?.abort();
+    setImages((prev) => prev.filter((p) => p.id !== id));
+  };
+
   /** Paste is the shortest road from a screenshot to a question. The clipboard
    *  hands over the same File objects the picker does, so it feeds `attach`
-   *  rather than growing a second path. Only image and PDF items are taken,
-   *  and the default is prevented only when one was — otherwise a paste
+   *  rather than growing a second path. Only image, video and PDF items are
+   *  taken, and the default is prevented only when one was — otherwise a paste
    *  carrying text would silently lose it. */
   const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
     const files = Array.from(e.clipboardData?.items ?? [])
-      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type === "application/pdf"))
+      .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type.startsWith("video/") || i.type === "application/pdf"))
       .map((i) => i.getAsFile())
       .filter((f): f is File => f !== null);
     if (files.length === 0) return;
@@ -438,7 +520,7 @@ export function Composer({ shape, placeholder }: {
     if (!text || uploading || pending !== null || live) return;
     if (clarifying) {
       send({ type: "submit_clarification", revision, answer: text });
-      setPending({ text, docId: activeDocId, clarify: true });
+      setPending({ text, docId: activeDocId, asks, clarify: true, notice: notice?.id ?? 0, draft, images });
       clear();
       return;
     }
@@ -459,7 +541,7 @@ export function Composer({ shape, placeholder }: {
       skipPlanner: willSkipPlanner,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
-    setPending({ text, docId: activeDocId, clarify: false });
+    setPending({ text, docId: activeDocId, asks, clarify: false, notice: notice?.id ?? 0, draft, images });
     clear();
   };
 
@@ -476,22 +558,37 @@ export function Composer({ shape, placeholder }: {
       {(images.length > 0 || imageError) && (
         <div style={S.tray}>
           {images.map((img) => (
-            <span key={img.id} style={S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
-              {img.status === "admitted" && img.thumb
+            <span key={img.id} style={isVideoChip(img) && img.status !== "failed" ? S.videoChip : S.thumb} title={img.status === "admitted" && img.title ? img.title : img.name}>
+              {isVideoChip(img) && img.status !== "failed"
+                ? <VideoChip img={img} />
+                : img.status === "admitted" && img.thumb
                 ? <img src={img.thumb} alt={img.title ?? img.name} style={S.thumbImg} />
                 : img.status === "failed"
-                  ? <span style={{ ...S.docChip, color: color.danger }}><DocGlyph />{img.name} — {img.error}</span>
+                  ? (
+                    // The name may be cut short; why it failed never is, so a failed attachment never looks gone.
+                    <span style={S.failedChip}>
+                      {img.video ? <FilmGlyph /> : <DocGlyph />}
+                      <span style={S.failedText}>
+                        <span style={S.failedName}>{img.name}</span>
+                        <span style={S.failedReason}>{img.error}</span>
+                      </span>
+                    </span>
+                  )
                   : <span style={{ ...S.docChip, ...(img.status === "uploading" ? S.admitting : {}) }}><DocGlyph />{img.name}{img.status === "uploading" ? " · admitting…" : ""}</span>}
               <button
                 type="button"
                 style={S.thumbX}
                 aria-label={`Remove ${img.name}`}
-                onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
+                onClick={() => remove(img.id)}
               >
                 ×
               </button>
             </span>
           ))}
+          {images.flatMap((img) => {
+            const notice = img.status === "admitted" ? untranscribedNotice(img.untranscribed ?? []) : null;
+            return notice ? [<span key={`sound-${img.id}`} style={S.soundNotice}>{img.name}: {notice}</span>] : [];
+          })}
           {imageError && <span style={S.imageError}>{imageError}</span>}
         </div>
       )}
@@ -570,8 +667,8 @@ export function Composer({ shape, placeholder }: {
           <button
             type="button"
             className="cmp-icon" style={S.attach}
-            title="Attach an image or PDF"
-            aria-label="Attach an image or PDF"
+            title="Attach an image, PDF or video"
+            aria-label="Attach an image, PDF or video"
             onClick={() => picker.current?.click()}
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -600,8 +697,8 @@ export function Composer({ shape, placeholder }: {
             onPaste={onPaste}
             // A failed recording explains itself where the words would have
             // gone, and the first keystroke replaces it.
-            placeholder={voice.error ?? (uploading ? "Sending your image…" : placeholder)}
-            disabled={uploading || pending !== null}
+            placeholder={voice.error ?? (uploading ? "Attaching… write your question meanwhile" : placeholder)}
+            disabled={pending !== null}
           />
         )}
         {pending && <span className="fn-lamp" style={S.sentDot} />}
@@ -762,6 +859,18 @@ const S: Record<string, CSSProperties> = {
   thumbImg: {
     width: 40, height: 40, objectFit: "cover", borderRadius: 6, display: "block",
   },
+  // A video in the tray: a card the size of a small shared-video thumbnail, attaching or attached.
+  videoChip: { position: "relative", display: "inline-flex", flex: "none", borderRadius: 10, boxShadow: shadow.card },
+  // Dark like the card it becomes, so attaching and attached are one object.
+  videoPending: {
+    width: 160, height: 90, boxSizing: "border-box", padding: "6px 8px", borderRadius: 10, background: "#1B1B1F", color: "#fff",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between",
+  },
+  videoName: {
+    alignSelf: "stretch", font: `11px/1.3 ${font.ui}`, color: "rgba(255,255,255,.75)",
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
+  videoProgress: { font: `500 11px ${font.ui}`, color: "#fff", fontVariantNumeric: "tabular-nums" },
   thumbX: {
     position: "absolute", top: -6, right: -6, width: 18, height: 18,
     borderRadius: 9, border: `1px solid ${color.line}`, background: color.card,
@@ -770,12 +879,20 @@ const S: Record<string, CSSProperties> = {
   },
   /** An attachment the host has not answered for yet. */
   admitting: { opacity: 0.6 },
+  failedChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 280, padding: "4px 10px 4px 8px",
+    font: `12px/1.35 ${font.ui}`, color: color.danger,
+  },
+  failedText: { display: "flex", flexDirection: "column", minWidth: 0 },
+  failedName: { color: color.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  failedReason: { color: color.danger, whiteSpace: "normal", overflowWrap: "anywhere" },
   docChip: {
     display: "inline-flex", alignItems: "center", gap: 6, height: 40, padding: "0 10px 0 8px",
     font: `12px ${font.ui}`, color: color.ink, maxWidth: 240, overflow: "hidden",
     textOverflow: "ellipsis", whiteSpace: "nowrap",
   },
   imageError: { font: `12px ${font.ui}`, color: color.danger },
+  soundNotice: { font: `12px ${font.ui}`, color: color.ink },
   attach: {
     width: 30, height: 30, borderRadius: 8, border: 0, background: "none",
     color: color.dim, display: "grid", placeItems: "center", flex: "none",
@@ -932,3 +1049,11 @@ const S: Record<string, CSSProperties> = {
     border: 0, display: "grid", placeItems: "center", fontSize: 14, flex: "none", cursor: "pointer",
   },
 };
+
+/** ui's video card at tray size, in this composer's register. */
+const TRAY_CARD = {
+  card: {
+    position: "relative", display: "block", padding: 0, width: 160, aspectRatio: "16 / 9", overflow: "hidden", cursor: "pointer",
+    border: `1px solid ${color.line}`, borderRadius: 10, background: "#111",
+  },
+} satisfies Record<string, CSSProperties>;

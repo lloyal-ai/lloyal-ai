@@ -28,7 +28,7 @@ const INPUTS: Record<string, Record<string, unknown>> = {
   "preflight": { query: "Q?", ability: { name: "web", useWhen: "for the web", tools: ["web_search"], contents: null } },
   "preflight-recover": { budget: 120 },
   "recovery": { budget: 120, tool: "report", writesTheAnswer: true },
-  "synthesize": { query: "Q?" },
+  "synthesize": { query: "Q?", findings: [{ task: "the task", body: "what the spine could not hold" }] },
   "synthesize-flat": { query: "Q?", findings: [{ task: "the task", body: "what was found" }] },
 };
 const strict = ({ prompt, key }: { prompt: string; key: string }): never => { throw new Error(`${prompt}: input "${key}" is not given`); };
@@ -46,7 +46,7 @@ test("every prompt renders from its declared input, and reads no key the input d
 test("at run time a missing input is reported and rendered empty — never the word undefined, never a lost run", () => {
   const misses: string[] = [];
   const out = render("synthesize.user", {}, { onMissing: ({ prompt, key }) => misses.push(`${prompt}.${key}`) });
-  assert.equal(misses.join(","), "synthesize.user.eta.query");
+  assert.equal(misses.join(","), "synthesize.user.eta.query,synthesize.user.eta.findings");
   assert.ok(!out.includes("undefined"));
 });
 
@@ -68,7 +68,7 @@ const instructed = <T>(purpose: string, answers: string, body: () => T): T => {
 test("the frame says the purpose first and, only where the answer is written, what answers must do last", () => {
   instructed("PURPOSE.", "ANSWERS.", () => {
     // A stage that writes the reader's answer: purpose, its own text, answers.
-    const settling = prompt("synthesize", { query: "Q" }).systemPrompt;
+    const settling = prompt("synthesize", { query: "Q", findings: [] }).systemPrompt;
     assert.ok(settling.startsWith("PURPOSE.\n\nYou are writing"), settling.slice(0, 60));
     assert.ok(settling.endsWith("\n\nANSWERS."), settling.slice(-40));
     // A stage that does not: purpose and its own text, nothing after.

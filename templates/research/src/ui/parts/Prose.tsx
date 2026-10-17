@@ -8,19 +8,16 @@
  *  derives — the same pure list the outline rail reads, indexed in render
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
-import { memo, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Lightbox, Markdown, useAssets } from "@lloyal-labs/ui";
+import { createContext, memo, useContext, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { Lightbox, Markdown, momentClock, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
+import type { LightboxProps } from "@lloyal-labs/ui";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
 import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
 import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
-import { parseAttachmentHref, resolvePrefix } from "@lloyal-labs/media";
-
-const textOf = (node: ReactNode): string =>
-  typeof node === "string" ? node
-  : Array.isArray(node) ? node.map(textOf).join("")
-  : "";
+import { parseAttachmentHref, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
+import { textOf } from "../text-of.js";
 
 /** The heading scale, stepping down from the document's 31px title. */
 const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
@@ -32,6 +29,10 @@ const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
 
 /** Models sometimes wrap a woven link in literal brackets — shed them. */
 const shed = (raw: string): string => raw.replace(/\[(\[[^\]]*\]\([^)]*\))\]/g, "$1");
+
+/** Whether what is rendering sits inside a link. A code span there is the link's label, not a citation of its
+ *  own: the link is already the control, and a button inside a button is not markup a page may have. */
+const InsideLink = createContext(false);
 
 /** Memoized on its props: a section keeps its parse while a sibling streams.
  *  Headings take their ids from `anchors` when given, else from `anchorPrefix`
@@ -50,9 +51,107 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
   const digests = useMemo(() => (digestKey ? digestKey.split("\n") : []), [digestKey]);
   const assets = useAssets(digests);
   const [openPage, setOpenPage] = useState<{ digest: string; label: string } | null>(null);
+  const [openVideo, setOpenVideo] = useState<NonNullable<LightboxProps["video"]> | null>(null);
+  const origin = useContentOrigin();
   const markdown = shed(raw);
   const anchors = given ?? (anchorPrefix ? anchorsOf(markdown, anchorPrefix) : []);
   let next = 0;
+  /** An inline code span that is exactly an attachment address: a model citing a moment or a page in backticks
+   *  rather than as a link. The address is unambiguous either way, so it reads as the citation it is. */
+  const citedInCode = (children: ReactNode): ReactElement | null => {
+    const text = textOf(children).trim();
+    const moment = parseAttachmentMoment(text);
+    const page = moment ? null : parseAttachmentHref(text);
+    if (moment) return linked({ href: text });
+    if (page) return linked({ href: text, children: `page ${page.page}` });
+    return null;
+  };
+  /** An inline code span: a citation when its text is an attachment address, unless a link already holds it. */
+  const InlineCode = ({ children }: { children?: ReactNode }): ReactElement =>
+    (useContext(InsideLink) ? null : citedInCode(children)) ?? <code style={S.code}>{children}</code>;
+  /** A link, and the fact of being inside one for whatever it renders. */
+  const link = (props: { href?: string; children?: ReactNode }): ReactElement =>
+    <InsideLink.Provider value={true}>{linked(props)}</InsideLink.Provider>;
+  const linked = ({ href, children }: { href?: string; children?: ReactNode }): ReactElement => {
+    const ordinal = href ? citations?.get(href) : undefined;
+    const moment = href ? parseAttachmentMoment(href) : null;
+    if (moment) {
+      // A moment in a video: the one root that answers to the prefix, played from that time.
+      const root = resolvePrefix(moment.prefix, digests);
+      const asset = root ? assets[root] : undefined;
+      const at = momentClock(moment.tMs);
+      const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
+      if (!root || asset?.kind !== "video" || origin === null) {
+        // Not playable here (yet): the citation stays visible, as its own words or, from backticks, its address.
+        const shown = children ?? <code style={S.code}>{href}</code>;
+        return <span style={S.citeLink} title={`video · ${at} — not in this thread`}>{shown}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</span>;
+      }
+      const view = videoView(origin, root, asset, moment.tMs);
+      // The frame the model saw at that moment: the last one shown at or before it.
+      const seen = view.frames.filter((f) => f.tMs <= moment.tMs).at(-1) ?? view.frames[0];
+      // Said aloud as it reads: the cited words, their citation number, then what pressing it does.
+      const label = [textOf(children).trim(), ordinal !== undefined && `citation ${ordinal}`, `play the attached video from ${at}`]
+        .filter(Boolean).join(", ");
+      return (
+        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={label} onClick={() => setOpenVideo(view)}>
+          {mark}
+          <span style={S.moment}>
+            {seen && <img src={seen.src} alt="" style={S.momentFrame} />}
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z" /></svg>
+            {at}
+          </span>
+        </button>
+      );
+    }
+    const cited = href ? parseAttachmentHref(href) : null;
+    if (cited) {
+      // Evidence by content address: exactly one root in this thread
+      // answers to the prefix, and its sidecar names the page's render.
+      const root = resolvePrefix(cited.prefix, digests);
+      const asset = root ? assets[root] : undefined;
+      const meta = asset?.kind === "document" ? asset.meta : null;
+      const render = meta?.pages.find((p) => p.page === cited.page)?.render;
+      const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
+      if (!render || !meta) {
+        return <span style={S.citeLink} title={meta ? `${meta.title} · page ${cited.page}` : "page not in this thread"}>{mark}</span>;
+      }
+      return (
+        <button
+          type="button"
+          style={S.pageLink}
+          title={`${meta.title} · page ${cited.page} — open`}
+          onClick={() => setOpenPage({ digest: render.digest, label: `${meta.title} · page ${cited.page}` })}
+        >
+          {mark}
+        </button>
+      );
+    }
+    if (ordinal === undefined) {
+      return (
+        <a href={href} target="_blank" rel="noreferrer" style={S.link}>
+          {children}
+        </a>
+      );
+    }
+    const bare = isBareOrdinal(textOf(children));
+    // A corpus citation's target is a local file — chip without a
+    // dead hyperlink; the sources grid carries its card.
+    if (!/^https?:\/\//.test(href ?? "")) {
+      return (
+        <span style={S.citeLink}>
+          {!bare && children}
+          <sup style={S.cite}>{ordinal}</sup>
+        </span>
+      );
+    }
+    return (
+      <a href={href} target="_blank" rel="noreferrer" style={S.citeLink}>
+        {!bare && children}
+        <sup style={S.cite}>{ordinal}</sup>
+      </a>
+    );
+  };
+
   const anchored = (Tag: "h1" | "h2" | "h3" | "h4") =>
     ({ children }: { children?: ReactNode }): ReactElement =>
       <Tag id={anchors[next++]?.anchor} style={HEADING[Tag]}>{children}</Tag>;
@@ -62,56 +161,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
         markdown={markdown}
         style={S.prose}
         components={{
-          a: ({ href, children }) => {
-            const ordinal = href ? citations?.get(href) : undefined;
-            const cited = href ? parseAttachmentHref(href) : null;
-            if (cited) {
-              // Evidence by content address: exactly one root in this thread
-              // answers to the prefix, and its sidecar names the page's render.
-              const root = resolvePrefix(cited.prefix, digests);
-              const asset = root ? assets[root] : undefined;
-              const meta = asset?.kind === "document" ? asset.meta : null;
-              const render = meta?.pages.find((p) => p.page === cited.page)?.render;
-              const mark = <>{children}{ordinal !== undefined && <sup style={S.cite}>{ordinal}</sup>}</>;
-              if (!render || !meta) {
-                return <span style={S.citeLink} title={meta ? `${meta.title} · page ${cited.page}` : "page not in this thread"}>{mark}</span>;
-              }
-              return (
-                <button
-                  type="button"
-                  style={S.pageLink}
-                  title={`${meta.title} · page ${cited.page} — open`}
-                  onClick={() => setOpenPage({ digest: render.digest, label: `${meta.title} · page ${cited.page}` })}
-                >
-                  {mark}
-                </button>
-              );
-            }
-            if (ordinal === undefined) {
-              return (
-                <a href={href} target="_blank" rel="noreferrer" style={S.link}>
-                  {children}
-                </a>
-              );
-            }
-            const bare = isBareOrdinal(textOf(children));
-            // A corpus citation's target is a local file — chip without a
-            // dead hyperlink; the sources grid carries its card.
-            if (!/^https?:\/\//.test(href ?? "")) {
-              return (
-                <span style={S.citeLink}>
-                  {!bare && children}
-                  <sup style={S.cite}>{ordinal}</sup>
-                </span>
-              );
-            }
-            return (
-              <a href={href} target="_blank" rel="noreferrer" style={S.citeLink}>
-                {!bare && children}
-                <sup style={S.cite}>{ordinal}</sup>
-              </a>
-            );
-          },
+          a: link,
           h1: anchored("h1"), h2: anchored("h2"), h3: anchored("h3"), h4: anchored("h4"),
           p: ({ children }) => <p style={S.p}>{children}</p>,
           strong: ({ children }) => <strong style={S.strong}>{children}</strong>,
@@ -120,11 +170,14 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
             className ? (
               <code className={className} style={S.codeBlock}>{children}</code>
             ) : (
-              <code style={S.code}>{children}</code>
+              <InlineCode>{children}</InlineCode>
             ),
           pre: ({ children }) => <pre style={S.pre}>{children}</pre>,
         }}
       />
+      {openVideo !== null && (
+        <Lightbox video={openVideo} label="the attached video" onClose={() => setOpenVideo(null)} styles={LIGHTBOX} />
+      )}
       {openPage !== null && (
         <Lightbox digest={openPage.digest} label={openPage.label} onClose={() => setOpenPage(null)} styles={LIGHTBOX} />
       )}
@@ -179,6 +232,12 @@ const S: Record<string, CSSProperties> = {
     background: "none", border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit",
     textDecoration: "underline dotted", textUnderlineOffset: 3, cursor: "zoom-in",
   },
+  // A cited moment, as a shared video's timestamp: the frame, a play mark, the time.
+  moment: {
+    display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 4, padding: "1px 6px 1px 2px", verticalAlign: "middle",
+    font: `600 11px/1 ${font.mono}`, color: color.emberDeep, background: color.emberWash, borderRadius: radius.pill,
+  },
+  momentFrame: { height: 14, aspectRatio: "16 / 9", objectFit: "cover", borderRadius: radius.pill, display: "block" },
   cite: {
     font: `600 10px/1 ${font.ui}`, color: color.emberDeep, background: color.emberWash,
     borderRadius: radius.pill, padding: "2px 5px", marginLeft: 2, verticalAlign: "super",

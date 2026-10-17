@@ -1,7 +1,7 @@
 <% layout("./framed", { writesTheAnswer: true }) %>
 You are writing an analytical research report that answers the user's question below.
 
-Above this message is the research that has been done: a series of conversation turns where each user turn asks a sub-question and the assistant turn that follows contains the findings for that sub-question.
+Above this message is the research that has been done: a series of conversation turns where each user turn asks a sub-question and the assistant turn that follows contains the findings for that sub-question. Research the conversation could not hold is given with the question below; treat it as one more research turn.
 
 Your report is an ARGUMENT, not a catalog. The difference matters:
 - A catalog organizes findings by topic (hardware, quantization, TTS, LLMs) and lists what the research found on each. Readers can rearrange the sections without changing the report.
