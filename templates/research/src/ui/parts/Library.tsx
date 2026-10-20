@@ -1,5 +1,7 @@
-/** Completed reports — every settled brief on disk, newest first. Clicking
- *  one RESTORES it as the session document (the canvas, Ask, and Extend
+/** The shelf — every brief on disk, newest first: settled, ended incomplete,
+ *  or being written now, each saying which. Clicking the one being written
+ *  returns to it on the canvas. Clicking a settled one RESTORES it as the
+ *  session document (the canvas, Ask, and Extend
  *  behave exactly as over a fresh settle; the report prefills the trunk on
  *  the first question). The list is the run dirs themselves: whatever the
  *  corpus ability ingests for cross-report memory, the reader browses here
@@ -11,7 +13,7 @@ import { color, font, radius } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command, LibraryEntry } from "../../protocol.js";
 import {
-  selectLibrary, selectLibrarySearch, selectLive, selectTitle,
+  selectLibrary, selectLibrarySearch, selectLive, selectTitle, selectStatus, entryState,
 } from "../select.js";
 
 /** Order entries by a best-first path ranking; anything the ranking does not
@@ -34,6 +36,7 @@ const day = (iso: string): string => {
 export function Library(): ReactElement | null {
   const send = useSend<Command>();
   const entries = useProjection(selectLibrary);
+  const status = useProjection(selectStatus);
   const title = useProjection(selectTitle);
   const search = useProjection(selectLibrarySearch);
   const live = useProjection(selectLive);
@@ -80,7 +83,7 @@ export function Library(): ReactElement | null {
   let lastDay = "";
 
   return (
-    <nav style={S.wrap} aria-label="library of settled briefs">
+    <nav style={S.wrap} aria-label="library of briefs">
       <style>{HOVER}</style>
       <p style={S.kicker}>Library · {entries.length}</p>
       <span style={S.searchWrap}>
@@ -97,6 +100,7 @@ export function Library(): ReactElement | null {
       </span>
       <div className="lib-list" style={{ ...S.list, ...(awaiting ? S.listWaiting : null) }}>
         {rows.map((e) => {
+          const word = entryState(status, e);
           const d = day(e.savedAt);
           const divider = search === null && d !== lastDay ? d : null;
           lastDay = d;
@@ -116,6 +120,7 @@ export function Library(): ReactElement | null {
             >
             <span style={S.entryBody}>
               <span style={S.entryTitle}>{e.title}</span>
+              {word !== null && <span style={S.state}>{word}</span>}
             </span>
             {e.hasMedia && (
               <svg style={S.media} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="carries images">
@@ -124,6 +129,7 @@ export function Library(): ReactElement | null {
                 <path d="M21 15l-4.5-4.5L6 21" />
               </svg>
             )}
+            {!e.inProgress && (
             <button
               type="button"
               className="lib-trash"
@@ -148,6 +154,7 @@ export function Library(): ReactElement | null {
                 </svg>
               )}
             </button>
+            )}
             </div>
           </div>
           );
@@ -211,6 +218,7 @@ const S: Record<string, CSSProperties> = {
   entryTitle: {
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500,
   },
+  state: { fontSize: 10.5, opacity: 0.62, marginLeft: 6, whiteSpace: "nowrap", letterSpacing: 0.2 },
   media: { color: color.dim, flex: "none" },
   trash: {
     font: `600 10px ${font.ui}`, color: color.dim, background: "none", border: 0,

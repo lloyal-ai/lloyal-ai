@@ -47,7 +47,7 @@ export const answerText = (body: string, unsettled: Unsettled | null | undefined
 export const findingsAsWritten = (inquiries: readonly { task: string; findings: string }[]): string =>
   inquiries.flatMap(({ task, findings }) => (findings.trim() ? [`## ${task}\n\n${findings.trim()}`] : [])).join("\n\n");
 
-/** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
+/** One brief on disk — a library row: settled, ended incomplete, or being written. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;
   docId: DocId;
@@ -59,6 +59,11 @@ export interface LibraryEntry {
   direct: boolean;
   /** The brief carried images — its record names their roots. */
   hasMedia: boolean;
+  /** The brief is being written now: the run is on the canvas, and opening the entry returns to it. Its own fact,
+   *  never the `unsettled` reason, which belongs to a run that ended. */
+  inProgress: boolean;
+  /** How the run ended short of settling, when it did; absent for a settled brief and for one being written. */
+  unsettled?: Unsettled;
 }
 
 /** A settled brief read whole from its folder: the report and every exchange beside it, in order. */

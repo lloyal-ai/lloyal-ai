@@ -158,8 +158,8 @@ export const selectBoot = (app: AppState): Boot => ({
   loadingLabel: app.session.loadingLabel,
 });
 
-/** Every settled brief on disk, newest first. Opening one restores it as
- *  the session document — no body is ever held view-side. */
+/** Every brief on disk, newest first, each saying what it is. Opening a settled one restores it as the session
+ *  document; opening the one being written returns to it on the canvas — no body is ever held view-side. */
 export const selectLibrary = (app: AppState): LibraryEntry[] => app.session.library.entries;
 
 /** The live library search, when one is running: its query and the report

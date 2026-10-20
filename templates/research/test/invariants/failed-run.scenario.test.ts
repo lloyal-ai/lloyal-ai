@@ -89,8 +89,7 @@ test("a run that fails after two of three stages ends as an unsettled brief: the
   assert.ok(report.includes(UNSETTLED.failed), "the saved report says, as the canvas does, why it was not settled");
 });
 
-test("while a run is in progress the shelf does not list it, though its checkpoint is on disk; once it ends unsettled, it does", async () => {
-  let spawns = 0;
+test("the shelf hears of a run as its first annexure lands, listed as being written; once it ends unsettled, as incomplete", async () => {
   const run = await runHarness({
     config: threeTasksAllowed,
     utterances: threeStages,
@@ -101,23 +100,21 @@ test("while a run is in progress the shelf does not list it, though its checkpoi
         return inner(msgs, opts);
       };
     },
-    script: [
-      { send: { type: "submit_query", query: "Q?", mode: "deep" } },
-      { on: (ev) => ev.type === "ui:plan_review", send: accept },
-      // The second stage is seated once the first report was kept: the checkpoint record is on disk, the run is not over.
-      { on: (ev) => ev.type === "agent:spawn" && ++spawns === 2, send: { type: "library_list" } },
-      { on: (ev) => ev.type === "complete" || ev.type === "run:aborted" },
-    ],
+    // Nobody asks for the shelf: the library says it changed, as the app relies on.
+    script: investigation((ev) => ev.type === "complete" || ev.type === "run:aborted"),
   });
   const docId = docIdOfQuery(run.events);
   const types = run.events.map((e) => e.type);
   const completeAt = types.indexOf("complete");
-  const lists = run.events.map((e, i) => [e, i] as const).filter(([e]) => e.type === "library:list") as unknown as [{ entries: { docId: string }[] }, number][];
+  const lists = run.events.map((e, i) => [e, i] as const).filter(([e]) => e.type === "library:list") as unknown as [{ entries: { docId: string; inProgress: boolean; unsettled?: string }[] }, number][];
   const during = lists.filter(([, i]) => i < completeAt);
-  assert.ok(during.length > 0, `the shelf was asked while the run was in progress: ${types.join(" ")}`);
-  for (const [list] of during) assert.ok(!list.entries.some((e) => e.docId === docId), "a run in progress is not a brief on the shelf");
-  const last = lists[lists.length - 1][0];
-  assert.ok(last.entries.some((e) => e.docId === docId), "once the run ended unsettled, the shelf lists it");
+  assert.equal(during.length, 1, `the shelf heard of the run once, at its first annexure: ${types.join(" ")}`);
+  for (const [list] of during) {
+    const row = list.entries.find((e) => e.docId === docId);
+    assert.deepEqual({ inProgress: row?.inProgress, unsettled: row?.unsettled }, { inProgress: true, unsettled: undefined }, "a run in progress is on the shelf as being written, with no verdict on it yet");
+  }
+  const last = lists[lists.length - 1][0].entries.find((e) => e.docId === docId);
+  assert.deepEqual({ inProgress: last?.inProgress, unsettled: last?.unsettled }, { inProgress: false, unsettled: "failed" }, "once the run ended unsettled, the shelf says incomplete");
   assert.deepEqual(annexures(path.join(run.outputDir, docId)), ["annexure-1.md", "annexure-2.md"]);
 });
 

@@ -13,7 +13,7 @@ import { syncBuiltinESMExports } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { run, createChannel } from "effection";
-import type { Operation } from "effection";
+import type { Channel, Operation } from "effection";
 import { createBus } from "@lloyal-labs/binding";
 import type { EventBus } from "@lloyal-labs/binding";
 import { Attachments } from "@lloyal-labs/lloyal-agents";
@@ -21,7 +21,7 @@ import { NullAttachmentStore } from "@lloyal-labs/media";
 import { createAbilityRegistry, createInMemoryConfigStore } from "@lloyal-labs/rig";
 import { asBriefRecord, openLibrary, writeBrief } from "../../src/harness/library.js";
 import type { BriefRecord, Library } from "../../src/harness/library.js";
-import type { WorkflowEvent } from "../../src/protocol.js";
+import type { LibraryEntry, WorkflowEvent } from "../../src/protocol.js";
 import type { Inputs, Written } from "../../src/harness/research.js";
 
 const ev = (e: Record<string, unknown>): WorkflowEvent => e as unknown as WorkflowEvent;
@@ -36,14 +36,22 @@ const wrote = (inquiries: { task: string; findings: string }[], answer: string |
 const settled = (query: string, answer: string, extra: Partial<BriefRecord> = {}): BriefRecord =>
   ({ version: 1, query, savedAt: "2026-01-01T00:00:00.000Z", mode: "flat", effort: "low", direct: false, attachments: [], answer, inquiries: [], elapsedMs: 1000, ...extra });
 
-/** One session's library over `dir`, with the bus it reads. */
-function* opened(dir: string): Operation<{ lib: Library; bus: EventBus<WorkflowEvent> }> {
+/** One session's library over `dir`, with the bus it reads and the wire it says things on. */
+function* opened(dir: string): Operation<{ lib: Library; bus: EventBus<WorkflowEvent>; wire: Channel<WorkflowEvent, void> }> {
   const registry = yield* createAbilityRegistry({ configStore: createInMemoryConfigStore() });
   const bus = createBus<WorkflowEvent>();
   bus.subscribe(() => {});
   yield* Attachments.set(new NullAttachmentStore());
-  const lib = yield* openLibrary(() => dir, { events: bus, registry, wire: createChannel<WorkflowEvent, void>(), run: { busy: false } as never, abilities: [] });
-  return { lib, bus };
+  const wire = createChannel<WorkflowEvent, void>();
+  const lib = yield* openLibrary(() => dir, { events: bus, registry, wire, run: { busy: false } as never, abilities: [] });
+  return { lib, bus, wire };
+}
+
+/** The shelf as the library says it when asked. */
+function* shelf(library: Library, wire: Channel<WorkflowEvent, void>): Operation<LibraryEntry[]> {
+  const said = yield* wire;
+  yield* library.handlers.library_list!({ type: "library_list" });
+  return ((yield* said.next()).value as Extract<WorkflowEvent, { type: "library:list" }>).entries;
 }
 
 const fresh = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "lib-"));
@@ -117,16 +125,11 @@ test("a folder without a record was never settled: it is not listed, a read find
   writeBrief(path.join(lib, other), settled("Other?", "Settled."), { exchange: false, annexuresFrom: 0 });
   fs.writeFileSync(path.join(lib, other, "exchange-1.json"), '{"version":2,"query":"x"}');   // a record of another shape beside it
   const seen = await run(function* () {
-    const wire = createChannel<WorkflowEvent, void>();
-    const registry = yield* createAbilityRegistry({ configStore: createInMemoryConfigStore() });
-    yield* Attachments.set(new NullAttachmentStore());
-    const library = yield* openLibrary(() => lib, { events: createBus<WorkflowEvent>(), registry, wire, run: { busy: false } as never, abilities: [] });
-    const said = yield* wire;
-    yield* library.handlers.library_list!({ type: "library_list" });
-    const listed = (yield* said.next()).value as Extract<WorkflowEvent, { type: "library:list" }>;
+    const { lib: library, wire } = yield* opened(lib);
+    const listed = yield* shelf(library, wire);
     const read = library.read(unsettled);
     library.release(unsettled);
-    return { listed: listed.entries.map((e) => e.docId), read, thread: library.read(other) };
+    return { listed: listed.map((e) => e.docId), read, thread: library.read(other) };
   });
   assert.deepEqual(seen.listed, [other], "only the settled brief is listed");
   assert.equal(seen.read, null);
@@ -298,29 +301,36 @@ test("each inquiry's annexure is filed as its report returns, and the record say
   assert.ok(seen.thread?.body.includes("## the near half\n\nFIRST-FINDING") && seen.thread.body.includes("SECOND-FINDING"));
 });
 
-test("a brief this session is writing is not on the shelf and does not read as a brief: it is unfinished, where the canvas has it; a new session over the folder reads what a kill left", async () => {
+test("a brief this session is writing is on the shelf as being written, and does not read as a brief: it is unfinished, where the canvas has it; a new session over the folder reads what a kill left", async () => {
   const lib = fresh();
   const seen = await run(function* () {
-    const wire = createChannel<WorkflowEvent, void>();
-    const registry = yield* createAbilityRegistry({ configStore: createInMemoryConfigStore() });
-    yield* Attachments.set(new NullAttachmentStore());
-    const library = yield* openLibrary(() => lib, { events: createBus<WorkflowEvent>(), registry, wire, run: { busy: false } as never, abilities: [] });
+    const { lib: library, bus, wire } = yield* opened(lib);
+    const announced: LibraryEntry[][] = [];
+    bus.subscribe((e) => { if (e.type === "library:list") announced.push(e.entries); });
     const docId = library.reserve();
     library.begin(docId, ask(docId), { warm: false });
-    library.annexure(docId, 0, "the near half", "FIRST-FINDING");   // the checkpoint record is on disk now
+    library.annexure(docId, 0, "the near half", "FIRST-FINDING");   // the checkpoint record is on disk now: a shelf change, said unasked
+    library.annexure(docId, 1, "the far half", "SECOND-FINDING");   // a second one is not: the shelf already has the row
+    const listed = yield* shelf(library, wire);
+    // The row has a record, so the shelf could name it to delete; the library refuses while the run writes into it.
     const said = yield* wire;
-    yield* library.handlers.library_list!({ type: "library_list" });
-    const listed = (yield* said.next()).value as Extract<WorkflowEvent, { type: "library:list" }>;
-    return { docId, listed: listed.entries.map((e) => e.docId), read: library.read(docId), unfinished: library.unfinished(docId) };
+    yield* library.handlers.library_delete!({ type: "library_delete", path: path.join(lib, docId, "report.json") });
+    const refused = (yield* said.next()).value as { type: string; message?: string };
+    return { docId, announced, refused: refused.type === "ui:error" ? refused.message ?? "" : refused.type, listed: listed.map((e) => ({ docId: e.docId, title: e.title, inProgress: e.inProgress, unsettled: e.unsettled })), read: library.read(docId), unfinished: library.unfinished(docId) };
   });
-  assert.deepEqual(seen.listed, [], "a run in progress is not a brief on the shelf");
-  assert.equal(seen.read, null, "and does not read as one");
+  assert.deepEqual(seen.announced.map((l) => l.map((e) => [e.docId, e.inProgress])), [[[seen.docId, true]]], "the first annexure said the shelf changed, once");
+  assert.ok(fs.existsSync(path.join(lib, seen.docId, "annexure-1.md")), "a delete from the shelf refused the folder being written");
+  assert.match(seen.refused, /being written/);
+  assert.deepEqual(seen.listed, [{ docId: seen.docId, title: "Q?", inProgress: true, unsettled: undefined }], "the run in progress is on the shelf as being written, not as a brief that failed");
+  assert.equal(seen.read, null, "and does not read as a brief");
   assert.equal(seen.unfinished, true, "it is the brief being written, which the canvas already shows");
   const after = await run(function* () {
-    const { lib: library } = yield* opened(lib);   // a new session over the same folder: the writer is gone, as after a kill
-    return library.read(seen.docId);
+    const { lib: library, wire } = yield* opened(lib);   // a new session over the same folder: the writer is gone, as after a kill
+    const listed = yield* shelf(library, wire);
+    return { read: library.read(seen.docId), entry: listed.find((e) => e.docId === seen.docId) };
   });
-  assert.equal(after?.unsettled, "failed", "what a kill left reads as the unsettled brief it is");
+  assert.equal(after.read?.unsettled, "failed", "what a kill left reads as the unsettled brief it is");
+  assert.deepEqual({ inProgress: after.entry?.inProgress, unsettled: after.entry?.unsettled }, { inProgress: false, unsettled: "failed" }, "and the shelf says so");
 });
 
 test("the report made at the end indexes the annexures already filed and files no second copy", async () => {

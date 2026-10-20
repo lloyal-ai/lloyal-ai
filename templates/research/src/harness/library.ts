@@ -1,6 +1,7 @@
 /**
- * Settled briefs on disk, and the folders reserved for briefs still being
- * written — over rig's folder mechanics. A brief's record is `report.json`:
+ * The briefs on disk: settled, ended short of settling, or being written now
+ * (listable from its first annexure), and the folders reserved for briefs
+ * that have not filed anything yet — over rig's folder mechanics. A brief's record is `report.json`:
  * the facts of the run that wrote it, and the ONLY file the library reads
  * back. Beside it the library writes what a reader opens — the answer as
  * `report.md`, what each inquiry said as `annexure-N.md` — and an ask into a
@@ -171,7 +172,8 @@ export interface Library {
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
   /** One inquiry's findings, as its report returns: filed as an annexure now, so a run that ends any other way
-   *  has what had finished. A first report's record says what the run has so far, unsettled, until it settles. */
+   *  has what had finished. A first report's record says what the run has so far, unsettled, until it settles,
+   *  and the first one announces the shelf, which lists the run from then on as being written. */
   annexure(id: DocId, index: number, task: string, findings: string): void;
   /** What the writer returned for the brief being written. The report is made from it when the run says `complete`. */
   written(id: DocId, written: Written): void;
@@ -206,24 +208,34 @@ export function* openLibrary(
    *  nothing — the folder is as unsettled as one with no record, and is treated the same. */
   const keptIn = (id: DocId): boolean => { const file = recordPath(id); const r = file === null ? null : readRecord(file); return r !== null && kept(r); };
 
-  /** Every brief's record that holds something, newest first — a settled brief, or a run that ended with its
-   *  findings filed; a folder without one, or with one of another shape, is not listed. Nor is the folder of the
-   *  run in progress: its checkpoint record says what a kill would leave, not what the shelf has, and the run is
-   *  on the canvas until it ends. */
+  /** Every brief's record that holds something, newest first — a settled brief, a run that ended with its
+   *  findings filed, or the run in progress once its first annexure landed; a folder without one, or with one of
+   *  another shape, is not listed. The shelf says which each is (see `list`); search is refused while a run is
+   *  live (`run.busy`), so it never ranks the checkpoint. */
   function records(): { path: string; docId: DocId; record: BriefRecord }[] {
     const found: { path: string; docId: DocId; record: BriefRecord }[] = [];
     for (const { name, path: file } of listFolders(dir(), RECORD)) {
-      if (writing(name)) continue;
       const r = readRecord(file);
       if (r && kept(r)) found.push({ path: file, docId: name, record: r });
     }
     return found.sort((a, b) => (a.record.savedAt < b.record.savedAt ? 1 : -1));
   }
 
+  /** What a shelf announcement carries: every brief the library knows of, and what each is. A shelf change is
+   *  said unasked, with this one expression; each site says it on the channel it holds. */
+  const shelf = (): WorkflowEvent => ({ type: "library:list", entries: list() });
+
+  /** The shelf: every brief the library knows of, and what each is. The run in progress is listed as being
+   *  written, with no verdict on it: its checkpoint's `unsettled` says what a kill would leave, not what it is. */
   const list = (): LibraryEntry[] =>
-    records().map(({ path: file, docId, record: r }) => ({
-      path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0,
-    }));
+    records().map(({ path: file, docId, record: r }) => {
+      const inProgress = writing(docId);
+      return {
+        path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0,
+        inProgress,
+        ...(!inProgress && r.unsettled ? { unsettled: r.unsettled } : {}),
+      };
+    });
 
   function release(id: DocId): void {
     if (record?.docId === id) record = null;
@@ -328,7 +340,7 @@ export function* openLibrary(
       // the brief it was writing is on the shelf from this breath.
       finish(r);
       record = null;
-      events.send({ type: "library:list", entries: list() });
+      events.send(shelf());
     }
   });
   yield* ensure(() => unsubscribe());
@@ -343,7 +355,7 @@ export function* openLibrary(
   return {
     handlers: {
       *library_list() {
-        yield* wire.send({ type: "library:list", entries: list() });
+        yield* wire.send(shelf());
       },
       *library_search({ query }) {
         // The reranker is the run's instrument while a run is live; the sidebar disables its input, this is the same fact host-side.
@@ -360,10 +372,16 @@ export function* openLibrary(
         yield* wire.send({ type: "library:search", query: q, ranked });
       },
       *library_delete({ path: candidate }) {
-        // The whole folder goes — report, annexures, thread — and the corpus unlearns it.
+        // The whole folder goes — report, annexures, thread — and the corpus unlearns it. Not while this session's
+        // run is writing into it: the row is on the shelf from its first annexure, and the run owns the folder until
+        // it ends. `writing` is this session's record, so the guard holds within one session (see LLO-160 for a
+        // served host, where another session over the same library does not know).
         const file = confined(dir(), candidate);
-        if (file !== null && path.basename(file) === RECORD) { removeFolder(path.dirname(file)); yield* reindex(); }
-        yield* wire.send({ type: "library:list", entries: list() });
+        if (file === null || path.basename(file) !== RECORD) return yield* wire.send(shelf());
+        if (writing(path.basename(path.dirname(file)))) return yield* wire.send({ type: "ui:error", message: "That brief is being written; stop the run before deleting it." });
+        removeFolder(path.dirname(file));
+        yield* reindex();
+        yield* wire.send(shelf());
       },
     },
     reserve() {
@@ -399,10 +417,13 @@ export function* openLibrary(
     annexure(id, index, task, findings) {
       const r = record;
       if (r?.docId !== id || !findings.trim()) return;
+      const first = r.filed.size === 0;
       const n = writeAnnexure(r.dir, r.ordinalBase + index + 1, task, findings);
       r.filed.set(index, { task, findings, annexure: n });
       // An exchange lands beside a settled brief, whose record stands; a first report's record is the run's own.
       if (!r.appending) writeRecordFile(path.join(r.dir, RECORD), soFar(r));
+      // The first checkpoint makes the folder listable: a shelf change, said unasked, as every shelf change is.
+      if (!r.appending && first) events.send(shelf());
     },
     written(id, w) { if (record?.docId === id) record.written = w; },
     read,
@@ -427,7 +448,7 @@ export function* openLibrary(
         // A run that settled without saying `complete`, ended with findings filed: it is over, and the shelf, which
         // `complete` would have refreshed, hears of it here.
         record = null;
-        yield* wire.send({ type: "library:list", entries: list() });
+        yield* wire.send(shelf());
       }
       yield* reindex();
     },

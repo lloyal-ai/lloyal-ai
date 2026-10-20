@@ -2,6 +2,7 @@
  *  and its clock. Every other selector module starts from the two documents found here — the one on the canvas
  *  and the one the run is writing — which are not always the same document. */
 import { type AppState, type DocState, type DocPhase } from "../state.js";
+import type { LibraryEntry } from "../../protocol.js";
 import { emptyDoc } from "../reduce.js";
 import { type Pace } from "../pace.js";
 import { type Boot } from "./ask.js";
@@ -22,6 +23,9 @@ export const activeDoc = (app: AppState): DocState =>
 export const runDoc = (app: AppState): DocState | null =>
   app.runDocId !== null ? app.documents.get(app.runDocId) ?? null : null;
 
+
+/** The word for a brief that ended short of settling, wherever it is said. */
+const INCOMPLETE = "Incomplete";
 
 /** What each phase of a document means to the reader: the moment that owns the canvas, the run bar's word, and
  *  whether the model is working. Total over `DocPhase`, so a phase added to the fold does not compile until it
@@ -141,9 +145,16 @@ export const selectStatus = (app: AppState): string => {
   if (d.ask !== null) return "Writing";
   // A brief whose answer is its inquiries' findings as written was not settled, whatever left it so; the mark
   // above the answer says why.
-  if (d.phase === "done" && d.unsettled !== null) return "Incomplete";
+  if (d.phase === "done" && d.unsettled !== null) return INCOMPLETE;
   return PHASES[d.phase].status;
 };
+
+/** A shelf row's state word, from the run bar's word (`selectStatus`) for the run in progress, so the two never
+ *  disagree; the one word for a brief that ended short of settling; null for a settled brief, which needs none.
+ *  A pure function of the two, so a view projects the entries and the word as two stable values and combines
+ *  them per row in render, allocating nothing per fold. */
+export const entryState = (status: string, e: LibraryEntry): string | null =>
+  e.inProgress ? status : e.unsettled ? INCOMPLETE : null;
 
 /** A follow-up ask is in flight — writing under the settled document. */
 export const selectAskInFlight = (app: AppState): boolean => activeDoc(app).ask !== null;
