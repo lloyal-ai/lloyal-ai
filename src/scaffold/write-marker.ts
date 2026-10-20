@@ -11,6 +11,7 @@
  * boot — the vendored `file:` deps are the install truth. npm ignores the extra
  * top-level key.
  */
+import { parseAbilitySpec } from './ability-spec.js';
 import { join } from 'node:path';
 import { readPackageJson, writeJson } from './package-json.js';
 import type { Target } from './prune-targets.js';
@@ -83,14 +84,17 @@ export function recordInstalledAbility(pkg: Record<string, unknown>, name: strin
   const marker = pkg.harnessdev as PkgWithMarker['harnessdev'];
   if (!marker || !Array.isArray(marker.abilities)) return;
   marker.abilities = marker.abilities.map((spec: unknown) =>
-    typeof spec === 'string' && abilityNameOf(spec) === name ? `${name}@${version}` : spec);
+    typeof spec === 'string' && recordedName(spec) === name ? `${name}@${version}` : spec);
 }
 
-/** `lloyal/web@1.3.0` → `lloyal/web`; a spec with no version is its own name. */
-const abilityNameOf = (spec: string): string => {
-  const at = spec.lastIndexOf('@');
-  return at > 0 ? spec.slice(0, at) : spec;
-};
+/** The name a recorded spec names, by the one spec rule; null for an entry that is not a spec, which is left as it is. */
+function recordedName(spec: string): string | null {
+  try {
+    return parseAbilitySpec(spec).name;
+  } catch {
+    return null;
+  }
+}
 
 interface PkgWithMarker {
   harnessdev?: { template?: unknown; targets?: unknown; abilities?: unknown };

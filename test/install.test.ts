@@ -49,7 +49,8 @@ vi.mock('../src/verify', async (importActual) => {
 });
 
 import { installCommand } from '../src/commands/install';
-import { verifyAndVendorAbility, parseAbilitySpec, RequirementError } from '../src/scaffold/vendor-ability';
+import { verifyAndVendorAbility, RequirementError } from '../src/scaffold/vendor-ability';
+import { parseAbilitySpec } from '../src/scaffold/ability-spec';
 import * as verify from '../src/verify';
 import { buildTarball } from './helpers/tarball';
 
@@ -215,11 +216,8 @@ const ymlText = (): Promise<string> => readFile(join(cwd, 'harness.yml'), 'utf-8
 
 // ── the marker: the recorded spec moves with the vendored version ─────────────
 
-/** The dependency the scaffold's `bin/preflight-abilities.js` expects for a recorded spec: its one assumption about the CLI. */
-const preflightExpects = (spec: string): string => {
-  const at = spec.lastIndexOf('@');
-  return `file:vendor/${spec.slice(0, at).replace('/', '__')}-${spec.slice(at + 1)}.tgz`;
-};
+/** The dependency the scaffold's `bin/preflight-abilities.js` expects for a recorded ability at a version: its one assumption about the CLI. */
+const preflightExpects = (name: string, version: string): string => `file:vendor/${name.replace('/', '__')}-${version}.tgz`;
 
 describe('the marker', () => {
   const marker = async (): Promise<{ abilities?: string[] } | undefined> =>
@@ -236,7 +234,7 @@ describe('the marker', () => {
     const recorded = await marker();
     expect(recorded?.abilities).toEqual(['lloyal/wikipedia@1.0.0', 'lloyal/web@1.3.0']);
     // The preflight's rule holds again: the recorded spec names the dependency that was vendored.
-    expect(await depSpec()).toBe(preflightExpects('lloyal/wikipedia@1.0.0'));
+    expect(await depSpec()).toBe(preflightExpects('lloyal/wikipedia', '1.0.0'));
   });
 
   it('a marker that never recorded the ability, or a project with no marker, is left as it is', async () => {

@@ -5,12 +5,11 @@ import { spawnNpm } from '../npm-spawn.js';
 import type { Command } from '../command.js';
 import { BundleVerificationError } from '../verify.js';
 import {
-  parseAbilitySpec,
   verifyAndVendorAbility,
-  InvalidAppSpecError,
   RequirementError,
   type VendoredApp,
 } from '../scaffold/vendor-ability.js';
+import { parseAbilitySpec, InvalidAppSpecError } from '../scaffold/ability-spec.js';
 import { offerToWrite } from '../scaffold/offer-model.js';
 import { interactive } from '../scaffold/terminal.js';
 
