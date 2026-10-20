@@ -207,10 +207,13 @@ export function* openLibrary(
   const keptIn = (id: DocId): boolean => { const file = recordPath(id); const r = file === null ? null : readRecord(file); return r !== null && kept(r); };
 
   /** Every brief's record that holds something, newest first — a settled brief, or a run that ended with its
-   *  findings filed; a folder without one, or with one of another shape, is not listed. */
+   *  findings filed; a folder without one, or with one of another shape, is not listed. Nor is the folder of the
+   *  run in progress: its checkpoint record says what a kill would leave, not what the shelf has, and the run is
+   *  on the canvas until it ends. */
   function records(): { path: string; docId: DocId; record: BriefRecord }[] {
     const found: { path: string; docId: DocId; record: BriefRecord }[] = [];
     for (const { name, path: file } of listFolders(dir(), RECORD)) {
+      if (writing(name)) continue;
       const r = readRecord(file);
       if (r && kept(r)) found.push({ path: file, docId: name, record: r });
     }
@@ -243,7 +246,14 @@ export function* openLibrary(
     };
   };
 
+  /** Whether `id` is the brief the run in progress is writing its first report into: what the disk holds of it is
+   *  a checkpoint, not a brief. An exchange appends beside a settled brief, which stands and reads as it was. */
+  const writing = (id: DocId): boolean => record?.docId === id && !record.appending;
+
+  /** A brief, whole, from its record and exchanges; null for a folder with no record, and for the one the run in
+   *  progress is writing, which is unfinished (see `unfinished`) and not yet a brief to read. */
   function read(id: DocId): Thread | null {
+    if (writing(id)) return null;
     const file = recordPath(id);
     const root = file === null ? null : readRecord(file);
     if (file === null || root === null) return null;
@@ -314,7 +324,8 @@ export function* openLibrary(
       for (const a of ev.attachments ?? []) if (!r.attachments.includes(a.digest)) r.attachments.push(a.digest);
     } else if (ev.type === "complete") {
       // A settle is a library change, said unasked — on the bus directly, in the same breath as `complete`,
-      // so no reader of it finds the shelf stale.
+      // so no reader of it finds the shelf stale. The run is over before the shelf is read (`record` is null), so
+      // the brief it was writing is on the shelf from this breath.
       finish(r);
       record = null;
       events.send({ type: "library:list", entries: list() });
@@ -365,7 +376,7 @@ export function* openLibrary(
     // that failed left the disk behind what was filed, and the disk is what the next ask meets). An exchange has
     // no record of its own until it completes, so its end leaves nothing to say; the brief it was asked into stands.
     asWritten: (id) => {
-      if (record?.docId !== id || record.appending) return null;
+      if (!writing(id)) return null;
       const file = recordPath(id);
       const r = file === null ? null : readRecord(file);
       return r !== null && kept(r) ? r.answer : null;

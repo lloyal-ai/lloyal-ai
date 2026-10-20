@@ -298,6 +298,31 @@ test("each inquiry's annexure is filed as its report returns, and the record say
   assert.ok(seen.thread?.body.includes("## the near half\n\nFIRST-FINDING") && seen.thread.body.includes("SECOND-FINDING"));
 });
 
+test("a brief this session is writing is not on the shelf and does not read as a brief: it is unfinished, where the canvas has it; a new session over the folder reads what a kill left", async () => {
+  const lib = fresh();
+  const seen = await run(function* () {
+    const wire = createChannel<WorkflowEvent, void>();
+    const registry = yield* createAbilityRegistry({ configStore: createInMemoryConfigStore() });
+    yield* Attachments.set(new NullAttachmentStore());
+    const library = yield* openLibrary(() => lib, { events: createBus<WorkflowEvent>(), registry, wire, run: { busy: false } as never, abilities: [] });
+    const docId = library.reserve();
+    library.begin(docId, ask(docId), { warm: false });
+    library.annexure(docId, 0, "the near half", "FIRST-FINDING");   // the checkpoint record is on disk now
+    const said = yield* wire;
+    yield* library.handlers.library_list!({ type: "library_list" });
+    const listed = (yield* said.next()).value as Extract<WorkflowEvent, { type: "library:list" }>;
+    return { docId, listed: listed.entries.map((e) => e.docId), read: library.read(docId), unfinished: library.unfinished(docId) };
+  });
+  assert.deepEqual(seen.listed, [], "a run in progress is not a brief on the shelf");
+  assert.equal(seen.read, null, "and does not read as one");
+  assert.equal(seen.unfinished, true, "it is the brief being written, which the canvas already shows");
+  const after = await run(function* () {
+    const { lib: library } = yield* opened(lib);   // a new session over the same folder: the writer is gone, as after a kill
+    return library.read(seen.docId);
+  });
+  assert.equal(after?.unsettled, "failed", "what a kill left reads as the unsettled brief it is");
+});
+
 test("the report made at the end indexes the annexures already filed and files no second copy", async () => {
   const lib = fresh();
   const id = await run(function* () {
