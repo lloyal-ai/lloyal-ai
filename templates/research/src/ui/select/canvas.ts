@@ -2,7 +2,7 @@
  *  and its clock. Every other selector module starts from the two documents found here — the one on the canvas
  *  and the one the run is writing — which are not always the same document. */
 import { type AppState, type DocState, type DocPhase } from "../state.js";
-import type { LibraryEntry } from "../../protocol.js";
+import type { BriefState, LibraryEntry } from "../../protocol.js";
 import { emptyDoc } from "../reduce.js";
 import { type Pace } from "../pace.js";
 import { type Boot } from "./ask.js";
@@ -149,12 +149,21 @@ export const selectStatus = (app: AppState): string => {
   return PHASES[d.phase].status;
 };
 
-/** A shelf row's state word, from the run bar's word (`selectStatus`) for the run in progress, so the two never
- *  disagree; the one word for a brief that ended short of settling; null for a settled brief, which needs none.
- *  A pure function of the two, so a view projects the entries and the word as two stable values and combines
- *  them per row in render, allocating nothing per fold. */
-export const entryState = (status: string, e: LibraryEntry): string | null =>
-  e.inProgress ? status : e.unsettled ? INCOMPLETE : null;
+/** What a shelf row shows beside its title, the one reading of its state: a working lamp while nothing is saved
+ *  behind it, the run bar's own word (`selectStatus`) while it is being written so the two never disagree, the
+ *  one word for a brief that ended short, nothing for a settled one. A pure function of the row and the bar's
+ *  word, so a view projects the entries and the word as two stable values and reads each row in render. */
+export type RowMark = { kind: "lamp" } | { kind: "word"; word: string } | null;
+/** What each state of a row means to the shelf: its mark, and whether the reader may delete it (not while the run
+ *  owns the folder). Total over `BriefState`, so a new state does not compile until it is given both. */
+const ROW: Record<BriefState, { mark: (status: string) => RowMark; deletable: boolean }> = {
+  unsaved:    { mark: () => ({ kind: "lamp" }),                     deletable: false },
+  writing:    { mark: (status) => ({ kind: "word", word: status }), deletable: false },
+  incomplete: { mark: () => ({ kind: "word", word: INCOMPLETE }),   deletable: true },
+  settled:    { mark: () => null,                                   deletable: true },
+};
+export const entryMark = (status: string, e: LibraryEntry): RowMark => ROW[e.state].mark(status);
+export const entryDeletable = (e: LibraryEntry): boolean => ROW[e.state].deletable;
 
 /** A follow-up ask is in flight — writing under the settled document. */
 export const selectAskInFlight = (app: AppState): boolean => activeDoc(app).ask !== null;

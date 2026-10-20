@@ -59,12 +59,13 @@ export interface LibraryEntry {
   direct: boolean;
   /** The brief carried images — its record names their roots. */
   hasMedia: boolean;
-  /** The brief is being written now: the run is on the canvas, and opening the entry returns to it. Its own fact,
-   *  never the `unsettled` reason, which belongs to a run that ended. */
-  inProgress: boolean;
-  /** How the run ended short of settling, when it did; absent for a settled brief and for one being written. */
-  unsettled?: Unsettled;
+  /** What the row is, one value: `unsaved`, the run whose writing just started, on the shelf with nothing on disk yet;
+   *  `writing`, the run in progress with its checkpoint saved; `settled`; or `incomplete`, ended short of
+   *  settling, with the reason on the brief itself. Opening an unsaved or writing row returns to the canvas. */
+  state: BriefState;
 }
+
+export type BriefState = "unsaved" | "writing" | "settled" | "incomplete";
 
 /** A settled brief read whole from its folder: the report and every exchange beside it, in order. */
 export interface Thread {

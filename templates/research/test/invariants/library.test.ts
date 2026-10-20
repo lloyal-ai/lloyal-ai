@@ -308,20 +308,22 @@ test("a brief this session is writing is on the shelf as being written, and does
     const announced: LibraryEntry[][] = [];
     bus.subscribe((e) => { if (e.type === "library:list") announced.push(e.entries); });
     const docId = library.reserve();
-    library.begin(docId, ask(docId), { warm: false });
-    library.annexure(docId, 0, "the near half", "FIRST-FINDING");   // the checkpoint record is on disk now: a shelf change, said unasked
-    library.annexure(docId, 1, "the far half", "SECOND-FINDING");   // a second one is not: the shelf already has the row
+    library.begin(docId, ask(docId), { warm: false });   // on the shelf from the ask, with nothing saved behind it: a shelf change, said unasked
+    library.annexure(docId, 0, "the near half", "FIRST-FINDING");   // the checkpoint record is on disk now: the row is saved, said again
+    library.annexure(docId, 1, "the far half", "SECOND-FINDING");   // a second one changes nothing the shelf says
     const listed = yield* shelf(library, wire);
     // The row has a record, so the shelf could name it to delete; the library refuses while the run writes into it.
     const said = yield* wire;
     yield* library.handlers.library_delete!({ type: "library_delete", path: path.join(lib, docId, "report.json") });
     const refused = (yield* said.next()).value as { type: string; message?: string };
-    return { docId, announced, refused: refused.type === "ui:error" ? refused.message ?? "" : refused.type, listed: listed.map((e) => ({ docId: e.docId, title: e.title, inProgress: e.inProgress, unsettled: e.unsettled })), read: library.read(docId), unfinished: library.unfinished(docId) };
+    return { docId, announced, refused: refused.type === "ui:error" ? refused.message ?? "" : refused.type, listed: listed.map((e) => ({ docId: e.docId, title: e.title, state: e.state })), read: library.read(docId), unfinished: library.unfinished(docId) };
   });
-  assert.deepEqual(seen.announced.map((l) => l.map((e) => [e.docId, e.inProgress])), [[[seen.docId, true]]], "the first annexure said the shelf changed, once");
+  assert.deepEqual(seen.announced.map((l) => l.map((e) => [e.docId, e.state])),
+    [[[seen.docId, "unsaved"]], [[seen.docId, "writing"]]],
+    "the ask put the row on the shelf unsaved; the first annexure saved it; the session's end said nothing");
   assert.ok(fs.existsSync(path.join(lib, seen.docId, "annexure-1.md")), "a delete from the shelf refused the folder being written");
   assert.match(seen.refused, /being written/);
-  assert.deepEqual(seen.listed, [{ docId: seen.docId, title: "Q?", inProgress: true, unsettled: undefined }], "the run in progress is on the shelf as being written, not as a brief that failed");
+  assert.deepEqual(seen.listed, [{ docId: seen.docId, title: "Q?", state: "writing" }], "the run in progress is on the shelf as being written, not as a brief that failed");
   assert.equal(seen.read, null, "and does not read as a brief");
   assert.equal(seen.unfinished, true, "it is the brief being written, which the canvas already shows");
   const after = await run(function* () {
@@ -330,7 +332,7 @@ test("a brief this session is writing is on the shelf as being written, and does
     return { read: library.read(seen.docId), entry: listed.find((e) => e.docId === seen.docId) };
   });
   assert.equal(after.read?.unsettled, "failed", "what a kill left reads as the unsettled brief it is");
-  assert.deepEqual({ inProgress: after.entry?.inProgress, unsettled: after.entry?.unsettled }, { inProgress: false, unsettled: "failed" }, "and the shelf says so");
+  assert.equal(after.entry?.state, "incomplete", "and the shelf says so");
 });
 
 test("the report made at the end indexes the annexures already filed and files no second copy", async () => {
@@ -355,19 +357,23 @@ test("the report made at the end indexes the annexures already filed and files n
   assert.equal(record?.answer, "the answer");
 });
 
-test("a run released with nothing filed leaves no folder, as before; one with findings filed keeps it, and is listed", async () => {
+test("a run released with nothing filed leaves no folder, as before, and the shelf hears it go; one with findings filed keeps it, and is listed", async () => {
   const lib = fresh();
-  const { empty, kept } = await run(function* () {
-    const { lib: library } = yield* opened(lib);
+  const { empty, kept, announced } = await run(function* () {
+    const { lib: library, bus } = yield* opened(lib);
+    const announced: string[][] = [];
+    bus.subscribe((e) => { if (e.type === "library:list") announced.push(e.entries.map((x) => `${x.docId}:${x.state}`)); });
     const empty = library.reserve();
     library.begin(empty, ask(empty), { warm: false });
     library.release(empty);
+    assert.deepEqual(announced, [[`${empty}:unsaved`], []], "on the shelf from the ask, off it when released with nothing filed");
     const kept = library.reserve();
     library.begin(kept, ask(kept), { warm: false });
     library.annexure(kept, 0, "a task", "A FINDING");
     library.release(kept);
-    return { empty, kept };
+    return { empty, kept, announced };
   });
+  assert.deepEqual(announced.slice(2), [[`${kept}:unsaved`], [`${kept}:writing`], [`${kept}:incomplete`]], "the kept run was announced at its ask, its first annexure, and its release, when it stayed as what it kept");
   assert.equal(fs.existsSync(path.join(lib, empty)), false, "nothing was kept: the folder goes");
   assert.equal(fs.existsSync(path.join(lib, kept)), true, "a finding was filed: the folder stays");
   const read = await run(function* () {

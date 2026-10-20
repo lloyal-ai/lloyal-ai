@@ -89,7 +89,7 @@ test("a run that fails after two of three stages ends as an unsettled brief: the
   assert.ok(report.includes(UNSETTLED.failed), "the saved report says, as the canvas does, why it was not settled");
 });
 
-test("the shelf hears of a run as its first annexure lands, listed as being written; once it ends unsettled, as incomplete", async () => {
+test("the shelf hears of a run at its ask, unsaved, and again as its first annexure lands, saved; once it ends unsettled, as incomplete", async () => {
   const run = await runHarness({
     config: threeTasksAllowed,
     utterances: threeStages,
@@ -106,15 +106,11 @@ test("the shelf hears of a run as its first annexure lands, listed as being writ
   const docId = docIdOfQuery(run.events);
   const types = run.events.map((e) => e.type);
   const completeAt = types.indexOf("complete");
-  const lists = run.events.map((e, i) => [e, i] as const).filter(([e]) => e.type === "library:list") as unknown as [{ entries: { docId: string; inProgress: boolean; unsettled?: string }[] }, number][];
-  const during = lists.filter(([, i]) => i < completeAt);
-  assert.equal(during.length, 1, `the shelf heard of the run once, at its first annexure: ${types.join(" ")}`);
-  for (const [list] of during) {
-    const row = list.entries.find((e) => e.docId === docId);
-    assert.deepEqual({ inProgress: row?.inProgress, unsettled: row?.unsettled }, { inProgress: true, unsettled: undefined }, "a run in progress is on the shelf as being written, with no verdict on it yet");
-  }
+  const lists = run.events.map((e, i) => [e, i] as const).filter(([e]) => e.type === "library:list") as unknown as [{ entries: { docId: string; state: string }[] }, number][];
+  const during = lists.filter(([, i]) => i < completeAt).map(([list]) => list.entries.find((e) => e.docId === docId)?.state);
+  assert.deepEqual(during, ["unsaved", "writing"], `the shelf heard of the run at its ask, with nothing saved, and at its first annexure, being written: ${types.join(" ")}`);
   const last = lists[lists.length - 1][0].entries.find((e) => e.docId === docId);
-  assert.deepEqual({ inProgress: last?.inProgress, unsettled: last?.unsettled }, { inProgress: false, unsettled: "failed" }, "once the run ended unsettled, the shelf says incomplete");
+  assert.equal(last?.state, "incomplete", "once the run ended unsettled, the shelf says incomplete");
   assert.deepEqual(annexures(path.join(run.outputDir, docId)), ["annexure-1.md", "annexure-2.md"]);
 });
 

@@ -1,7 +1,8 @@
 /**
  * The briefs on disk: settled, ended short of settling, or being written now
- * (listable from its first annexure), and the folders reserved for briefs
- * that have not filed anything yet — over rig's folder mechanics. A brief's record is `report.json`:
+ * (on the shelf from the moment its writing starts, unsaved until its first
+ * annexure), and the folders reserved for briefs that have not filed anything
+ * yet — over rig's folder mechanics. A brief's record is `report.json`:
  * the facts of the run that wrote it, and the ONLY file the library reads
  * back. Beside it the library writes what a reader opens — the answer as
  * `report.md`, what each inquiry said as `annexure-N.md` — and an ask into a
@@ -29,7 +30,7 @@ import type { AbilityFactory, AbilityRegistry, Execution, Handlers } from "@lloy
 import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs/rig/node";
 import { config } from "../config.js";
 import type { Inputs, Written } from "../harness/research.js";
-import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
+import type { BriefState, Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
 import { answerText, errorMessage, findingsAsWritten } from "../protocol.js";
 
 const CORPUS = "corpus";
@@ -173,7 +174,7 @@ export interface Library {
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
   /** One inquiry's findings, as its report returns: filed as an annexure now, so a run that ends any other way
    *  has what had finished. A first report's record says what the run has so far, unsettled, until it settles,
-   *  and the first one announces the shelf, which lists the run from then on as being written. */
+   *  and the first one tells the shelf the row is saved. */
   annexure(id: DocId, index: number, task: string, findings: string): void;
   /** What the writer returned for the brief being written. The report is made from it when the run says `complete`. */
   written(id: DocId, written: Written): void;
@@ -200,7 +201,8 @@ export function* openLibrary(
   let record: RunRecord | null = null;
   // `ensure` registers cleanup with whoever called `openLibrary` — here the session. It runs when the session
   // ends, however it ends, so a folder reserved for a brief that never settled does not outlive it.
-  yield* ensure(() => { for (const id of [...reserved]) release(id); });
+  let closing = false;
+  yield* ensure(() => { closing = true; for (const id of [...reserved]) release(id); });
 
   const recordPath = (id: DocId): string | null => confined(dir(), path.join(dir(), id, RECORD));
   /** Whether a brief's folder holds anything kept: a record that READS and has an answer or filed findings. A file
@@ -225,23 +227,34 @@ export function* openLibrary(
    *  said unasked, with this one expression; each site says it on the channel it holds. */
   const shelf = (): WorkflowEvent => ({ type: "library:list", entries: list() });
 
-  /** The shelf: every brief the library knows of, and what each is. The run in progress is listed as being
-   *  written, with no verdict on it: its checkpoint's `unsettled` says what a kill would leave, not what it is. */
-  const list = (): LibraryEntry[] =>
-    records().map(({ path: file, docId, record: r }) => {
-      const inProgress = writing(docId);
-      return {
-        path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0,
-        inProgress,
-        ...(!inProgress && r.unsettled ? { unsettled: r.unsettled } : {}),
-      };
-    });
+  /** One shelf row from a brief record, whatever its state. */
+  const entry = (file: string, docId: DocId, r: BriefRecord, state: BriefState): LibraryEntry => ({
+    path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0, state,
+  });
+
+  /** What a brief on disk is to the shelf: the run in progress is `writing` whatever its checkpoint says, since
+   *  that says what a kill would leave, not what it is; otherwise the record's own ending. */
+  const stateOf = (docId: DocId, r: BriefRecord): BriefState => (writing(docId) ? "writing" : r.unsettled ? "incomplete" : "settled");
+
+  /** The shelf: every brief the library knows of, and what each is. The run in progress is on it from the moment
+   *  its writing starts (`begin`, after the plan is accepted): `unsaved` until its first annexure puts its
+   *  checkpoint on disk, from the same record `soFar` keeps. */
+  function list(): LibraryEntry[] {
+    const onDisk = records().map(({ path: file, docId, record: r }) => entry(file, docId, r, stateOf(docId, r)));
+    const r = record;
+    const unsaved = r !== null && !r.appending && r.filed.size === 0;   // nothing filed: no checkpoint has been written
+    return unsaved ? [entry(path.join(r.dir, RECORD), r.docId, soFar(r), "unsaved"), ...onDisk] : onDisk;
+  }
 
   function release(id: DocId): void {
-    if (record?.docId === id) record = null;
+    const wasTheRun = record?.docId === id;
+    if (wasTheRun) record = null;
     const folder = path.join(dir(), id);
     if (fs.existsSync(folder) && !keptIn(id)) removeFolder(folder);
     reserved.delete(id);
+    // The run was on the shelf; released, it leaves it or stays as what it kept, and the shelf hears so, unless
+    // the session itself is ending and nobody is listening.
+    if (wasTheRun && !closing) events.send(shelf());
   }
 
   /** The facts of the run so far, as a record: the findings filed, in plan order, as the answer they would make;
@@ -413,6 +426,8 @@ export function* openLibrary(
         attachments: ask.attachments.map((a) => a.digest),
         appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), filed: new Map(), written: null,
       };
+      // A first report is on the shelf from here, with nothing saved behind it yet; an exchange's brief stands.
+      if (!settledAlready) events.send(shelf());
     },
     annexure(id, index, task, findings) {
       const r = record;
@@ -422,7 +437,7 @@ export function* openLibrary(
       r.filed.set(index, { task, findings, annexure: n });
       // An exchange lands beside a settled brief, whose record stands; a first report's record is the run's own.
       if (!r.appending) writeRecordFile(path.join(r.dir, RECORD), soFar(r));
-      // The first checkpoint makes the folder listable: a shelf change, said unasked, as every shelf change is.
+      // The first checkpoint is the row's record on disk: the shelf hears it is saved.
       if (!r.appending && first) events.send(shelf());
     },
     written(id, w) { if (record?.docId === id) record.written = w; },

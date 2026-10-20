@@ -1,5 +1,6 @@
-/** The shelf — every brief on disk, newest first: settled, ended incomplete,
- *  or being written now, each saying which. Clicking the one being written
+/** The shelf — every brief the library knows of, newest first: settled, ended
+ *  incomplete, or being written now, each saying which; the run just asked for
+ *  is on it with a working lamp until its first checkpoint is saved. Clicking the one being written
  *  returns to it on the canvas. Clicking a settled one RESTORES it as the
  *  session document (the canvas, Ask, and Extend
  *  behave exactly as over a fresh settle; the report prefills the trunk on
@@ -13,7 +14,7 @@ import { color, font, radius } from "../theme.js";
 import { useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command, LibraryEntry } from "../../protocol.js";
 import {
-  selectLibrary, selectLibrarySearch, selectLive, selectTitle, selectStatus, entryState,
+  selectLibrary, selectLibrarySearch, selectLive, selectTitle, selectStatus, entryMark, entryDeletable,
 } from "../select.js";
 
 /** Order entries by a best-first path ranking; anything the ranking does not
@@ -100,7 +101,7 @@ export function Library(): ReactElement | null {
       </span>
       <div className="lib-list" style={{ ...S.list, ...(awaiting ? S.listWaiting : null) }}>
         {rows.map((e) => {
-          const word = entryState(status, e);
+          const mark = entryMark(status, e);
           const d = day(e.savedAt);
           const divider = search === null && d !== lastDay ? d : null;
           lastDay = d;
@@ -120,7 +121,8 @@ export function Library(): ReactElement | null {
             >
             <span style={S.entryBody}>
               <span style={S.entryTitle}>{e.title}</span>
-              {word !== null && <span style={S.state}>{word}</span>}
+              {mark?.kind === "lamp" && <span className="fn-lamp" style={S.rowLamp} aria-label="being written, nothing saved yet" />}
+              {mark?.kind === "word" && <span style={S.state}>{mark.word}</span>}
             </span>
             {e.hasMedia && (
               <svg style={S.media} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="carries images">
@@ -129,7 +131,7 @@ export function Library(): ReactElement | null {
                 <path d="M21 15l-4.5-4.5L6 21" />
               </svg>
             )}
-            {!e.inProgress && (
+            {entryDeletable(e) && (
             <button
               type="button"
               className="lib-trash"
@@ -219,6 +221,7 @@ const S: Record<string, CSSProperties> = {
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500,
   },
   state: { fontSize: 10.5, opacity: 0.62, marginLeft: 6, whiteSpace: "nowrap", letterSpacing: 0.2 },
+  rowLamp: { width: 7, height: 7, borderRadius: 4, background: color.ember, flex: "none", marginLeft: 6 },
   media: { color: color.dim, flex: "none" },
   trash: {
     font: `600 10px ${font.ui}`, color: color.dim, background: "none", border: 0,
