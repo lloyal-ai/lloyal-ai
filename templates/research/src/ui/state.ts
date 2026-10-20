@@ -89,7 +89,7 @@ export interface SessionState {
   /** Most recent transient toast (e.g. "saved → harness.json"). */
   toast: Toast | null;
   nextToastId: number;
-  /** Settled briefs on disk (`library:list`). */
+  /** The briefs on disk, each saying what it is (`library:list`). */
   library: { entries: LibraryEntry[] };
   /** Live semantic search over the library; null when not searching. */
   librarySearch: { query: string; ranked: string[] } | null;

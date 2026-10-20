@@ -432,3 +432,35 @@ test("a brief's attachments are read before its outline is drafted: the canvas s
   const bare = fold([{ type: 'query', docId: B, query: 'Q2', warm: false } as WorkflowEvent]);
   assert.equal(bare.documents.get(B)?.reading, false, "a brief asked without attachments reads nothing");
 });
+
+test('the run bar says Incomplete above an unsettled brief, whatever left it unsettled, and Settled above a settled one', () => {
+  const ended = (unsettled?: string): AppState => fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    { type: 'plan:start', query: 'Q1', mode: 'deep' } as WorkflowEvent,
+    PLAN,
+    { type: 'research:start', agentCount: 2, mode: 'deep' } as WorkflowEvent,
+    { type: 'answer', text: 'the findings as written', ...(unsettled ? { unsettled } : {}) } as WorkflowEvent,
+    COMPLETE,
+  ]);
+  assert.equal(selectStatus(ended()), 'Settled');
+  assert.equal(selectStatus(ended('no_room')), 'Incomplete', 'a brief whose settling pass had no room is not Settled');
+  assert.equal(selectStatus(ended('failed')), 'Incomplete', 'a brief whose run failed after its inquiries is not Settled');
+  assert.equal(selectMoment(ended('failed')), 'settle', 'the canvas still shows the answer: the findings as written');
+});
+
+test('a root answer closes the settling pass: the answer shows, not what the settling agent had written', () => {
+  const s = fold([
+    { type: 'query', docId: A, query: 'Q1', warm: false } as WorkflowEvent,
+    PLAN,
+    { type: 'research:done', totalTokens: 1, totalToolCalls: 0, timeMs: 1 } as WorkflowEvent,
+    { type: 'synthesize:start' } as WorkflowEvent,
+    { type: 'agent:spawn', agentId: 9, taskIndex: 0 } as WorkflowEvent,
+    { type: 'agent:produce', agentId: 9, text: 'half an answer', tokenCount: 3 } as WorkflowEvent,
+    // The settling pass failed after it had spawned: the run publishes the findings as written, and no
+    // synthesize:done is ever said.
+    { type: 'answer', text: 'FINDINGS AS WRITTEN', unsettled: 'failed' } as WorkflowEvent,
+    COMPLETE,
+  ]);
+  assert.equal(selectAnswer(s)?.body, 'FINDINGS AS WRITTEN');
+  assert.equal(selectAnswer(s)?.streaming, false);
+});

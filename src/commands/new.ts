@@ -15,7 +15,8 @@ import { runInstall, printNextSteps, writeReadmeRunSteps } from '../scaffold/pos
 import { createInterface } from 'node:readline/promises';
 import { describeSnapshot, detectNvidiaGpu, packPlatform, progressLine, provisionCuda, snapshotPack } from '../scaffold/backend-pack.js';
 import type { BackendOutcome } from '../scaffold/backend-pack.js';
-import { verifyAndVendorAbility, parseAbilitySpec, RequirementError } from '../scaffold/vendor-ability.js';
+import { verifyAndVendorAbility, RequirementError } from '../scaffold/vendor-ability.js';
+import { parseAbilitySpec } from '../scaffold/ability-spec.js';
 import { offerToWrite } from '../scaffold/offer-model.js';
 import { interactive } from '../scaffold/terminal.js';
 import { runNewWizard, type TemplateKind, type WizardPrefill } from './new-wizard.js';
@@ -85,7 +86,7 @@ const ALL_TARGETS: Target[] = ['cli', 'desktop', 'web'];
  */
 export const DEFAULT_ABILITIES: Record<TemplateKind, string[]> = {
   basic: ['lloyal/wikipedia@3.0.0'],
-  research: ['lloyal/corpus@3.0.0', 'lloyal/web@3.0.0', 'lloyal/documents@0.3.1'],
+  research: ['lloyal/corpus@3.0.1', 'lloyal/web@3.0.0', 'lloyal/documents@0.3.1'],
 };
 
 interface ScaffoldPlan {

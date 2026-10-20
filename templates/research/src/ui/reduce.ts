@@ -210,12 +210,18 @@ function abortRun(state: AppState, stopped: boolean): AppState {
       pipelineResumedAt: null,
     }, { runDocId: null });
   }
+  // A document with an answer: a settled brief whose follow-up was aborted, or a run stopped after it had filed
+  // findings, which the harness said as the answer before the stop. Its agents stop where they stand, and the
+  // brief is done, the mark above its answer saying why it was not settled.
   if (doc.answer !== null) {
+    const now = Date.now();
     const banked = doc.pipelineResumedAt
-      ? doc.pipelineElapsedMs + (Date.now() - doc.pipelineResumedAt)
+      ? doc.pipelineElapsedMs + (now - doc.pipelineResumedAt)
       : doc.pipelineElapsedMs;
     return withDoc(state, id, {
       ...doc,
+      roster: stopRoster(doc.roster, now),
+      phase: 'done',
       ask: null,
       askAttachments: [],
       revision: null,
@@ -498,7 +504,9 @@ function docReduce(doc: DocState, ev: WorkflowEvent): DocState {
           askAttachments: [],
         };
       }
-      return { ...doc, answer: ev.text, unanswered: ev.unanswered ?? null, unsettled: ev.unsettled ?? null };
+      // The answer supersedes the settling pass, however that pass ended: a pass that failed after it spawned
+      // said no synthesize:done, and what it had written is not the answer.
+      return { ...doc, answer: ev.text, unanswered: ev.unanswered ?? null, unsettled: ev.unsettled ?? null, synth: { ...doc.synth, open: false } };
 
     case 'complete': {
       // Settled — bank the last active slice and freeze the timer.

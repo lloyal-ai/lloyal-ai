@@ -1,6 +1,8 @@
 /**
- * Settled briefs on disk, and the folders reserved for briefs still being
- * written — over rig's folder mechanics. A brief's record is `report.json`:
+ * The briefs on disk: settled, ended short of settling, or being written now
+ * (on the shelf from the moment its writing starts, unsaved until its first
+ * annexure), and the folders reserved for briefs that have not filed anything
+ * yet — over rig's folder mechanics. A brief's record is `report.json`:
  * the facts of the run that wrote it, and the ONLY file the library reads
  * back. Beside it the library writes what a reader opens — the answer as
  * `report.md`, what each inquiry said as `annexure-N.md` — and an ask into a
@@ -28,8 +30,8 @@ import type { AbilityFactory, AbilityRegistry, Execution, Handlers } from "@lloy
 import { confined, listFolders, removeFolder, reserveFolder } from "@lloyal-labs/rig/node";
 import { config } from "../config.js";
 import type { Inputs, Written } from "../harness/research.js";
-import type { Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
-import { answerText, errorMessage } from "../protocol.js";
+import type { BriefState, Command, DocId, LibraryEntry, Thread, WorkflowEvent } from "../protocol.js";
+import { answerText, errorMessage, findingsAsWritten } from "../protocol.js";
 
 const CORPUS = "corpus";
 const RECORD = "report.json";
@@ -53,8 +55,9 @@ export const BriefRecord = z.object({
   elapsedMs: z.number(),
   synthTokens: z.number().optional(),
   synthPpl: z.number().optional(),
-  /** The answer is the inquiries' findings as written: the context had no room left to settle them. */
-  unsettled: z.literal("no_room").optional(),
+  /** The answer is the inquiries' findings as written: the context had no room left to settle them (`no_room`),
+   *  or the run ended before it could (`failed`) — which is also what a run still being written says of itself. */
+  unsettled: z.enum(["no_room", "failed"]).optional(),
 });
 export type BriefRecord = z.infer<typeof BriefRecord>;
 
@@ -68,16 +71,23 @@ export const asBriefRecord = (json: string): BriefRecord | null => {
   }
 };
 
+/** File one inquiry's findings as the first free annexure numbered at or after `from`; returns its number. The
+ *  name is reserved, never assumed: another session may be writing beside this one. */
+export function writeAnnexure(dir: string, from: number, task: string, findings: string): number {
+  const n = reserveName(dir, "annexure", ".md", from);
+  fs.writeFileSync(path.join(dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${task ? `**Task:** ${task}\n\n` : ""}---\n\n${findings.trimEnd()}\n`, "utf8");
+  return n;
+}
+
 /** The one writer of a brief's files, for a first report or an exchange beside a settled one: the markdown a
- *  reader opens first — one annexure per inquiry that found something, then the answer with its meta line and
- *  the index of those annexures — and the record LAST, so a crash before it leaves a folder that was never
- *  settled. An annexure's name is reserved, never assumed: another session may be writing beside this one. */
-export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: boolean; annexuresFrom: number }): void {
+ *  reader opens first — one annexure per inquiry that found something (those `filed` as the run went are
+ *  indexed, not written again), then the answer with its meta line and the index of those annexures — and the
+ *  record LAST, so a crash before it leaves a folder that holds only what the run had kept. */
+export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: boolean; annexuresFrom: number; filed?: ReadonlyMap<number, number> }): void {
   const refs: string[] = [];
   record.inquiries.forEach(({ task, findings }, i) => {
     if (!findings.trim()) return;
-    const n = reserveName(dir, "annexure", ".md", opts.annexuresFrom + i + 1);
-    fs.writeFileSync(path.join(dir, `annexure-${n}.md`), `# Annexure ${n}\n\n${task ? `**Task:** ${task}\n\n` : ""}---\n\n${findings.trimEnd()}\n`, "utf8");
+    const n = opts.filed?.get(i) ?? writeAnnexure(dir, opts.annexuresFrom + i + 1, task, findings);
     refs.push(`- [Annexure ${n}](./annexure-${n}.md)${task ? ` — ${task}` : ""}`);
   });
   const annexures = refs.length ? `\n---\n\n## Annexures\n\n${refs.join("\n")}\n` : "";
@@ -87,7 +97,7 @@ export function writeBrief(dir: string, record: BriefRecord, opts: { exchange: b
   const doc = `# ${record.query}\n\n${meta}\n\n${answerText(record.answer.trim(), record.unsettled)}\n${annexures}`;
   const name = opts.exchange ? `exchange-${reserveName(dir, "exchange", ".json", 1)}` : "report";
   fs.writeFileSync(path.join(dir, `${name}.md`), doc, "utf8");
-  fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(record, null, 2) + "\n", "utf8");
+  writeRecordFile(path.join(dir, `${name}.json`), record);
 }
 
 /** Create `<dir>/<prefix>-<n><ext>` for the first free n ≥ `from`, exclusively. */
@@ -102,10 +112,23 @@ function reserveName(dir: string, prefix: string, ext: string, from: number): nu
   }
 }
 
+/** A record reaches its name whole or not at all: written beside it and renamed into place, so a write that dies
+ *  midway (a quit lands wherever it lands) leaves the last whole record, and the folder it keeps, as they were. */
+function writeRecordFile(file: string, record: BriefRecord): void {
+  const staging = `${file}.tmp`;
+  fs.writeFileSync(staging, JSON.stringify(record, null, 2) + "\n", "utf8");
+  fs.renameSync(staging, file);
+}
+
 /** The record at a confined path, or null where there is none to read. */
 const readRecord = (file: string): BriefRecord | null => {
   try { return asBriefRecord(fs.readFileSync(file, "utf8")); } catch { return null; }
 };
+
+/** Whether a record holds anything a reader can open: a settled answer, or the findings a run still being
+ *  written had filed. A record with neither settles nothing, and its folder goes like one with no record. */
+const kept = (record: BriefRecord): boolean =>
+  record.answer.trim() !== "" || record.inquiries.some((i) => i.findings.trim() !== "");
 
 /** What the library keeps for one brief's run: where it writes, and what its inquiries said. */
 interface RunRecord {
@@ -123,6 +146,8 @@ interface RunRecord {
   /** Annexure numbers the folder already held when this run began: this run's annexures are numbered after them. */
   ordinalBase: number;
   startedAt: number;
+  /** What each inquiry found, filed as its report returned: by plan index, with the annexure number it took. */
+  filed: Map<number, { task: string; findings: string; annexure: number }>;
   /** What the writer returned, held until the run says `complete`. */
   written: Written | null;
 }
@@ -143,8 +168,14 @@ export interface Library {
   reserve(): DocId;
   /** The folder goes, unless a brief settled in it (its record reads); the record stops writing for it. */
   release(id: DocId): void;
+  /** What the run on `id` has filed so far, as the answer it would make, or null when it has filed nothing. */
+  asWritten(id: DocId): string | null;
   /** The record starts: a first report, or a thread beside a settled one. */
   begin(id: DocId, ask: Inputs, opts: { warm: boolean }): void;
+  /** One inquiry's findings, as its report returns: filed as an annexure now, so a run that ends any other way
+   *  has what had finished. A first report's record says what the run has so far, unsettled, until it settles,
+   *  and the first one tells the shelf the row is saved. */
+  annexure(id: DocId, index: number, task: string, findings: string): void;
   /** What the writer returned for the brief being written. The report is made from it when the run says `complete`. */
   written(id: DocId, written: Written): void;
   /** A settled brief, its pictures checked against the store; null when there is none. */
@@ -170,36 +201,84 @@ export function* openLibrary(
   let record: RunRecord | null = null;
   // `ensure` registers cleanup with whoever called `openLibrary` — here the session. It runs when the session
   // ends, however it ends, so a folder reserved for a brief that never settled does not outlive it.
-  yield* ensure(() => { for (const id of [...reserved]) release(id); });
+  let closing = false;
+  yield* ensure(() => { closing = true; for (const id of [...reserved]) release(id); });
 
   const recordPath = (id: DocId): string | null => confined(dir(), path.join(dir(), id, RECORD));
-  /** Whether a brief settled in its folder: it holds a record that READS. A file that exists but does not (a write
-   *  cut short) settles nothing — the folder is as unsettled as one with no record, and is treated the same. */
-  const settledIn = (id: DocId): boolean => { const file = recordPath(id); return file !== null && readRecord(file) !== null; };
+  /** Whether a brief's folder holds anything kept: a record that READS and has an answer or filed findings. A file
+   *  that exists but does not read (a write cut short), or a record of a run that had found nothing yet, settles
+   *  nothing — the folder is as unsettled as one with no record, and is treated the same. */
+  const keptIn = (id: DocId): boolean => { const file = recordPath(id); const r = file === null ? null : readRecord(file); return r !== null && kept(r); };
 
-  /** Every settled brief's record, newest first — a folder without one, or with one of another shape, is not listed. */
+  /** Every brief's record that holds something, newest first — a settled brief, a run that ended with its
+   *  findings filed, or the run in progress once its first annexure landed; a folder without one, or with one of
+   *  another shape, is not listed. The shelf says which each is (see `list`); search is refused while a run is
+   *  live (`run.busy`), so it never ranks the checkpoint. */
   function records(): { path: string; docId: DocId; record: BriefRecord }[] {
     const found: { path: string; docId: DocId; record: BriefRecord }[] = [];
     for (const { name, path: file } of listFolders(dir(), RECORD)) {
       const r = readRecord(file);
-      if (r) found.push({ path: file, docId: name, record: r });
+      if (r && kept(r)) found.push({ path: file, docId: name, record: r });
     }
     return found.sort((a, b) => (a.record.savedAt < b.record.savedAt ? 1 : -1));
   }
 
-  const list = (): LibraryEntry[] =>
-    records().map(({ path: file, docId, record: r }) => ({
-      path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0,
-    }));
+  /** What a shelf announcement carries: every brief the library knows of, and what each is. A shelf change is
+   *  said unasked, with this one expression; each site says it on the channel it holds. */
+  const shelf = (): WorkflowEvent => ({ type: "library:list", entries: list() });
 
-  function release(id: DocId): void {
-    if (record?.docId === id) record = null;
-    const folder = path.join(dir(), id);
-    if (fs.existsSync(folder) && !settledIn(id)) removeFolder(folder);
-    reserved.delete(id);
+  /** One shelf row from a brief record, whatever its state. */
+  const entry = (file: string, docId: DocId, r: BriefRecord, state: BriefState): LibraryEntry => ({
+    path: file, docId, title: r.query, savedAt: r.savedAt, mode: r.mode, effort: r.effort, direct: r.direct, hasMedia: r.attachments.length > 0, state,
+  });
+
+  /** What a brief on disk is to the shelf: the run in progress is `writing` whatever its checkpoint says, since
+   *  that says what a kill would leave, not what it is; otherwise the record's own ending. */
+  const stateOf = (docId: DocId, r: BriefRecord): BriefState => (writing(docId) ? "writing" : r.unsettled ? "incomplete" : "settled");
+
+  /** The shelf: every brief the library knows of, and what each is. The run in progress is on it from the moment
+   *  its writing starts (`begin`, after the plan is accepted): `unsaved` until its first annexure puts its
+   *  checkpoint on disk, from the same record `soFar` keeps. */
+  function list(): LibraryEntry[] {
+    const onDisk = records().map(({ path: file, docId, record: r }) => entry(file, docId, r, stateOf(docId, r)));
+    const r = record;
+    const unsaved = r !== null && !r.appending && r.filed.size === 0;   // nothing filed: no checkpoint has been written
+    return unsaved ? [entry(path.join(r.dir, RECORD), r.docId, soFar(r), "unsaved"), ...onDisk] : onDisk;
   }
 
+  function release(id: DocId): void {
+    const wasTheRun = record?.docId === id;
+    if (wasTheRun) record = null;
+    const folder = path.join(dir(), id);
+    if (fs.existsSync(folder) && !keptIn(id)) removeFolder(folder);
+    reserved.delete(id);
+    // The run was on the shelf; released, it leaves it or stays as what it kept, and the shelf hears so, unless
+    // the session itself is ending and nobody is listening.
+    if (wasTheRun && !closing) events.send(shelf());
+  }
+
+  /** The facts of the run so far, as a record: the findings filed, in plan order, as the answer they would make;
+   *  unsettled until the run settles. What a reader finds of a run that was killed. */
+  const soFar = (r: RunRecord): BriefRecord => {
+    const inquiries: BriefRecord["inquiries"] = [];
+    for (const [index, { task, findings }] of r.filed) {
+      while (inquiries.length < index) inquiries.push({ task: "", findings: "" });
+      inquiries[index] = { task, findings };
+    }
+    return {
+      version: 1, query: r.query, savedAt: new Date().toISOString(), mode: r.mode, effort: r.effort, direct: r.direct,
+      attachments: r.attachments, answer: findingsAsWritten(inquiries), inquiries, elapsedMs: Date.now() - r.startedAt, unsettled: "failed",
+    };
+  };
+
+  /** Whether `id` is the brief the run in progress is writing its first report into: what the disk holds of it is
+   *  a checkpoint, not a brief. An exchange appends beside a settled brief, which stands and reads as it was. */
+  const writing = (id: DocId): boolean => record?.docId === id && !record.appending;
+
+  /** A brief, whole, from its record and exchanges; null for a folder with no record, and for the one the run in
+   *  progress is writing, which is unfinished (see `unfinished`) and not yet a brief to read. */
   function read(id: DocId): Thread | null {
+    if (writing(id)) return null;
     const file = recordPath(id);
     const root = file === null ? null : readRecord(file);
     if (file === null || root === null) return null;
@@ -255,7 +334,7 @@ export function* openLibrary(
       ...(w.complete.synthTokens !== undefined ? { synthTokens: w.complete.synthTokens } : {}),
       ...(w.complete.synthPpl !== undefined ? { synthPpl: w.complete.synthPpl } : {}),
       ...(w.unsettled ? { unsettled: w.unsettled } : {}),
-    }, { exchange: r.appending, annexuresFrom: r.ordinalBase });
+    }, { exchange: r.appending, annexuresFrom: r.ordinalBase, filed: new Map([...r.filed].map(([i, f]) => [i, f.annexure])) });
   }
 
   /** The two things the library takes from the bus, because no value carries them: the roots a tool admitted
@@ -270,10 +349,11 @@ export function* openLibrary(
       for (const a of ev.attachments ?? []) if (!r.attachments.includes(a.digest)) r.attachments.push(a.digest);
     } else if (ev.type === "complete") {
       // A settle is a library change, said unasked — on the bus directly, in the same breath as `complete`,
-      // so no reader of it finds the shelf stale.
+      // so no reader of it finds the shelf stale. The run is over before the shelf is read (`record` is null), so
+      // the brief it was writing is on the shelf from this breath.
       finish(r);
       record = null;
-      events.send({ type: "library:list", entries: list() });
+      events.send(shelf());
     }
   });
   yield* ensure(() => unsubscribe());
@@ -288,7 +368,7 @@ export function* openLibrary(
   return {
     handlers: {
       *library_list() {
-        yield* wire.send({ type: "library:list", entries: list() });
+        yield* wire.send(shelf());
       },
       *library_search({ query }) {
         // The reranker is the run's instrument while a run is live; the sidebar disables its input, this is the same fact host-side.
@@ -305,10 +385,16 @@ export function* openLibrary(
         yield* wire.send({ type: "library:search", query: q, ranked });
       },
       *library_delete({ path: candidate }) {
-        // The whole folder goes — report, annexures, thread — and the corpus unlearns it.
+        // The whole folder goes — report, annexures, thread — and the corpus unlearns it. Not while this session's
+        // run is writing into it: the row is on the shelf from its first annexure, and the run owns the folder until
+        // it ends. `writing` is this session's record, so the guard holds within one session (see LLO-160 for a
+        // served host, where another session over the same library does not know).
         const file = confined(dir(), candidate);
-        if (file !== null && path.basename(file) === RECORD) { removeFolder(path.dirname(file)); yield* reindex(); }
-        yield* wire.send({ type: "library:list", entries: list() });
+        if (file === null || path.basename(file) !== RECORD) return yield* wire.send(shelf());
+        if (writing(path.basename(path.dirname(file)))) return yield* wire.send({ type: "ui:error", message: "That brief is being written; stop the run before deleting it." });
+        removeFolder(path.dirname(file));
+        yield* reindex();
+        yield* wire.send(shelf());
       },
     },
     reserve() {
@@ -317,20 +403,42 @@ export function* openLibrary(
       return id;
     },
     release,
+    // What the disk holds of the run so far: a first report's record, read back from the disk (a checkpoint write
+    // that failed left the disk behind what was filed, and the disk is what the next ask meets). An exchange has
+    // no record of its own until it completes, so its end leaves nothing to say; the brief it was asked into stands.
+    asWritten: (id) => {
+      if (!writing(id)) return null;
+      const file = recordPath(id);
+      const r = file === null ? null : readRecord(file);
+      return r !== null && kept(r) ? r.answer : null;
+    },
     begin(id, ask, { warm }) {
       const folder = path.join(dir(), id);
       // A brief whose run was stopped before its report lost its folder with the stop but not its place on the
       // canvas: an ask into it writes its first report, so the folder is back and reserved again.
       fs.mkdirSync(folder, { recursive: true });
-      const settledAlready = warm && settledIn(id);
+      const settledAlready = warm && keptIn(id);
       if (!settledAlready) reserved.add(id);
       let taken = 0;
       if (settledAlready) for (const name of fs.readdirSync(folder)) { const m = /^annexure-(\d+)\.md$/.exec(name); if (m) taken = Math.max(taken, Number(m[1])); }
       record = {
         docId: id, dir: folder, query: ask.text, mode: ask.mode, effort: ask.effort, direct: ask.direct,
         attachments: ask.attachments.map((a) => a.digest),
-        appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), written: null,
+        appending: settledAlready, ordinalBase: taken, startedAt: Date.now(), filed: new Map(), written: null,
       };
+      // A first report is on the shelf from here, with nothing saved behind it yet; an exchange's brief stands.
+      if (!settledAlready) events.send(shelf());
+    },
+    annexure(id, index, task, findings) {
+      const r = record;
+      if (r?.docId !== id || !findings.trim()) return;
+      const first = r.filed.size === 0;
+      const n = writeAnnexure(r.dir, r.ordinalBase + index + 1, task, findings);
+      r.filed.set(index, { task, findings, annexure: n });
+      // An exchange lands beside a settled brief, whose record stands; a first report's record is the run's own.
+      if (!r.appending) writeRecordFile(path.join(r.dir, RECORD), soFar(r));
+      // The first checkpoint is the row's record on disk: the shelf hears it is saved.
+      if (!r.appending && first) events.send(shelf());
     },
     written(id, w) { if (record?.docId === id) record.written = w; },
     read,
@@ -349,8 +457,14 @@ export function* openLibrary(
       return heldRoots(store, thread.attachments);
     },
     *settled(id) {
-      if (!settledIn(id)) return release(id);   // nothing settled in it: the run found nothing, or its record never landed
+      if (!keptIn(id)) return release(id);   // nothing kept in it: the run found nothing, or its record never landed
       reserved.delete(id);
+      if (record?.docId === id) {
+        // A run that settled without saying `complete`, ended with findings filed: it is over, and the shelf, which
+        // `complete` would have refreshed, hears of it here.
+        record = null;
+        yield* wire.send(shelf());
+      }
       yield* reindex();
     },
   };

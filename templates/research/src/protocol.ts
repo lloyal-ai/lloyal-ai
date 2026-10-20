@@ -26,18 +26,28 @@ export type Mode = "flat" | "deep";
 export type Unanswered = "no_room";
 
 /** Why an answer is the inquiries' findings as they were written, not one settled answer: `no_room` when the
- *  context had no room left for the agent that settles them. */
-export type Unsettled = "no_room";
+ *  context had no room left for the agent that settles them; `failed` when the run ended before they could be
+ *  settled, by a failure after some inquiries had finished. */
+export type Unsettled = "no_room" | "failed";
 
-/** Said above an answer that is the inquiries' findings as they were written, not one settled answer. */
-export const UNSETTLED = "These are the inquiries' findings as they were written: the context had no room left to settle them into one answer.";
+/** Said above an answer that is the inquiries' findings as they were written, not one settled answer: one
+ *  sentence for each reason. */
+export const UNSETTLED: Record<Unsettled, string> = {
+  no_room: "These are the inquiries' findings as they were written: the context had no room left to settle them into one answer.",
+  failed: "These are the inquiries' findings as they were written: the run ended before they could be settled into one answer.",
+};
 
 /** An answer as it leaves the app (the saved report, the terminal, a copy or a download), saying it was not
  *  settled when it was not. The canvas sets the same sentence in its own style. */
 export const answerText = (body: string, unsettled: Unsettled | null | undefined): string =>
-  unsettled ? `> ${UNSETTLED}\n\n${body}` : body;
+  unsettled ? `> ${UNSETTLED[unsettled]}\n\n${body}` : body;
 
-/** One settled brief on disk — a library row. `path` is the brief's record, which is what a delete names back. */
+/** The findings as they were written, as an answer: each inquiry's under its task, in plan order; one that
+ *  found nothing is left out. What an unsettled brief shows, and what a run still being written has so far. */
+export const findingsAsWritten = (inquiries: readonly { task: string; findings: string }[]): string =>
+  inquiries.flatMap(({ task, findings }) => (findings.trim() ? [`## ${task}\n\n${findings.trim()}`] : [])).join("\n\n");
+
+/** One brief on disk — a library row: settled, ended incomplete, or being written. `path` is the brief's record, which is what a delete names back. */
 export interface LibraryEntry {
   path: string;
   docId: DocId;
@@ -49,7 +59,13 @@ export interface LibraryEntry {
   direct: boolean;
   /** The brief carried images — its record names their roots. */
   hasMedia: boolean;
+  /** What the row is, one value: `unsaved`, the run whose writing just started, on the shelf with nothing on disk yet;
+   *  `writing`, the run in progress with its checkpoint saved; `settled`; or `incomplete`, ended short of
+   *  settling, with the reason on the brief itself. Opening an unsaved or writing row returns to the canvas. */
+  state: BriefState;
 }
+
+export type BriefState = "unsaved" | "writing" | "settled" | "incomplete";
 
 /** A settled brief read whole from its folder: the report and every exchange beside it, in order. */
 export interface Thread {

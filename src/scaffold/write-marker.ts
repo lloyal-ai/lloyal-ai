@@ -11,6 +11,7 @@
  * boot — the vendored `file:` deps are the install truth. npm ignores the extra
  * top-level key.
  */
+import { parseAbilitySpec } from './ability-spec.js';
 import { join } from 'node:path';
 import { readPackageJson, writeJson } from './package-json.js';
 import type { Target } from './prune-targets.js';
@@ -70,6 +71,29 @@ export function setMarkerTargets(projectDir: string, targets: Target[]): void {
   const { template, abilities } = pkg.harnessdev;
   pkg.harnessdev = { template, targets, ...(Array.isArray(abilities) ? { abilities } : {}) };
   writePkg(projectDir, pkg);
+}
+
+/**
+ * Record an install in the marker, in the manifest object the installer is about to write: the recorded spec
+ * for the same ability moves to the version that was vendored, so `harnessdev.abilities` and the `file:`
+ * dependency move together and the scaffold's preflight, which checks the one against the other, keeps
+ * passing after an upgrade. A marker that never recorded the ability is left as it is: the marker says what
+ * the template's harness imports, and an install does not change that.
+ */
+export function recordInstalledAbility(pkg: Record<string, unknown>, name: string, version: string): void {
+  const marker = pkg.harnessdev as PkgWithMarker['harnessdev'];
+  if (!marker || !Array.isArray(marker.abilities)) return;
+  marker.abilities = marker.abilities.map((spec: unknown) =>
+    typeof spec === 'string' && recordedName(spec) === name ? `${name}@${version}` : spec);
+}
+
+/** The name a recorded spec names, by the one spec rule; null for an entry that is not a spec, which is left as it is. */
+function recordedName(spec: string): string | null {
+  try {
+    return parseAbilitySpec(spec).name;
+  } catch {
+    return null;
+  }
 }
 
 interface PkgWithMarker {

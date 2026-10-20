@@ -2,6 +2,7 @@
  *  and its clock. Every other selector module starts from the two documents found here — the one on the canvas
  *  and the one the run is writing — which are not always the same document. */
 import { type AppState, type DocState, type DocPhase } from "../state.js";
+import type { BriefState, LibraryEntry } from "../../protocol.js";
 import { emptyDoc } from "../reduce.js";
 import { type Pace } from "../pace.js";
 import { type Boot } from "./ask.js";
@@ -22,6 +23,9 @@ export const activeDoc = (app: AppState): DocState =>
 export const runDoc = (app: AppState): DocState | null =>
   app.runDocId !== null ? app.documents.get(app.runDocId) ?? null : null;
 
+
+/** The word for a brief that ended short of settling, wherever it is said. */
+const INCOMPLETE = "Incomplete";
 
 /** What each phase of a document means to the reader: the moment that owns the canvas, the run bar's word, and
  *  whether the model is working. Total over `DocPhase`, so a phase added to the fold does not compile until it
@@ -138,8 +142,28 @@ export const selectStatus = (app: AppState): string => {
   // controls command that document, whatever the canvas shows.
   const d = running ?? activeDoc(app);
   if (d.stopped) return "Stopped";
-  return d.ask !== null ? "Writing" : PHASES[d.phase].status;
+  if (d.ask !== null) return "Writing";
+  // A brief whose answer is its inquiries' findings as written was not settled, whatever left it so; the mark
+  // above the answer says why.
+  if (d.phase === "done" && d.unsettled !== null) return INCOMPLETE;
+  return PHASES[d.phase].status;
 };
+
+/** What a shelf row shows beside its title, the one reading of its state: a working lamp while nothing is saved
+ *  behind it, the run bar's own word (`selectStatus`) while it is being written so the two never disagree, the
+ *  one word for a brief that ended short, nothing for a settled one. A pure function of the row and the bar's
+ *  word, so a view projects the entries and the word as two stable values and reads each row in render. */
+export type RowMark = { kind: "lamp" } | { kind: "word"; word: string } | null;
+/** What each state of a row means to the shelf: its mark, and whether the reader may delete it (not while the run
+ *  owns the folder). Total over `BriefState`, so a new state does not compile until it is given both. */
+const ROW: Record<BriefState, { mark: (status: string) => RowMark; deletable: boolean }> = {
+  unsaved:    { mark: () => ({ kind: "lamp" }),                     deletable: false },
+  writing:    { mark: (status) => ({ kind: "word", word: status }), deletable: false },
+  incomplete: { mark: () => ({ kind: "word", word: INCOMPLETE }),   deletable: true },
+  settled:    { mark: () => null,                                   deletable: true },
+};
+export const entryMark = (status: string, e: LibraryEntry): RowMark => ROW[e.state].mark(status);
+export const entryDeletable = (e: LibraryEntry): boolean => ROW[e.state].deletable;
 
 /** A follow-up ask is in flight — writing under the settled document. */
 export const selectAskInFlight = (app: AppState): boolean => activeDoc(app).ask !== null;
