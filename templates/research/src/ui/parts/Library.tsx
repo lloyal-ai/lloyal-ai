@@ -121,9 +121,9 @@ export function Library(): ReactElement | null {
             >
             <span style={S.entryBody}>
               <span style={S.entryTitle}>{e.title}</span>
-              {mark?.kind === "lamp" && <span className="fn-lamp" style={S.rowLamp} aria-label="being written, nothing saved yet" />}
-              {mark?.kind === "word" && <span style={S.state}>{mark.word}</span>}
             </span>
+            {mark?.kind === "lamp" && <span className="fn-lamp" style={S.rowLamp} aria-label="being written, nothing saved yet" />}
+            {mark?.kind === "word" && <span style={S.state}>{mark.word}</span>}
             {e.hasMedia && (
               <svg style={S.media} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="carries images">
                 <rect x="3" y="3" width="18" height="18" rx="3" />
@@ -131,7 +131,8 @@ export function Library(): ReactElement | null {
                 <path d="M21 15l-4.5-4.5L6 21" />
               </svg>
             )}
-            {entryDeletable(e) && (
+            {/* Every row keeps the trash's slot, so the icons beside it line up whether or not this row can be deleted (an armed trash widens to confirm, and its own row with it). */}
+            {entryDeletable(e) ? (
             <button
               type="button"
               className="lib-trash"
@@ -156,7 +157,7 @@ export function Library(): ReactElement | null {
                 </svg>
               )}
             </button>
-            )}
+            ) : <span style={TRASH_SLOT} aria-hidden="true" />}
             </div>
           </div>
           );
@@ -178,6 +179,9 @@ const HOVER = `
   .lib-search:disabled { opacity: .55; }
   .lib-search::placeholder { color: ${color.dim}; }
 `;
+
+/** The trash's footprint in a row: the button and the empty slot a row that cannot be deleted keeps in its place. */
+const TRASH_SLOT: CSSProperties = { width: 22, height: 22, flex: "none" };
 
 const S: Record<string, CSSProperties> = {
   wrap: {
@@ -214,19 +218,21 @@ const S: Record<string, CSSProperties> = {
     borderRadius: radius.control, padding: "6px 6px", cursor: "pointer", flex: "none",
   },
   entryOn: { background: color.card, color: color.ink },
-  entryBody: { display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 },
+  entryBody: { minWidth: 0, flex: 1 },
   // One line each — the full question rides the tooltip, and halving the rows
   // doubles how much library is visible before a scroll.
   entryTitle: {
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500,
+    display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500,
   },
-  state: { fontSize: 10.5, opacity: 0.62, marginLeft: 6, whiteSpace: "nowrap", letterSpacing: 0.2 },
-  rowLamp: { width: 7, height: 7, borderRadius: 4, background: color.ember, flex: "none", marginLeft: 6 },
+  // The row's mark sits on the right with the media icon and the trash, never under the title.
+  state: { fontSize: 10.5, opacity: 0.62, whiteSpace: "nowrap", letterSpacing: 0.2, flex: "none" },
+  rowLamp: { width: 6, height: 6, borderRadius: 3, background: color.ember, flex: "none" },
   media: { color: color.dim, flex: "none" },
   trash: {
+    ...TRASH_SLOT,
     font: `600 10px ${font.ui}`, color: color.dim, background: "none", border: 0,
-    borderRadius: 6, width: 22, height: 22, padding: 0, display: "grid",
-    placeItems: "center", cursor: "pointer", flex: "none",
+    borderRadius: 6, padding: 0, display: "grid",
+    placeItems: "center", cursor: "pointer",
   },
   trashArmed: { color: color.danger, background: "#F7E2DF", width: "auto", padding: "0 6px" },
 };
