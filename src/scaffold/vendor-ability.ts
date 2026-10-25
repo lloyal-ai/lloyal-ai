@@ -37,7 +37,7 @@ import {
 import { readTarEntry, isGzipReadable } from '../tar-read.js';
 import type { AttentionSurface } from '../describe.js';
 import { httpFetch } from '../http.js';
-import { derivesFromLlm, isService, modelsForRole } from './model-catalog.js';
+import { derivationOf, emptyBlockTakes, isService, modelsForRole } from './model-catalog.js';
 import type { Service } from './model-catalog.js';
 import { modelSelection } from './model-selection.js';
 
@@ -64,15 +64,15 @@ export interface VendoredApp {
 }
 
 /** A service an ability requires that the project selects no model for — with the line that would: the
- *  catalog's id under `model.<service>.id`, or, for a service whose provider derives the model from the llm,
- *  the empty block `model.<service>: {}`. */
+ *  catalog's id under `model.<service>.id`, or, for a service whose model the platform selects, the empty block
+ *  `model.<service>: {}`. */
 export interface MissingService {
   ability: string;
   service: Service;
   /** `model.<service>.id`, or `model.<service>` when the remedy is the block itself. */
   key: string;
   suggestion?: string;
-  /** The remedy is the empty block: the provider pairs the model from the llm. */
+  /** The remedy is the empty block: the platform selects the model for it. */
   block?: true;
 }
 
@@ -147,10 +147,12 @@ export async function assertRequirements(projectDir: string, ability: string, re
   }
   for (const name of names) {
     const selection = modelSelection(projectDir, name);
-    const derives = derivesFromLlm(name);
+    const derivation = derivationOf(name);
+    const derives = derivation !== undefined;
     // A block the platform would pair with the reasoning model — present and naming no model, or offered —
-    // pairs with nothing when the project selects none. One that names its own model needs no pairing.
-    if (derives && selection.spec === null && modelSelection(projectDir, 'llm').spec === null) {
+    // pairs with nothing when the project selects none. One that names its own model needs no pairing, and
+    // one whose service has its own default needs no reasoning model.
+    if (derivation?.from === 'llm' && selection.spec === null && modelSelection(projectDir, 'llm').spec === null) {
       throw new RequirementError(`${ability} requires \`${name}\`, which is paired with the reasoning model, and this project selects none — add \`model.llm.id\` to harness.yml, then \`lloyal install ${ability}\`. Nothing was installed.`);
     }
     if (selection.present && (selection.spec !== null || derives)) continue;
@@ -159,7 +161,7 @@ export async function assertRequirements(projectDir: string, ability: string, re
       ? { ability, service: name, key: `model.${name}`, block: true }
       : { ability, service: name, key: `model.${name}.id`, ...(suggestion ? { suggestion } : {}) };
     if (settle && (await settle(missing))) continue;
-    const how = derives ? ` (\`model.${name}: {}\` takes the one paired with your model)` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '';
+    const how = derivation ? ` (\`model.${name}: {}\` takes ${emptyBlockTakes(derivation)})` : suggestion ? ` (\`${missing.key}: ${suggestion}\` is the catalog's)` : '';
     throw new RequirementError(
       (selection.present
         ? `${ability} requires \`${name}\`, and this project's \`model.${name}\` names no model — add \`${missing.key}\` to harness.yml`

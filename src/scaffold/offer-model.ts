@@ -1,17 +1,19 @@
 /**
  * The one write to `harness.yml` an install may make — asked, never unasked. A requirement the project does
  * not meet is put to the reader with its remedy: the catalog's id under `model.<service>.id`, or the empty block
- * for a service the platform pairs from the llm. A yes writes it through the one model writer; anything else
+ * for a service whose model the platform selects. A yes writes it through the one model writer; anything else
  * leaves the file as it is.
  */
 import { createInterface } from 'node:readline/promises';
 import { writeModelBlock, writeModelField } from './apply-model.js';
+import { derivationOf, emptyBlockTakes } from './model-catalog.js';
 import type { MissingService } from './vendor-ability.js';
 
 export async function offerToWrite(projectDir: string, missing: MissingService): Promise<boolean> {
   const line = missing.block ? `${missing.key}: {}` : missing.suggestion ? `${missing.key}: ${missing.suggestion}` : null;
   if (!line) return false;
-  const why = missing.block ? ' — the one paired with your model' : '';
+  const derivation = missing.block ? derivationOf(missing.service) : undefined;
+  const why = derivation ? ` — ${emptyBlockTakes(derivation)}` : '';
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
     const answer = (await rl.question(
