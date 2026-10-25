@@ -12,12 +12,14 @@ restart. The one exception is `instructions.ts` next door, which is read when a 
 ## The files
 
 A prompt is a pair: `<name>.system.eta` is the system prompt, `<name>.user.eta` the user turn, rendered with
-the same input. A single turn is one file. Two files are not prompts but parts every prompt uses.
+the same input. A single turn is one file. Three files are not prompts but parts other prompts use.
 
 | file | who reads it | what it receives (`it.*`) |
 |---|---|---|
 | `framed.eta` | every system prompt, as its layout | `purpose`, `answers` from `instructions.ts`; `body`, the file that handed itself over; `writesTheAnswer` |
 | `cite.eta` | an inquiry, as a partial, when its report takes sources | `tool`, the report tool's name |
+| `moment.eta` | every text that says how a moment in a video is cited, as a partial: the form, once, with an example that cannot play | `at`, the video's address or `attachment://…` |
+| `video-addresses` | the question, after the reader's words, when it carries videos | `videos: { n, at }[]`, each video's number and address |
 | `plan` / `plan-flat` | the planner, once per ask | `query: string`, `count: number`, `date: string`, `routingKey: string`, `sources: { name, useWhen, toc: string \| null }[]`, `coverage: string \| null` |
 | `preflight` | one probe per source, before the plan | `query: string`, `ability: { name, useWhen, tools: string[], contents: string \| null }` |
 | `preflight-recover` | a probe reaped under budget | `budget: number`, the words it may still write |

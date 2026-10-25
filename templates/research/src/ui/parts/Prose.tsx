@@ -56,9 +56,10 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
   const markdown = shed(raw);
   const anchors = given ?? (anchorPrefix ? anchorsOf(markdown, anchorPrefix) : []);
   let next = 0;
-  /** An inline code span that is exactly an attachment address: a model citing a moment or a page in backticks
-   *  rather than as a link. The address is unambiguous either way, so it reads as the citation it is. */
-  const citedInCode = (children: ReactNode): ReactElement | null => {
+  /** Text that is exactly an attachment address: a model citing a moment or a page in backticks, or as the bare
+   *  address, rather than as a link with words of its own. The address is unambiguous either way, so it reads as
+   *  the citation it is, shown as its moment or its page rather than as the address. */
+  const citedAddress = (children: ReactNode): ReactElement | null => {
     const text = textOf(children).trim();
     const moment = parseAttachmentMoment(text);
     const page = moment ? null : parseAttachmentHref(text);
@@ -68,10 +69,14 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
   };
   /** An inline code span: a citation when its text is an attachment address, unless a link already holds it. */
   const InlineCode = ({ children }: { children?: ReactNode }): ReactElement =>
-    (useContext(InsideLink) ? null : citedInCode(children)) ?? <code style={S.code}>{children}</code>;
-  /** A link, and the fact of being inside one for whatever it renders. */
-  const link = (props: { href?: string; children?: ReactNode }): ReactElement =>
-    <InsideLink.Provider value={true}>{linked(props)}</InsideLink.Provider>;
+    (useContext(InsideLink) ? null : citedAddress(children)) ?? <code style={S.code}>{children}</code>;
+  /** A link, and the fact of being inside one for whatever it renders. A link whose words are its own address
+   *  (a bare address in the prose) reads as that address cited. */
+  const link = (props: { href?: string; children?: ReactNode }): ReactElement => (
+    <InsideLink.Provider value={true}>
+      {(textOf(props.children).trim() === props.href ? citedAddress(props.children) : null) ?? linked(props)}
+    </InsideLink.Provider>
+  );
   const linked = ({ href, children }: { href?: string; children?: ReactNode }): ReactElement => {
     const ordinal = href ? citations?.get(href) : undefined;
     const moment = href ? parseAttachmentMoment(href) : null;

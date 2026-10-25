@@ -8,6 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parseAttachmentMoment } from "@lloyal-labs/media";
+import { linksOf } from "@lloyal-labs/ui/prose";
 import { INSTRUCTIONS } from "../../src/harness/instructions.js";
 import { PROMPTS as DIR, prompt, render } from "../../src/harness/prompts.js";
 
@@ -30,11 +32,12 @@ const INPUTS: Record<string, Record<string, unknown>> = {
   "recovery": { budget: 120, tool: "report", writesTheAnswer: true },
   "synthesize": { query: "Q?", findings: [{ task: "the task", body: "what the spine could not hold" }] },
   "synthesize-flat": { query: "Q?", findings: [{ task: "the task", body: "what was found" }] },
+  "video-addresses": { videos: [{ n: 1, at: "attachment://e8befb123f1b" }, { n: 2, at: "attachment://66b1d44fbe7f" }] },
 };
 const strict = ({ prompt, key }: { prompt: string; key: string }): never => { throw new Error(`${prompt}: input "${key}" is not given`); };
 
 test("every prompt renders from its declared input, and reads no key the input does not name", () => {
-  const files = fs.readdirSync(DIR).filter((f) => f.endsWith(".eta") && !["framed.eta", "cite.eta"].includes(f)).map((f) => f.replace(/\.eta$/, ""));
+  const files = fs.readdirSync(DIR).filter((f) => f.endsWith(".eta") && !["framed.eta", "cite.eta", "moment.eta"].includes(f)).map((f) => f.replace(/\.eta$/, ""));
   for (const file of files) {
     const name = file.replace(/\.(system|user)$/, "");
     const input = INPUTS[file] ?? INPUTS[name];
@@ -112,5 +115,35 @@ test("the next render reads edits to a prompt, its layout, and its partial", () 
     assert.equal(render(name), "edited:[second:changed]");
   } finally {
     for (const file of files) fs.rmSync(file, { force: true });
+  }
+});
+
+test("each attached video is named by its address, with the form a moment in it is cited in", () => {
+  assert.equal(render("video-addresses", INPUTS["video-addresses"]), [
+    "Video 1 is attachment://e8befb123f1b. Cite a moment in it as a link whose text is the time the video marks at that moment, written as the video writes it, and whose address is attachment://e8befb123f1b/t/ followed by that same time: [time](attachment://e8befb123f1b/t/time).",
+    "Video 2 is attachment://66b1d44fbe7f. Cite a moment in it as a link whose text is the time the video marks at that moment, written as the video writes it, and whose address is attachment://66b1d44fbe7f/t/ followed by that same time: [time](attachment://66b1d44fbe7f/t/time).",
+  ].join("\n"));
+});
+
+/** Every text that says how a moment is cited: the question's address line, the inquiry's citation partial,
+ *  and the settling passes. */
+const MOMENT_SAYERS: [string, object][] = [
+  ["video-addresses", INPUTS["video-addresses"]],
+  ["inquiry.system", { preamble: "P", tool: "report", takesSources: true, writesTheAnswer: false }],
+  ["synthesize.system", INPUTS["synthesize"]],
+  ["synthesize-flat.system", INPUTS["synthesize-flat"]],
+];
+
+test("a moment's form is said in one place, and the example it shows can never be cited as a moment", () => {
+  const form = "a link whose text is the time the video marks at that moment, written as the video writes it";
+  for (const [name, input] of MOMENT_SAYERS) {
+    const text = render(name, input);
+    assert.ok(text.includes(form), `${name} says the moment's form`);
+    const moments = linksOf(text).map((l) => l.href).filter((href) => href.includes("/t/"));
+    assert.ok(moments.length > 0, `${name} shows the form`);
+    for (const href of moments) assert.equal(parseAttachmentMoment(href), null, `${name}: its example ${href} would play if copied`);
+  }
+  for (const name of ["synthesize", "synthesize-flat"]) {
+    assert.ok(!render(`${name}.system`, INPUTS[name]).includes("example.com"), `${name}: no worked example a model can copy as a source`);
   }
 });

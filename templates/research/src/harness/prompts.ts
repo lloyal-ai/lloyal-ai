@@ -5,7 +5,8 @@
  *
  * Every system file opens by handing itself to `framed.eta`, the one frame: what the app is FOR is said
  * first (`instructions.ts`) and, for a stage that writes the reader's answer, what answers must do is said
- * last. `cite.eta` is the citation partial an inquiry includes when its report takes sources.
+ * last. `cite.eta` is the citation partial an inquiry includes when its report takes sources, and `moment.eta`
+ * the one statement of how a moment in a video is cited.
  *
  * What a prompt is rendered with is what the caller knows: the framework hands the app what only it knows
  * (a reaped agent's word budget) through `PromptOf`, and the app adds its own.

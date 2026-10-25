@@ -54,8 +54,8 @@ test("a video on the question is one video input on the trunk, and a moment cite
   assert.equal(run.events.filter((e) => e.type === "ui:error").length, 0);
   assert.equal(ctx.multimodalPrefills.length, 1, "one projection");
   assert.deepEqual(ctx.multimodalPrefills[0].inputKinds, [["video"]], "the clip is one video input, not three images");
-  assert.ok(ctx.multimodalPrefills[0].prompts[0].includes(`Video 1 is attachment://${prefix}; cite a moment in it as attachment://${prefix}/t/ followed by the time the video marks, such as attachment://${prefix}/t/0m5.00s.`),
-    "the question names the video's address");
+  assert.ok(ctx.multimodalPrefills[0].prompts[0].includes(`Video 1 is attachment://${prefix}. Cite a moment in it as a link whose text is the time the video marks at that moment, written as the video writes it, and whose address is attachment://${prefix}/t/ followed by that same time: [time](attachment://${prefix}/t/time).`),
+    "the question names the video's address, and shows the form a moment in it is cited in");
 
   // Resolved as the view resolves it: against the roots the brief's query event carries.
   const query = run.events.find((e) => e.type === "query") as { attachments?: Attachment[] } | undefined;
