@@ -113,7 +113,7 @@ next run. An existing `path` selection for that role is replaced.
 | Argument or option | Meaning and default |
 | --- | --- |
 | `<id>` | Catalogue model ID. Use `models:list` to see known IDs. |
-| `--role <role>` | `llm`, `reranker`, `vision`, or `embedding`. Default: `llm`. |
+| `--role <role>` | `llm`, `reranker`, `vision`, `embedding`, or `transcription`. Default: `llm`. |
 | `-h`, `--help` | Show help. |
 
 An unknown ID is written with a warning; it must resolve in the runtime's catalogue when provisioned.
@@ -134,7 +134,7 @@ references the file in place. Relative paths resolve from the project root.
 | Argument or option | Meaning and default |
 | --- | --- |
 | `<path>` | Local GGUF path. A missing file produces a warning; it must exist when the app loads it. |
-| `--role <role>` | `llm`, `reranker`, `vision`, or `embedding`. Default: `llm`. |
+| `--role <role>` | `llm`, `reranker`, `vision`, `embedding`, or `transcription`. Default: `llm`. |
 | `-h`, `--help` | Show help. |
 
 Local files are trusted by possession and are not checked against catalogue digests.
@@ -155,7 +155,7 @@ successful download. The filename comes from the URL path, without its query str
 | Argument or option | Meaning and default |
 | --- | --- |
 | `<url>` | Model download URL. |
-| `--role <role>` | `llm`, `reranker`, `vision`, or `embedding`. Default: `llm`. |
+| `--role <role>` | `llm`, `reranker`, `vision`, `embedding`, or `transcription`. Default: `llm`. |
 | `--sha256 <hex>` | Expected SHA-256 digest. If supplied, a mismatch removes the downloaded file and returns an error. Without it, the download is trusted by source. |
 | `-h`, `--help` | Show help. |
 

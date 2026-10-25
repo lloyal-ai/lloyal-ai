@@ -82,6 +82,11 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
     role: 'embedding',
     label: 'Qwen3 Embedding 0.6B · Q8_0',
   },
+  {
+    id: 'embeddinggemma-2-q8',
+    role: 'embedding',
+    label: 'EmbeddingGemma 2 · Q8_0',
+  },
 ];
 
 /**
