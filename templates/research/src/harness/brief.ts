@@ -152,7 +152,7 @@ export function briefs(deps: {
     // brief lets the one on the canvas go before its media lands, so it is judged by the whole context.
     const reserve = BUDGETS.effort[config().defaults.effort].context.softLimit;
     const free = warm ? undefined : new ContextPressure(yield* Ctx.expect()).nCtx;
-    const seen = yield* admitted(attachments, { ...BUDGETS.attachments, reserve, ...(free !== undefined ? { free } : {}) });
+    const seen = yield* admitted(attachments, { context: config().attachments.context, reserve, ...(free !== undefined ? { free } : {}) });
     if ("refused" in seen) {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;

@@ -15,6 +15,9 @@ import { FileAttachmentStore } from "@lloyal-labs/media/node";
 import { composeVideo, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
 import type { Attachment } from "@lloyal-labs/media";
 import type { MockSessionContext } from "@lloyal-labs/sdk/testing";
+import { loadYml } from "@lloyal-labs/rig/node";
+import { config } from "../../src/app.js";
+import type { WorkflowEvent } from "../../src/protocol.js";
 import { runHarness, writeReportFixture } from "./harness.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -79,6 +82,56 @@ test("a video that would fill more of the context than the budget allows is refu
   assert.equal(errors.length, 1);
   assert.match(errors[0].message, /would take [\d,]+ of the [\d,]+-token context; this harness lets attachments fill up to 70% of it/);
   assert.equal(ctx.multimodalPrefills.length, 0, "nothing was read in");
+});
+
+test("the share of the context a turn's attachments may fill is the harness's attachments.context", async () => {
+  const { store, video } = await plant();
+  const run = await runHarness({
+    attachmentStore: store,
+    config: { attachments: { context: 0.5 } },
+    instrument: (c) => { c.mockImageCells = c.nCtx; },
+    script: [
+      { send: { type: "submit_query", query: "Which way does the square move?", mode: "flat", skipPlanner: true, attachments: [video] } },
+      { on: (ev) => ev.type === "ui:error" },
+    ],
+  });
+
+  const errors = run.events.filter((e) => e.type === "ui:error") as { message: string }[];
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /this harness lets attachments fill up to 50% of it/);
+});
+
+test("a video is described under the harness's attachments.video, as it stands when asked", async () => {
+  const run = await runHarness({
+    config: { attachments: { video: { fps: 2, maxFrames: 32, maxEdgePx: 480, soundtrackWindowSeconds: 8 } } },
+    script: [
+      { send: { type: "video:describe" } },
+      { on: (ev) => ev.type === "video:capabilities" },
+    ],
+  });
+
+  const described = run.events.find((e) => e.type === "video:capabilities") as Extract<WorkflowEvent, { type: "video:capabilities" }>;
+  assert.deepEqual(
+    (({ fps, maxFrames, maxEdgePx, soundtrackWindowMs }) => ({ fps, maxFrames, maxEdgePx, soundtrackWindowMs }))(described.capabilities.sampling),
+    { fps: 2, maxFrames: 32, maxEdgePx: 480, soundtrackWindowMs: 8000 },
+  );
+});
+
+test("harness.yml commits the video policy and the attachments' share the scenarios run under", async () => {
+  const run = await runHarness({
+    script: [
+      { send: { type: "video:describe" } },
+      { on: (ev) => ev.type === "video:capabilities" },
+    ],
+  });
+
+  const described = run.events.find((e) => e.type === "video:capabilities") as Extract<WorkflowEvent, { type: "video:capabilities" }>;
+  assert.deepEqual(
+    (({ fps, maxFrames, maxEdgePx, soundtrackWindowMs }) => ({ fps, maxFrames, maxEdgePx, soundtrackWindowMs }))(described.capabilities.sampling),
+    { fps: 4, maxFrames: 64, maxEdgePx: 640, soundtrackWindowMs: 5000 },
+  );
+  const committed = loadYml(config, fileURLToPath(new URL("../..", import.meta.url))) as { attachments?: { context?: number } };
+  assert.equal(committed.attachments?.context, 0.7);
 });
 
 const SAVED = "2026-01-01T00-00-00-000";

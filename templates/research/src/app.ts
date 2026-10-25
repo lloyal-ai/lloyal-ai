@@ -44,7 +44,7 @@ export function* harness(ctx: SessionContext, events: EventBus<WorkflowEvent>, c
   // last one's cleanup, and Stop can always reach what is running.
   const run = yield* useExecution();
   const voice = yield* useVoiceCommands({ wire });
-  const video = yield* useVideoCommands({ wire });   // an attached video, composed from its frames and soundtrack
+  const video = yield* useVideoCommands({ wire, config: runner.config });   // an attached video, composed from its frames and soundtrack
   const library = yield* openLibrary(() => runner.config().sources.outputDir, { events, registry, wire, run, abilities });
   const brief = briefs({ session, library, run, wire, config: runner.config, research });   // hand it another planner or writer here
   yield* wire.send({ type: "weights:done" });   // ready: the model is resident and the abilities are enabled
