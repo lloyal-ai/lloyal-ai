@@ -14,6 +14,7 @@ import {
 } from "../select.js";
 import { Work } from "../parts/InquiryRow.js";
 import { Figures } from "../parts/Figures.js";
+import { QuestionTitle } from "../parts/QuestionTitle.js";
 import { Thinking, doc } from "../parts/Shell.js";
 
 const START_HOLD_S = 5;
@@ -29,7 +30,7 @@ export function Frame(): ReactElement {
 
   return (
     <div style={doc}>
-      <h1 style={S.title}>{title}</h1>
+      <QuestionTitle question={title} below={18} />
       <Figures />
 
       {discovering && (
@@ -272,7 +273,6 @@ const P: Record<string, CSSProperties> = {
 };
 
 const S: Record<string, CSSProperties> = {
-  title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 18px", textWrap: "balance" },
   beat: { font: `14px ${font.ui}`, margin: "0 0 16px" },
   outline: { display: "flex", flexDirection: "column", gap: 2 },
   line: {

@@ -10,19 +10,36 @@ import {
   selectSeen, selectStatus, selectTitle,
 } from "../select.js";
 import { paceFor } from "../pace.js";
-import { Lightbox, useAssets, videoView } from "./Figures.js";
+import { useAssets, videoView } from "./Figures.js";
+import { useLightbox } from "./Lightboxes.js";
 import { representationUrl } from "@lloyal-labs/media";
 import { APP } from "../presentation.js";
 import { DeleteMe } from "./DeleteMe.js";
 
-/** The mark, the name, and the control that puts the panel away. Collapsed,
- *  the name and the library go and the rail keeps only the mark and the
- *  control — so the way back is always the thing you just used. */
+/** The mark, the name, a new brief, and the control that puts the panel away.
+ *  Collapsed, the name and the library go and the rail keeps the mark and the
+ *  two controls, the panel's first, under the mark: the way back is always the
+ *  thing you just used. The mark starts a new brief too, but nothing says so;
+ *  the button does. */
 export function Wordmark({ collapsed = false, onToggle }: {
   collapsed?: boolean;
   onToggle?: () => void;
 } = {}): ReactElement {
   const send = useSend<Command>();
+  const newBrief = (
+    <button
+      type="button"
+      className="shl-icon" style={S.headControl}
+      onClick={() => send({ type: "new_run" })}
+      title="New brief"
+      aria-label="Start a new brief"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3.5H5.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V12" />
+        <path d="M18.4 2.6a1.5 1.5 0 0 1 3 3l-8.6 8.6a2 2 0 0 1-.9.5l-2.7.8.8-2.7a2 2 0 0 1 .5-.9z" />
+      </svg>
+    </button>
+  );
   return (
     <div style={{ ...S.brand, ...(collapsed ? S.brandRail : null) }}>
       <button
@@ -41,12 +58,13 @@ export function Wordmark({ collapsed = false, onToggle }: {
           <span style={S.divider} />
           {APP.name}
           <span style={{ flex: 1 }} />
+          {newBrief}
         </>
       )}
       {onToggle && (
         <button
           type="button"
-          className="shl-icon" style={S.panelToggle}
+          className="shl-icon" style={S.headControl}
           onClick={onToggle}
           title={collapsed ? "Show the library" : "Hide the library"}
           aria-label={collapsed ? "Show the library" : "Hide the library"}
@@ -58,6 +76,7 @@ export function Wordmark({ collapsed = false, onToggle }: {
           </svg>
         </button>
       )}
+      {collapsed && newBrief}
     </div>
   );
 }
@@ -101,9 +120,8 @@ function Seen(): ReactElement | null {
   const seen = useProjection(selectSeen);
   const origin = useContentOrigin();
   const assets = useAssets(seen);
-  const [open, setOpen] = useState<string | null>(null);
+  const open = useLightbox();
   if (seen.length === 0) return null;
-  const opened = open !== null ? assets[open] : undefined;
   return (
     <span style={S.seen}>
       {seen.map((id) => {
@@ -119,16 +137,13 @@ function Seen(): ReactElement | null {
               style={S.seenBtn}
               title={asset?.kind === "video" ? "What the model saw — play" : "What the model saw — enlarge"}
               aria-label={asset?.kind === "video" ? "Play the attached video" : "Enlarge the attached image"}
-              onClick={() => setOpen(id)}
+              onClick={() => open(asset?.kind === "video" ? { video: videoView(origin, id, asset), label: "the attached video" } : { digest: id })}
             >
               <img src={representationUrl(origin, id, asset?.kind === "video" ? asset.meta.poster : 0)} alt="" style={S.seenImg} />
             </button>
           )
           : <span key={id} style={S.seenChip}>image</span>;
       })}
-      {open !== null && origin !== null && (opened?.kind === "video"
-        ? <Lightbox video={videoView(origin, open, opened)} label="the attached video" onClose={() => setOpen(null)} />
-        : <Lightbox digest={open} onClose={() => setOpen(null)} />)}
     </span>
   );
 }
@@ -369,7 +384,8 @@ const S: Record<string, CSSProperties> = {
     background: "none", border: 0, padding: 0, cursor: "pointer",
     display: "inline-flex", flex: "none", borderRadius: 7,
   },
-  panelToggle: {
+  /** A control in the header: a new brief, the panel's toggle. */
+  headControl: {
     background: "none", border: 0, padding: 4, borderRadius: 7, cursor: "pointer",
     color: color.dim, display: "inline-flex", flex: "none",
   },

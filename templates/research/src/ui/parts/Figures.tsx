@@ -16,18 +16,15 @@
  *  with the start of what the soundtrack said beneath; opening it plays the
  *  file as attached, the frames the model saw on its time slider. */
 import { useState, type CSSProperties, type ReactElement } from "react";
-import { Lightbox as UiLightbox, pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection, VideoCard, videoView } from "@lloyal-labs/ui";
-import type { Asset, LightboxProps } from "@lloyal-labs/ui";
+import { pageFacts, resolveAsset, useAssets, useContentOrigin, useProjection, VideoCard, videoView } from "@lloyal-labs/ui";
+import type { Asset } from "@lloyal-labs/ui";
 import { representationUrl, sourceUrl } from "@lloyal-labs/media";
 import { color, font, radius, shadow } from "../theme.js";
 import { selectSeen, selectThreadDigests } from "../select.js";
-import { LIGHTBOX } from "./Prose.js";
+import { useLightbox } from "./Lightboxes.js";
 
 export { pageFacts, resolveAsset, useAssets, videoView };
 export type { Asset };
-
-/** ui's enlarged view, in this document's register — one for the strip, the run bar's marker and a cited page. */
-export const Lightbox = (props: Omit<LightboxProps, "styles">): ReactElement | null => <UiLightbox {...props} styles={LIGHTBOX} />;
 
 export function Figures(): ReactElement | null {
   const seen = useProjection(selectSeen);
@@ -43,9 +40,7 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
   // Page renders the thread holds — admitted by a tool, persisted with the run —
   // say which pages the model looked at.
   const threadDigests = useProjection(selectThreadDigests);
-  const [open, setOpen] = useState<
-    { digest: string; label?: string } | { pdf: string; label: string } | { video: NonNullable<LightboxProps["video"]>; label: string } | null
-  >(null);
+  const open = useLightbox();
   // Read off the loaded element rather than the wire: the descriptor carries a
   // byte length, never pixels, and this is the representation's true size.
   const [dims, setDims] = useState<Record<string, string>>({});
@@ -69,8 +64,8 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
             // The card opens the document itself in the browser's PDF viewer
             // when the ingest kept the original; else its first page render.
             const openIt = (): void => {
-              if (asset.source) setOpen({ pdf: sourceUrl(origin, digest), label: meta.title });
-              else if (cover) setOpen({ digest: cover.digest, label: `${meta.title} · page 1` });
+              if (asset.source) open({ pdf: sourceUrl(origin, digest), label: meta.title });
+              else if (cover) open({ digest: cover.digest, label: `${meta.title} · page 1` });
             };
             return (
               <button
@@ -97,7 +92,7 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
             const said = asset.transcript?.segments.map((t) => t.text).join(" ");
             return (
               <figure key={digest} style={S.video}>
-                <VideoCard video={view} styles={VIDEO_CARD} onOpen={() => setOpen({ video: view, label: "the attached video" })} />
+                <VideoCard video={view} styles={VIDEO_CARD} onOpen={() => open({ video: view, label: "the attached video" })} />
                 {said ? <figcaption style={S.said}>“{said}”</figcaption> : null}
               </figure>
             );
@@ -108,7 +103,7 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
               type="button"
               style={S.figure}
               title="Enlarge"
-              onClick={() => setOpen({ digest })}
+              onClick={() => open({ digest, ...(dims[digest] ? { dims: dims[digest] } : {}) })}
             >
               <img
                 src={representationUrl(origin, digest)}
@@ -132,12 +127,6 @@ export function FigureStrip({ digests }: { digests: string[] }): ReactElement | 
         {digests.length === 1 && dims[digests[0]] ? ` · ${dims[digests[0]]}` : ""}
         {` · ${action}`}
       </p>
-
-      {open !== null && ("pdf" in open
-        ? <Lightbox pdf={open.pdf} label={open.label} onClose={() => setOpen(null)} />
-        : "video" in open
-          ? <Lightbox video={open.video} label={open.label} onClose={() => setOpen(null)} />
-          : <Lightbox digest={open.digest} dims={dims[open.digest]} label={open.label} onClose={() => setOpen(null)} />)}
     </>
   );
 }

@@ -8,9 +8,8 @@
  *  derives — the same pure list the outline rail reads, indexed in render
  *  order. With `citations` (url → ordinal), a cited link grows its chip;
  *  a link whose whole text is a bare "[1]" collapses into the chip. */
-import { createContext, memo, useContext, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Lightbox, Markdown, momentClock, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
-import type { LightboxProps } from "@lloyal-labs/ui";
+import { createContext, memo, useContext, useMemo, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { Markdown, momentClock, useAssets, useContentOrigin, videoView } from "@lloyal-labs/ui";
 import { splitStreaming } from "@lloyal-labs/ui/prose";
 import type { Anchor } from "@lloyal-labs/ui/prose";
 import { color, font, radius } from "../theme.js";
@@ -18,6 +17,7 @@ import { anchorsOf, isBareOrdinal, selectThreadDigestKey } from "../select.js";
 import { useProjection } from "@lloyal-labs/ui";
 import { parseAttachmentHref, parseAttachmentMoment, resolvePrefix } from "@lloyal-labs/media";
 import { textOf } from "../text-of.js";
+import { useLightbox } from "./Lightboxes.js";
 
 /** The heading scale, stepping down from the document's 31px title. */
 const HEADING: Record<"h1" | "h2" | "h3" | "h4", CSSProperties> = {
@@ -50,8 +50,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
   const digestKey = useProjection(selectThreadDigestKey);
   const digests = useMemo(() => (digestKey ? digestKey.split("\n") : []), [digestKey]);
   const assets = useAssets(digests);
-  const [openPage, setOpenPage] = useState<{ digest: string; label: string } | null>(null);
-  const [openVideo, setOpenVideo] = useState<NonNullable<LightboxProps["video"]> | null>(null);
+  const open = useLightbox();
   const origin = useContentOrigin();
   const markdown = shed(raw);
   const anchors = given ?? (anchorPrefix ? anchorsOf(markdown, anchorPrefix) : []);
@@ -98,7 +97,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
       const label = [textOf(children).trim(), ordinal !== undefined && `citation ${ordinal}`, `play the attached video from ${at}`]
         .filter(Boolean).join(", ");
       return (
-        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={label} onClick={() => setOpenVideo(view)}>
+        <button type="button" style={S.pageLink} title={`video · ${at} — play from here`} aria-label={label} onClick={() => open({ video: view, label: "the attached video" })}>
           {mark}
           <span style={S.moment}>
             {seen && <img src={seen.src} alt="" style={S.momentFrame} />}
@@ -125,7 +124,7 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
           type="button"
           style={S.pageLink}
           title={`${meta.title} · page ${cited.page} — open`}
-          onClick={() => setOpenPage({ digest: render.digest, label: `${meta.title} · page ${cited.page}` })}
+          onClick={() => open({ digest: render.digest, label: `${meta.title} · page ${cited.page}` })}
         >
           {mark}
         </button>
@@ -161,32 +160,24 @@ export const Prose = memo(function Prose({ markdown: raw, anchorPrefix, anchors:
     ({ children }: { children?: ReactNode }): ReactElement =>
       <Tag id={anchors[next++]?.anchor} style={HEADING[Tag]}>{children}</Tag>;
   return (
-    <>
-      <Markdown
-        markdown={markdown}
-        style={S.prose}
-        components={{
-          a: link,
-          h1: anchored("h1"), h2: anchored("h2"), h3: anchored("h3"), h4: anchored("h4"),
-          p: ({ children }) => <p style={S.p}>{children}</p>,
-          strong: ({ children }) => <strong style={S.strong}>{children}</strong>,
-          blockquote: ({ children }) => <blockquote style={S.quote}>{children}</blockquote>,
-          code: ({ children, className }) =>
-            className ? (
-              <code className={className} style={S.codeBlock}>{children}</code>
-            ) : (
-              <InlineCode>{children}</InlineCode>
-            ),
-          pre: ({ children }) => <pre style={S.pre}>{children}</pre>,
-        }}
-      />
-      {openVideo !== null && (
-        <Lightbox video={openVideo} label="the attached video" onClose={() => setOpenVideo(null)} styles={LIGHTBOX} />
-      )}
-      {openPage !== null && (
-        <Lightbox digest={openPage.digest} label={openPage.label} onClose={() => setOpenPage(null)} styles={LIGHTBOX} />
-      )}
-    </>
+    <Markdown
+      markdown={markdown}
+      style={S.prose}
+      components={{
+        a: link,
+        h1: anchored("h1"), h2: anchored("h2"), h3: anchored("h3"), h4: anchored("h4"),
+        p: ({ children }) => <p style={S.p}>{children}</p>,
+        strong: ({ children }) => <strong style={S.strong}>{children}</strong>,
+        blockquote: ({ children }) => <blockquote style={S.quote}>{children}</blockquote>,
+        code: ({ children, className }) =>
+          className ? (
+            <code className={className} style={S.codeBlock}>{children}</code>
+          ) : (
+            <InlineCode>{children}</InlineCode>
+          ),
+        pre: ({ children }) => <pre style={S.pre}>{children}</pre>,
+      }}
+    />
   );
 });
 
@@ -213,13 +204,6 @@ export function StreamingProse({ markdown: raw, anchorPrefix, citations }: {
     </>
   );
 }
-
-/** The enlarged view in this document's register. */
-export const LIGHTBOX = {
-  full: { maxWidth: "100%", maxHeight: "calc(100vh - 110px)", objectFit: "contain", borderRadius: radius.panel, background: color.card } as CSSProperties,
-  pdf: { width: "min(1100px, 94vw)", height: "calc(100vh - 110px)", border: 0, borderRadius: radius.panel, background: "#fff" } as CSSProperties,
-  caption: { font: `12px ${font.ui}`, color: "#D8D8D2", margin: 0 } as CSSProperties,
-};
 
 const S: Record<string, CSSProperties> = {
   prose: { font: `400 15.5px/1.72 ${font.ui}`, color: color.ink },

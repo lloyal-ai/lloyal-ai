@@ -18,6 +18,7 @@ import { Figures, FigureStrip } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
+import { QuestionTitle } from "../parts/QuestionTitle.js";
 import { Sources } from "../parts/Sources.js";
 import { nothingKept } from "../presentation.js";
 import { UNSETTLED, answerText } from "../../protocol.js";
@@ -99,7 +100,7 @@ export function Settle(): ReactElement {
   return (
     <div style={spread}>
     <div style={doc}>
-      <h1 style={S.title}>{title}</h1>
+      <QuestionTitle question={title} below={6} />
       <Figures />
       <p style={S.byline}>
         <span>{new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
@@ -165,7 +166,6 @@ export function Settle(): ReactElement {
 }
 
 const S: Record<string, CSSProperties> = {
-  title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 6px", textWrap: "balance" },
   byline: {
     font: `12.5px ${font.ui}`, color: color.dim, margin: "0 0 18px",
     display: "flex", gap: 14, alignItems: "baseline",
@@ -192,5 +192,6 @@ const S: Record<string, CSSProperties> = {
   exchangeActions: { display: "flex", gap: 8, margin: "-6px 0 12px" },
   exchangeHead: {
     font: `italic 600 16px/1.4 ${font.ui}`, letterSpacing: "-.008em", margin: "0 0 10px",
+    whiteSpace: "pre-wrap", overflowWrap: "anywhere",
   },
 };
