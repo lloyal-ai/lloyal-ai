@@ -21,6 +21,7 @@ import { config } from "../config.js";
 import { Shell } from "./parts/Shell.js";
 import { Composer } from "./parts/Composer.js";
 import { Library } from "./parts/Library.js";
+import { Lightboxes } from "./parts/Lightboxes.js";
 import { Ask } from "./moments/Ask.js";
 import { Frame } from "./moments/Frame.js";
 import { Write } from "./moments/Write.js";
@@ -80,19 +81,22 @@ export function HarnessApp(): ReactElement {
       title={APP.name}
       runCommands={{ stop: true, wrapUp: true, cancelAgent: true, pause: true }}
     >
-      <Shell
-        library={<Library />}
-        dock={<Composer shape={shape} placeholder={askInFlight ? COMPOSER_HINT.write : COMPOSER_HINT[moment]} />}
-      >
-        {/* Identity remount — per-doc component state (disclosure toggles,
-            edit fields) resets when the canvas turns over to another doc. */}
-        <div key={activeDocId ?? "picker"} style={{ display: "contents" }}>
-          {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
-          {moment === "frame" && <Frame />}
-          {moment === "write" && <Write />}
-          {moment === "settle" && <Settle />}
-        </div>
-      </Shell>
+      {/* The enlarged view sits above the moments, so a run that redraws them never closes it. */}
+      <Lightboxes>
+        <Shell
+          library={<Library />}
+          dock={<Composer shape={shape} placeholder={askInFlight ? COMPOSER_HINT.write : COMPOSER_HINT[moment]} />}
+        >
+          {/* Identity remount — per-doc component state (disclosure toggles,
+              edit fields) resets when the canvas turns over to another doc. */}
+          <div key={activeDocId ?? "picker"} style={{ display: "contents" }}>
+            {moment === "ask" && <Ask shape={shape} onShape={setChosenShape} />}
+            {moment === "frame" && <Frame />}
+            {moment === "write" && <Write />}
+            {moment === "settle" && <Settle />}
+          </div>
+        </Shell>
+      </Lightboxes>
     </DevPane>
   );
 }

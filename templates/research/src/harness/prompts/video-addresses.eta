@@ -1,0 +1,1 @@
+<%~ it.videos.map((v) => `Video ${v.n} is ${v.at}. Cite a moment in it as ${include("./moment", { at: v.at })}.`).join("\n") %>

@@ -152,7 +152,7 @@ export function briefs(deps: {
     // brief lets the one on the canvas go before its media lands, so it is judged by the whole context.
     const reserve = BUDGETS.effort[config().defaults.effort].context.softLimit;
     const free = warm ? undefined : new ContextPressure(yield* Ctx.expect()).nCtx;
-    const seen = yield* admitted(attachments, { ...BUDGETS.attachments, reserve, ...(free !== undefined ? { free } : {}) });
+    const seen = yield* admitted(attachments, { context: config().attachments.context, reserve, ...(free !== undefined ? { free } : {}) });
     if ("refused" in seen) {
       yield* wire.send({ type: "ui:error", message: seen.refused });
       return null;
@@ -370,9 +370,7 @@ export interface SubmitOptions {
 
 /** A video is cited by a moment in it; the question names each attached video's address so a report can. */
 function withVideoAddresses(text: string, videos: readonly { digest: string }[]): string {
-  const lines = videos.map((v, i) => {
-    const at = `attachment://${v.digest.replace(/^sha256:/, "").slice(0, 12)}`;
-    return `Video ${i + 1} is ${at}; cite a moment in it as ${at}/t/ followed by the time the video marks, such as ${at}/t/0m5.00s.`;
-  });
-  return lines.length > 0 ? `${text}\n\n${lines.join("\n")}` : text;
+  if (videos.length === 0) return text;
+  const addressed = videos.map((v, i) => ({ n: i + 1, at: `attachment://${v.digest.replace(/^sha256:/, "").slice(0, 12)}` }));
+  return `${text}\n\n${render("video-addresses", { videos: addressed })}`;
 }

@@ -3,11 +3,12 @@
  *  type is read off this table, so a key added here is typed everywhere at once. Node-free: the view reads the
  *  same type. */
 import { isGuardOverrides } from "@lloyal-labs/lloyal-agents";
-import { defineConfig, modelSettings } from "@lloyal-labs/rig";
+import { attachmentSettings, defineConfig, modelSettings } from "@lloyal-labs/rig";
 import type { ConfigOf, OriginOf } from "@lloyal-labs/rig";
 
 export const config = defineConfig({
   ...modelSettings,   // the model block, with its own yml, env and cli names; per-ability config is layered in for every app
+  ...attachmentSettings,   // what a turn's attachments may take of the context, and how a video is sampled
   "sources.outputDir": {
     yml: "sources.outputDir", cli: "outputDir", path: true, default: "reports",
     describe: "Where settled briefs, their annexures and the session trace are written; the library reads it back.",

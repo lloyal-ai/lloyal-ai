@@ -23,6 +23,10 @@ export const NO_ROOM = "This brief's context had no room left for an agent to wo
 export const nothingKept = (unanswered: Unanswered | null | undefined): string =>
   unanswered === "no_room" ? NO_ROOM : NOTHING_KEPT;
 
+/** Said over a video opened while the run works, until the run is held or settles: the model and the video share
+ *  the GPU, so the video plays only once the model is not decoding. */
+export const WAITING_FOR_THE_RUN = "The brief is finishing a step. The video plays as soon as it's held or settled.";
+
 /** Said on a video whose soundtrack was not all transcribed: what the model will not hear, before the question is sent. */
 export const untranscribedNotice = (windows: readonly { startMs: number; endMs: number }[]): string | null => {
   if (windows.length === 0) return null;

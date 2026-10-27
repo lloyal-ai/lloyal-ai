@@ -26,11 +26,23 @@ export type ModelRole = 'llm' | Service;
 
 export const isService = (name: string): name is Service => (SERVICES as readonly string[]).includes(name);
 
-/** The services whose provider derives the model from the llm when the block names none — so the remedy for a
- *  missing one is the empty block, `model.<service>: {}`, never a catalog id. Mirrors the rows of rig's provider
- *  table that carry a `derive` cell; `test/platform-mirror.test.ts` holds it to them. */
-export const DERIVED_SERVICES = ['vision'] as const;
-export const derivesFromLlm = (name: Service): boolean => (DERIVED_SERVICES as readonly string[]).includes(name);
+/** What an empty block of a service takes when the platform derives its model: the one the catalog pairs with
+ *  the llm, or the service's own default. */
+export type Derivation = { from: 'llm' } | { from: 'default'; id: string };
+
+/** The services whose block, naming no model, still selects one, and what it takes. So the remedy for a missing
+ *  one is the empty block, `model.<service>: {}`, never a catalog id. Mirrors the rows of rig's provider table
+ *  that carry a `derive` cell; `test/platform-mirror.test.ts` holds each to what its cell selects. */
+export const DERIVED: Readonly<Record<'vision' | 'embedding', Derivation>> = {
+  vision: { from: 'llm' },
+  embedding: { from: 'default', id: 'embeddinggemma-2-q8' },
+};
+
+export const derivationOf = (name: Service): Derivation | undefined => DERIVED[name as keyof typeof DERIVED];
+
+/** What an empty block takes, in the words a remedy says it with. */
+export const emptyBlockTakes = (d: Derivation): string =>
+  d.from === 'llm' ? 'the one paired with your model' : `${MODEL_CATALOG.find((m) => m.id === d.id)?.label ?? d.id}, the default`;
 
 export interface CatalogModel {
   /** Stable id — what gets written into `harness.yml` `model.<role>.id`. */
@@ -78,9 +90,9 @@ export const MODEL_CATALOG: readonly CatalogModel[] = [
     label: 'nomic-embed-text v1.5 · Q4_K_M',
   },
   {
-    id: 'qwen3-embedding-0.6b-q8',
+    id: 'embeddinggemma-2-q8',
     role: 'embedding',
-    label: 'Qwen3 Embedding 0.6B · Q8_0',
+    label: 'EmbeddingGemma 2 · Q8_0',
   },
 ];
 

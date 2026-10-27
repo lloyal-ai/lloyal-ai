@@ -12,17 +12,27 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { SERVICES, MODEL_CATALOG, DERIVED_SERVICES } from '../src/scaffold/model-catalog.js';
+import { SERVICES, MODEL_CATALOG, DERIVED } from '../src/scaffold/model-catalog.js';
 
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'basic');
 const installed = existsSync(join(TEMPLATE, 'node_modules', '@lloyal-labs', 'rig', 'package.json'));
 const platform = createRequire(join(TEMPLATE, 'package.json'));
 
 describe.skipIf(!installed)('the CLI\'s mirrors of the platform', () => {
-  it('DERIVED_SERVICES are exactly the provider rows with a derive cell', () => {
-    const rig = platform('@lloyal-labs/rig/node') as { providers: Record<string, { derive?: unknown }> };
-    const theirs = Object.entries(rig.providers).filter(([, row]) => typeof row.derive === 'function').map(([name]) => name).sort();
-    expect([...DERIVED_SERVICES].sort()).toEqual(theirs);
+  it('DERIVED is exactly the provider rows with a derive cell, each taking what its cell selects for an empty block', () => {
+    type Derive = (of: { llm: { id?: string } }) => { id?: string } | undefined;
+    const rig = platform('@lloyal-labs/rig/node') as { providers: Record<string, { derive?: Derive }> };
+    const theirs = Object.entries(rig.providers).filter((e): e is [string, { derive: Derive }] => typeof e[1].derive === 'function');
+    expect(Object.keys(DERIVED).sort()).toEqual(theirs.map(([name]) => name).sort());
+    for (const [name, row] of theirs) {
+      const ours = DERIVED[name as keyof typeof DERIVED];
+      if (ours.from === 'llm') {
+        expect(row.derive({ llm: {} }), `${name} with no llm`).toBeUndefined();
+        expect(row.derive({ llm: { id: 'qwen3.5-4b' } }), `${name} beside the catalog's llm`).toBeDefined();
+      } else {
+        expect(row.derive({ llm: {} }), name).toEqual({ id: ours.id });
+      }
+    }
   });
 
   it('SERVICES is the platform\'s closed set, in its order', () => {

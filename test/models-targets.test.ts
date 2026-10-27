@@ -233,9 +233,20 @@ describe('models: verbs', () => {
     vi.spyOn(process.stdout, 'write').mockImplementation((s) => (out.push(String(s)), true));
     expect(await runIn(dir, () => modelsListCommand.run([]))).toBe(0);
     const text = out.join('');
-    expect(text).toMatch(/vision\s+\(paired with the llm/);
+    expect(text).toMatch(/vision\s+\(the one paired with your model: the block names no id or path\)/);
     expect(text).toMatch(/reranker\s+\(selects nothing — the block is present but names neither model\.reranker\.id nor model\.reranker\.path\)/);
     expect(text).toMatch(/embedding\s+\(unset — the block is absent/);
+  });
+
+  it('models:list names the default an empty embedding block takes', async () => {
+    const dir = await scaffold('l3', 'cli');
+    const yml = openHarnessYml(dir);
+    yml.set(['model', 'embedding'], {});
+    yml.save();
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s) => (out.push(String(s)), true));
+    expect(await runIn(dir, () => modelsListCommand.run([]))).toBe(0);
+    expect(out.join('')).toMatch(/embedding\s+\(EmbeddingGemma 2 · Q8_0, the default: the block names no id or path\)/);
   });
 
   it('rejects an unknown --role', async () => {

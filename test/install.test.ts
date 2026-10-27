@@ -377,6 +377,31 @@ describe('the install gate', () => {
     expect(await exists(VENDOR_REL)).toBe(true);
   });
 
+  it.each([
+    ['beside a reasoning model', 'model:\n  llm:\n    id: qwen3.5-4b\n  embedding: {}\n'],
+    ['with none selected', 'model:\n  embedding: {}\n'],
+  ])('an empty embedding block selects the embedding service\'s default and passes the gate, %s', async (_, before) => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), before);
+    useTarball(requiring(['embedding']));
+    let offered = 0;
+    await verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async () => { offered++; return false; } });
+    expect(offered).toBe(0);
+    expect(await exists(VENDOR_REL)).toBe(true);
+  });
+
+  it('a missing embedding service is offered the empty block, which takes EmbeddingGemma 2, and refused naming it', async () => {
+    await seedProject();
+    await writeFile(join(cwd, 'harness.yml'), 'model:\n  llm:\n    id: qwen3.5-4b\n');
+    useTarball(requiring(['embedding']));
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME)))
+      .rejects.toThrow(/requires `embedding`, and this project names none — add `model\.embedding` to harness\.yml \(`model\.embedding: \{\}` takes EmbeddingGemma 2 · Q8_0, the default\)/);
+    const offered: unknown[] = [];
+    await expect(verifyAndVendorAbility(cwd, parseAbilitySpec(SCOPED_NAME), { settle: async (missing) => { offered.push(missing); return false; } }))
+      .rejects.toBeInstanceOf(RequirementError);
+    expect(offered).toEqual([{ ability: SCOPED_NAME, service: 'embedding', key: 'model.embedding', block: true }]);
+  });
+
   it('offered and declined: refused, harness.yml byte-identical', async () => {
     await seedProject();
     const before = 'model:\n  llm:\n    id: qwen3.5-4b\n';

@@ -15,6 +15,7 @@ import { Figures } from "../parts/Figures.js";
 import { InquiryRow } from "../parts/InquiryRow.js";
 import { OutlineRail } from "../parts/OutlineRail.js";
 import { Prose, StreamingProse } from "../parts/Prose.js";
+import { QuestionTitle } from "../parts/QuestionTitle.js";
 
 export function Write(): ReactElement {
   const title = useProjection(selectTitle);
@@ -26,7 +27,7 @@ export function Write(): ReactElement {
   return (
     <div style={spread}>
     <div style={doc}>
-      <h1 style={S.title}>{title}</h1>
+      <QuestionTitle question={title} below={10} />
       <Figures />
 
       {sections.map((s) => (
@@ -98,7 +99,6 @@ function Stop({ note }: { note: string }): ReactElement {
 }
 
 const S: Record<string, CSSProperties> = {
-  title: { font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: "0 0 10px", textWrap: "balance" },
   stop: { display: "flex", alignItems: "center", gap: 10, margin: "6px 0 12px", color: color.dim, font: `12px ${font.ui}` },
   stopLine: { flex: 1, height: 1, background: color.line },
   stopNote: { flex: "none", fontStyle: "italic" },

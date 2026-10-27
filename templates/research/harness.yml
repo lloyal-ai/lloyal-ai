@@ -14,6 +14,14 @@ model:
 sources:
   outputDir: reports
 
+attachments:
+  context: 0.7
+  video:
+    fps: 4
+    maxFrames: 64
+    maxEdgePx: 640
+    soundtrackWindowSeconds: 5
+
 defaults:
   effort: low
   guards:

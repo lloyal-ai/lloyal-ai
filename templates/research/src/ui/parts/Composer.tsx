@@ -8,11 +8,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import pcmWorkletUrl from "@lloyal-labs/ui/pcm-worklet?url&no-inline";
 import { color, font, radius, shadow } from "../theme.js";
 import { describeProgress, ingestVideo, MicGlyph, ProgressRing, Popover, RecordingWaveform, useAssets, useContentOrigin, useHarness, useProjection, useSend, useVideoCapabilities, useVoiceInput, VideoCard, videoView } from "@lloyal-labs/ui";
-import type { VideoView } from "@lloyal-labs/ui";
 import type { AttachedVideo, VideoProgress } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../../protocol.js";
 import { ingestMedia, isVideoContainer, representationUrl } from "@lloyal-labs/media";
-import { Lightbox, resolveAsset } from "./Figures.js";
+import { resolveAsset } from "./Figures.js";
+import { useLightbox } from "./Lightboxes.js";
+import { QuestionField } from "./QuestionField.js";
 import { untranscribedNotice } from "../presentation.js";
 import type { Descriptor } from "@lloyal-labs/media";
 import {
@@ -97,15 +98,10 @@ function VideoChip({ img }: { img: Attached }): ReactElement {
   const origin = useContentOrigin();
   const digest = img.status === "admitted" ? img.root.digest : null;
   const asset = useAssets(digest ? [digest] : [])[digest ?? ""];
-  const [open, setOpen] = useState<VideoView | null>(null);
+  const open = useLightbox();
   if (img.status === "admitted" && origin !== null && asset?.kind === "video" && digest) {
     const view = videoView(origin, digest, asset);
-    return (
-      <>
-        <VideoCard video={view} styles={TRAY_CARD} label={`Play ${img.name}`} onOpen={() => setOpen(view)} />
-        {open && <Lightbox video={open} label={img.name} onClose={() => setOpen(null)} />}
-      </>
-    );
+    return <VideoCard video={view} styles={TRAY_CARD} label={`Play ${img.name}`} onOpen={() => open({ video: view, label: img.name })} />;
   }
   // Before the first report, and once attached while the host is read back, the ring spins.
   const step = img.status === "uploading" && img.progress ? describeProgress(img.progress) : { fraction: null, text: "Starting" };
@@ -143,7 +139,7 @@ export function Composer({ shape, placeholder }: {
   const uploading = images.some((a) => a.status === "uploading");
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  const draftInput = useRef<HTMLInputElement>(null);
+  const draftInput = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(0);
   /** The work each attachment still has running, by id: stopped when it is removed or the composer goes. */
   const inFlight = useRef(new Map<number, AbortController>());
@@ -468,7 +464,7 @@ export function Composer({ shape, placeholder }: {
    *  rather than growing a second path. Only image, video and PDF items are
    *  taken, and the default is prevented only when one was — otherwise a paste
    *  carrying text would silently lose it. */
-  const onPaste = (e: ClipboardEvent<HTMLInputElement>): void => {
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
     const files = Array.from(e.clipboardData?.items ?? [])
       .filter((i) => i.kind === "file" && (i.type.startsWith("image/") || i.type.startsWith("video/") || i.type === "application/pdf"))
       .map((i) => i.getAsFile())
@@ -651,6 +647,7 @@ export function Composer({ shape, placeholder }: {
           the microphone the same row carries it: cancel where attach was, the
           waveform where the words will go, stop where the mic was. */}
       <div style={S.entryRow}>
+        <span style={S.firstLine}>
         {voice.active ? (
           <button
             type="button"
@@ -676,6 +673,7 @@ export function Composer({ shape, placeholder }: {
             </svg>
           </button>
         )}
+        </span>
         {voice.active ? (
           <div style={S.dictation}>
             <RecordingWaveform levels={voice.levels} elapsed={voice.elapsed} recording={voice.phase === "recording"} />
@@ -686,14 +684,12 @@ export function Composer({ shape, placeholder }: {
             )}
           </div>
         ) : (
-          <input
+          <QuestionField
             ref={draftInput}
             style={{ ...S.input, ...(pending ? S.inputSent : null) }}
             value={pending ? pending.text : draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
-            }}
+            onSend={submit}
             onPaste={onPaste}
             // A failed recording explains itself where the words would have
             // gone, and the first keystroke replaces it.
@@ -701,11 +697,13 @@ export function Composer({ shape, placeholder }: {
             disabled={pending !== null}
           />
         )}
-        {pending && <span className="fn-lamp" style={S.sentDot} />}
+        {pending && <span style={S.firstLine}><span className="fn-lamp" style={S.sentDot} /></span>}
         {voice.pending && (
-          <button type="button" className="cmp-pill" style={S.insertTranscript} onClick={voice.insertPending}>
-            Insert transcript
-          </button>
+          <span style={S.firstLine}>
+            <button type="button" className="cmp-pill" style={S.insertTranscript} onClick={voice.insertPending}>
+              Insert transcript
+            </button>
+          </span>
         )}
       </div>
       {/* Row 2 — what the next brief will DRAW ON, then how it will be worked.
@@ -941,8 +939,11 @@ const S: Record<string, CSSProperties> = {
    *  the card does not breathe when a recording starts or ends. */
   stackDictating: { minHeight: 79, justifyContent: "center" },
   /** The question and the two controls that act on it. The row carries its
-   *  own height so the field has room to breathe. */
-  entryRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 38 },
+   *  own height so the field has room to breathe; as a passage grows the
+   *  field, the controls stay on its first line. */
+  entryRow: { display: "flex", alignItems: "flex-start", gap: 12, minHeight: 38 },
+  /** A control's seat on the question's first line: the height of one line of the field. */
+  firstLine: { height: 38, display: "flex", alignItems: "center", flex: "none" },
   /** What the brief draws on, then how it is worked — sources left, shape of
    *  the work right, reading in the order the decisions are actually made. */
   /** Holds the depth picker's own height whether or not the picker is there, so
@@ -1006,15 +1007,12 @@ const S: Record<string, CSSProperties> = {
    *  also the state indicator, so an icon-bearing ability leans on the chip's
    *  own dimming to say whether it is included. */
   libIcon: { display: "block", flex: "none", borderRadius: 3 },
-  input: {
-    flex: 1, border: 0, outline: 0, font: `14.5px ${font.ui}`, color: color.ink,
-    background: "none", minWidth: 0,
-  },
+  input: { flex: 1, minWidth: 0, fontFamily: font.ui, fontSize: 14.5, color: color.ink },
   /** Words in hand, not yet taken — dimmed, beside a working lamp. */
   inputSent: { color: color.dim },
   /** The field's place while a recording is in hand: the waveform takes the
    *  width the words will take, in the same ink. */
-  dictation: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, color: color.ink, font: `12px ${font.ui}` },
+  dictation: { flex: 1, minWidth: 0, minHeight: 38, display: "flex", alignItems: "center", gap: 12, color: color.ink, font: `12px ${font.ui}` },
   dictationStatus: { color: color.dim, whiteSpace: "nowrap", flex: "none" },
   insertTranscript: {
     font: `600 12px ${font.ui}`, color: color.ink, background: color.card2,

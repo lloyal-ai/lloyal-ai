@@ -1,0 +1,1 @@
+a link whose text is the time the video marks at that moment, written as the video writes it, and whose address is <%= it.at %>/t/ followed by that same time: [time](<%= it.at %>/t/time)
