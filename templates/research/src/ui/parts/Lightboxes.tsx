@@ -1,13 +1,14 @@
 /** The app's one enlarged view, held above everything a run redraws: a follow-up that settles, the canvas turning
  *  from writing to settled, a section as it streams. Whatever opens an image, a document or a video asks for it here
- *  (`useLightbox`), and it stays open until the reader closes it. A video opened while the run works holds the run
- *  until it closes, and until the hold takes it waits, said over its poster (`viewing.ts` holds the rules). */
-import { createContext, useCallback, useContext, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+ *  (`useLightbox`), and it stays open until the reader closes it. An open video holds the run whenever the run works,
+ *  opened during it or started under, until it closes; until the hold takes it waits, said over its poster
+ *  (`viewing.ts` holds the rules). */
+import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Lightbox, useHarness, useProjection, useSend } from "@lloyal-labs/ui";
 import type { Command, WorkflowEvent } from "../../protocol.js";
 import type { AppState } from "../state.js";
 import { selectControls, selectLive } from "../select.js";
-import { closing, covered, opening, type Opened, type RunFacts, type Viewing } from "../viewing.js";
+import { closing, covered, holding, opening, type Opened, type RunFacts, type Viewing } from "../viewing.js";
 import { WAITING_FOR_THE_RUN } from "../presentation.js";
 import { color, font, radius } from "../theme.js";
 
@@ -26,6 +27,14 @@ export function Lightboxes({ children }: { children: ReactNode }): ReactElement 
     if (command) send(command);
     setViewing(viewing);
   }, [projection, send]);
+  // A run that starts working under an open video, plan review's countdown say, is held by it then.
+  useEffect(() => {
+    if (!viewing) return;
+    const { viewing: held, command } = holding(viewing, run);
+    if (!command) return;
+    send(command);
+    setViewing(held);
+  }, [viewing, run, send]);
   const close = (): void => {
     const command = viewing && closing(viewing);
     if (command) send(command);

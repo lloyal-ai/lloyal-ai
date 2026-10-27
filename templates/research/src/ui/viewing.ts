@@ -1,9 +1,11 @@
 /** What the enlarged view shows, and the hold a video puts on the run.
  *
- *  Where the page and the model share a GPU, a video cannot play while the model decodes. So a video opened while
- *  the run works holds the run, and closing it lets go of that hold and of no other: a run the reader held
- *  themselves stays held. A hold the run has not taken (it is between steps, or closing) leaves the video covered
- *  until the run is held or settles. An image or a document needs no GPU to show, so it never holds the run.
+ *  Where the page and the model share a GPU, a video cannot play while the model decodes. So an open video holds the
+ *  run whenever the run works, whether it was working when the video opened or started under it (plan review's
+ *  countdown starts the research behind an open video), and closing it lets go of that hold and of no other: a run
+ *  the reader held themselves stays held. A hold the run has not taken (it is between steps, or closing) leaves the
+ *  video covered until the run is held or settles. An image or a document needs no GPU to show, so it never holds
+ *  the run.
  *
  *  Pure: the run's facts come in as arguments, and the commands go out as values for the caller to send. */
 import type { LightboxProps } from "@lloyal-labs/ui";
@@ -23,11 +25,15 @@ type Hold = Extract<Command, { type: "pause" } | { type: "resume" }>;
 const isVideo = (opened: Opened): boolean => opened.video !== undefined;
 const working = (run: RunFacts): boolean => run.live && !run.paused;
 
-/** Open `opened`: a video while the run works holds it. */
-export const opening = (opened: Opened, run: RunFacts): { viewing: Viewing; command: Hold | null } => {
-  const holds = isVideo(opened) && working(run);
-  return { viewing: { opened, holds }, command: holds ? { type: "pause" } : null };
-};
+/** What is open, as the run now stands: a video that holds nothing while the run works takes the hold. */
+export const holding = (viewing: Viewing, run: RunFacts): { viewing: Viewing; command: Hold | null } =>
+  isVideo(viewing.opened) && !viewing.holds && working(run)
+    ? { viewing: { ...viewing, holds: true }, command: { type: "pause" } }
+    : { viewing, command: null };
+
+/** Open `opened`, as the run stands at the click. */
+export const opening = (opened: Opened, run: RunFacts): { viewing: Viewing; command: Hold | null } =>
+  holding({ opened, holds: false }, run);
 
 /** Close what is open: the hold it put on the run is let go. */
 export const closing = (viewing: Viewing): Hold | null => (viewing.holds ? { type: "resume" } : null);

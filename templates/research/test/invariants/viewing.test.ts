@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closing, covered, opening, type RunFacts } from '../../src/ui/viewing.js';
+import { closing, covered, holding, opening, type RunFacts } from '../../src/ui/viewing.js';
 
 const WORKING: RunFacts = { live: true, paused: false };
 const HELD: RunFacts = { live: true, paused: true };
@@ -57,6 +57,31 @@ test('a hold that never took leaves the video covered, and closing still lets go
   const { viewing } = opening(VIDEO, WORKING);
   assert.equal(covered(viewing, WORKING), true);
   assert.deepEqual(closing(viewing), { type: 'resume' });
+});
+
+test('a run that starts under an open video is held by it then, and closing lets go of that hold', () => {
+  // Opened during plan review, before the countdown starts the research: without the hold it would wait for the
+  // run to settle.
+  const opened = opening(VIDEO, IDLE).viewing;
+  const { viewing, command } = holding(opened, WORKING);
+  assert.deepEqual(command, { type: 'pause' });
+  assert.equal(viewing.holds, true);
+  assert.deepEqual(closing(viewing), { type: 'resume' });
+});
+
+test('a video that holds the run already sends nothing more while the run works', () => {
+  const { viewing } = opening(VIDEO, WORKING);
+  assert.deepEqual(holding(viewing, WORKING), { viewing, command: null });
+});
+
+test("a video open on the reader's own hold takes no hold of its own until the run works again", () => {
+  const opened = opening(VIDEO, HELD).viewing;
+  assert.equal(holding(opened, HELD).command, null);
+  assert.deepEqual(holding(opened, WORKING).command, { type: 'pause' });
+});
+
+test('an image or a document takes no hold when a run starts under it', () => {
+  for (const opened of [IMAGE, PDF]) assert.equal(holding(opening(opened, IDLE).viewing, WORKING).command, null);
 });
 
 test('an image or a document is never covered', () => {

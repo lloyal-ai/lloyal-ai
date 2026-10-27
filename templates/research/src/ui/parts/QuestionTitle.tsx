@@ -47,7 +47,9 @@ export function QuestionTitle({ question, below }: {
   }, [heading, question, whole]);
   return (
     <div style={{ position: "relative", marginBottom: below }}>
-      <div ref={measure} aria-hidden="true" inert style={{ ...S.heading, ...S.measure }}>{question}</div>
+      <div aria-hidden="true" inert style={S.measure}>
+        <div ref={measure} style={S.heading}>{question}</div>
+      </div>
       {heading ? <h1 style={S.heading}>{question}</h1> : (
         <>
           <h1 ref={passage} style={{ ...S.passage, ...(whole ? null : S.held) }}>{question}</h1>
@@ -67,8 +69,12 @@ const S: Record<string, CSSProperties> = {
     font: `600 31px/1.22 ${font.ui}`, letterSpacing: "-.022em", margin: 0,
     whiteSpace: "pre-wrap", overflowWrap: "anywhere", textWrap: "balance",
   },
-  /** The heading-size copy the choice is measured from: the column's width, out of sight and out of reach. */
-  measure: { position: "absolute", left: 0, right: 0, top: 0, visibility: "hidden", pointerEvents: "none" },
+  /** Where the heading-size copy the choice is measured from is laid out: the column's width, out of sight and out
+   *  of reach, and no height, so however tall the copy runs it never lengthens the page it sits in. */
+  measure: {
+    position: "absolute", left: 0, right: 0, top: 0, height: 0, overflow: "hidden",
+    visibility: "hidden", pointerEvents: "none",
+  },
   /** The reader's words, at the size the answer is read at. */
   passage: {
     font: `500 15.5px/1.6 ${font.ui}`, color: color.ink, margin: 0,
