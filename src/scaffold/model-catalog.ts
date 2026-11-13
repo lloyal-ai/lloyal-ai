@@ -7,7 +7,7 @@
  * It is vendored, not imported, on purpose: the catalog is only exported from
  * `@lloyal-labs/rig/node`, whose barrel also pulls in `createReranker` (the
  * NATIVE `@lloyal-labs/lloyal.node`) + the Ability registry. `lloyal` is the
- * Apache-2.0, zero-native-dep CLI — `verify.ts` duplicates rig's verify surface
+ * MIT, zero-native-dep CLI — `verify.ts` duplicates rig's verify surface
  * for exactly this reason. Keep these rows in sync with rig's `MODEL_CATALOG`
  * (packages/rig/src/models.ts); adding a row here only widens the picker.
  */

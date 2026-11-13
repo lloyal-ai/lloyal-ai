@@ -44,7 +44,7 @@ This project is yours — add whatever licence your organisation needs. The
 scaffolding that produced it is MIT and imposes nothing on your code.
 
 Your use of the HDK runtime (`@lloyal-labs/*`) is covered by the Functional
-Source License plus the [Lloyal Harness Builder Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
+Source License plus the [Developer Grant](https://github.com/lloyal-ai/hdk/blob/main/GRANT.md),
 under which building, distributing, selling and hosting a harness or an ability
 is always permitted and is never a Competing Use — including in direct
 competition with Lloyal's own products.
