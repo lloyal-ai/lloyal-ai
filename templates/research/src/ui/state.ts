@@ -16,7 +16,7 @@ import type { Config } from '../config.js';
 import type { Descriptor } from '@lloyal-labs/media';
 import type { Effort } from '../harness/budgets.js';
 import type { Reports } from '@lloyal-labs/rig';
-import type { DocId, Mode, LibraryEntry, Unanswered, Unsettled } from '../protocol.js';
+import type { DocId, Mode, LibraryEntry, Unanswered, Unsettled, LexiconEntry } from '../protocol.js';
 
 export type { DocId, Mode, LibraryEntry } from '../protocol.js';
 export { reduce } from './reduce.js';
@@ -99,6 +99,9 @@ export interface SessionState {
   abilities: AbilityDescriptor[];
   /** The host has said which abilities exist; before this the list is unknown, not empty. */
   abilitiesKnown: boolean;
+  /** The reader's own words for transcription, whole, as the host last said them. A session fact, not
+   *  document state: the list survives every brief and edit. Empty until the host speaks. */
+  lexicon: LexiconEntry[];
 }
 
 /** One document, whole: its identity, its content, and its run machinery.
@@ -193,6 +196,7 @@ export const initialSession: SessionState = {
   participation: {},
   abilities: [],
   abilitiesKnown: false,
+  lexicon: [],
 };
 
 export const initialState: AppState = {

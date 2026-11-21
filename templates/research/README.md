@@ -204,6 +204,29 @@ reopen restores the document; a warm ask stages it again; a cold submit
   does not
 ```
 
+## The reader's words
+
+Speech recognition gets names wrong. The app keeps a small list of the words that matter — a product, a
+client, a piece of jargon — and uses each of them two ways.
+
+**The bias is a hint.** The terms go to the transcriber as a preference, and a model that honours it
+leans toward those spellings. It cannot guarantee one: a made-up name sounds like an ordinary word,
+and the decoder is still guessing from audio.
+
+**The replacement is the guarantee.** An entry may list the spellings the recogniser has produced for
+it (`heardAs`), and each is replaced with the term after transcription — whole-word, case-insensitive,
+longest phrase first. That step is deterministic and **terminal**: the optional shaping seam in
+`voice/format.ts` runs before it, so nothing downstream can undo a name.
+
+They live in `user.json` at the project root, not in `harness.*`. These are the reader's words, not the
+developer's schema: a config reset must not delete them, and the file is gitignored for the same reason
+`harness.json` is. The cog in the sidebar opens the one screen that reads and writes them, under
+Transcription.
+
+The transcriber's side of this is `@lloyal-labs/binding`'s `TranscriptBias`: an app says *what* matters
+and the service says *how* it can honour that — `prompt`, `decode` or `none` — so a dictionary works
+with any speech model, and a model that cannot use one says so rather than pretending.
+
 ## How the harness works
 
 The platform contract is one generator:
@@ -389,6 +412,12 @@ src/
     budgets.ts         every number it obeys, effort as the one knob
     prompts.ts         renders the prompt files; ~30 lines
     prompts/           every prompt, one Eta file per text — see "The prompts are files"
+  user/                ← the reader's own words; never `harness.*`
+    store.ts           `user.json`: versioned, written atomically, one document
+    lexicon.ts         the entries, and the replacement that guarantees them
+  voice/               the transcription text pipeline
+    format.ts          the optional shaping seam: layout, never words, and before the replacement
+    commands.ts        add or remove a word; answers with the whole list
   ui/                  ← your view
     presentation.ts    what it is called
     reduce.ts          reduce(state, event): the ONE fold every surface shares
@@ -406,6 +435,7 @@ media/                 the content-addressed store (OCI Image Layout)
 models/                resident weights (fetched on first run; gitignored)
 vendor/                signed Abilities — Ed25519-verified tarballs, committed
 reports/               your settled briefs — the library AND the memory
+user.json              the reader's own words for transcription (created on first add; gitignored)
 harness.yml            models, output dir, ability config, gate scope
 ```
 

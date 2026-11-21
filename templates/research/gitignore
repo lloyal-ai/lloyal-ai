@@ -34,3 +34,8 @@ trace-*.attachments/
 .DS_Store
 harness.json
 reports/
+
+# The reader's own words for transcription: their names, their clients. It lives
+# beside `harness.json` and is never committed — `harness.*` is the developer's
+# schema, this is the installation's content.
+user.json

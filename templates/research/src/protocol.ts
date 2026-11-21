@@ -140,7 +140,18 @@ export type LibraryCommand =
   /** Remove a brief's whole folder. Confined to the library. */
   | { type: "library_delete"; path: string };
 
-export type Command = VoiceCommand | VideoCommand | BriefCommand | LibraryCommand | RunCommand | SettingsCommand<Config> | { type: "quit" };
+/** One word transcription should get right, and the spellings it has been heard as instead. */
+export interface LexiconEntry {
+  term: string;
+  /** What speech recognition wrote for the term. Each is replaced by `term` after transcription. */
+  heardAs?: string[];
+}
+
+export type LexiconCommand =
+  | { type: "add_lexicon_term"; term: string; heardAs?: string[] }
+  | { type: "remove_lexicon_term"; term: string };
+
+export type Command = VoiceCommand | VideoCommand | BriefCommand | LibraryCommand | RunCommand | LexiconCommand | SettingsCommand<Config> | { type: "quit" };
 
 // ── Events ───────────────────────────────────────────────────────
 
@@ -196,7 +207,11 @@ export type LibraryEvent =
   /** The corpus ability indexed the library (at boot, and after every settle). */
   | { type: "corpus:indexed"; corpusPath: string; fileCount: number; chunkCount: number };
 
-export type WorkflowEvent = VoiceEvent | VideoEvent | AgentEvent | BriefEvent | LibraryEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
+/** The reader's own words for transcription, whole. A session fact, not document state: the list survives
+ *  every brief and edit, and what a view edits is what the next dictation is biased with. */
+export type LexiconEvent = { type: "lexicon:state"; entries: LexiconEntry[] };
+
+export type WorkflowEvent = VoiceEvent | VideoEvent | AgentEvent | BriefEvent | LibraryEvent | LexiconEvent | SettingsEvent<Config, Origin> | HostResourcesEvent;
 
 // ── The small builders ───────────────────────────────────────────
 

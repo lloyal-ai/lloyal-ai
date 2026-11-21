@@ -9,6 +9,7 @@ export * from "./select/frame.js";
 export * from "./select/write.js";
 export * from "./select/settle.js";
 export * from "./select/rail.js";
+export * from "./select/settings.js";
 
 // So a view never imports the fold directly.
 export { extractStreamingReport } from "./state.js";

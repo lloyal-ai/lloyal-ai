@@ -71,6 +71,7 @@ const SCOPE: Record<WorkflowEvent['type'], Scope> = {
   'agent:trace': 'ignored', 'host:resources': 'ignored',   // the dev pane folds these itself
   // session facts
   'config:loaded': 'session', 'config:updated': 'session',
+  'lexicon:state': 'session',
   'participation:toggled': 'session', 'abilities:state': 'session',
   'corpus:indexed': 'session', 'weights:done': 'session',
   'library:list': 'session', 'library:search': 'session',
@@ -334,6 +335,9 @@ function sessionReduce(s: SessionState, ev: WorkflowEvent): SessionState {
         nextToastId: toastId,
       };
     }
+
+    case 'lexicon:state':
+      return { ...s, lexicon: ev.entries };
 
     case 'participation:toggled':
       // Any change to the filter drops a standing toast: whatever it was complaining about, the user has
