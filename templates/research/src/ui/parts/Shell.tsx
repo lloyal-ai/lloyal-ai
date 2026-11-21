@@ -15,15 +15,17 @@ import { useLightbox } from "./Lightboxes.js";
 import { representationUrl } from "@lloyal-labs/media";
 import { APP } from "../presentation.js";
 import { DeleteMe } from "./DeleteMe.js";
+import { SettingsDialog } from "./SettingsDialog.js";
 
-/** The mark, the name, a new brief, and the control that puts the panel away.
+/** The mark, the name, a new brief, settings, and the control that puts the panel away.
  *  Collapsed, the name and the library go and the rail keeps the mark and the
- *  two controls, the panel's first, under the mark: the way back is always the
- *  thing you just used. The mark starts a new brief too, but nothing says so;
- *  the button does. */
-export function Wordmark({ collapsed = false, onToggle }: {
+ *  controls, the panel's first, under the mark: the way back is always the thing
+ *  you just used. The mark starts a new brief too, but nothing says so; the button
+ *  does. */
+export function Wordmark({ collapsed = false, onToggle, onSettings }: {
   collapsed?: boolean;
   onToggle?: () => void;
+  onSettings?: () => void;
 } = {}): ReactElement {
   const send = useSend<Command>();
   const newBrief = (
@@ -60,6 +62,22 @@ export function Wordmark({ collapsed = false, onToggle }: {
           <span style={{ flex: 1 }} />
           {newBrief}
         </>
+      )}
+      {onSettings && (
+        <button
+          type="button"
+          className="shl-icon" style={S.headControl}
+          onClick={onSettings}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="4" y1="8" x2="20" y2="8" />
+            <line x1="4" y1="16" x2="20" y2="16" />
+            <circle cx="9" cy="8" r="2.2" />
+            <circle cx="15" cy="16" r="2.2" />
+          </svg>
+        </button>
       )}
       {onToggle && (
         <button
@@ -222,6 +240,7 @@ export function Shell({ children, dock, library }: {
   library?: ReactNode;
 }): ReactElement {
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const toggle = (): void =>
     setCollapsed((c) => {
       writeCollapsed(!c);
@@ -240,7 +259,7 @@ export function Shell({ children, dock, library }: {
     <div style={S.app}>
       <style>{KEYFRAMES}</style>
       <aside style={{ ...S.side, ...(collapsed ? S.sideRail : null) }}>
-        <Wordmark collapsed={collapsed} onToggle={toggle} />
+        <Wordmark collapsed={collapsed} onToggle={toggle} onSettings={() => setSettingsOpen(true)} />
         {!collapsed && library}
         <div style={{ flex: 1 }} />
         {!collapsed && (
@@ -259,6 +278,7 @@ export function Shell({ children, dock, library }: {
         </div>
         <div style={S.dock}>{dock}</div>
       </div>
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
